@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Customers</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a0ca3;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --success: #4bb543;
+            --error: #ff3333;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7ff;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: var(--primary);
+            margin-bottom: 24px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .upload-card {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+        }
+        
+        .upload-card:hover {
+            border-color: var(--primary);
+            background-color: rgba(67, 97, 238, 0.05);
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-label {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .file-label:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        .file-name {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .submit-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
+        }
+        
+        .instructions {
+            margin-top: 32px;
+            padding: 16px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .instructions h3 {
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        
+        .instructions ul {
+            padding-left: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 24px;
+                margin: 20px auto;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .upload-card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Customer Data</h1>
+        
+        <form method="post" enctype="multipart/form-data" id="uploadForm">
+            {% csrf_token %}
+            
+            <div class="upload-card" id="uploadArea">
+                <div class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </div>
+                <h3>Drag & drop your Excel file here</h3>
+                <p>or</p>
+                <label for="file" class="file-label">Browse Files</label>
+                <input type="file" id="file" name="file" class="file-input" accept=".xls,.xlsx" required>
+                <div class="file-name" id="fileName">No file selected</div>
+            </div>
+            
+            <button type="submit" class="submit-btn">Upload Customers</button>
+        </form>
+        
+        <div class="instructions">
+            <h3>File Requirements:</h3>
+            <ul>
+                <li>Excel format (.xls or .xlsx)</li>
+                <li>Maximum file size: 5MB</li>
+                <li>Include columns: customer_code, customer_name, salesman</li>
+                <li>First row should contain headers</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+    // File selection handler
+    const fileInput = document.getElementById('file');
+    const fileName = document.getElementById('fileName');
+    const uploadArea = document.getElementById('uploadArea');
+    
+    // Get CSS variable value properly
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+    const successColor = '#4bb543';
+    const defaultBorderColor = '#d1d5db';
+    
+    fileInput.addEventListener('change', (e) => {
+        if (fileInput.files.length > 0) {
+            fileName.textContent = fileInput.files[0].name;
+            uploadArea.style.borderColor = successColor;
+            uploadArea.style.backgroundColor = 'rgba(75, 181, 67, 0.05)';
+        } else {
+            fileName.textContent = 'No file selected';
+            uploadArea.style.borderColor = defaultBorderColor;
+            uploadArea.style.backgroundColor = '';
+        }
+    });
+    
+    // Drag and drop functionality
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = primaryColor;
+        uploadArea.style.backgroundColor = 'rgba(67, 97, 238, 0.1)';
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.borderColor = fileInput.files.length > 0 ? successColor : defaultBorderColor;
+        uploadArea.style.backgroundColor = fileInput.files.length > 0 ? 'rgba(75, 181, 67, 0.05)' : '';
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            fileName.textContent = e.dataTransfer.files[0].name;
+            uploadArea.style.borderColor = successColor;
+            uploadArea.style.backgroundColor = 'rgba(75, 181, 67, 0.05)';
+        }
+    });
+</script>
+</body>
+</html>

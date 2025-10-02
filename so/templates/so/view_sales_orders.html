@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Orders Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light-bg: #f8f9fa;
+            --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            --hover-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #2d3748;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .page-header {
+            background: linear-gradient(135deg, #050329 0%, #010567 100%);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            color: white;
+            margin-bottom: 2rem;
+            box-shadow: var(--card-shadow);
+        }
+        
+        .stats-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+            border-top: 4px solid;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
+        }
+        
+        .stats-card.total {
+            border-top-color: var(--primary);
+        }
+        
+        .stats-card.approved {
+            border-top-color: var(--success);
+        }
+        
+        .stats-card.hold {
+            border-top-color: var(--warning);
+        }
+        
+        .stats-card.pending {
+            border-top-color: var(--danger);
+        }
+        
+        .order-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        
+        .order-card:hover {
+            box-shadow: var(--hover-shadow);
+            transform: translateY(-2px);
+        }
+        
+        .order-card.approved {
+            border-left-color: var(--success);
+        }
+        
+        .order-card.hold {
+            border-left-color: var(--warning);
+        }
+        
+        .order-card.pending {
+            border-left-color: var(--danger);
+        }
+        
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.8rem;
+            border-radius: 50px;
+            font-weight: 500;
+        }
+        
+        .badge-approved {
+            background-color: rgba(40, 167, 69, 0.15);
+            color: var(--success);
+        }
+        
+        .badge-hold {
+            background-color: rgba(255, 193, 7, 0.15);
+            color: var(--warning);
+        }
+        
+        .badge-pending {
+            background-color: rgba(220, 53, 69, 0.15);
+            color: var(--danger);
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 0.8rem 1.5rem;
+            transition: all 0.2s ease;
+            border-radius: 0;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border-bottom: 3px solid #dee2e6;
+            color: #495057;
+        }
+        
+        .nav-tabs .nav-link.active {
+            border-bottom: 3px solid var(--primary);
+            color: var(--primary);
+            background: transparent;
+        }
+        
+        .total-amount {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #2d3748;
+        }
+        
+        .customer-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .salesman-name {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .order-date {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .edit-btn {
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+        }
+        
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+        }
+     /* Pagination Styles */
+        .pagination-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+        }
+
+        .pagination {
+            margin-bottom: 0;
+        }
+
+        .page-link {
+            border: none;
+            color: #6c757d;
+            padding: 0.5rem 0.75rem;
+            margin: 0 2px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .page-link:hover {
+            background-color: #e9ecef;
+            color: #495057;
+            transform: translateY(-1px);
+        }
+
+        .page-item.active .page-link {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        .page-item.disabled .page-link {
+            color: #adb5bd;
+            background-color: #f8f9fa;
+        }
+        /* Loading animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .order-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Loading state */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4361ee;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        
+        @media (max-width: 992px) {
+            .order-info {
+                margin-bottom: 1rem;
+            }
+            
+            .action-section {
+                border-top: 1px solid #e9ecef;
+                padding-top: 1rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .page-header {
+                padding: 1.25rem;
+            }
+            
+            .page-header h1 {
+                font-size: 1.75rem;
+            }
+            
+            .stats-card {
+                margin-bottom: 1rem;
+            }
+            
+            .nav-tabs .nav-link {
+                padding: 0.6rem;
+                font-size: 0.9rem;
+            }
+        }
+            .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .page-item {
+        margin-bottom: 0.5rem;
+    }
+    
+    .pagination-section {
+        padding: 1rem;
+    }
+        
+        @media (max-width: 576px) {
+            .dashboard-container {
+                padding: 0 15px;
+            }
+            
+            .page-header {
+                border-radius: 10px;
+            }
+            
+            .order-card {
+                padding: 1rem;
+            }
+        }
+            .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .page-item {
+        margin-bottom: 0.5rem;
+    }
+    
+    .pagination-section {
+        padding: 1rem;
+    }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container py-4">
+        <!-- Header Section -->
+        <div class="page-header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <h1 class="mb-1">Customer Orders</h1>
+                    <p class="mb-0 opacity-75">Manage and track all customer orders</p>
+                </div>
+                <div class="mt-2 mt-md-0">
+                    {% if request.user.role.role == 'Salesman' %}
+                        <a href="{% url 'sales_home' %}" class="btn btn-light">
+                            <i class="fas fa-home me-2"></i>Back to Home
+                        </a>
+                    {% else %}
+                        <a href="{% url 'home' %}" class="btn btn-light">
+                            <i class="fas fa-home me-2"></i>Back to Home
+                        </a>
+                    {% endif %}
+                    <a href="{% url 'create_sales_order' %}" class="btn btn-light">
+                        <i class="fas fa-plus-circle me-2"></i>Create New Order
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter and Tabs Section -->
+<div class="filter-section">
+    <div class="row align-items-center">
+        <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+            <div class="input-group">
+                <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search orders..." id="searchOrders">
+            </div>
+        </div>
+
+        <div class="col-lg-9 col-md-6">
+            <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end">
+                <input type="hidden" name="status" value="{{ current_status }}">
+                
+                <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+                    <label for="startDate" class="form-label mb-0 me-2 d-none d-sm-block">From:</label>
+                    <input type="date" class="form-control form-control-sm" id="startDate" name="start_date" value="{{ start_date }}">
+                </div>
+                <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+                    <label for="endDate" class="form-label mb-0 me-2 d-none d-sm-block">To:</label>
+                    <input type="date" class="form-control form-control-sm" id="endDate" name="end_date" value="{{ end_date }}">
+                </div>
+                
+                {% if not request.user.role.role == 'Salesman' %}
+                <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+                    <label for="salesmanFilter" class="form-label mb-0 me-2 d-none d-sm-block">Salesman:</label>
+                    <select class="form-select form-select-sm" id="salesmanFilter" name="salesman_filter">
+                        <option value="All" {% if selected_salesman == 'All' %}selected{% endif %}>All Salesmen</option>
+                        {% for salesman in all_salesmen %}
+                            <option value="{{ salesman.salesman_name }}" {% if selected_salesman == salesman.salesman_name %}selected{% endif %}>
+                                {{ salesman.salesman_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
+                <a href="{% url 'view_sales_orders' %}" class="btn btn-outline-secondary btn-sm mb-2 mb-lg-0">Reset</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <ul class="nav nav-tabs justify-content-md-start">
+            <li class="nav-item">
+                <a class="nav-link {% if not current_status or current_status == 'All' %}active{% endif %}" 
+                   href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">All Orders</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if current_status == 'SO Created' %}active{% endif %}" 
+                   href="?status=SO Created{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">SO Created</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if current_status == 'Approved' %}active{% endif %}" 
+                   href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Approved</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if current_status == 'Hold by A/c' %}active{% endif %}" 
+                   href="?status=Hold by A/c{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">On Hold</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if current_status == 'Pending' %}active{% endif %}" 
+                   href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Pending</a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Orders List -->
+<div class="orders-container">
+    {% if sales_orders %}
+        <div class="row">
+            {% for order in sales_orders %}
+            <div class="col-lg-4 col-md-6 mb-3" id="order-card-{{ order.id }}">
+                <div class="order-card 
+                    {% if order.order_status == 'Approved' %}approved
+                    {% elif order.order_status == 'Hold by A/c' %}hold
+                    {% elif order.order_status == 'SO Created' %}created
+                    {% else %}pending{% endif %}">
+                    
+                    <!-- Header -->
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="mb-1">Order #{{ order.order_number }}</h5>
+                            <span class="order-date">{{ order.order_date|date:"M d, Y" }}</span>
+                        </div>
+                        <span class="status-badge status-{{ order.id }}
+                            {% if order.order_status == 'Approved' %}badge-approved
+                            {% elif order.order_status == 'Hold by A/c' %}badge-hold
+                            {% elif order.order_status == 'SO Created' %}badge-success
+                            {% else %}badge-pending{% endif %}">
+                            {{ order.order_status }}
+                        </span>
+                    </div>
+
+                    <!-- Customer Info -->
+                    <div class="mb-3">
+                        <p class="customer-name mb-1">{{ order.customer.customer_name }}</p>
+                        {% if order.salesman %}
+                            <p class="salesman-name mb-0">({{ order.salesman.salesman_name }})</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="total-amount">AED {{ order.total_amount|floatformat:2 }}</div>
+                        <div>
+                            <a href="{% url 'view_sales_order_details' order.id %}" 
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+
+                            {% if order.order_status == "Pending" %}
+                                <a href="{% url 'edit_sales_order' order.id %}" 
+                                   class="btn btn-sm btn-outline-primary edit-btn ms-1">
+                                    <i class="fas fa-edit me-1"></i>Edit
+                                </a>
+                            {% endif %}
+
+                            <!-- Mark as SO Created Button -->
+                            {% if order.order_status != "SO Created" and order.order_status == "Approved" %}
+                                <button class="btn btn-sm btn-success ms-1 mark-so-btn" 
+                                        data-id="{{ order.id }}">
+                                    Mark as Done
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+         <!-- Pagination Section -->
+        {% if sales_orders.paginator.num_pages > 1 %}
+        <div class="pagination-section mt-5">
+            <nav aria-label="Orders pagination">
+                <ul class="pagination justify-content-center">
+                    <!-- First Page -->
+                    {% if sales_orders.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="First">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <!-- Previous Page -->
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ sales_orders.previous_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Previous">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                        </li>
+                    {% endif %}
+
+                    <!-- Page numbers with ellipsis -->
+                    {% for num in sales_orders.paginator.page_range %}
+                        {% if num == sales_orders.number %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > sales_orders.number|add:'-3' and num < sales_orders.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
+                            </li>
+                        {% elif num == 1 or num == sales_orders.paginator.num_pages %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
+                            </li>
+                        {% elif num == sales_orders.number|add:'-3' or num == sales_orders.number|add:'3' %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    <!-- Next Page -->
+                    {% if sales_orders.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ sales_orders.next_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Next">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <!-- Last Page -->
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ sales_orders.paginator.num_pages }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Last">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            
+            <!-- Page info -->
+            <div class="text-center text-muted mt-2">
+                <small>
+                    Showing {{ sales_orders.start_index }} - {{ sales_orders.end_index }} of {{ sales_orders.paginator.count }} orders
+                    {% if current_status and current_status != 'All' %}
+                        <span class="badge bg-primary ms-2">{{ current_status }}</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+        {% endif %}
+        
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
+            <h4 class="text-muted">No Orders Found</h4>
+            <p class="text-muted">
+                {% if current_status and current_status != 'All' %}
+                    There are no {{ current_status }} orders matching your criteria
+                {% else %}
+                    There are no orders matching your criteria
+                {% endif %}
+            </p>
+            <a href="{% url 'create_sales_order' %}" class="btn btn-primary mt-2">
+                <i class="fas fa-plus-circle me-1"></i> Create New Order
+            </a>
+            {% if current_status and current_status != 'All' %}
+                <a href="?status=All" class="btn btn-outline-secondary mt-2 ms-2">
+                    View All Orders
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Simple search functionality
+    document.getElementById('searchOrders').addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase();
+        const orderCards = document.querySelectorAll('.order-card');
+        
+        orderCards.forEach(card => {
+            const orderText = card.textContent.toLowerCase();
+            if (orderText.includes(searchText)) {
+                card.parentElement.style.display = 'block';
+            } else {
+                card.parentElement.style.display = 'none';
+            }
+        });
+    });
+    
+    // Update active tab based on current status
+    document.addEventListener('DOMContentLoaded', function() {
+        const currentStatus = "{{ current_status }}";
+        const navLinks = document.querySelectorAll('.nav-link');
+        
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.textContent.trim() === currentStatus || 
+               (currentStatus === "All" && link.textContent.trim() === "All Orders")) {
+                link.classList.add('active');
+            }
+        });
+
+        // Smooth scroll to top when pagination links are clicked
+        document.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // Only for pagination links that change pages
+                if (this.getAttribute('href') && this.getAttribute('href').includes('page=')) {
+                    e.preventDefault();
+                    
+                    // Add loading animation
+                    const ordersContainer = document.querySelector('.orders-container');
+                    ordersContainer.style.opacity = '0.7';
+                    ordersContainer.style.transition = 'opacity 0.3s ease';
+                    
+                    // Scroll to top smoothly
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Wait for scroll to complete then navigate
+                    setTimeout(() => {
+                        window.location.href = this.getAttribute('href');
+                    }, 300);
+                }
+            });
+        });
+    });
+
+    // AJAX to mark order as SO Created
+    $(document).on("click", ".mark-so-btn", function() {
+        let orderId = $(this).data("id");
+        let button = $(this);
+
+        $.ajax({
+            url: `/sales-orders/${orderId}/so-created/`,
+            type: "POST",
+            headers: { "X-CSRFToken": "{{ csrf_token }}" },
+            success: function(response) {
+                if (response.success) {
+                    // Update status badge
+                    let statusBadge = $(".status-" + orderId);
+                    statusBadge.text(response.new_status);
+                    statusBadge.removeClass().addClass("status-badge badge-success status-" + orderId);
+
+                    // Replace button with a label
+                    button.replaceWith('<span class="badge bg-success ms-1">SO Created</span>');
+                }
+            }
+        });
+    });
+
+    // Add fade-in animation for order cards
+    document.addEventListener('DOMContentLoaded', function() {
+        const orderCards = document.querySelectorAll('.order-card');
+        orderCards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.5s ease';
+            
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+    </script>
+</body>
+</html>

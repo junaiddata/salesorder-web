@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Create Customer Order</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 for searchable dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html {
+            height: 100%;
+            -webkit-text-size-adjust: 100%;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            height: 100%;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Mobile App Header */
+        .app-header {
+            background: #4CAF50;
+            color: white;
+            padding: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .app-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            margin: 0;
+            color: white;
+        }
+        
+        /* Main Container */
+        .container {
+            flex: 1;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 16px;
+            padding-bottom: 80px; /* Space for fixed submit button */
+        }
+        
+        /* Form Cards */
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            font-size: 17px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        
+        .required-mark {
+            color: #e74c3c;
+            margin-left: 2px;
+        }
+        
+        /* Select2 Custom Styles for Mobile */
+        .select2-container {
+            width: 100% !important;
+        }
+        
+        .select2-container .select2-selection--single {
+            height: 48px;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #333;
+            line-height: 24px;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 46px;
+            right: 12px;
+        }
+        
+        .select2-container--focus .select2-selection--single {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        /* Select2 Dropdown */
+        .select2-dropdown {
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .select2-search--dropdown {
+            padding: 8px;
+        }
+        
+        .select2-search--dropdown .select2-search__field {
+            padding: 10px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            width: 100%;
+        }
+        
+        .select2-results__options {
+            max-height: 330px !important;
+            overflow-y: auto !important;
+        }
+        
+        .select2-results__option {
+            padding: 6px 10px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .select2-results__option--highlighted {
+            background-color: #4CAF50;
+        }
+        
+        /* Multi-select styles */
+        .select2-container--default .select2-selection--multiple {
+            min-height: 48px;
+            padding: 6px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .select2-container--default.select2-container--focus .select2-selection--multiple {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+        
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin-top: 6px;
+        }
+        
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: white;
+            margin-right: 4px;
+        }
+
+        /* Regular inputs */
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background-color: #fff;
+            height: 48px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+        
+        input:disabled {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .help-text {
+            font-size: 13px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        /* Items Section */
+        .item-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .item-number {
+            font-weight: 600;
+            color: #495057;
+            font-size: 15px;
+        }
+        
+        .item-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .item-unit {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    font-size: 16px;
+    background-color: #fff;
+    height: 48px;
+}
+
+.item-unit:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+/* Update the grid for the new unit field */
+.qty-price-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+}
+
+
+        
+        /* .qty-price-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        } */
+        
+        .wrap-select option {
+            white-space: normal;
+        }
+
+        .wrap-select {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            line-height: 1;
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:active:not(:disabled) {
+            background-color: #45a049;
+        }
+        
+        .btn-secondary {
+            background-color: #fff;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+        }
+        
+        .btn-secondary:active:not(:disabled) {
+            background-color: #f0f9f0;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+        
+        .btn-danger:active:not(:disabled) {
+            background-color: #c0392b;
+        }
+        
+        .btn-block {
+            width: 100%;
+        }
+        
+        .btn-add-item {
+            margin-top: 12px;
+            height: 48px;
+        }
+        
+        /* Fixed Submit Button for Mobile */
+        .submit-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 16px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            height: 48px;
+            font-size: 16px;
+        }
+        
+        /* Loading State */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Custom Price Indicator */
+        .custom-price {
+            border-color: #3498db !important;
+            background-color: #ebf5fb !important;
+        }
+        
+        .price-indicator {
+            font-size: 11px;
+            color: #3498db;
+            margin-top: 4px;
+            display: none;
+        }
+        
+        .custom-price ~ .price-indicator {
+            display: block;
+        }
+        
+        /* Messages */
+        .success-message, .error-message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 0 16px 16px;
+            font-size: 14px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .success-message {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        /* Item Details Display */
+        .item-details {
+            font-size: 14px;
+            color: #495057;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        
+        /* Responsive adjustments */
+        @media (min-width: 576px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .app-header {
+                display: none;
+            }
+            
+            .container h1 {
+                display: block;
+                color: #2c3e50;
+                margin-bottom: 30px;
+                font-size: 28px;
+                text-align: center;
+                font-weight: 700;
+            }
+            
+            .submit-section {
+                position: relative;
+                padding: 0;
+                box-shadow: none;
+                margin-top: 32px;
+                text-align: center;
+            }
+            
+            .btn-submit {
+                width: auto;
+                min-width: 200px;
+                padding: 14px 32px;
+            }
+            
+            .item-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            
+        /* Mobile responsive */
+
+            .qty-price-grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+        
+        /* Tablet view */
+        @media (min-width: 575px) and (max-width: 1024px) {
+            .container {
+                padding: 20px;
+                padding-bottom: 100px;
+            }
+
+            .app-header {
+                display: block;
+            }
+
+            .container h1 {
+                display: none;
+            }
+
+            .submit-section {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 16px;
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                z-index: 50;
+            }
+
+            .btn-submit {
+                width: 100%;
+                height: 48px;
+                font-size: 16px;
+            }
+
+            .item-grid {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .qty-price-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+        }
+        
+        /* Prevent zoom on input focus on iOS */
+        @supports (-webkit-touch-callout: none) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
+        
+        /* Hide desktop title on mobile */
+        @media (max-width: 575px) {
+            .container > h1 {
+                display: none;
+            }
+        }
+        
+        input[type="file"] {
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 16px;
+            background-color: #fff;
+            color: #495057;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="app-header">
+            <h1>Create Customer Order</h1>
+        </div>
+        
+        <div id="success-message" class="success-message"></div>
+        <div id="error-message" class="error-message"></div>
+        
+        <div class="container">
+            <h1>Create Customer Order</h1>
+            
+            <form method="post" enctype="multipart/form-data" id="sales-order-form">
+                {% csrf_token %}
+                
+                <!-- Basic Information -->
+                <div class="form-card">
+                    <h2 class="section-header">Order Information</h2>
+                    
+                    <div class="form-group">
+                        <label for="salesman">
+                            Salesman <span class="required-mark">*</span>
+                        </label>
+                        <select id="salesman" name="salesman" required onchange="loadCustomersBySalesman()" class="searchable-select">
+                            <option value="">Select Salesman</option>
+                            {% for salesman in salesmen %}
+                                <option value="{{ salesman.id }}">{{ salesman.salesman_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer">
+                            Customer <span class="required-mark">*</span>
+                        </label>
+                        <select id="customer" name="customer" required disabled class="searchable-select">
+                            <option value="">Select Salesman First</option>
+                        </select>
+                        <p class="help-text">Select a salesman to load their customers</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new_customer_name">Or Add New Customer</label>
+                        <input type="text" name="new_customer_name" id="new_customer_name" 
+                            class="form-control" placeholder="Enter new customer name">
+                        <p class="help-text">Leave blank if selecting from above</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="common_firm">Brand:</label>
+                        <select id="common_firm" name="common_firm" onchange="toggleCommonFirm()" class="searchable-select">
+                            <option value="">Select Brand </option>
+                            <option value="All">All Firms</option>
+                            {% for firm in firms %}
+                                <option value="{{ firm }}">{{ firm }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="help-text">Choose a firm to apply to all items, or select individually</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" id="location" name="location" placeholder="Enter location">
+                    </div>
+                </div>
+
+<!-- Items Multi-Select Section -->
+<div class="form-card" id="items-multiselect-section" style="display: none;">
+    <h2 class="section-header">Select Items</h2>
+    
+    <div class="form-group">
+        <label for="item-multiselect">
+            Items <span class="required-mark">*</span>
+        </label>
+        <select id="item-multiselect" class="searchable-select" multiple="multiple">
+            <option value="">Select Items</option>
+        </select>
+        <p class="help-text">Search and select multiple items at once</p>
+    </div>
+    
+    <button type="button" class="btn btn-secondary btn-block" onclick="addSelectedItems()" style="margin-bottom: 16px;">
+        + Add Selected Items to Order
+    </button>
+</div>
+
+                <!-- Items Section -->
+                <div class="form-card">
+                    <h2 class="section-header">Order Items</h2>
+                    
+                    <div id="items-container" class="items-section">
+                        <div class="item-card">
+                            <div class="item-header">
+                                <span class="item-number">Item #1</span>
+                                <button type="button" class="btn btn-danger" onclick="removeItemRow(this)" style="display:none;">
+                                    Remove
+                                </button>
+                            </div>
+                            
+                            <div class="item-grid">
+                                <div class="individual-firm form-group" style="display:none;">
+                                    <label>Firm <span class="required-mark">*</span></label>
+                                    <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
+                                        <option value="">Select Firm</option>
+                                        <option value="All">All Firms</option>
+                                        {% for firm in firms %}
+                                            <option value="{{ firm }}">{{ firm }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Item <span class="required-mark">*</span></label>
+                                    <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required disabled>
+                                        <option value="">Select Firm First</option>
+                                    </select>
+                                    <div class="item-details" style="font-size:14px;color:#888;">--</div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Stock</label>
+                                    <div class="item-stock" style="font-size:14px;color:#888;">--</div>
+                                    <!-- <label>C:</label>
+                                    <div class="item-cost" style="font-size:14px;color:#888;">---</div> -->
+                                </div>
+                                
+                                <div class="qty-price-grid">
+                                    <div class="form-group">
+                                        <label>Quantity <span class="required-mark">*</span></label>
+                                        <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
+                                    </div>
+                                        <div class="form-group">
+                                        <label>Unit <span class="required-mark">*</span></label>
+                                        <select name="unit" class="item-unit" required>
+                                            <option value="pcs">pcs</option>
+                                            <option value="ctn">ctn</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Price <span class="required-mark">*</span></label>
+                                        <input type="number" name="price" class="item-price" 
+                                            step="0.01" min="0" value="" required inputmode="decimal">
+                                        <p class="price-indicator">Custom price applied</p>
+                                    </div>
+                                </div>
+                                <!-- <div class="form-group">
+                                    <label for="lpo_image">Upload LPO Image (Optional)</label>
+                                    <input type="file" name="lpo_image" accept="image/*">
+                                    <div class="help-text">Accepted formats: JPG, PNG, PDF</div>
+                                </div> -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-secondary btn-block btn-add-item" onclick="addItemRow()">
+                        + Add Another Item
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="submit-section">
+            <button type="submit" form="sales-order-form" class="btn btn-primary btn-submit">
+                Create Customer Order
+            </button>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2 for all searchable selects
+            initializeSelect2();
+            
+            // Initialize multi-select for items
+            $('#item-multiselect').select2({
+                placeholder: "Search and select multiple items",
+                ajax: {
+                    url: '/api/items-search/',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || ''
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.map(item => ({
+                                id: item.id,
+                                text: `${item.item_description || '' }- Stock: ${item.item_stock || 0}`
+                            }))
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 3,
+                width: '100%',
+                closeOnSelect: false // Keep dropdown open after selection
+            });
+            
+            // Initialize item select change handler
+            $(document).on('change', '.item-select', function() {
+                updatePriceField(this);
+            });
+            
+            // Update item numbers
+            updateItemNumbers();
+            
+            // Form validation and submit handler
+            $('#sales-order-form').on('submit', function(e) {
+                // Only prevent default if validation fails
+                if (!validateForm()) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Show loading state
+                const submitBtn = $('.btn-submit');
+                const originalText = submitBtn.html();
+                submitBtn.html('<span class="loading-spinner"></span> Creating Order...')
+                        .prop('disabled', true);
+                
+                // Let the form submit normally
+            });
+            
+            // Prevent double-tap zoom on iOS
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, false);
+            
+            // Handle viewport height on mobile browsers
+            function setViewportHeight() {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            }
+            setViewportHeight();
+            window.addEventListener('resize', setViewportHeight);
+        });
+        
+        function initializeSelect2() {
+            // Ensure jQuery and Select2 are loaded
+            if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') {
+                console.error('jQuery or Select2 is not loaded properly.');
+                return;
+            }
+
+            // Item dropdowns → use AJAX search
+            $('.item-select.searchable-select').select2({
+                placeholder: "Search item...",
+                ajax: {
+                    url: '/api/items-search/',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || ''
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.map(item => ({
+                                id: item.id,
+                                text: `${item.item_code || ''} - ${item.item_stock || ''} - ${item.item_description || ''}`
+                            }))
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 2,
+                width: '100%',
+                allowClear: true
+            });
+
+            // Salesman dropdowns → simple select2 (no AJAX)
+            $('#salesman').select2({
+                placeholder: "Select salesman",
+                minimumResultsForSearch: 5,
+                width: '100%',
+                allowClear: true
+            });
+
+            // Customer dropdown → simple select2 (no AJAX)
+            $('#customer').select2({
+                placeholder: "Select customer",
+                width: '100%',
+                allowClear: true
+            });
+
+            // Firm dropdowns → simple select2 (no AJAX)
+            $('#common_firm').select2({
+                placeholder: "Select Brand",
+                allowClear: true,
+                width: '100%'
+            });
+        }
+        
+        function updateItemNumbers() {
+            $('.item-card').each(function(index) {
+                $(this).find('.item-number').text('Item #' + (index + 1));
+                
+                // Show/hide remove button
+                if (index === 0 && $('.item-card').length === 1) {
+                    $(this).find('.btn-danger').hide();
+                } else {
+                    $(this).find('.btn-danger').show();
+                }
+            });
+        }
+
+        function loadCustomersBySalesman() {
+            const salesmanId = $('#salesman').val();
+            const customerSelect = $('#customer');
+            
+            if (salesmanId) {
+                // Destroy existing Select2 instance
+                if (customerSelect.hasClass('select2-hidden-accessible')) {
+                    customerSelect.select2('destroy');
+                }
+                
+                customerSelect.html('<option value="">Loading customers...</option>')
+                             .prop('disabled', true);
+                
+                $.ajax({
+                    url: '/get_customers_by_salesman/',
+                    data: { 'salesman_id': salesmanId },
+                    dataType: 'json',
+                    success: function(data) {
+                        customerSelect.empty().append('<option value="">Select Customer</option>');
+                        $.each(data.customers, function(index, customer) {
+                            customerSelect.append(
+                                $('<option>', {
+                                    value: customer.id,
+                                    text: customer.customer_name
+                                })
+                            );
+                        });
+                        customerSelect.prop('disabled', false);
+                        
+                        // Reinitialize Select2
+                        customerSelect.select2({
+                            placeholder: "Select Customer",
+                            allowClear: false,
+                            width: '100%'
+                        });
+                    },
+                    error: function() {
+                        customerSelect.html('<option value="">Error loading customers</option>')
+                                     .prop('disabled', false);
+                        showErrorMessage('Failed to load customers. Please try again.');
+                    }
+                });
+            } else {
+                customerSelect.html('<option value="">Select Salesman First</option>')
+                             .prop('disabled', true);
+            }
+        }
+
+        function toggleCommonFirm() {
+            const commonFirm = $('#common_firm').val();
+            const showIndividual = !commonFirm;
+            
+            $('.individual-firm').toggle(showIndividual);
+
+                // Simple line to show/hide multi-select section
+                $('#items-multiselect-section').toggle(!!commonFirm);
+            
+            if (commonFirm) {
+                // Load items for all item selects with common firm
+                $('.item-select').each(function() {
+                    loadItemsForSelect(commonFirm, $(this));
+                });
+            } else {
+                // Reset individual firm selections
+                $('.item-firm').val('').trigger('change');
+                $('.item-select').each(function() {
+                    if ($(this).hasClass('select2-hidden-accessible')) {
+                        $(this).select2('destroy');
+                    }
+                    $(this).html('<option value="">Select Firm First</option>')
+                           .prop('disabled', true);
+                    initializeSelect2();
+                });
+                $('.item-price').val('').removeClass('custom-price');
+                $('.item-details').text('--'); // Reset item details
+            }
+        }
+
+        function loadItemsForSelect(firm, selectElement) {
+            if (!firm) {
+                selectElement.html('<option value="">Select Firm First</option>')
+                           .prop('disabled', true);
+                return;
+            }
+
+            // Destroy existing Select2 instance if exists
+            if (selectElement.hasClass('select2-hidden-accessible')) {
+                selectElement.select2('destroy');
+            }
+
+            selectElement.html('<option value="">Loading items...</option>')
+                        .prop('disabled', true);
+
+            $.ajax({
+                url: '/get_items_by_firm/',
+                data: { 'firm': firm },
+                dataType: 'json',
+                success: function(data) {
+                    selectElement.empty()
+                               .append('<option value="">Select Item</option>');
+                    $.each(data.items, function(index, item) {
+                        const label = `${item.item_description} (${item.item_code} - ${item.item_firm} - ${item.item_upvc} - Stock: ${item.item_stock})`;
+                        selectElement.append(
+                            $('<option>', {
+                                value: item.id,
+                                text: label
+                            })
+                        );
+                    });
+                    selectElement.prop('disabled', false);
+                    
+                    // Reinitialize Select2
+                    selectElement.select2({
+                        placeholder: "Select Item",
+                        allowClear: false,
+                        width: '100%',
+                        minimumInputLength: 3,
+                        templateResult: function(item) {
+                            if (!item.id) return item.text;
+
+                            const parts = item.text.split(' - Stock: ');
+                            const description = parts[0].split(' (')[0];
+                            const stock = parts[1] ? parts[1].replace(')', '') : '';
+
+                            return $('<span>' + description + ' | Stock: ' + stock + '</span>');
+                        },
+                        templateSelection: function(item) {
+                            if (!item.id) return item.text;
+
+                            const parts = item.text.split(' - Stock: ');
+                            const description = parts[0].split(' (')[0];
+                            const stock = parts[1] ? parts[1].replace(')', '') : '';
+
+                            return description + ' | Stock: ' + stock;
+                        },
+
+                        matcher: function(params, data) {
+                            if ($.trim(params.term) === '') {
+                                return data;
+                            }
+                            if (typeof data.text === 'undefined') {
+                                return null;
+                            }
+                            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) {
+                                return data;
+                            }
+                            return null;
+                        }
+                    });
+                },
+                error: function() {
+                    selectElement.html('<option value="">Error loading items</option>')
+                                .prop('disabled', false);
+                    showErrorMessage('Failed to load items. Please try again.');
+                }
+            });
+        }
+
+function addSelectedItems() {
+    const selectedItems = $('#item-multiselect').select2('data');
+    const commonFirm = $('#common_firm').val();
+    
+    if (selectedItems.length === 0) {
+        showErrorMessage('Please select at least one item');
+        return;
+    }
+    
+    // Check if the first/default row is empty and can be used
+    const firstRow = $('.item-card').first();
+    const firstRowItem = firstRow.find('.item-select').val();
+    
+    // If first row is empty, use it for the first selected item
+    if (!firstRowItem && selectedItems.length > 0) {
+        const firstItem = selectedItems.shift(); // Remove first item from array
+        populateFirstRowWithData(firstItem.id, firstItem.text, commonFirm, firstRow);
+    }
+    
+    // Add remaining items as new rows
+    selectedItems.forEach(itemData => {
+        addItemRowWithData(itemData.id, itemData.text, commonFirm);
+    });
+    
+    // Clear the selection
+    $('#item-multiselect').val(null).trigger('change');
+}
+
+                // Function to populate the first/default row with data
+        function populateFirstRowWithData(itemId, itemText, firm, rowElement) {
+            // Enable the row elements
+            rowElement.find('.item-select').prop('disabled', false);
+            
+            // Set the item selection
+            rowElement.find('.item-select').empty().append(`<option value="${itemId}" selected>${itemText}</option>`);
+            rowElement.find('.item-details').text(itemText);
+            
+            // Set default unit
+            rowElement.find('.item-unit').val('pcs');
+            
+            // Show remove button for the first row
+            rowElement.find('.btn-danger').show();
+            
+            // Load stock and price information
+            loadItemDetails(itemId, rowElement);
+            updatePriceField(rowElement.find('.item-select')[0]);
+            
+            // Reinitialize Select2 for the item select
+            if (rowElement.find('.item-select').hasClass('select2-hidden-accessible')) {
+                rowElement.find('.item-select').select2('destroy');
+            }
+            
+            rowElement.find('.item-select').select2({
+                width: '100%',
+                minimumInputLength: 2,
+                ajax: {
+                    url: '/api/items-search/',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || ''
+                        };
+                    },
+                    processResults: function(data) {
+                        return {
+                            results: data.map(item => ({
+                                id: item.id,
+                                text: `${item.item_code || ''} - ${item.item_upvc || ''} - ${item.item_description || ''}`
+                            }))
+                        };
+                    },
+                    cache: true
+                }
+            });
+        }
+
+            // Function to add item row with pre-selected data
+            function addItemRowWithData(itemId, itemText, firm) {
+                const container = $('#items-container');
+                const showIndividual = !firm;
+                const itemCount = $('.item-card').length + 1;
+                
+                const newRow = $(`
+                    <div class="item-card">
+                        <div class="item-header">
+                            <span class="item-number">Item #${itemCount}</span>
+                            <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">
+                                Remove
+                            </button>
+                        </div>
+                        
+                        <div class="item-grid">
+                            <div class="individual-firm form-group" style="display:${showIndividual ? 'block' : 'none'}">
+                                <label>Firm <span class="required-mark">*</span></label>
+                                <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
+                                    <option value="">Select Firm</option>
+                                    <option value="All">All Firms</option>
+                                    {% for firm in firms %}
+                                        <option value="{{ firm }}">{{ firm }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Item <span class="required-mark">*</span></label>
+                                <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required>
+                                    <option value="${itemId}" selected>${itemText}</option>
+                                </select>
+                                <div class="item-details" style="font-size:14px;color:#888;">${itemText}</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Stock</label>
+                                <div class="item-stock" style="font-size:14px;color:#888;">--</div>
+                                <!-- <label>C:</label>
+                                // <div class="item-cost" style="font-size:14px;color:#888;">---</div> -->
+                            </div>
+                            
+                            <div class="qty-price-grid">
+                                <div class="form-group">
+                                    <label>Quantity <span class="required-mark">*</span></label>
+                                    <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
+                                </div>
+                                 <div class="form-group">
+                                    <label>Unit <span class="required-mark">*</span></label>
+                                    <select name="unit" class="item-unit" required>
+                                        <option value="pcs">pcs</option>
+                                        <option value="ctn">ctn</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Price <span class="required-mark">*</span></label>
+                                    <input type="number" name="price" class="item-price" 
+                                        step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
+                                    <p class="price-indicator">Custom price applied</p>
+                                </div>
+                            </div>
+                            
+                            <!-- <div class="form-group">
+                                <label for="lpo_image">Upload LPO Image (Optional)</label>
+                                <input type="file" name="lpo_image" accept="image/*">
+                                <div class="help-text">Accepted formats: JPG, PNG, PDF</div>
+                            </div> -->
+                        </div>
+                    </div>
+                `);
+                
+                container.append(newRow);
+                
+                // Initialize Select2 for the new item select
+                newRow.find('.item-select').select2({
+                    width: '100%',
+                    minimumInputLength: 2,
+                    ajax: {
+                        url: '/api/items-search/',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function(params) {
+                            return {
+                                q: params.term || ''
+                            };
+                        },
+                        processResults: function(data) {
+                            return {
+                                results: data.map(item => ({
+                                    id: item.id,
+                                    text: `${item.item_code || ''} - ${item.item_upvc || ''} - ${item.item_description || ''}`
+                                }))
+                            };
+                        },
+                        cache: true
+                    }
+                });
+                
+                // Load stock and price information
+                loadItemDetails(itemId, newRow);
+                updatePriceField(newRow.find('.item-select')[0]);
+                
+                updateItemNumbers();
+            }
+        // Function to load item details (stock, cost)
+        function loadItemDetails(itemId, rowElement) {
+            $.ajax({
+                url: '/get_item_stock/',
+                data: { 'item_id': itemId },
+                success: function(data) {
+                    rowElement.find('.item-stock').text(data.stock);
+                    rowElement.find('.item-cost').text(data.cost);
+                },
+                error: function() {
+                    rowElement.find('.item-stock').text('Error');
+                    rowElement.find('.item-cost').text('Error');
+                }
+            });
+        }
+
+        function addItemRow() {
+            const container = $('#items-container');
+            const commonFirm = $('#common_firm').val();
+            const showIndividual = !commonFirm;
+            const itemCount = $('.item-card').length + 1;
+            
+            const newRow = $(`
+                <div class="item-card" style="display:none;">
+                    <div class="item-header">
+                        <span class="item-number">Item #${itemCount}</span>
+                        <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">
+                            Remove
+                        </button>
+                    </div>
+                    
+                    <div class="item-grid">
+                        <div class="individual-firm form-group" style="display:${showIndividual ? 'block' : 'none'}">
+                            <label>Firm <span class="required-mark">*</span></label>
+                            <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
+                                <option value="">Select Firm</option>
+                                <option value="All">All Firms</option>
+                                {% for firm in firms %}
+                                    <option value="{{ firm }}">{{ firm }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Item <span class="required-mark">*</span></label>
+                            <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required ${commonFirm ? '' : 'disabled'}>
+                                ${commonFirm ? '<option value="">Select Item</option>' : '<option value="">Select Firm First</option>'}
+                            </select>
+                            <div class="item-details" style="font-size:14px;color:#888;">--</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <div class="item-stock" style="font-size:14px;color:#888;">--</div>
+                            <!-- <label>C:</label>
+                            // <div class="item-cost" style="font-size:14px;color:#888;">---</div>-->
+                        </div>
+                        
+                        <div class="qty-price-grid">
+                            <div class="form-group">
+                                <label>Quantity <span class="required-mark">*</span></label>
+                                <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
+                            </div>
+                        <div class="form-group">
+                        <label>Unit <span class="required-mark">*</span></label>
+                        <select name="unit" class="item-unit" required>
+                            <option value="pcs">pcs</option>
+                            <option value="ctn">ctn</option>
+                        </select>
+                    </div>
+                            
+                            <div class="form-group">
+                                <label>Price <span class="required-mark">*</span></label>
+                                <input type="number" name="price" class="item-price" 
+                                       step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
+                                <p class="price-indicator">Custom price applied</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="lpo_image">Upload LPO Image (Optional)</label>
+                            <input type="file" name="lpo_image" accept="image/*">
+                            <div class="help-text">Accepted formats: JPG, PNG, PDF</div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            
+            container.append(newRow);
+            newRow.slideDown(300);
+            
+            // Initialize Select2 for new elements
+            newRow.find('.searchable-select').select2({
+                placeholder: function() {
+                    return $(this).find('option:first').text();
+                },
+                allowClear: false,
+                width: '100%'
+            });
+            
+            if (commonFirm) {
+                loadItemsForSelect(commonFirm, newRow.find('.item-select'));
+            }
+            
+            updateItemNumbers();
+            
+            // Smooth scroll to new item
+            setTimeout(() => {
+                newRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 350);
+        }
+
+        function removeItemRow(btn) {
+            const row = $(btn).closest('.item-card');
+            
+            // Confirm deletion if item has been filled
+            const itemSelect = row.find('.item-select').val();
+            if (itemSelect) {
+                if (!confirm('Are you sure you want to remove this item?')) {
+                    return;
+                }
+            }
+            
+            // Destroy Select2 instances before removing
+            row.find('.searchable-select').each(function() {
+                if ($(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2('destroy');
+                }
+            });
+            
+            row.slideUp(300, function() {
+                $(this).remove();
+                updateItemNumbers();
+            });
+        }
+        
+        function updatePriceField(itemSelect) {
+            const row = $(itemSelect).closest('.item-card');
+            const customerId = $('#customer').val();
+            const itemId = $(itemSelect).val();
+            const priceField = row.find('.item-price');
+            
+            if (itemId && customerId) {
+                // Show loading state on price field
+                priceField.prop('disabled', true).attr('placeholder', 'Loading...');
+                
+                $.ajax({
+                    url: '/get_item_price/',
+                    data: {
+                        'item_id': itemId,
+                        'customer_id': customerId
+                    },
+                    dataType: 'json',
+                    success: function(data) {
+                        console.log('Price data received:', data);
+                        
+                        // Check if custom price exists and use it, otherwise use default price
+                        if (data.custom_price !== null && data.custom_price !== undefined) {
+                            priceField.val(data.final_price);
+                            priceField.addClass('custom-price');
+                        } else if (data.default_price !== null && data.default_price !== undefined) {
+                            priceField.val(data.default_price);
+                            priceField.removeClass('custom-price');
+                        }
+                        
+                        // Re-enable the field
+                        priceField.prop('disabled', false).attr('placeholder', '0.00');
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading price:', error);
+                        priceField.prop('disabled', false).attr('placeholder', '0.00');
+                        showErrorMessage('Failed to load price. Please enter manually.');
+                    }
+                });
+            } else {
+                console.log('Missing itemId or customerId - itemId:', itemId, 'customerId:', customerId);
+                priceField.val('').removeClass('custom-price');
+            }
+        }
+
+        function onItemChange(itemSelect) {
+            const itemId = $(itemSelect).val();
+            const itemCard = $(itemSelect).closest('.item-card');
+            const stockDisplay = itemCard.find('.item-stock');
+            const costDisplay = itemCard.find('.item-cost');
+            const itemDetailsDisplay = itemCard.find('.item-details');
+            const selectedOption = $(itemSelect).find('option:selected').text();
+
+            if (!itemId) {
+                stockDisplay.text('--');
+                itemDetailsDisplay.text('--');
+                return;
+            }
+
+            // Update item details display
+            itemDetailsDisplay.text(selectedOption);
+
+            // Fetch and update stock
+            $.ajax({
+                url: '/get_item_stock/',
+                data: { 'item_id': itemId },
+                success: function(data) {
+                    stockDisplay.text(data.stock);
+                },
+                error: function() {
+                    stockDisplay.text('Error');
+                }
+            });
+            $.ajax({
+                url: '/get_item_cost/',
+                data: { 'item_id': itemId },
+                success: function(data) {
+                    costDisplay.text(data.cost);
+                },
+                error: function() {
+                    costDisplay.text('Error');
+                }
+            });
+        }
+        
+        function validateForm() {
+            let isValid = true;
+            let errorMessage = '';
+            
+            // Check if at least one item is added
+            if ($('.item-card').length === 0) {
+                errorMessage = 'Please add at least one item to the order.';
+                isValid = false;
+            }
+            
+            // Check if all required fields are filled
+            const requiredFields = $('#sales-order-form').find('[required]');
+            requiredFields.each(function() {
+                if (!$(this).val()) {
+                    isValid = false;
+                    $(this).addClass('error');
+                    errorMessage = 'Please fill in all required fields.';
+                } else {
+                    $(this).removeClass('error');
+                }
+            });
+            
+            if (!isValid) {
+                showErrorMessage(errorMessage);
+                // Scroll to first error field on mobile
+                const firstError = $('.error').first();
+                if (firstError.length) {
+                    firstError[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            
+            return isValid;
+        }
+        
+        function showSuccessMessage(message) {
+            $('#success-message').text(message).slideDown();
+            $('#error-message').slideUp();
+            
+            // Scroll to top on mobile to see message
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            setTimeout(() => {
+                $('#success-message').slideUp();
+            }, 5000);
+        }
+        
+        function showErrorMessage(message) {
+            $('#error-message').text(message).slideDown();
+            $('#success-message').slideUp();
+            
+            // Scroll to top on mobile to see message
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Vibrate on mobile for error feedback
+            if ('vibrate' in navigator) {
+                navigator.vibrate(200);
+            }
+            
+            setTimeout(() => {
+                $('#error-message').slideUp();
+            }, 5000);
+        }
+        
+        // Add touch feedback for buttons
+        $(document).on('touchstart', '.btn', function() {
+            $(this).addClass('active');
+        });
+        
+        $(document).on('touchend touchcancel', '.btn', function() {
+            $(this).removeClass('active');
+        });
+        
+        // Handle Select2 on mobile - open in fullscreen mode
+        $(document).on('select2:open', function(e) {
+            if (window.innerWidth < 576) {
+                $('.select2-container--open .select2-search__field').attr('placeholder', 'Search...');
+                setTimeout(() => {
+                    $('.select2-container--open .select2-search__field').focus();
+                }, 100);
+            }
+        });
+        
+        // Prevent form submission on Enter key in inputs (mobile keyboards)
+        $(document).on('keypress', 'input', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                $(this).blur();
+            }
+        });
+        
+        // Auto-save draft (optional feature for better UX)
+        let autoSaveTimer;
+        function autoSaveDraft() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                const formData = $('#sales-order-form').serializeArray();
+                if (formData.length > 0) {
+                    localStorage.setItem('orderDraft', JSON.stringify(formData));
+                    console.log('Draft saved');
+                }
+            }, 2000);
+        }
+        
+        // Attach autosave to form changes
+        $('#sales-order-form').on('change', 'input, select', autoSaveDraft);
+        
+        // Load draft on page load (optional)
+        function loadDraft() {
+            const draft = localStorage.getItem('orderDraft');
+            if (draft && confirm('You have an unsaved draft. Would you like to restore it?')) {
+                // Implementation for restoring draft
+                console.log('Draft restoration not implemented');
+            }
+        }
+        
+        // Clear draft on successful submission
+        $('#sales-order-form').on('submit', function() {
+            if (validateForm()) {
+                localStorage.removeItem('orderDraft');
+            }
+        });
+        
+        // Add pull-to-refresh functionality (optional)
+        let touchStartY = 0;
+        let touchEndY = 0;
+        
+        document.addEventListener('touchstart', function(e) {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        document.addEventListener('touchend', function(e) {
+            touchEndY = e.changedTouches[0].clientY;
+            if (touchEndY - touchStartY > 100 && window.scrollY === 0) {
+                // Pull to refresh action
+                // location.reload();
+            }
+        }, { passive: true });
+        
+        // Handle offline functionality
+        window.addEventListener('online', function() {
+            showSuccessMessage('Connection restored');
+        });
+        
+        window.addEventListener('offline', function() {
+            showErrorMessage('No internet connection. Your work will be saved locally.');
+        });
+        
+        // Initialize app
+        window.addEventListener('load', function() {
+            // Add iOS standalone app support
+            if (window.navigator.standalone) {
+                document.body.classList.add('standalone');
+            }
+            
+            // Check if running as PWA
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                document.body.classList.add('pwa');
+            }
+        });
+
+        // When user scrolls dropdown, hide keyboard
+        $(document).on('select2:open', function () {
+            let searchField = $('.select2-container--open .select2-search__field');
+            let results = $('.select2-container--open .select2-results__options');
+
+            if (results.length && searchField.length) {
+                results.on('scroll', function () {
+                    searchField.blur(); // hide keyboard
+                });
+            }
+        });
+
+        document.getElementById('customer').addEventListener('change', function() {
+            let customerId = this.value;
+            if (!customerId) return;
+
+            fetch(`/api/get-last-location/${customerId}/`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('location').value = data.location || '';
+                });
+        });
+    </script>
+</body>
+</html>

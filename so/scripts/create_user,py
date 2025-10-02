@@ -1,0 +1,25 @@
+from django.contrib.auth.models import User
+from so.models import Salesman, Role  
+
+default_password = 'junaid2134'
+
+for salesman in Salesman.objects.all():
+    first_name = salesman.salesman_name.strip()
+    username = first_name.lower().replace(' ', '')  
+
+    user, created = User.objects.get_or_create(
+        username=username,
+        defaults={'first_name': first_name}
+    )
+
+    if created:
+        user.set_password(default_password)
+        user.save()
+        print(f"✅ Created user: {username}")
+    else:
+        print(f"⚠️ User {username} already exists")
+
+    Role.objects.update_or_create(
+        user=user,
+        defaults={'role': 'Salesman'}
+    )

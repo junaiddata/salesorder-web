@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation: {{ quotation.quotation_number }} Details - Sales Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* SAP-inspired color palette */
+            --sap-blue: #0a6ed1;
+            --sap-blue-dark: #074ca1;
+            --sap-blue-light: #e5f1fc;
+            --sap-gray-100: #fafafa;
+            --sap-gray-200: #f5f5f5;
+            --sap-gray-300: #e5e5e5;
+            --sap-gray-400: #cccccc;
+            --sap-gray-500: #89919a;
+            --sap-gray-700: #32363a;
+            --sap-gray-900: #1d1d1b;
+            --sap-success: #107e3e;
+            --sap-warning: #df6e0c;
+            --sap-error: #bb0000;
+            --sap-info: #0057b8;
+            --shadow-sm: 0 1px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 5px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--sap-gray-100);
+            color: var(--sap-gray-900);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* SAP-style Header Bar */
+        .sap-header {
+            background-color: var(--sap-gray-700);
+            color: white;
+            padding: 12px 0;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .sap-header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sap-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .sap-logo i {
+            color: var(--sap-blue);
+            font-size: 24px;
+        }
+
+        /* Page Header */
+        .page-header {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+        }
+
+        .page-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .page-title h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+            margin: 0;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.success {
+            background-color: #e5f5ea;
+            color: var(--sap-success);
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-badge.warning {
+            background-color: #fff3cd;
+            color: var(--sap-warning);
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-badge.info {
+            background-color: #e5f1fc;
+            color: var(--sap-info);
+            border: 1px solid #b3d9ff;
+        }
+
+        /* SAP-style Cards */
+        .sap-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .sap-card-header {
+            background-color: var(--sap-gray-200);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--sap-gray-300);
+        }
+
+        .sap-card-header h5 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+        }
+
+        .sap-card-body {
+            padding: 24px;
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: var(--sap-gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: var(--sap-gray-900);
+            font-weight: 500;
+        }
+
+        /* SAP-style Table */
+        .sap-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .sap-table thead {
+            background-color: var(--sap-gray-200);
+            border-bottom: 2px solid var(--sap-gray-300);
+        }
+
+        .sap-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: var(--sap-gray-700);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sap-table td {
+            padding: 16px;
+            border-bottom: 1px solid var(--sap-gray-300);
+            color: var(--sap-gray-900);
+        }
+
+        .sap-table tbody tr:hover {
+            background-color: var(--sap-blue-light);
+            transition: background-color 0.2s ease;
+        }
+
+        .sap-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table-number {
+            color: var(--sap-gray-500);
+            font-weight: 500;
+        }
+
+        .table-total-row {
+            background-color: var(--sap-gray-100);
+            font-weight: 600;
+        }
+
+        .table-total-row td {
+            padding: 20px 16px;
+            font-size: 16px;
+        }
+
+        /* Action Buttons */
+        .action-area {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .sap-button {
+            padding: 10px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .sap-button-primary {
+            background-color: var(--sap-blue);
+            color: white;
+        }
+
+        .sap-button-primary:hover {
+            background-color: var(--sap-blue-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .sap-button-secondary {
+            background-color: white;
+            color: var(--sap-gray-700);
+            border: 1px solid var(--sap-gray-400);
+        }
+
+        .sap-button-secondary:hover {
+            background-color: var(--sap-gray-100);
+            border-color: var(--sap-gray-500);
+        }
+
+        .sap-button-success {
+            background-color: var(--sap-success);
+            color: white;
+        }
+
+        .sap-button-success:hover {
+            background-color: #0d6b35;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Breadcrumb */
+        .sap-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+
+        .sap-breadcrumb a {
+            color: var(--sap-blue);
+            text-decoration: none;
+        }
+
+        .sap-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .sap-breadcrumb .separator {
+            color: var(--sap-gray-400);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--sap-gray-500);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Remarks Section Styles */
+        .remarks-section {
+            margin-top: 24px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+        }
+
+        .remarks-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .remarks-header h5 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+        }
+
+        .remarks-content {
+            padding: 16px;
+            background-color: var(--sap-gray-100);
+            border-radius: 4px;
+            border: 1px solid var(--sap-gray-300);
+            min-height: 100px;
+        }
+
+        .remarks-content p {
+            margin: 0;
+            color: var(--sap-gray-700);
+        }
+
+        .remarks-form {
+            margin-top: 16px;
+        }
+
+        .remarks-form textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--sap-gray-300);
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+
+        .remarks-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sap-table {
+                font-size: 12px;
+            }
+
+            .sap-table th,
+            .sap-table td {
+                padding: 8px;
+            }
+
+            .action-area {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .sap-button {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .page-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .page-title h1 {
+                font-size: 20px;
+            }
+            
+            .sap-card-body {
+                padding: 16px;
+            }
+            
+            .sap-card-header {
+                padding: 12px 16px;
+            }
+            
+            .remarks-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .sap-table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            .sap-table thead,
+            .sap-table tbody,
+            .sap-table th,
+            .sap-table td,
+            .sap-table tr {
+                display: block;
+            }
+            
+            .sap-table thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+            
+            .sap-table tr {
+                border: 1px solid var(--sap-gray-300);
+                margin-bottom: 12px;
+                border-radius: 4px;
+            }
+            
+            .sap-table td {
+                border: none;
+                border-bottom: 1px solid var(--sap-gray-300);
+                position: relative;
+                padding-left: 50%;
+                text-align: left;
+                white-space: normal;
+            }
+            
+            .sap-table td:before {
+                content: attr(data-label);
+                position: absolute;
+                left: 16px;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                font-weight: 600;
+                color: var(--sap-gray-700);
+                text-transform: uppercase;
+                font-size: 11px;
+                letter-spacing: 0.5px;
+            }
+            
+            .table-total-row td {
+                padding-left: 16px;
+                text-align: right;
+            }
+            
+            .table-total-row td:before {
+                display: none;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .sap-header,
+            .sap-breadcrumb,
+            .action-area {
+                display: none;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            .sap-card {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- SAP-style Header Bar -->
+    <div class="sap-header">
+        <div class="container">
+            <div class="sap-header-content">
+                <div class="sap-logo">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Sales Management System</span>
+                </div>
+                <div>
+                    <span style="color: var(--sap-gray-400); margin-right: 16px;">{{ user.get_full_name|default:user.username }}</span>
+                    <a href="{% url 'logout' %}" style="color: white; text-decoration: none;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Breadcrumb -->
+        <nav class="sap-breadcrumb">
+            <a href="{% if user.role.role == 'Salesman' %}{% url 'sales_home' %}{% else %}{% url 'home' %}{% endif %}">Home</a>
+            <span class="separator">/</span>
+            <a href="{% url 'view_quotations' %}">Quotations</a>
+            <span class="separator">/</span>
+            <span style="color: var(--sap-gray-700);">Quotation: {{ quotation.quotation_number }}</span>
+        </nav>
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="page-title">
+                <h1>Quotation: {{ quotation.quotation_number }}</h1>
+                <span class="status-badge 
+                    {% if quotation.status == 'Approved' %}success
+                    {% elif quotation.status == 'On Hold' %}warning
+                    {% else %}info{% endif %}">
+                    <i class="fas fa-{% if quotation.status == 'Approved' %}check-circle{% elif quotation.status == 'On Hold' %}pause-circle{% else %}file-alt{% endif %}" style="margin-right: 4px;"></i>
+                    {{ quotation.status }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Quotation Information -->
+        <div class="sap-card">
+            <div class="sap-card-header">
+                <h5>Quotation Information</h5>
+            </div>
+            <div class="sap-card-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Customer Code</span>
+                        <span class="info-value">{{ quotation.customer.customer_code }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Customer Name</span>
+                        <span class="info-value">{{ quotation.customer.customer_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Quotation Date</span>
+                        <span class="info-value">{{ quotation.quotation_date|date:"F j, Y" }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Valid Until</span>
+                        <span class="info-value">{{ quotation.valid_until|date:"F j, Y"|default:"Not specified" }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Location</span>
+                        <span class="info-value">{{ quotation.location|default:"Not specified" }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Salesman</span>
+                        <span class="info-value">
+                            {% if quotation.salesman %}
+                                {{ quotation.salesman.salesman_name }}
+                            {% else %}
+                                <span style="color: var(--sap-gray-500);">Not assigned</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Total Amount</span>
+                        <span class="info-value" style="color: var(--sap-blue); font-size: 18px; font-weight: 600;">
+                            AED {{ quotation.total_amount|floatformat:2 }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quotation Items -->
+        <div class="sap-card">
+            <div class="sap-card-header">
+                <h5>Quotation Items</h5>
+                {% if has_undercost_items %}
+                <div style="padding: 10px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 5px; margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> One or more items are undercost!
+                </div>
+                {% endif %}
+            </div>
+            <div class="sap-card-body" style="padding: 0;">
+                <table class="sap-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">#</th>
+                            <th>Item Code</th>
+                            <th>Item Description</th>
+                            <th style="width: 120px; text-align: right;">Quantity</th>
+                            <th style="width: 150px; text-align: right;">Unit Price</th>
+                            {% if user.role.role == "Admin" %}
+                            <th style="width: 150px; text-align: right;">Cost Price</th>
+                            <th style="width: 150px; text-align: right;">Min. Selling Price</th>
+                            {% endif %}
+                            <th style="width: 150px; text-align: right;">Line Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in quotation_items %}
+                        <tr>
+                            <td class="table-number" data-label="#">{{ forloop.counter }}</td>
+                            <td data-label="Item Code">{{ item.item.item_code }}</td>
+                            <td data-label="Item Description">{{ item.item.item_description }}</td>
+                            <td style="text-align: right;" data-label="Quantity">{{ item.quantity }} {{item.unit}}</td>
+                            <td 
+                                {% if item.is_undercost %}
+                                    style="text-align: right; color: red; font-weight: bold;"
+                                {% else %}
+                                    style="text-align: right;"
+                                {% endif %}
+                                data-label="Unit Price">
+                                AED {{ item.price|floatformat:2 }}
+                            </td>
+                            {% if user.role.role == "Admin" %}
+                            <td style="text-align: right;" data-label="Cost Price">AED {{ item.item.item_cost|floatformat:2 }}</td>
+                            <td style="text-align: right;" data-label="Min. Selling Price">AED {{ item.item.item_price|floatformat:2 }}</td>
+                            {% endif %}
+                            <td style="text-align: right;" data-label="Line Total">AED {{ item.line_total|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if user.role.role == 'Admin' %}8{% else %}6{% endif %}">
+                                <div class="empty-state">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>No items in this quotation</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if quotation_items %}
+                        <tr class="table-total-row">
+                            <td colspan="{% if user.role.role == 'Admin' %}6{% else %}4{% endif %}" style="text-align: right;">Quotation Total:</td>
+                            <td style="text-align: right; color: var(--sap-blue);">
+                                AED {{ quotation.total_amount|floatformat:2 }}
+                            </td>
+                            {% if user.role.role == "Admin" %}
+                            <td colspan="2"></td>
+                            {% endif %}
+                            <td></td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if user.role.role == 'Admin' %}
+        <!-- Remarks Section -->
+        <div class="remarks-section">
+            <div class="remarks-header">
+                <h5>Remarks</h5>
+                <button id="edit-remarks-btn" class="sap-button sap-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                    <i class="fas fa-edit"></i> Edit Remarks
+                </button>
+            </div>
+            
+            <div id="remarks-display" class="remarks-content">
+                {% if quotation.remarks %}
+                    <p>{{ quotation.remarks|linebreaksbr }}</p>
+                {% else %}
+                    <p style="color: var(--sap-gray-500); font-style: italic;">No remarks added yet.</p>
+                {% endif %}
+            </div>
+            
+            <div id="remarks-form" class="remarks-form" style="display: none;">
+                <form method="POST" id="update-remarks-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update_remarks">
+                    <textarea name="remarks" placeholder="Enter your remarks here...">{% if quotation.remarks %}{{ quotation.remarks }}{% endif %}</textarea>
+                    <div class="remarks-actions">
+                        <button type="button" id="cancel-remarks-btn" class="sap-button sap-button-secondary" style="padding: 6px 12px;">
+                            Cancel
+                        </button>
+                        <button type="submit" class="sap-button sap-button-primary" style="padding: 6px 12px;">
+                            Save Remarks
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="action-area">
+            {% if user.role.role == 'Admin' %}
+                {% if quotation.status != 'Approved' %}
+                    <form method="POST" style="margin: 0; display: inline-block;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="approve">
+                        <button type="submit" class="sap-button sap-button-primary">
+                            <i class="fas fa-check"></i>
+                            Mark as Approved
+                        </button>
+                    </form>
+
+                    <form method="POST" style="margin: 0; display: inline-block;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="hold">
+                        <button type="submit" class="sap-button sap-button-warning">
+                            <i class="fas fa-pause"></i>
+                            Put On Hold
+                        </button>
+                    </form>
+                {% endif %}
+            {% endif %}
+            
+            <!-- Edit Button -->
+            
+                <a href="{% url 'edit_quotation' quotation.id %}" 
+                class="sap-button sap-button-secondary">
+                    <i class="fas fa-edit"></i>
+                    Edit Quotation
+                </a>
+           
+            
+            <a href="{% url 'view_quotations' %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Back to Quotations
+            </a>
+            
+            <button onclick="window.print()" class="sap-button sap-button-secondary">
+                <i class="fas fa-print"></i>
+                Print Quotation
+            </button>
+            {% if quotation.status == "Approved" %}
+            <a href="{% url 'export_quotation_to_pdf' quotation.id %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-file-pdf"></i>
+                Export to PDF
+            </a>
+            {%else %}
+            <a href="#" class="sap-button sap-button-secondary">
+                <i class="fas fa-file-pdf"></i>
+                Not approved to export
+            </a>
+            {% endif %}
+            {% if quotation.status == "Remove thsi after creating export functions" %}
+            <a href="{% url 'export_quotation_to_excel' quotation.id %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-file-excel"></i>
+                Export to Excel
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add smooth animations on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.sap-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+
+        // Export to PDF function (placeholder)
+        function exportToPDF() {
+            alert('PDF export functionality would be implemented here. This would generate a PDF version of the quotation.');
+        }
+
+        // Add hover effect to table rows
+        const tableRows = document.querySelectorAll('.sap-table tbody tr');
+        tableRows.forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.cursor = 'pointer';
+            });
+        });
+
+        // Status update animation
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const button = this.querySelector('button[type="submit"]');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                    button.disabled = true;
+                }
+            });
+        });
+
+        // Add tooltip functionality
+        function addTooltip(element, text) {
+            element.setAttribute('title', text);
+            element.style.cursor = 'help';
+        }
+
+        // Add tooltips to status badges
+        const statusBadge = document.querySelector('.status-badge');
+        if (statusBadge.classList.contains('warning')) {
+            addTooltip(statusBadge, 'This quotation is on hold');
+        } else if (statusBadge.classList.contains('success')) {
+            addTooltip(statusBadge, 'This quotation has been approved');
+        } else {
+            addTooltip(statusBadge, 'This quotation is pending approval');
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Press 'P' to print
+            if (e.key === 'p' && e.ctrlKey) {
+                e.preventDefault();
+                window.print();
+            }
+            // Press 'Escape' to go back
+            if (e.key === 'Escape') {
+                window.location.href = "{% url 'view_quotations' %}";
+            }
+        });
+        
+        // Remarks functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const editRemarksBtn = document.getElementById('edit-remarks-btn');
+            const cancelRemarksBtn = document.getElementById('cancel-remarks-btn');
+            const remarksDisplay = document.getElementById('remarks-display');
+            const remarksForm = document.getElementById('remarks-form');
+            const updateRemarksForm = document.getElementById('update-remarks-form');
+            
+            if (editRemarksBtn) {
+                editRemarksBtn.addEventListener('click', function() {
+                    remarksDisplay.style.display = 'none';
+                    remarksForm.style.display = 'block';
+                });
+            }
+            
+            if (cancelRemarksBtn) {
+                cancelRemarksBtn.addEventListener('click', function() {
+                    remarksDisplay.style.display = 'block';
+                    remarksForm.style.display = 'none';
+                });
+            }
+            
+            if (updateRemarksForm) {
+                updateRemarksForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update the displayed remarks
+                            const remarksContent = remarksDisplay.querySelector('p');
+                            if (formData.get('remarks').trim() === '') {
+                                remarksContent.innerHTML = '<p style="color: var(--sap-gray-500); font-style: italic;">No remarks added yet.</p>';
+                            } else {
+                                remarksContent.textContent = formData.get('remarks');
+                                // Convert line breaks to <br> tags
+                                remarksContent.innerHTML = remarksContent.textContent.replace(/\n/g, '<br>');
+                            }
+                            
+                            // Switch back to display mode
+                            remarksDisplay.style.display = 'block';
+                            remarksForm.style.display = 'none';
+                            
+                            // Show success message
+                            alert('Remarks updated successfully!');
+                        } else {
+                            alert('Error updating remarks: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while updating remarks.');
+                    });
+                });
+            }
+        });
+        
+        // Auto-refresh if quotation is pending (every 30 seconds)
+    </script>
+    {% if quotation.status == 'Pending' %}
+    <script>
+        setTimeout(function() {
+            window.location.reload();
+        }, 30000);
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SALES ORDER WEB</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .tab-container {
+            display: flex;
+            background-color: #f0f0f0;
+            padding: 5px 0;
+            border-bottom: 1px solid #ccc;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 5px 15px;
+            margin: 0 2px;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .content {
+            padding: 20px;
+        }
+        iframe {
+            width: 100%;
+            height: calc(100vh - 50px);
+            border: none;
+        }
+        .scroll-arrows {
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            background-color: #f0f0f0;
+        }
+        .scroll-arrow {
+            cursor: pointer;
+            padding: 0 5px;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="scroll-arrows">
+            <span class="scroll-arrow" onclick="scrollTabs(-100)">◀</span>
+            <div class="tab-container" id="tabContainer">
+                <div class="tab active" onclick="showSheet('sheet1')">SALES ORDER APP</div>
+                <div class="tab" onclick="showSheet('sheet2')">INTR</div>
+                <div class="tab" onclick="showSheet('sheet3')">HOME</div>
+                <div class="tab" onclick="showSheet('sheet4')">PAGES</div>
+                <div class="tab" onclick="showSheet('sheet5')">CUSTOMER ORDER LIST</div>
+                <div class="tab" onclick="showSheet('sheet6')">DETAILED PAGE</div>
+                <div class="tab" onclick="showSheet('sheet7')">WHATSAPP</div>
+                <div class="tab" onclick="showSheet('sheet8')">PDF EXCEL</div>
+            </div>
+            <span class="scroll-arrow" onclick="scrollTabs(100)">▶</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <iframe id="contentFrame" src="SALESORDER%20WEB_files/sheet003.htm"></iframe>
+    </div>
+
+    <script>
+        // Current active sheet
+        let currentSheet = 'sheet3';
+        
+        function showSheet(sheetId) {
+            currentSheet = sheetId;
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Load the corresponding content
+            const frame = document.getElementById('contentFrame');
+            switch(sheetId) {
+                case 'sheet1': frame.src = "SALESORDER%20WEB_files/sheet001.htm"; break;
+                case 'sheet2': frame.src = "SALESORDER%20WEB_files/sheet002.htm"; break;
+                case 'sheet3': frame.src = "SALESORDER%20WEB_files/sheet003.htm"; break;
+                case 'sheet4': frame.src = "SALESORDER%20WEB_files/sheet004.htm"; break;
+                case 'sheet5': frame.src = "SALESORDER%20WEB_files/sheet005.htm"; break;
+                case 'sheet6': frame.src = "SALESORDER%20WEB_files/sheet006.htm"; break;
+                case 'sheet7': frame.src = "SALESORDER%20WEB_files/sheet007.htm"; break;
+                case 'sheet8': frame.src = "SALESORDER%20WEB_files/sheet008.htm"; break;
+            }
+        }
+
+        function scrollTabs(amount) {
+            const container = document.getElementById('tabContainer');
+            container.scrollLeft += amount;
+        }
+
+        // Initialize with HOME tab active
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('.tab');
+            tabs[2].classList.add('active'); // HOME tab is index 2 (third tab)
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order: {{ sales_order.order_number }} Details - Sales Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* SAP-inspired color palette */
+            --sap-blue: #0a6ed1;
+            --sap-blue-dark: #074ca1;
+            --sap-blue-light: #e5f1fc;
+            --sap-gray-100: #fafafa;
+            --sap-gray-200: #f5f5f5;
+            --sap-gray-300: #e5e5e5;
+            --sap-gray-400: #cccccc;
+            --sap-gray-500: #89919a;
+            --sap-gray-700: #32363a;
+            --sap-gray-900: #1d1d1b;
+            --sap-success: #107e3e;
+            --sap-warning: #df6e0c;
+            --sap-error: #bb0000;
+            --sap-info: #0057b8;
+            --shadow-sm: 0 1px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 5px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--sap-gray-100);
+            color: var(--sap-gray-900);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* SAP-style Header Bar */
+        .sap-header {
+            background-color: var(--sap-gray-700);
+            color: white;
+            padding: 12px 0;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .sap-header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sap-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .sap-logo i {
+            color: var(--sap-blue);
+            font-size: 24px;
+        }
+
+        /* Page Header */
+        .page-header {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+        }
+
+                .page-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .page-title h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+            margin: 0;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.success {
+            background-color: #e5f5ea;
+            color: var(--sap-success);
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-badge.warning {
+            background-color: #fff3cd;
+            color: var(--sap-warning);
+            border: 1px solid #ffeaa7;
+        }
+
+        /* SAP-style Cards */
+        .sap-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .sap-card-header {
+            background-color: var(--sap-gray-200);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--sap-gray-300);
+        }
+
+        .sap-card-header h5 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+        }
+
+        .sap-card-body {
+            padding: 24px;
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: var(--sap-gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: var(--sap-gray-900);
+            font-weight: 500;
+        }
+
+        /* SAP-style Table */
+        .sap-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .sap-table thead {
+            background-color: var(--sap-gray-200);
+            border-bottom: 2px solid var(--sap-gray-300);
+        }
+
+        .sap-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: var(--sap-gray-700);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sap-table td {
+            padding: 16px;
+            border-bottom: 1px solid var(--sap-gray-300);
+            color: var(--sap-gray-900);
+        }
+
+        .sap-table tbody tr:hover {
+            background-color: var(--sap-blue-light);
+            transition: background-color 0.2s ease;
+        }
+
+        .sap-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table-number {
+            color: var(--sap-gray-500);
+            font-weight: 500;
+        }
+
+        .table-total-row {
+            background-color: var(--sap-gray-100);
+            font-weight: 600;
+        }
+
+        .table-total-row td {
+            padding: 20px 16px;
+            font-size: 16px;
+        }
+
+        /* Action Buttons */
+        .action-area {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .sap-button {
+            padding: 10px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .sap-button-primary {
+            background-color: var(--sap-blue);
+            color: white;
+        }
+
+        .sap-button-primary:hover {
+            background-color: var(--sap-blue-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .sap-button-secondary {
+            background-color: white;
+            color: var(--sap-gray-700);
+            border: 1px solid var(--sap-gray-400);
+        }
+
+        .sap-button-secondary:hover {
+            background-color: var(--sap-gray-100);
+            border-color: var(--sap-gray-500);
+        }
+
+        /* Breadcrumb */
+        .sap-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+
+        .sap-breadcrumb a {
+            color: var(--sap-blue);
+            text-decoration: none;
+        }
+
+        .sap-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .sap-breadcrumb .separator {
+            color: var(--sap-gray-400);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--sap-gray-500);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        /* Remarks Section Styles */
+        .remarks-section {
+            margin-top: 24px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sap-gray-300);
+        }
+
+        .remarks-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .remarks-header h5 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--sap-gray-900);
+        }
+
+        .remarks-content {
+            padding: 16px;
+            background-color: var(--sap-gray-100);
+            border-radius: 4px;
+            border: 1px solid var(--sap-gray-300);
+            min-height: 100px;
+        }
+
+        .remarks-content p {
+            margin: 0;
+            color: var(--sap-gray-700);
+        }
+
+        .remarks-form {
+            margin-top: 16px;
+        }
+
+        .remarks-form textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--sap-gray-300);
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+
+        .remarks-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        /* Container for the monthly pending table */
+/* Container styling */
+.monthly-pending-container {
+    margin: 20px 0;
+    overflow-x: auto;
+}
+
+/* Table styling */
+.month-split-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Header rows styling */
+.month-split-table thead tr {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Data rows styling */
+.month-split-table tbody tr {
+    text-align: center;
+}
+
+/* Cell styling */
+.month-split-table th,
+.month-split-table td {
+    padding: 12px 8px;
+    border: 1px solid #dee2e6;
+    width: 16.66%; /* Equal width for 6 columns */
+}
+
+/* First header row bottom border */
+.month-split-table thead tr:first-child {
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Hover effects */
+.month-split-table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Responsive adjustments */
+
+
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sap-table {
+                font-size: 12px;
+            }
+
+            .sap-table th,
+            .sap-table td {
+                padding: 8px;
+            }
+
+            .action-area {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .sap-button {
+                width: 100%;
+                justify-content: center;
+            }
+    .month-split-table th,
+    .month-split-table td {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
+}
+        
+
+        /* Print Styles */
+        @media print {
+            .sap-header,
+            .sap-breadcrumb,
+            .action-area {
+                display: none;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            .sap-card {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- SAP-style Header Bar -->
+    <div class="sap-header">
+        <div class="container">
+            <div class="sap-header-content">
+                <div class="sap-logo">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Sales Management System</span>
+                </div>
+                <div>
+                    <span style="color: var(--sap-gray-400); margin-right: 16px;">{{ user.get_full_name|default:user.username }}</span>
+                    <a href="{% url 'logout' %}" style="color: white; text-decoration: none;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Breadcrumb -->
+        <nav class="sap-breadcrumb">
+            <a href="{% if user.role.role == 'Salesman' %}{% url 'sales_home' %}{% else %}{% url 'home' %}{% endif %}">Home</a>
+            <span class="separator">/</span>
+            <a href="{% url 'view_sales_orders' %}">Customer Order Forms</a>
+            <span class="separator">/</span>
+            <span style="color: var(--sap-gray-700);">Order: {{ sales_order.order_number }}</span>
+        </nav>
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="page-title">
+                <h1>Customer Order: {{ sales_order.order_number }}</h1>
+                <span class="status-badge {% if sales_order.order_taken %}success{% else %}warning{% endif %}">
+                    <i class="fas fa-{% if sales_order.order_taken %}check-circle{% else %}clock{% endif %}" style="margin-right: 4px;"></i>
+                    {% if sales_order.order_taken %}
+                        Order Approved
+                        {% if sales_order.approved_by %}
+                            <span style="font-weight:400; color:var(--sap-gray-500); font-size:12px; margin-left:8px;">
+                                (by {{ sales_order.approved_by.get_full_name|default:sales_order.approved_by.username }})
+                            </span>
+                        {% endif %}
+                    {% else %}
+                        {{ sales_order.order_status }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+                {% if sales_order.order_taken %}
+                <div style="padding: 10px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px; margin-bottom: 10px;">
+                    <i class="fas fa-check-circle"></i>
+                    {% if messag %}
+                        {{ messag }}
+                    {% else %}
+                        Order has been approved.
+                    {% endif %}
+                </div>
+                {% endif %}
+        <!-- Order Information -->
+        <div class="sap-card">
+            <div class="sap-card-header">
+                <h5>Order Information</h5>
+            </div>
+            <div class="sap-card-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Customer Code</span>
+                        <span class="info-value">{{ sales_order.customer.customer_code }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Customer Name</span>
+                        <span class="info-value">{{ sales_order.customer.customer_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Order Date</span>
+                        <span class="info-value">{{ sales_order.order_date|date:"F j, Y" }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Credit Limit</span>
+                        <span class="info-value">{{credit_limit }} AED</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Payment Term</span>
+                        <span class="info-value">{{payment_terms }} </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Location</span>
+                        <span class="info-value">{{ sales_order.location|default:"Not specified" }}</span>
+                    </div>
+
+
+                    <div class="info-item">
+                        <span class="info-label">Salesman</span>
+                        <span class="info-value">
+                            {% if sales_order.salesman %}
+                                {{ sales_order.salesman.salesman_name }}
+                            {% else %}
+                                <span style="color: var(--sap-gray-500);">Not assigned</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Total Amount</span>
+                        <span class="info-value" style="color: var(--sap-blue); font-size: 18px; font-weight: 600;">
+                            AED {{ sales_order.total_amount|floatformat:2 }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if sales_order.lpo_image %}
+<div class="sap-card">
+    <div class="sap-card-header">
+        <h5>Attached LPO Image</h5>
+    </div>
+    <div class="sap-card-body" style="text-align: center;">
+        <a href="{{ sales_order.lpo_image.url }}" target="_blank">
+            <img src="{{ sales_order.lpo_image.url }}" alt="LPO Image" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+        </a>
+        <div style="margin-top: 8px;">
+            <a href="{{ sales_order.lpo_image.url }}" target="_blank" class="sap-button sap-button-secondary">
+                <i class="fas fa-eye"></i>
+                View Full LPO
+            </a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="sap-card">
+    <div class="sap-card-header">
+        <h5>LPO Image</h5>
+    </div>
+    <div class="sap-card-body">
+        <p style="color: var(--sap-gray-500);">No LPO image uploaded for this order.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Order Items -->
+<div class="sap-card">
+    <div class="sap-card-header">
+        <h5>Order Items</h5>
+        {% if has_undercost_items %}
+        <div style="padding: 10px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 5px; margin-bottom: 10px;">
+            <i class="fas fa-exclamation-triangle"></i> One or more items are undercost!
+        </div>
+        {% endif %}
+    </div>
+    <div class="sap-card-body" style="padding: 0;">
+        <table class="sap-table">
+            <thead>
+                <tr>
+                    <th style="width: 60px;">#</th>
+                    <th>Item Code</th>
+                    <th>Item Description</th>
+                    <th style="width: 120px; text-align: right;">Quantity</th>
+                    <th style="width: 150px; text-align: right;">Unit Price</th>
+                    {% if user.role.role == "Admin" %}  <!-- Only show for Admin -->
+                    <th style="width: 150px; text-align: right;">Cost Price</th>
+                    <th style="width: 150px; text-align: right;">Min. Selling Price</th>
+                    {% endif %}
+                    <th style="width: 150px; text-align: right;">Line Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in order_items %}
+                <tr>
+                    <td class="table-number">{{ forloop.counter }}</td>
+                    <td>{{ item.item.item_code }}</td>
+                    <td>{{ item.item.item_description }}</td>
+                    <td style="text-align: right;">{{ item.quantity }} {{item.unit}}</td>
+                    <td
+                    {% if item.is_undercost %}
+                        style="text-align: right; color: red; font-weight: bold;"
+                    {% else %}
+                        style="text-align: right;"
+                    {% endif %}
+                    >AED {{ item.price|floatformat:2 }}
+                    </td>
+                    {% if user.role.role == "Admin" %}  <!-- Only show for Admin -->
+                    <td style="text-align: right;">AED {{ item.item.item_cost|floatformat:2 }}</td>
+                    <td style="text-align: right;">AED {{ item.item.item_price|floatformat:2 }}</td>
+                    {% endif %}
+                    <td style="text-align: right;">AED {{ item.line_total|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if user.role == 'Admin' %}8{% else %}6{% endif %}">  <!-- Adjust colspan based on role -->
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>No items in this order</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if order_items %}
+                <tr class="table-total-row">
+                    <td colspan="4" style="text-align: right;">Order Total:</td>
+                    <td style="text-align: right; color: var(--sap-blue);">
+                        AED {{ sales_order.total_amount|floatformat:2 }}
+                    </td>
+                    {% if user.role.role == "Admin" %}  <!-- Add empty cells to maintain alignment -->
+                    <td colspan="2"></td>
+                    {% endif %}
+                    <td></td>
+                </tr>
+                    <tr class="table-total-row">
+                    <td colspan="4" style="text-align: right;">VAT (5%):</td>
+                    <td style="text-align: right; color: var(--sap-blue);">
+                        AED {{ sales_order.tax|floatformat:2 }}
+                    </td>
+                    {% if user.role.role == "Admin" %}  <!-- Add empty cells to maintain alignment -->
+                    <td colspan="2"></td>
+                    {% endif %}
+                    <td></td>
+                </tr>
+                <tr class="table-total-row">
+                    <td colspan="4" style="text-align: right;">Grand Total (incl. VAT 5%):</td>
+                    <td style="text-align: right; color: var(--sap-blue);">
+                        AED {{ grand_total |floatformat:2 }}
+                    </td>
+                    {% if user.role.role == "Admin" %}  <!-- Add empty cells to maintain alignment -->
+                    <td colspan="2"></td>
+                    {% endif %}
+                    <td></td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if user.role.role == 'Admin' %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h3 class="mb-0">Monthly Pending Summary</h3>
+    </div>
+    <div class="card-body">
+        {% if has_over_limit %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Warning!</strong> Customer has exceeded credit limit ({{ pending_total|floatformat:2 }} AED vs {{ credit_limit|floatformat:2 }} AED limit)
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+
+        <div class="table-responsive monthly-pending-container">
+            <table class="table table-bordered month-split-table">
+                <thead class="table-light">
+                <tr>
+                    {% for month in monthly_pending_data|slice:":6" %}
+                        <th class="text-center">{{ month.month_abbr }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    {% for month in monthly_pending_data|slice:":6" %}
+                        <td class="text-center {{ month.pending_total|yesno:'table-warning,' }}">
+                            {{ month.pending_total|floatformat:2|default:"0.00" }}
+                        </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+
+            <!-- <thead class="table-light">
+                <tr>
+                    {% for month in monthly_pending_data|slice:"6:" %}
+                        <th class="text-center">{{ month.month_abbr }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    {% for month in monthly_pending_data|slice:"6:" %}
+                        <td class="text-center {{ month.pending_total|yesno:'table-warning,' }}">
+                            {{ month.pending_total|floatformat:2|default:"0.00" }}
+                        </td>
+                    {% endfor %}
+                </tr>
+            </tbody> -->
+            </table>
+        </div>
+
+        <div class="mt-3 p-3 bg-light rounded">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between">
+                        <strong>6+ Months Pending:</strong>
+                        <span>{{ old_months|floatformat:2 }} AED</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <strong>Credit Limit:</strong>
+                        <span>{{ credit_limit|floatformat:2 }} AED</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Pending:</strong>
+                        <span class="{{ has_over_limit|yesno:'text-danger,' }}">
+                            {{ pending_total_without|floatformat:2 }} AED
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between">
+                        <strong>Total PDC:</strong>
+                        <span class="text-success">{{ current_month_receivables|floatformat:2 }} AED</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <strong>Payment Terms:</strong>
+                        <span>{{ payment_terms }} </span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Pending with this Order:</strong>
+                        <span>{{ pending_total |floatformat:2 }} </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+        {% if user.role.role == "Admin" %} 
+        <!-- Remarks Section -->
+        <div class="remarks-section">
+            <div class="remarks-header">
+                <h5>Remarks</h5>
+                {% if user.role.role == 'Admin' %}
+                <button id="edit-remarks-btn" class="sap-button sap-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                    <i class="fas fa-edit"></i> Edit Remarks
+                </button>
+                {% endif %}
+            </div>
+            
+            <div id="remarks-display" class="remarks-content">
+                {% if sales_order.remarks %}
+                    <p>{{ sales_order.remarks|linebreaksbr }}</p>
+                {% else %}
+                    <p style="color: var(--sap-gray-500); font-style: italic;">No remarks added yet.</p>
+                {% endif %}
+            </div>
+            
+            {% if user.role.role == 'Admin' %}
+            <div id="remarks-form" class="remarks-form" style="display: none;">
+                <form method="POST" id="update-remarks-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update_remarks">
+                    <textarea name="remarks" placeholder="Enter your remarks here...">{% if sales_order.remarks %}{{ sales_order.remarks }}{% endif %}</textarea>
+                    <div class="remarks-actions">
+                        <button type="button" id="cancel-remarks-btn" class="sap-button sap-button-secondary" style="padding: 6px 12px;">
+                            Cancel
+                        </button>
+                        <button type="submit" class="sap-button sap-button-primary" style="padding: 6px 12px;">
+                            Save Remarks
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+         <!-- Action Buttons -->
+        <div class="action-area">
+        {% if user.role.role == 'Admin' %}
+            {% if sales_order.order_status != 'Approved' %}
+                <form method="POST" style="margin: 0; display: inline-block;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="sap-button sap-button-primary">
+                        <i class="fas fa-check"></i>
+                        Mark as Approved
+                    </button>
+                </form>
+
+            <form method="POST" style="margin: 0; display: inline-block;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="hold">
+                <button type="submit" class="sap-button sap-button-warning">
+                    <i class="fas fa-pause"></i>
+                    Hold by A/c
+                </button>
+            </form>
+            {% endif %}
+        {% endif %}
+            <!-- Edit Button -->
+        {% if sales_order.order_status == "Pending" %}
+            <a href="{% url 'edit_sales_order' sales_order.id %}" 
+            class="sap-button sap-button-secondary">
+                <i class="fas fa-edit"></i>
+                Edit Order
+            </a>
+        {% endif %}
+            <a href="{% url 'view_sales_orders' %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Back to Orders
+            </a>
+            
+            <button onclick="window.print()" class="sap-button sap-button-secondary">
+                <i class="fas fa-print"></i>
+                Print Order
+            </button>
+            
+            <a href="{% url 'export_sales_order_to_pdf' sales_order.id %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-file-pdf"></i>
+                Export to PDF
+            </a>
+            <a href="{% url 'export_sales_order_to_excel' sales_order.id %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-file-excel"></i>
+                Export to Excel
+            </a>
+                        <a
+                href="https://wa.me/{{ sales_order.customer.phone_number|urlencode }}?text={{ pdf_message|urlencode }}"
+                class="btn btn-success"
+                target="_blank"
+            >
+                Send PDF via WhatsApp
+            </a>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add smooth animations on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.sap-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+
+        // Export to PDF function (placeholder)
+        function exportToPDF() {
+            alert('PDF export functionality would be implemented here. This would generate a PDF version of the order.');
+        }
+
+        // Add hover effect to table rows
+        const tableRows = document.querySelectorAll('.sap-table tbody tr');
+        tableRows.forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.cursor = 'pointer';
+            });
+        });
+
+        // Status update animation
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const button = this.querySelector('button[type="submit"]');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                    button.disabled = true;
+                }
+            });
+        });
+
+        // Add tooltip functionality
+        function addTooltip(element, text) {
+            element.setAttribute('title', text);
+            element.style.cursor = 'help';
+        }
+
+        // Add tooltips to status badges
+        const statusBadge = document.querySelector('.status-badge');
+        if (statusBadge.classList.contains('warning')) {
+            addTooltip(statusBadge, 'This order has not been processed yet');
+        } else {
+            addTooltip(statusBadge, 'This order has been successfully processed');
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Press 'P' to print
+            if (e.key === 'p' && e.ctrlKey) {
+                e.preventDefault();
+                window.print();
+            }
+            // Press 'Escape' to go back
+            if (e.key === 'Escape') {
+                window.location.href = "{% url 'view_sales_orders' %}";
+            }
+        });
+        
+        // Remarks functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const editRemarksBtn = document.getElementById('edit-remarks-btn');
+    const cancelRemarksBtn = document.getElementById('cancel-remarks-btn');
+    const remarksDisplay = document.getElementById('remarks-display');
+    const remarksForm = document.getElementById('remarks-form');
+    const updateRemarksForm = document.getElementById('update-remarks-form');
+    
+    if (editRemarksBtn) {
+        editRemarksBtn.addEventListener('click', function() {
+            remarksDisplay.style.display = 'none';
+            remarksForm.style.display = 'block';
+        });
+    }
+    
+    if (cancelRemarksBtn) {
+        cancelRemarksBtn.addEventListener('click', function() {
+            remarksDisplay.style.display = 'block';
+            remarksForm.style.display = 'none';
+        });
+    }
+    
+    if (updateRemarksForm) {
+        updateRemarksForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the displayed remarks
+                    const remarksContent = remarksDisplay.querySelector('p');
+                    if (formData.get('remarks').trim() === '') {
+                        remarksContent.innerHTML = '<p style="color: var(--sap-gray-500); font-style: italic;">No remarks added yet.</p>';
+                    } else {
+                        remarksContent.textContent = formData.get('remarks');
+                        // Convert line breaks to <br> tags
+                        remarksContent.innerHTML = remarksContent.textContent.replace(/\n/g, '<br>');
+                    }
+                    
+                    // Switch back to display mode
+                    remarksDisplay.style.display = 'block';
+                    remarksForm.style.display = 'none';
+                    
+                    // Show success message
+                    alert('Remarks updated successfully!');
+                } else {
+                    alert('Error updating remarks: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating remarks.');
+            });
+        });
+    }
+});
+        // Auto-refresh if order is pending (every 30 seconds)
+        
+    </script>
+</body>
+</html>

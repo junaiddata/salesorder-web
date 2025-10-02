@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Quotations Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light-bg: #f8f9fa;
+            --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            --hover-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #2d3748;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .page-header {
+            background: linear-gradient(135deg, #050329 0%, #010567 100%);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            color: white;
+            margin-bottom: 2rem;
+            box-shadow: var(--card-shadow);
+        }
+        
+        .stats-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+            border-top: 4px solid;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
+        }
+        
+        .stats-card.total {
+            border-top-color: var(--primary);
+        }
+        
+        .stats-card.approved {
+            border-top-color: var(--success);
+        }
+        
+        .stats-card.hold {
+            border-top-color: var(--warning);
+        }
+        
+        .stats-card.pending {
+            border-top-color: var(--danger);
+        }
+        
+        .quotation-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        
+        .quotation-card:hover {
+            box-shadow: var(--hover-shadow);
+            transform: translateY(-2px);
+        }
+        
+        .quotation-card.approved {
+            border-left-color: var(--success);
+        }
+        
+        .quotation-card.hold {
+            border-left-color: var(--warning);
+        }
+        
+        .quotation-card.pending {
+            border-left-color: var(--danger);
+        }
+        
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.8rem;
+            border-radius: 50px;
+            font-weight: 500;
+        }
+        
+        .badge-approved {
+            background-color: rgba(40, 167, 69, 0.15);
+            color: var(--success);
+        }
+        
+        .badge-hold {
+            background-color: rgba(255, 193, 7, 0.15);
+            color: var(--warning);
+        }
+        
+        .badge-pending {
+            background-color: rgba(220, 53, 69, 0.15);
+            color: var(--danger);
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 0.8rem 1.5rem;
+            transition: all 0.2s ease;
+            border-radius: 0;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border-bottom: 3px solid #dee2e6;
+            color: #495057;
+        }
+        
+        .nav-tabs .nav-link.active {
+            border-bottom: 3px solid var(--primary);
+            color: var(--primary);
+            background: transparent;
+        }
+        
+        .total-amount {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #2d3748;
+        }
+        
+        .customer-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .salesman-name {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .quotation-date {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .edit-btn {
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+        }
+        
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Pagination Styles */
+        .pagination-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+        }
+
+        .pagination {
+            margin-bottom: 0;
+        }
+
+        .page-link {
+            border: none;
+            color: #6c757d;
+            padding: 0.5rem 0.75rem;
+            margin: 0 2px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .page-link:hover {
+            background-color: #e9ecef;
+            color: #495057;
+            transform: translateY(-1px);
+        }
+
+        .page-item.active .page-link {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        .page-item.disabled .page-link {
+            color: #adb5bd;
+            background-color: #f8f9fa;
+        }
+        
+        /* Loading animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .quotation-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Loading state */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4361ee;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 992px) {
+            .quotation-info {
+                margin-bottom: 1rem;
+            }
+            
+            .action-section {
+                border-top: 1px solid #e9ecef;
+                padding-top: 1rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .page-header {
+                padding: 1.25rem;
+            }
+            
+            .page-header h1 {
+                font-size: 1.75rem;
+            }
+            
+            .stats-card {
+                margin-bottom: 1rem;
+            }
+            
+            .nav-tabs .nav-link {
+                padding: 0.6rem;
+                font-size: 0.9rem;
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .page-item {
+                margin-bottom: 0.5rem;
+            }
+            
+            .pagination-section {
+                padding: 1rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .dashboard-container {
+                padding: 0 15px;
+            }
+            
+            .page-header {
+                border-radius: 10px;
+            }
+            
+            .quotation-card {
+                padding: 1rem;
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .page-item {
+                margin-bottom: 0.5rem;
+            }
+            
+            .pagination-section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container py-4">
+        <!-- Header Section -->
+        <div class="page-header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <h1 class="mb-1">Quotations</h1>
+                    <p class="mb-0 opacity-75">Manage and track all customer quotations</p>
+                </div>
+                <div class="mt-2 mt-md-0">
+                    {% if request.user.role.role == 'Salesman' %}
+                        <a href="{% url 'sales_home' %}" class="btn btn-light">
+                            <i class="fas fa-home me-2"></i>Back to Home
+                        </a>
+                    {% else %}
+                        <a href="{% url 'home' %}" class="btn btn-light">
+                            <i class="fas fa-home me-2"></i>Back to Home
+                        </a>
+                    {% endif %}
+                    <a href="{% url 'create_quotation' %}" class="btn btn-light">
+                        <i class="fas fa-plus-circle me-2"></i>Create New Quotation
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter and Tabs Section -->
+        <div class="filter-section">
+            <div class="row align-items-center">
+                <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" placeholder="Search quotations..." id="searchQuotations">
+                    </div>
+                </div>
+
+<div class="col-lg-9 col-md-6">
+    <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end">
+        <!-- Remove the hidden status input - we'll use the tabs for status -->
+        
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <label for="startDate" class="form-label mb-0 me-2 d-none d-sm-block">From:</label>
+            <input type="date" class="form-control form-control-sm" id="startDate" name="start_date" value="{{ start_date }}">
+        </div>
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <label for="endDate" class="form-label mb-0 me-2 d-none d-sm-block">To:</label>
+            <input type="date" class="form-control form-control-sm" id="endDate" name="end_date" value="{{ end_date }}">
+        </div>
+        
+        {% if not request.user.role.role == 'Salesman' %}
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <label for="salesmanFilter" class="form-label mb-0 me-2 d-none d-sm-block">Salesman:</label>
+            <select class="form-select form-select-sm" id="salesmanFilter" name="salesman_filter">
+                <option value="All" {% if selected_salesman == 'All' %}selected{% endif %}>All Salesmen</option>
+                {% for salesman in all_salesmen %}
+                    <option value="{{ salesman.salesman_name }}" {% if selected_salesman == salesman.salesman_name %}selected{% endif %}>
+                        {{ salesman.salesman_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
+        <a href="{% url 'view_quotations' %}" class="btn btn-outline-secondary btn-sm mb-2 mb-lg-0">Reset</a>
+    </form>
+</div>
+</div>
+
+<div class="mt-3">
+    <ul class="nav nav-tabs justify-content-md-start">
+        <li class="nav-item">
+            <a class="nav-link {% if current_status == 'All' or not current_status %}active{% endif %}" 
+               href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">All Quotations</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if current_status == 'Approved' %}active{% endif %}" 
+               href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Approved</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if current_status == 'On Hold' %}active{% endif %}" 
+               href="?status=On Hold{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">On Hold</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if current_status == 'Pending' %}active{% endif %}" 
+               href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Pending</a>
+        </li>
+    </ul>
+</div>
+</div>
+
+
+        <!-- Quotations List -->
+        <div class="quotations-container">
+            {% if quotations %}
+                <div class="row">
+                    {% for quotation in quotations %}
+                    <div class="col-lg-4 col-md-6 mb-3" id="quotation-card-{{ quotation.id }}">
+                        <div class="quotation-card 
+                            {% if quotation.status == 'Approved' %}approved
+                            {% elif quotation.status == 'Hold by A/c' %}hold
+                            {% elif quotation.status == 'SO Created' %}created
+                            {% else %}pending{% endif %}">
+                            
+                            <!-- Header -->
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 class="mb-1">Quotation #{{ quotation.quotation_number }}</h5>
+                                    <span class="quotation-date">{{ quotation.quotation_date|date:"M d, Y" }}</span>
+                                </div>
+                                <span class="status-badge status-{{ quotation.id }}
+                                    {% if quotation.status == 'Approved' %}badge-approved
+                                    {% elif quotation.status == 'On Hold' %}badge-hold
+                                    {% else %}badge-pending{% endif %}">
+                                    {{ quotation.status }}
+                                </span>
+                            </div>
+
+                            <!-- Customer Info -->
+                            <div class="mb-3">
+                                <p class="customer-name mb-1">{{ quotation.customer.customer_name }}</p>
+                                {% if quotation.salesman %}
+                                    <p class="salesman-name mb-0">({{ quotation.salesman.salesman_name }})</p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Footer Actions -->
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="total-amount">AED {{ quotation.total_amount|floatformat:2 }}</div>
+                                <div>
+                                    <div>
+                                    <a href="{% url 'view_quotation_details' quotation.id %}" 
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    </div>
+
+
+
+                                    {% if quotation.quotation_status == "Pending" %}
+                                        <a href="{% url 'edit_quotation' quotation.id %}" 
+                                           class="btn btn-sm btn-outline-primary edit-btn ms-1">
+                                            <i class="fas fa-edit me-1"></i>Edit
+                                        </a>
+                                    {% endif %}
+
+                                    <!-- Mark as Converted Button -->
+                                    <!-- {% if quotation.quotation_status != "Converted" and quotation.quotation_status == "Approved" %}
+                                        <button class="btn btn-sm btn-success ms-1 mark-converted-btn" 
+                                                data-id="{{ quotation.id }}">
+                                            Mark as Converted
+                                        </button>
+                                    {% endif %} -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Pagination Section -->
+                {% if quotations.paginator.num_pages > 1 %}
+                <div class="pagination-section mt-5">
+                    <nav aria-label="Quotations pagination">
+                        <ul class="pagination justify-content-center">
+                            <!-- First Page -->
+                            {% if quotations.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="First">
+                                        <i class="fas fa-angle-double-left"></i>
+                                    </a>
+                                </li>
+                                <!-- Previous Page -->
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ quotations.previous_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Previous">
+                                        <i class="fas fa-angle-left"></i>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
+                                </li>
+                                <li class="page-item disabled">
+                                    <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                                </li>
+                            {% endif %}
+
+                            <!-- Page numbers with ellipsis -->
+                            {% for num in quotations.paginator.page_range %}
+                                {% if num == quotations.number %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% elif num > quotations.number|add:'-3' and num < quotations.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
+                                    </li>
+                                {% elif num == 1 or num == quotations.paginator.num_pages %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
+                                    </li>
+                                {% elif num == quotations.number|add:'-3' or num == quotations.number|add:'3' %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <!-- Next Page -->
+                            {% if quotations.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ quotations.next_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Next">
+                                        <i class="fas fa-angle-right"></i>
+                                    </a>
+                                </li>
+                                <!-- Last Page -->
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ quotations.paginator.num_pages }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Last">
+                                        <i class="fas fa-angle-double-right"></i>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                                </li>
+                                <li class="page-item disabled">
+                                    <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    
+                    <!-- Page info -->
+                    <div class="text-center text-muted mt-2">
+                        <small>
+                            Showing {{ quotations.start_index }} - {{ quotations.end_index }} of {{ quotations.paginator.count }} quotations
+                            {% if current_status and current_status != 'All' %}
+                                <span class="badge bg-primary ms-2">{{ current_status }}</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+                
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
+                    <h4 class="text-muted">No Quotations Found</h4>
+                    <p class="text-muted">
+                        {% if current_status and current_status != 'All' %}
+                            There are no {{ current_status }} quotations matching your criteria
+                        {% else %}
+                            There are no quotations matching your criteria
+                        {% endif %}
+                    </p>
+                    <a href="{% url 'create_quotation' %}" class="btn btn-primary mt-2">
+                        <i class="fas fa-plus-circle me-1"></i> Create New Quotation
+                    </a>
+                    {% if current_status and current_status != 'All' %}
+                        <a href="?status=All" class="btn btn-outline-secondary mt-2 ms-2">
+                            View All Quotations
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Simple search functionality
+    document.getElementById('searchQuotations').addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase();
+        const quotationCards = document.querySelectorAll('.quotation-card');
+        
+        quotationCards.forEach(card => {
+            const quotationText = card.textContent.toLowerCase();
+            if (quotationText.includes(searchText)) {
+                card.parentElement.style.display = 'block';
+            } else {
+                card.parentElement.style.display = 'none';
+            }
+        });
+    });
+    
+    // Update active tab based on current status
+    document.addEventListener('DOMContentLoaded', function() {
+        const currentStatus = "{{ current_status }}";
+        const navLinks = document.querySelectorAll('.nav-link');
+        
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.textContent.trim() === currentStatus || 
+               (currentStatus === "All" && link.textContent.trim() === "All Quotations")) {
+                link.classList.add('active');
+            }
+        });
+
+        // Smooth scroll to top when pagination links are clicked
+        document.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // Only for pagination links that change pages
+                if (this.getAttribute('href') && this.getAttribute('href').includes('page=')) {
+                    e.preventDefault();
+                    
+                    // Add loading animation
+                    const quotationsContainer = document.querySelector('.quotations-container');
+                    quotationsContainer.style.opacity = '0.7';
+                    quotationsContainer.style.transition = 'opacity 0.3s ease';
+                    
+                    // Scroll to top smoothly
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Wait for scroll to complete then navigate
+                    setTimeout(() => {
+                        window.location.href = this.getAttribute('href');
+                    }, 300);
+                }
+            });
+        });
+    });
+
+    // AJAX to mark quotation as Converted
+    $(document).on("click", ".mark-converted-btn", function() {
+        let quotationId = $(this).data("id");
+        let button = $(this);
+
+        $.ajax({
+            url: `/quotations/${quotationId}/converted/`,
+            type: "POST",
+            headers: { "X-CSRFToken": "{{ csrf_token }}" },
+            success: function(response) {
+                if (response.success) {
+                    // Update status badge
+                    let statusBadge = $(".status-" + quotationId);
+                    statusBadge.text(response.new_status);
+                    statusBadge.removeClass().addClass("status-badge badge-success status-" + quotationId);
+
+                    // Replace button with a label
+                    button.replaceWith('<span class="badge bg-success ms-1">Converted</span>');
+                }
+            }
+        });
+    });
+
+    // Add fade-in animation for quotation cards
+    document.addEventListener('DOMContentLoaded', function() {
+        const quotationCards = document.querySelectorAll('.quotation-card');
+        quotationCards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.5s ease';
+            
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{% block content %}
+<div style="max-width: 500px; margin: 40px auto; padding: 32px; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+  <h2 style="text-align:center; color:#2c3e50; margin-bottom: 24px;">Upload Customer Credit Excel</h2>
+  <form method="post" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:18px;">
+    {% csrf_token %}
+    <label style="font-weight:500; color:#34495e;">
+      Select Excel file:
+      <input type="file" name="excel_file" accept=".xls,.xlsx" required style="margin-top:8px;">
+    </label>
+    <button type="submit" style="padding:10px 0; background:#2980b9; color:#fff; border:none; border-radius:5px; font-size:16px; font-weight:600; cursor:pointer; transition:background 0.2s;">
+      Upload
+    </button>
+  </form>
+
+  {% if messages %}
+    <ul style="margin-top:24px; padding-left:20px;">
+      {% for message in messages %}
+        <li {% if message.tags %} class="{{ message.tags }}" {% endif %} style="margin-bottom:8px; color:#27ae60;">
+          {{ message }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endblock %}

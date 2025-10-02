@@ -1,0 +1,308 @@
+{% block content %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+    }
+
+    .form-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .form-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.025em;
+    }
+
+    .form-subtitle {
+        margin-top: 0.5rem;
+        opacity: 0.9;
+        font-size: 0.875rem;
+    }
+
+    .form-body {
+        padding: 2rem;
+    }
+
+    /* Form field styling */
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-group label::after {
+        content: attr(data-required);
+        color: #ef4444;
+        margin-left: 0.25rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 0.625rem 0.875rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        transition: all 0.15s ease;
+        background-color: #f9fafb;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    /* Error styling */
+    .errorlist {
+        list-style: none;
+        padding: 0;
+        margin: 0.5rem 0 0;
+    }
+
+    .errorlist li {
+        color: #ef4444;
+        font-size: 0.813rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .errorlist li::before {
+        content: "⚠";
+        font-size: 1rem;
+    }
+
+    .form-group.has-error input,
+    .form-group.has-error select,
+    .form-group.has-error textarea {
+        border-color: #ef4444;
+        background-color: #fef2f2;
+    }
+
+    /* Help text styling */
+    .helptext {
+        display: block;
+        font-size: 0.813rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+        font-style: italic;
+    }
+
+    /* Button styling */
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.625rem 1.5rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.15s ease;
+        cursor: pointer;
+        border: none;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn:active {
+        transform: scale(0.98);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 6px rgba(102, 126, 234, 0.25);
+    }
+
+    .btn-primary:hover {
+        box-shadow: 0 6px 12px rgba(102, 126, 234, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background-color: #f3f4f6;
+        color: #374151;
+        border: 2px solid #e5e7eb;
+    }
+
+    .btn-secondary:hover {
+        background-color: #e5e7eb;
+        border-color: #d1d5db;
+    }
+
+    .btn-icon {
+        margin-right: 0.5rem;
+    }
+
+    /* Loading state */
+    .btn-loading {
+        color: transparent;
+    }
+
+    .btn-loading::after {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        top: 50%;
+        left: 50%;
+        margin-left: -8px;
+        margin-top: -8px;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        border-top-color: transparent;
+        animation: spinner 0.6s linear infinite;
+    }
+
+    @keyframes spinner {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+        .form-container {
+            margin: 1rem auto;
+        }
+
+        .form-header {
+            padding: 1.5rem;
+        }
+
+        .form-body {
+            padding: 1.5rem;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="form-container">
+    <div class="form-card">
+        <div class="form-header">
+            <h2 class="form-title">{{ title }}</h2>
+            <p class="form-subtitle">
+                {% if 'Add' in title %}
+                    Create a new item in your inventory
+                {% else %}
+                    Update the details of this item
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="form-body">
+            <form method="post" id="itemForm">
+                {% csrf_token %}
+                
+                <div class="form-fields">
+                    {% for field in form %}
+                        <div class="form-group {% if field.errors %}has-error{% endif %}">
+                            <label for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                                {% if field.field.required %}
+                                    <span data-required="*"></span>
+                                {% endif %}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="helptext">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% if field.errors %}
+                                {{ field.errors }}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <svg class="btn-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Save Item
+                    </button>
+                    <a href="{% url 'item_list' %}" class="btn btn-secondary">
+                        <svg class="btn-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('itemForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Add form validation feedback
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value && this.validity.valid) {
+                this.parentElement.classList.remove('has-error');
+            }
+        });
+    });
+    
+    // Handle form submission
+    form.addEventListener('submit', function(e) {
+        submitBtn.classList.add('btn-loading');
+        submitBtn.disabled = true;
+    });
+    
+    // Auto-focus first input
+    const firstInput = form.querySelector('input:not([type="hidden"]), select, textarea');
+    if (firstInput) {
+        firstInput.focus();
+    }
+});
+</script>
+{% endblock %}

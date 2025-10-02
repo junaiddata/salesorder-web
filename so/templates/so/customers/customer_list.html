@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            border-radius: 0.5rem;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        .table th {
+            white-space: nowrap;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .filter-section {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .hidden-row {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Customer Management</h1>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                <i class="bi bi-plus-lg"></i> Add Customer
+            </button>
+        </div>
+
+        <!-- Filter and Search Section -->
+        <div class="card shadow-sm filter-section">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="searchInput" class="form-label">Search Customers</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" 
+                                   placeholder="Search by name or code">
+                            <button class="btn btn-outline-secondary" id="searchButton">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="salesmanFilter" class="form-label">Filter by Salesman</label>
+                        <div class="input-group">
+                            <select class="form-select" id="salesmanFilter">
+                                <option value="">All Salesmen</option>
+                                {% for salesman in salesmen %}
+                                <option value="{{ salesman.id }}">{{ salesman.salesman_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-outline-secondary" id="resetFilters">
+                                <i class="bi bi-x-lg"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Table -->
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="customerTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Credit Limit</th>
+                                <th>Payment Term</th>
+                                <th>Salesman</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in customers %}
+                            <tr data-code="{{ customer.customer_code|lower }}" 
+                                data-name="{{ customer.customer_name|lower }}"
+                                data-salesman="{{ customer.salesman.id|default:'' }}">
+                                <td>{{ customer.customer_code }}</td>
+                                <td>{{ customer.customer_name }}</td>
+                                <td>{{ customer.credit_limit }}</td>
+                                <td>{{ customer.credit_days }}</td>
+                                <td>{{ customer.salesman.salesman_name|default:"-" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal"
+                                            data-customer-id="{{ customer.id }}"
+                                            data-customer-name="{{ customer.customer_name }}">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No customers found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Customer Modal -->
+    <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="post" action="{% url 'add_customer' %}">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addCustomerModalLabel">Add New Customer</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_customer_code" class="form-label">Customer Code</label>
+                            <input type="text" class="form-control" id="id_customer_code" name="customer_code" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_customer_name" class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" id="id_customer_name" name="customer_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_salesman" class="form-label">Salesman</label>
+                            <select class="form-select" id="id_salesman" name="salesman">
+                                <option value="">Select Salesman</option>
+                                {% for salesman in salesmen %}
+                                <option value="{{ salesman.id }}">{{ salesman.salesman_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Customer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong id="customerName"></strong>?</p>
+                    <p class="text-danger">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form id="deleteForm" method="post" action="">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Initialize delete modal with customer data
+        const deleteModal = document.getElementById('deleteModal');
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const customerId = button.getAttribute('data-customer-id');
+            const customerName = button.getAttribute('data-customer-name');
+            
+            document.getElementById('customerName').textContent = customerName;
+            document.getElementById('deleteForm').action = `/customers/delete/${customerId}/`;
+        });
+
+        // Client-side filtering functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const salesmanFilter = document.getElementById('salesmanFilter');
+            const searchButton = document.getElementById('searchButton');
+            const resetButton = document.getElementById('resetFilters');
+            const customerRows = document.querySelectorAll('#customerTable tbody tr');
+            
+            function filterCustomers() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const salesmanId = salesmanFilter.value;
+                
+                customerRows.forEach(row => {
+                    if (row.querySelector('td')) { // Skip the "no customers" row if present
+                        const code = row.getAttribute('data-code');
+                        const name = row.getAttribute('data-name');
+                        const rowSalesman = row.getAttribute('data-salesman');
+                        
+                        const matchesSearch = searchTerm === '' || 
+                                             code.includes(searchTerm) || 
+                                             name.includes(searchTerm);
+                        
+                        const matchesSalesman = salesmanId === '' || 
+                                               rowSalesman === salesmanId;
+                        
+                        if (matchesSearch && matchesSalesman) {
+                            row.classList.remove('hidden-row');
+                        } else {
+                            row.classList.add('hidden-row');
+                        }
+                    }
+                });
+            }
+            
+            // Event listeners
+            searchButton.addEventListener('click', filterCustomers);
+            resetButton.addEventListener('click', function() {
+                searchInput.value = '';
+                salesmanFilter.value = '';
+                filterCustomers();
+            });
+            
+            searchInput.addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') {
+                    filterCustomers();
+                }
+            });
+            
+            salesmanFilter.addEventListener('change', filterCustomers);
+        });
+    </script>
+</body>
+</html>
