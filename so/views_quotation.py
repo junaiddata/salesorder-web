@@ -224,8 +224,9 @@ def view_quotation_details(request, quotation_id):
         grand_total += item.line_total
 
         # Check undercost
-        if hasattr(item, "item") and item.item:  
-            item.is_undercost = item.price < item.item.item_price
+        if hasattr(item, "item") and item.item:
+            undercost_limit = item.item.item_cost * 1.10  # 10% above cost  
+            item.is_undercost = item.price < undercost_limit
             if item.is_undercost:
                 has_undercost_items = True
         else:
@@ -323,7 +324,8 @@ def edit_quotation(request, quotation_id):
                 item = get_object_or_404(Items, id=item_id)
                 
                 # Check if item is undercost
-                if price < item.item_price:
+                undercost_limit = item.item_cost * 1.10  # 10% above cost
+                if price < undercost_limit:
                     has_undercost_items = True
                 
                 quotation_items.append(QuotationItem(
@@ -468,7 +470,7 @@ class QuotationPDFTemplate(BaseDocTemplate):
         # Set default values before calling super()
         self.company_name = "Junaid Sanitary & Electrical Trading LLC"
         self.company_address = "Dubai Investment Parks 2, Dubai, UAE"
-        self.company_contact = "Email: sales@junaidworld.com | Phone: +971-XXX-XXXX"
+        self.company_contact = "Email: sales@junaid.ae | Phone: +97142367723"
         self.page_count = 1  # Initialize with page 1
         self.logo_path = None
         
