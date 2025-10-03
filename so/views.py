@@ -556,7 +556,9 @@ def format_whatsapp_order(sales_order, order_items, request):
     
     # Order info
     sections.append(f"📋 *CUSTOMER ORDER {sales_order.order_number}*")
-    sections.append(f"📅 {sales_order.order_date.strftime('%d-%b-%Y')}")
+    sections.append(
+    f"📅 {sales_order.order_date.strftime('%d-%b-%Y') if sales_order.order_date else 'N/A'}"
+)
     sections.append("")
     
     # Customer

@@ -90,6 +90,7 @@ class SalesOrder(models.Model):
     # delivery_address = models.TextField(blank=True, null=True)
 
     order_date = models.DateField(auto_now_add=True)
+    order_date_time = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     total_amount = models.FloatField(default=0.0)
     order_taken = models.BooleanField(default=False)
     order_status = models.CharField(max_length=20, choices=STATUS, default='Pending')
