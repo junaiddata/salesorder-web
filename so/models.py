@@ -6,9 +6,6 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 import os
 from django.conf import settings
-from django.utils import timezone
-from pytz import timezone as pytz_timezone
-
 
 class Role(models.Model):
     ROLE_CHOICES = [
@@ -92,10 +89,7 @@ class SalesOrder(models.Model):
     # contact_number = models.CharField(max_length=100, blank=True, null=True)
     # delivery_address = models.TextField(blank=True, null=True)
 
-
-
-    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-    order_date = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    order_date = models.DateField(auto_now_add=True)
     total_amount = models.FloatField(default=0.0)
     order_taken = models.BooleanField(default=False)
     order_status = models.CharField(max_length=20, choices=STATUS, default='Pending')
@@ -125,7 +119,6 @@ class SalesOrder(models.Model):
             from PIL import Image as PILImage
             from io import BytesIO
             import time
-
 
             try:
                 # Get the original file content before Django modifies it

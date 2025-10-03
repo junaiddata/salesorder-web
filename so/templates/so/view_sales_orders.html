@@ -444,7 +444,7 @@
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
                             <h5 class="mb-1">Order #{{ order.order_number }}</h5>
-                            <span class="order-date">{{ order.order_date|date:"M j, g:i a" }}</span>
+                            <span class="order-date">{{ order.order_date|date:"M d, Y" }}</span>
                         </div>
                         <span class="status-badge status-{{ order.id }}
                             {% if order.order_status == 'Approved' %}badge-approved
