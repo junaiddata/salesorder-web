@@ -469,7 +469,7 @@ def get_item_price(request):
     custom_price = custom_price_obj.custom_price if custom_price_obj else None
 
     # Decide final price: higher of custom or default
-    final_price = max(default_price, custom_price) if custom_price else default_price
+    final_price = custom_price if custom_price > item.item_cost else default_price
 
     return JsonResponse({
         'default_price': float(default_price),
