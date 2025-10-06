@@ -324,7 +324,7 @@ def edit_quotation(request, quotation_id):
                 item = get_object_or_404(Items, id=item_id)
                 
                 # Check if item is undercost
-                undercost_limit = item.item_cost * 1.10  # 10% above cost
+                undercost_limit = item.item_cost  # 10% above cost
                 if price < undercost_limit:
                     has_undercost_items = True
                 
