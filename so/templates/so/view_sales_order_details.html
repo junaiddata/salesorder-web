@@ -824,7 +824,7 @@
          <!-- Action Buttons -->
         <div class="action-area">
         {% if user.role.role == 'Admin' %}
-            {% if sales_order.order_status != 'Approved' %}
+            {% if sales_order.order_status != 'Approved' and sales_order.order_status != 'SO Created' %}
                 <form method="POST" style="margin: 0; display: inline-block;">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="approve">
