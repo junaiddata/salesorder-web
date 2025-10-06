@@ -225,7 +225,7 @@ def view_quotation_details(request, quotation_id):
 
         # Check undercost
         if hasattr(item, "item") and item.item:
-            undercost_limit = item.item.item_cost * 1.10  # 10% above cost  
+            undercost_limit = item.item.item_cost  # 10% above cost  
             item.is_undercost = item.price < undercost_limit
             if item.is_undercost:
                 has_undercost_items = True
