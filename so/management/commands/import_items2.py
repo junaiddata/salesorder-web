@@ -1,6 +1,6 @@
 import requests
 from django.core.management.base import BaseCommand
-from so.models import Items, IgnoreList  # adjust app name
+from so.models import Items, IgnoreList
 from django.core.cache import cache
 
 
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         )
 
         # 2. Fetch items from Website A JSON API
-        url = "https://stock.junaidworld.com/api/stock"  # change to your actual endpoint
+        url = "https://stock.junaidworld.com/api/stock"
         response = requests.get(url)
         items_data = response.json()
 
@@ -28,6 +28,14 @@ class Command(BaseCommand):
 
         created, updated, skipped = 0, 0, 0
 
+        def safe_float(value):
+            """Convert to float safely; return 0 if empty, invalid, or None."""
+            try:
+                if value in ("", None):
+                    return 0
+                return float(value)
+            except (TypeError, ValueError):
+                return 0
 
         for item in items_data:
             item_code = str(item.get("item_code", "")).strip()
@@ -36,27 +44,30 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
+            # Safely parse numeric fields
+            cost_price = safe_float(item.get("cost_price"))
+            price = safe_float(item.get("minimum_selling_price"))
+            stock = safe_float(item.get("stock_quantity"))
+
             if item_code in existing_codes:
-                # fetch existing object so it has a primary key
                 obj = Items.objects.get(item_code=item_code)
                 obj.item_description = item.get("description", "")
                 obj.item_upvc = item.get("upc_code", "")
-                obj.item_cost = item.get("cost_price", "")
+                obj.item_cost = cost_price
                 obj.item_firm = item.get("manufacturer", "")
-                obj.item_price = item.get("minimum_selling_price", "")
-                obj.item_stock = item.get("stock_quantity", 0)
+                obj.item_price = price
+                obj.item_stock = stock
                 items_to_update.append(obj)
                 updated += 1
             else:
-                # create new object
                 obj = Items(
                     item_code=item_code,
                     item_description=item.get("description", ""),
                     item_upvc=item.get("upc_code", ""),
-                    item_cost=item.get("cost_price", ""),
+                    item_cost=cost_price,
                     item_firm=item.get("manufacturer", ""),
-                    item_price=item.get("minimum_selling_price", ""),
-                    item_stock=item.get("stock_quantity", 0),
+                    item_price=price,
+                    item_stock=stock,
                 )
                 new_items.append(obj)
                 created += 1
@@ -69,7 +80,7 @@ class Command(BaseCommand):
             )
 
         if new_items:
-            Items.objects.bulk_create(new_items,ignore_conflicts=True)
+            Items.objects.bulk_create(new_items, ignore_conflicts=True)
 
         cache.clear()
         self.stdout.write(self.style.SUCCESS(
