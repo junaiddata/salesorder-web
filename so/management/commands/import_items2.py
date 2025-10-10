@@ -14,7 +14,7 @@ class Command(BaseCommand):
         )
 
         # 2. Fetch items from Website A JSON API
-        url = "https://junaiddataanalyst.pythonanywhere.com/api/stock"  # change to your actual endpoint
+        url = "https://stock.junaidworld.com/api/stock"  # change to your actual endpoint
         response = requests.get(url)
         items_data = response.json()
 
