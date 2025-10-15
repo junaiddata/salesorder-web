@@ -203,7 +203,7 @@ def create_sales_order(request):
                     item = Items.objects.get(id=item_id)
                     price_val = float(price) if price else float(item.item_price)
                     quantity_val = int(qty)
-                    unit_val = unit if unit in ['pcs', 'ctn'] else 'pcs'  # Validate unit
+                    unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'  # Validate unit
                     
                     if quantity_val <= 0:
                         messages.error(request, f'Quantity must be positive for item {i+1}.')
