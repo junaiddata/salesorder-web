@@ -224,6 +224,7 @@ class Quotation(models.Model):
     grand_total = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='Pending')
+    remarks = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"Quotation {self.quotation_number} - {self.customer.customer_name}"
@@ -251,6 +252,7 @@ class QuotationItem(models.Model):
     quantity = models.PositiveIntegerField()
     price = models.FloatField(default=0.0)
     line_total = models.FloatField(default=0.0)
+
 
     def __str__(self):
         return f"{self.item.item_description} ({self.quantity})"
