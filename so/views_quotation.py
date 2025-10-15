@@ -74,7 +74,7 @@ def create_quotation(request):
                     try:
                         item = Items.objects.get(id=item_id)
                         quantity_val = int(qty)
-                        unit_val = unit if unit in ['pcs', 'ctn'] else 'pcs'  # Validate unit
+                        unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'  # Validate unit
 
                         # Automatic price from CustomerPrice or default item price
                         customer_price = CustomerPrice.objects.filter(customer=customer, item=item).first()
