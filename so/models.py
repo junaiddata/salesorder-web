@@ -60,7 +60,7 @@ class Customer(models.Model):
     month_pending_6 = models.FloatField(default=0.0)
     old_months_pending = models.FloatField(default=0.0)
     credit_limit = models.FloatField(default=0.0)
-    credit_days = models.CharField(default='0',max_length=10)
+    credit_days = models.CharField(default='0',max_length=30)
     total_outstanding = models.FloatField(default=0.0)
     pdc_received = models.FloatField(default=0.0)
     total_outstanding_with_pdc = models.FloatField(default=0.0)
