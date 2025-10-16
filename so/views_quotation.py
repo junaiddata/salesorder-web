@@ -11,7 +11,7 @@ def create_quotation(request):
     if request.method == 'POST':
         try:
             # -------------------------
-            # Customer handling
+            # Customer handling - FIXED
             # -------------------------
             customer_id = request.POST.get('customer')
             firms = Items.objects.values_list('item_firm', flat=True).distinct().order_by('item_firm')
@@ -22,27 +22,38 @@ def create_quotation(request):
                 messages.error(request, 'Please select a customer or enter a new customer name.')
                 return redirect('create_quotation')
 
+            # Get salesman FIRST (required for both new and existing customers)
+            salesman_id = request.POST.get('salesman')
+            if not salesman_id:
+                messages.error(request, 'Salesman is required.')
+                return redirect('create_quotation')
+                
+            salesman = get_object_or_404(Salesman, id=salesman_id)
+
             if new_customer_name:
+                # Generate customer code like in sales order
                 last_customer = Customer.objects.filter(customer_code__startswith='NEWCUSTOMER') \
                                                 .order_by('-id').first()
-                last_number = int(last_customer.customer_code[11:]) if last_customer and last_customer.customer_code[11:].isdigit() else 0
+                if last_customer and last_customer.customer_code[11:].isdigit():
+                    last_number = int(last_customer.customer_code[11:])
+                else:
+                    last_number = 0
+
                 new_code = f'NEWCUSTOMER{last_number + 1}'
 
-                salesman_id = request.POST.get('salesman')
-                if not salesman_id:
-                    messages.error(request, 'Salesman is required when creating a new customer.')
-                    return redirect('create_quotation')
-
-                selected_salesman = get_object_or_404(Salesman, id=salesman_id)
-                customer, _ = Customer.objects.get_or_create(
+                # Create new customer
+                customer, created = Customer.objects.get_or_create(
                     customer_name=new_customer_name,
-                    defaults={'customer_code': new_code, 'salesman': selected_salesman}
+                    defaults={
+                        'customer_code': new_code,
+                        'salesman': salesman
+                    }
                 )
+                if not created:
+                    messages.error(request, f'Customer "{new_customer_name}" already exists.')
+                    return redirect('create_quotation')
             else:
                 customer = get_object_or_404(Customer, id=customer_id)
-
-            salesman_id = request.POST.get('salesman')
-            salesman = get_object_or_404(Salesman, id=salesman_id) if salesman_id else None
 
             # -------------------------
             # Items validation
@@ -50,7 +61,7 @@ def create_quotation(request):
             item_ids = request.POST.getlist('item')
             quantities = request.POST.getlist('quantity')
             prices = request.POST.getlist('price')
-            units = request.POST.getlist('unit')  # Get units list
+            units = request.POST.getlist('unit')
 
             if item_ids:  # POST with items
                 if len(item_ids) != len(quantities) or len(item_ids) != len(prices) or len(item_ids) != len(units):
@@ -58,12 +69,11 @@ def create_quotation(request):
                     return redirect('create_quotation')
 
                 # -------------------------
-                # Create Quotation - WITHOUT quotation_number
+                # Create Quotation
                 # -------------------------
                 quotation = Quotation.objects.create(
                     customer=customer,
                     salesman=salesman
-                    # quotation_number will be auto-generated in the model's save() method
                 )
 
                 quotation_items = []
@@ -74,7 +84,7 @@ def create_quotation(request):
                     try:
                         item = Items.objects.get(id=item_id)
                         quantity_val = int(qty)
-                        unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'  # Validate unit
+                        unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'
 
                         # Automatic price from CustomerPrice or default item price
                         customer_price = CustomerPrice.objects.filter(customer=customer, item=item).first()
@@ -95,7 +105,7 @@ def create_quotation(request):
                             item=item,
                             quantity=quantity_val,
                             price=price_val,
-                            unit=unit_val,  # Add unit field
+                            unit=unit_val,
                             line_total=line_total
                         ))
 
@@ -103,8 +113,8 @@ def create_quotation(request):
                         if price_input:
                             customer_price_updates.append((customer, item, price_val))
 
-                    except (ValueError, Items.DoesNotExist):
-                        messages.error(request, f'Invalid data for item {i+1}.')
+                    except (ValueError, Items.DoesNotExist) as e:
+                        messages.error(request, f'Invalid data for item {i+1}: {str(e)}')
                         return redirect('create_quotation')
 
                 # Bulk insert quotation items
