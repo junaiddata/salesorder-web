@@ -39,7 +39,7 @@ def create_quotation(request):
                 else:
                     last_number = 0
 
-                new_code = f'NEWCUSTOMER{last_number + 1}'
+                new_code = f'NEWCUSTOMERS{last_number + 1}'
 
                 # Create new customer
                 customer, created = Customer.objects.get_or_create(
