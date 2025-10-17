@@ -712,7 +712,7 @@ def export_quotation_to_pdf(request, quotation_id):
 
         items_data.append([
             str(idx),
-            getattr(item.item, 'item_upc', 'N/A'),
+            getattr(item.item, 'item_upvc', 'N/A'),
             description_para,
             f"{item.quantity} {item.unit}",
             f"AED {item.price:,.2f}",
