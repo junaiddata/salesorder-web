@@ -698,7 +698,7 @@ def export_quotation_to_pdf(request, quotation_id):
     elements.append(Spacer(1, 0.2 * inch))
 
     # 3. Items Table with pagination handling
-    items_header = ['#', 'Item Code', 'Description', 'Qty', 'Unit Price', 'Total']
+    items_header = ['#', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
     items_data = [items_header]
     subtotal = 0.0
 
@@ -712,7 +712,7 @@ def export_quotation_to_pdf(request, quotation_id):
 
         items_data.append([
             str(idx),
-            getattr(item.item, 'item_code', 'N/A'),
+            getattr(item.item, 'item_upc', 'N/A'),
             description_para,
             f"{item.quantity} {item.unit}",
             f"AED {item.price:,.2f}",
