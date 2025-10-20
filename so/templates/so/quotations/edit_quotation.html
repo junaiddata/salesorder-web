@@ -1129,7 +1129,7 @@
                     isValid = false;
                 }
                 
-                if (!price || price <= 0) {
+                if (!price || price < 0) {
                     errorMessages.push(`Item #${index + 1}: Please enter a valid price`);
                     isValid = false;
                 }
