@@ -327,7 +327,7 @@ def edit_quotation(request, quotation_id):
                 quantity = int(qty) if qty else 0
                 price = float(price) if price else 0.0
                 
-                if quantity <= 0 or price <= 0:
+                if quantity <= 0 or price < 0:
                     continue  # Skip invalid items
                     
                 # Get item from Items table
