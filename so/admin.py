@@ -10,6 +10,7 @@ admin.site.register(SalesOrder)
 admin.site.register(Role)
 admin.site.register(IgnoreList)
 admin.site.register(Quotation)
+admin.site.register(QuotationItem)
 
 
 
