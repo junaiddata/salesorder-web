@@ -313,7 +313,7 @@
         .then(r => r.json())
         .then(data => {
           body.innerHTML = data.rows_html;
-          pagination.innerHTML = data.pagination_html + '\\n' + `<div class="total">Total: ${data.count} quotations</div>`;
+          pagination.innerHTML = data.pagination_html + '\n' + `<div class="total">Total: ${data.count} quotations</div>`;
         })
         .catch(console.error);
     }
