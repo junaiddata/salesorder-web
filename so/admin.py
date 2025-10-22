@@ -11,6 +11,8 @@ admin.site.register(Role)
 admin.site.register(IgnoreList)
 admin.site.register(Quotation)
 admin.site.register(QuotationItem)
+admin.site.register(SAPQuotation)
+admin.site.register(SAPQuotationItem)
 
 
 

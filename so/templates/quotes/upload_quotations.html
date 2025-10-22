@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Upload Quotations</title>
+  <style>
+    :root{
+      /* Light palette matching your other pages */
+      --bg: #d9e0e4;
+      --bg-soft: #eef2f6;
+      --panel: #ffffff;
+      --panel-2: #f8fafc;
+      --text: #02050c;
+      --muted: #3f4752;
+      --brand: #6366f1;
+      --brand-2:#8b5cf6;
+      --accent:#1d0a7a;
+      --ok:#10b981;
+      --warn:#f59e0b;
+      --error:#b00020;
+      --border: rgba(2,5,12,.12);
+      --shadow: 0 6px 20px rgba(2,5,12,.08);
+      --radius: 16px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans";
+      color: var(--text);
+      background:
+        radial-gradient(900px 300px at -10% -10%, rgba(99,102,241,.08), transparent 40%),
+        radial-gradient(700px 280px at 110% 10%, rgba(139,92,246,.08), transparent 45%),
+        var(--bg);
+      line-height:1.5;
+    }
+
+    .wrap{
+      max-width: 900px;
+      margin: 28px auto 60px;
+      padding: 0 16px;
+    }
+
+    .page-head{
+      display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      margin-bottom: 16px;
+    }
+    .title{
+      font-weight: 800;
+      font-size: clamp(22px, 3.2vw, 32px);
+      letter-spacing:.2px;
+      color: var(--accent);
+    }
+    .subtitle{ color: var(--muted); margin-top: 4px; }
+
+    .panel{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .section{
+      padding:16px;
+      border-bottom:1px solid var(--border);
+      background: linear-gradient(180deg, #fff, var(--panel-2));
+    }
+    .section:last-child{ border-bottom:0 }
+
+    .messages{
+      margin: 8px 0 0; padding-left:18px; color: var(--error);
+    }
+
+    .upload{
+      padding:18px 16px;
+      display:grid; gap:16px;
+      grid-template-columns: 1fr;
+    }
+
+    .drop{
+      border:2px dashed rgba(2,5,12,.18);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fff, #f7f9fc);
+      padding: 22px;
+      text-align:center;
+      transition: border-color .15s ease, background .15s ease, transform .1s ease;
+    }
+    .drop.dragover{
+      border-color: rgba(99,102,241,.6);
+      background: #eef2ff;
+      transform: translateY(-1px);
+    }
+    .drop input[type="file"]{
+      display:none;
+    }
+    .drop .big{
+      font-weight: 800;
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+    .drop .hint{ color: var(--muted); font-size:.92rem }
+
+    .btns{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+    .btn{
+      appearance:none; border:none; cursor:pointer;
+      padding:10px 14px; border-radius:12px;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color:#fff; font-weight:700; text-decoration:none;
+      display:inline-flex; align-items:center; gap:8px;
+      box-shadow: var(--shadow);
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .btn.secondary{
+      background: linear-gradient(180deg, #fff, #f8fafc);
+      color: var(--accent);
+      border:1px solid var(--border);
+    }
+    .btn:hover{ transform: translateY(-1px); filter: saturate(1.05) }
+    .btn:active{ transform: translateY(0) }
+
+    .meta{
+      background: var(--bg-soft);
+      border-top:1px solid var(--border);
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size:.92rem;
+    }
+    .meta b{ color: var(--text) }
+
+    .cols{
+      display:grid; gap:12px; grid-template-columns: 1fr;
+      padding: 12px 16px 18px;
+    }
+    @media (min-width: 720px){
+      .cols{ grid-template-columns: 1fr 1fr; }
+    }
+    .card{
+      border:1px solid var(--border);
+      border-radius: 14px;
+      background:#fff;
+      padding: 12px 14px;
+    }
+    .card h3{
+      margin: 0 0 8px; font-size: 1rem; color: var(--accent);
+    }
+    .req{
+      margin:0; padding-left: 18px; line-height:1.6;
+    }
+    .fine{ color: var(--muted); font-size:.9rem; margin-top:6px; }
+
+    .file-name{
+      color: var(--muted); font-size:.95rem; margin: 0;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="page-head">
+      <div>
+        <div class="title">Upload Quotations</div>
+        <div class="subtitle">Excel → SAP “Quotation - ITEMWISE”</div>
+      </div>
+      <div class="btns">
+        <a class="btn secondary" href="{% url 'quotation_list' %}">View Quotations</a>
+      </div>
+    </header>
+
+    <div class="panel">
+      <div class="section">
+        {% if messages %}
+          <ul class="messages">
+            {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="upload" id="upload-form">
+        {% csrf_token %}
+
+        <!-- drag & drop -->
+        <label class="drop" id="dropzone">
+          <div class="big">Drag & drop your Excel file here</div>
+          <div class="hint">or click to choose <b>.xls</b> or <b>.xlsx</b></div>
+          <input id="excel-input" type="file" name="excel_file" accept=".xls,.xlsx" required />
+        </label>
+
+        <p id="file-name" class="file-name" style="display:none;"></p>
+
+        <div class="btns">
+          <button class="btn" type="submit">Upload</button>
+          <a class="btn secondary" href="{% url 'quotation_list' %}">Back to List</a>
+        </div>
+
+        <div class="meta">
+          Expected sheet: <b>Quotation - ITEMWISE</b>
+        </div>
+
+        <div class="cols">
+          <div class="card">
+            <h3>Required columns</h3>
+            <ol class="req">
+              <li>Internal Number</li>
+              <li>Document Number</li>
+              <li>Posting Date</li>
+              <li>Customer/Supplier No.</li>
+              <li>Customer/Supplier Name</li>
+              <li>Sales Employee Name</li>
+              <li>Brand</li>
+              <li>BP Reference No.</li>
+              <li>Item No.</li>
+              <li>Item/Service Description</li>
+              <li>Quantity</li>
+              <li>Price</li>
+              <li>Row Total</li>
+              <li>Document Total</li>
+              <li>Status</li>
+            </ol>
+            <p class="fine">Tip: headers should match exactly (case & spacing).</p>
+          </div>
+
+          <div class="card">
+            <h3>Notes</h3>
+            <ul class="req">
+              <li>Dates like <b>11.01.2015</b> are supported.</li>
+              <li>Numbers can contain commas; we’ll normalize them.</li>
+              <li>Document Number groups rows into one quotation.</li>
+              <li>Existing items for a quotation are replaced on re-upload.</li>
+            </ul>
+            <p class="fine">Need a sample? Export one from your SAP report and keep column names.</p>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const drop = document.getElementById('dropzone');
+      const input = document.getElementById('excel-input');
+      const fileName = document.getElementById('file-name');
+
+      function setFileName(name){
+        fileName.textContent = "Selected file: " + name;
+        fileName.style.display = 'block';
+      }
+
+      // Click → open file dialog
+      drop.addEventListener('click', () => input.click());
+
+      // Input change
+      input.addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) setFileName(f.name);
+      });
+
+      // Drag & drop
+      ['dragenter','dragover'].forEach(ev => {
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          drop.classList.add('dragover');
+        })
+      });
+      ['dragleave','drop'].forEach(ev => {
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault(); e.stopPropagation();
+          drop.classList.remove('dragover');
+        })
+      });
+      drop.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (!dt || !dt.files || dt.files.length === 0) return;
+        const f = dt.files[0];
+        if (!/\.xlsx?$/.test(f.name.toLowerCase())){
+          alert('Please drop an .xls or .xlsx file.');
+          return;
+        }
+        // Assign to input so it submits with the form
+        input.files = dt.files;
+        setFileName(f.name);
+      });
+    })();
+  </script>
+</body>
+</html>

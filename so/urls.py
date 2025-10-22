@@ -73,7 +73,14 @@ urlpatterns = [
     path('quotations/<int:quotation_id>/edit/', views_quotation.edit_quotation, name='edit_quotation'),
     path('quotations/<int:quotation_id>/export/', views_quotation.export_quotation_to_pdf, name='export_quotation_to_pdf'),
 
+]
 
-
+# Quotation URLs (order matters: ajax BEFORE detail)
+urlpatterns += [
+    path('sapquotations/upload/', views.upload_quotations, name='upload_quotations'),
+    path('sapquotations/', views.quotation_list, name='quotation_list'),
+    path('sapquotations/ajax/', views.quotation_search, name='quotation_search'),
+    path('sapquotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
+    path('sapquotations/<str:q_number>/export/', views.export_sap_quotation_pdf, name='export_sap_quotation_pdf'),
 
 ]

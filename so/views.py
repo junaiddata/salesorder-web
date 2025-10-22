@@ -26,7 +26,7 @@ from django.db import transaction
 from django.urls import reverse
 from django.http import JsonResponse
 from .utils import send_telegram_message 
-
+from datetime import date, datetime, timedelta
 
 def role_required(*required_roles):  # Accept multiple roles
     def decorator(view_func):
@@ -1166,14 +1166,14 @@ def logout_view(request):
 @login_required
 def home(request):
     total_orders = SalesOrder.objects.count()
-    today = datetime.date.today()
+    today = date.today()
     total_orders_today = SalesOrder.objects.filter(
         order_date__year=today.year,
         order_date__month=today.month,
         order_date__day=today.day
     ).count()
     total_customers = Customer.objects.count()
-    yesterday = today - datetime.timedelta(days=1)
+    yesterday = today - timedelta(days=1)
     orders_yesterday = SalesOrder.objects.filter(
         order_date__year=yesterday.year,
         order_date__month=yesterday.month,
@@ -2591,3 +2591,574 @@ def get_last_location(request, customer_id):
     return JsonResponse({
         'location': last_order.location if last_order else ''
     })
+
+
+from datetime import datetime
+from datetime import timedelta
+from decimal import Decimal
+
+# =====================
+# Quotation: Upload/List/Detail
+# =====================
+from django.db.models import Q
+from django.http import Http404
+
+# Map usernames -> the exact salesman_name values they are allowed to see.
+# Use lowercase keys for usernames.
+SALES_USER_MAP = {
+    "muzain": ["B.MR.MUZAIN"],
+    "dip": ["D.RETAIL CUST DIP"],
+    "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD"],
+    "rashid": ["A.MR.RASHID", "A.MR.RASHID CONT"],
+    "parthiban": ["B.MR.PARTHIBAN"],
+    "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT"],
+    "mr. nasheer": ["B.MR.NASHEER AHMAD"],
+    "deira 2 store": ["R.DEIRA 2"],
+    "rafiq": ["A.MR.RAFIQ"],
+    "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
+    "alabama": ["D. ALABAMA"],     # both entries for Meraj
+    "anish": ["ANISH DIP"],
+    "musharaf": ["A.MUSHARAF"],
+    "ibrahim": ["A.IBRAHIM"],
+    "adil": ["A.DIP ADIL"],
+    "kadar": ["A.DIP KADAR"],
+    "stephy": ["A.DIP STEFFY"],
+    "muzammil": ["A.DIP MUZAMMIL"],
+}
+
+def salesman_scope_q(user: "User") -> Q:
+    """Return a Q filter limiting SAPQuotation by salesman_name for non-staff users."""
+    if user.is_superuser or user.role.role == "Admin":
+        return Q()  # no restriction
+
+    uname = (user.username or "").strip().lower()
+    names = SALES_USER_MAP.get(uname)
+    if names:
+        q = Q(pk__isnull=False) & Q()  # start with something truthy
+        q = Q()  # cleaner: start empty
+        for n in names:
+            q |= Q(salesman_name__iexact=n)
+        return q
+
+    # Sensible fallback if no explicit mapping:
+    # match username token inside salesman_name (case-insensitive)
+    token = uname.replace(".", " ").strip()
+    if token:
+        return Q(salesman_name__icontains=token)
+    # If nothing to match, return an always-false Q to avoid leaking data
+    return Q(pk__in=[])
+
+@login_required
+def upload_quotations(request):
+    messages_list = []
+    if request.method == 'POST':
+        excel_file = request.FILES.get('excel_file')
+        if not excel_file:
+            messages_list.append('Please upload an Excel file.')
+        else:
+            try:
+                df = pd.read_excel(excel_file)
+
+                # Ensure expected columns exist
+                required_cols = [
+                    'Internal Number', 'Document Number', 'Posting Date',
+                    'Customer/Supplier No.', 'Customer/Supplier Name', 'Sales Employee Name',
+                    'Brand', 'BP Reference No.', 'Item No.', 'Item/Service Description',
+                    'Quantity', 'Price', 'Row Total', 'Document Total', 'Status'
+                ]
+                missing = [c for c in required_cols if c not in df.columns]
+                if missing:
+                    messages_list.append(f"Missing columns: {', '.join(missing)}")
+                else:
+                    # Normalize numeric/text columns
+                    def as_str(x):
+                        try:
+                            # preserve as string (e.g., to keep leading zeros)
+                            return str(x).strip()
+                        except Exception:
+                            return ''
+
+                    def to_decimal(x):
+                        if pd.isna(x):
+                            return None
+                        try:
+                            return Decimal(str(x).replace(',', '').strip())
+                        except Exception:
+                            return None
+
+                    # Convert posting date
+                    def parse_date(val):
+                        if pd.isna(val):
+                            return None
+                        if isinstance(val, datetime):
+                            return val.date()
+                        s = str(val).strip()
+                        for fmt in ["%d.%m.%y", "%d.%m.%Y", "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"]:
+                            try:
+                                return datetime.strptime(s, fmt).date()
+                            except ValueError:
+                                continue
+                        return None
+
+                    # Group by Document Number to create header + items
+                    for doc_no, grp in df.groupby('Document Number'):
+                        q_number = as_str(doc_no)
+                        first = grp.iloc[0]
+
+                        quotation, _ = SAPQuotation.objects.update_or_create(
+                            q_number=q_number,
+                            defaults={
+                                'internal_number': as_str(first['Internal Number']),
+                                'posting_date': parse_date(first['Posting Date']),
+                                'customer_code': as_str(first['Customer/Supplier No.']),
+                                'customer_name': as_str(first['Customer/Supplier Name']),
+                                'salesman_name': as_str(first['Sales Employee Name']),
+                                'brand': as_str(first['Brand']),
+                                'bp_reference_no': as_str(first['BP Reference No.']),
+                                'document_total': to_decimal(first['Document Total']),
+                                'status': as_str(first['Status'])
+                            }
+                        )
+
+                        # Refresh items: remove old, add new
+                        quotation.items.all().delete()
+                        items_to_create = []
+                        for _, row in grp.iterrows():
+                            items_to_create.append(SAPQuotationItem(
+                                quotation=quotation,
+                                item_no=as_str(row['Item No.']),
+                                description=as_str(row['Item/Service Description']),
+                                quantity=to_decimal(row['Quantity']) or Decimal('0'),
+                                price=to_decimal(row['Price']) or Decimal('0'),
+                                row_total=to_decimal(row['Row Total'])
+                            ))
+                        if items_to_create:
+                            SAPQuotationItem.objects.bulk_create(items_to_create)
+
+                    return redirect('quotation_list')
+
+            except Exception as e:
+                messages_list.append(f"Error processing Excel file: {str(e)}")
+
+    return render(request, 'quotes/upload_quotations.html', {
+        'messages': messages_list
+    })
+
+
+# =====================
+# Quotation: List
+# =====================
+@login_required
+def quotation_list(request):
+    # Scope by logged-in user
+    qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
+
+    # Filters
+    q = request.GET.get('q', '').strip()
+    salesman = request.GET.get('salesman', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+
+    if q:
+        if q.isdigit():
+            qs = qs.filter(q_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(q_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q)
+            )
+
+    if salesman:
+        qs = qs.filter(salesman_name__iexact=salesman)
+
+    # Parse dates (YYYY-MM or YYYY-MM-DD)
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:  # YYYY-MM
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    qs = qs.order_by('-posting_date', '-created_at')
+
+    # Pagination
+    try:
+        page_size = int(request.GET.get('page_size', 100))
+    except ValueError:
+        page_size = 20
+    page_size = max(5, min(page_size, 100))
+    paginator = Paginator(qs, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Distinct salesmen list (restricted to the same scope)
+    salesmen = (
+        SAPQuotation.objects.filter(salesman_scope_q(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+
+    return render(request, 'quotes/quotation_list.html', {
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+        'salesmen': salesmen,
+        'filters': {
+            'q': q,
+            'salesman': salesman,
+            'start': start,
+            'end': end,
+            'page_size': page_size,
+        }
+    })
+
+
+# =====================
+# Quotation: Detail
+# =====================
+@login_required
+def quotation_detail(request, q_number):
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Enforce scope for non-staff users
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPQuotation.objects.filter(
+            Q(pk=quotation.pk) & salesman_scope_q(request.user)
+        ).exists()
+        if not allowed:
+            # Hide existence to avoid data leakage (or use 403 if preferred)
+            raise Http404("Quotation not found")
+
+    return render(request, 'quotes/quotation_detail.html', {
+        'quotation': quotation,
+        'items': quotation.items.all().order_by('id')
+    })
+
+
+# =====================
+# Quotation: AJAX Search (rows + pagination HTML)
+# =====================
+@login_required
+def quotation_search(request):
+    # Scope by logged-in user
+    qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
+
+    q = request.GET.get('q', '').strip()
+    salesman = request.GET.get('salesman', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+
+    if q:
+        if q.isdigit():
+            qs = qs.filter(q_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(q_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q)
+            )
+
+    if salesman:
+        qs = qs.filter(salesman_name__iexact=salesman)
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    qs = qs.order_by('-posting_date', '-created_at')
+
+    try:
+        page_size = int(request.GET.get('page_size', 20))
+    except ValueError:
+        page_size = 20
+    page_size = max(5, min(page_size, 100))
+    paginator = Paginator(qs, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    rows_html = render_to_string('quotes/_quotation_rows.html', {
+        'page_obj': page_obj
+    }, request=request)
+    pagination_html = render_to_string('quotes/_pagination.html', {
+        'page_obj': page_obj
+    }, request=request)
+
+    return JsonResponse({
+        'rows_html': rows_html,
+        'pagination_html': pagination_html,
+        'count': paginator.count,
+    })
+
+
+# views.py
+from io import BytesIO
+from decimal import Decimal
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+
+# If you used the scoped access earlier, optionally re-check permission here too
+from django.db.models import Q
+
+# --- reportlab imports (same as in your other app) ---
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
+from reportlab.lib.colors import HexColor, white
+from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, KeepTogether
+
+# Reuse your template & styles (make sure these are importable)
+# from .pdf import QuotationPDFTemplate, styles   # <-- adjust to your actual module
+# If they're in the other app, import from there instead:
+from .views_quotation import QuotationPDFTemplate, styles  # <- update path
+
+from .models import SAPQuotation, SAPQuotationItem  # adjust if your items model path differs
+
+
+@login_required
+def export_sap_quotation_pdf(request, q_number):
+    """
+    Generate a PDF for SAPQuotation using the same design as your other export,
+    with field-name adaptations.
+    """
+    # Fetch quotation (and optional scope check if you implemented per-user scoping)
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Optionally enforce user scope (uncomment if you want to apply same restriction):
+    # from .views import salesman_scope_q
+    # if not (request.user.is_superuser or request.user.is_staff):
+    #     allowed = SAPQuotation.objects.filter(Q(pk=quotation.pk) & salesman_scope_q(request.user)).exists()
+    #     if not allowed:
+    #         return HttpResponse(status=404)
+
+    items_qs = quotation.items.all().order_by('id')
+
+    # Prepare HTTP response
+    response = HttpResponse(content_type='application/pdf')
+    date_str = quotation.posting_date.strftime('%Y%m%d') if quotation.posting_date else 'NA'
+    filename = f"SAP_Quotation_{quotation.q_number}_{date_str}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    buffer = BytesIO()
+
+    # --- PDF doc using your existing template ---
+    doc = QuotationPDFTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.5*inch,
+        bottomMargin=1.0*inch
+    )
+
+    elements = []
+
+    # --- Title ---
+    elements.append(Spacer(1, -1.3*inch))  # Keep your lifted title position
+
+    title_table = Table(
+        [[Paragraph('QUOTATION', styles['MainTitle'])]],
+        colWidths=[7.5*inch]  # single column
+    )
+    title_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(title_table)
+    elements.append(Spacer(1, 0.1*inch))
+
+    # --- Two-column info (Quotation / Customer) ---
+    main_table_width = 7.5 * inch
+
+    quotation_data = [
+        [Paragraph('Quotation Details', styles['SectionHeader'])],
+        [Paragraph(f"<b>Number:</b> {quotation.q_number}", styles['Normal'])],
+        [Paragraph(f"<b>Date:</b> {quotation.posting_date or '-'}", styles['Normal'])],
+        [Paragraph(f"<b>BP Ref No:</b> {quotation.bp_reference_no or '—'}", styles['Normal'])],
+    ]
+    quotation_info_table = Table(quotation_data, colWidths=[main_table_width / 2])
+    quotation_info_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 1), (-1, -1), 2),
+        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
+        ('BACKGROUND', (0, 0), (0, 0), HexColor('#4A7C59')),
+    ]))
+
+    customer_data = [
+        [Paragraph('Customer Information', styles['SectionHeader'])],
+        [Paragraph(f"<b>Name:</b> {quotation.customer_name or '—'}", styles['Normal'])],
+        [Paragraph(f"<b>Code:</b> {quotation.customer_code or '—'}", styles['Normal'])],
+        [Paragraph(f"<b>Salesman:</b> {quotation.salesman_name or '—'}", styles['Normal'])],
+
+    ]
+    customer_info_table = Table(customer_data, colWidths=[main_table_width / 2])
+    customer_info_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 1), (-1, -1), 2),
+        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
+        ('BACKGROUND', (0, 0), (0, 0), HexColor('#4A7C59')),
+    ]))
+
+    info_table = Table([[quotation_info_table, customer_info_table]],
+                       colWidths=[main_table_width / 2, main_table_width / 2])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.2 * inch))
+
+    # --- Items table ---
+    items_header = ['#', 'Item No.', 'Description', 'Qty', 'Unit Price', 'Total']
+    items_data = [items_header]
+
+    def _to_decimal(x):
+        from decimal import Decimal
+        if x is None:
+            return Decimal('0')
+        if isinstance(x, Decimal):
+            return x
+        try:
+            return Decimal(str(x))
+        except Exception:
+            return Decimal('0')
+
+    subtotal = Decimal('0')
+    for idx, it in enumerate(items_qs, 1):
+        qty = _to_decimal(it.quantity)
+        price = _to_decimal(it.price)
+        row_total = _to_decimal(it.row_total) if it.row_total is not None else (qty * price)
+        subtotal += row_total
+
+        items_data.append([
+            str(idx),
+            it.item_no or '—',
+            Paragraph(it.description or '—', styles['ItemDescription']),
+            f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0",
+            f"AED {price:,.2f}",
+            f"AED {row_total:,.2f}",
+        ])
+
+    items_table = Table(
+        items_data,
+        colWidths=[
+            main_table_width * 0.04,   # #
+            main_table_width * 0.16,   # Item No.
+            main_table_width * 0.43,   # Description
+            main_table_width * 0.09,   # Qty
+            main_table_width * 0.14,   # Unit Price
+            main_table_width * 0.14    # Total
+        ],
+        repeatRows=1
+    )
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#2C5530')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#F0F7F4'), white]),
+        ('ALIGN', (0, 1), (1, -1), 'CENTER'),
+        ('ALIGN', (3, 1), (3, -1), 'CENTER'),
+        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+    ]))
+    items_table.canSplit = 1
+    items_table.hAlign = 'CENTER'
+
+    elements.append(items_table)                 # <— no wrapper
+    elements.append(Spacer(1, 0.1 * inch))
+
+    # --- Summary (VAT 5%) ---
+    tax_rate = Decimal('0.05')
+    tax_amount = (subtotal * tax_rate).quantize(Decimal('0.01'))
+    doc_total = _to_decimal(quotation.document_total)
+    # Prefer model total if present; else compute
+    grand_total = doc_total if doc_total else (subtotal + tax_amount)
+
+    summary_data = [
+        ['Subtotal:', f"AED {subtotal:,.2f}"],
+        [f'VAT ({(tax_rate*100):.0f}%):', f"AED {tax_amount:,.2f}"],
+        ['Grand Total:', f"AED {grand_total:,.2f}"],
+    ]
+    summary_table = Table(summary_data, colWidths=[main_table_width * 0.5, main_table_width * 0.5])
+    summary_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
+        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 2), (-1, 2), 12),
+        ('BACKGROUND', (0, 2), (-1, 2), HexColor('#2C5530')),
+        ('TEXTCOLOR', (0, 2), (-1, 2), white),
+    ]))
+    summary_wrapper = Table([[summary_table]], colWidths=[main_table_width])
+    summary_wrapper.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(KeepTogether(summary_wrapper))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    # --- Optional: remarks / terms (adapt if your SAP model has them) ---
+    # Example (comment out if not used):
+    # if getattr(quotation, 'remarks', None):
+    #     elements.extend([
+    #         Paragraph("Remarks:", styles['h3']),
+    #         Paragraph(quotation.remarks, styles['Normal']),
+    #         Spacer(1, 0.2 * inch)
+    #     ])
+    elements.extend([
+        Paragraph("Terms & Conditions:", styles['h3']),
+        Paragraph("1. This quotation is valid for 30 days from the date of issue.", styles['Normal']),
+        Paragraph("2. Prices are subject to change after the validity period.", styles['Normal']),
+        Paragraph("3. Delivery timelines to be confirmed upon order confirmation.", styles['Normal']),
+        Paragraph("4. System-generated document.", styles['Normal']),
+    ])
+
+    # Build + return
+    doc.multiBuild(elements)
+    pdf = buffer.getvalue()
+    buffer.close()
+    response.write(pdf)
+    return response

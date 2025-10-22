@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quotations</title>
+  <style>
+    :root{
+      --bg: #e8e8e8;          /* slate-900 */
+      --bg-soft: #a0a0a0;     /* gray-900 */
+      --panel: #00050f;       /* gray-900 */
+      --panel-2: #0b1220;     /* deep layer */
+      --text: #02050c;        /* gray-200 */
+      --muted: #000000;       /* gray-400 */
+      --brand: #6366f1;       /* indigo-500 */
+      --brand-2:#8b5cf6;      /* violet-500 */
+      --accent:#1d0a7a;       /* cyan-400 */
+      --ok:#10b981;           /* emerald-500 */
+      --warn:#f59e0b;         /* amber-500 */
+      --border: rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      --radius: 16px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+      background:
+        radial-gradient(1200px 500px at -10% -10%, rgba(99,102,241,.18), transparent 40%),
+        radial-gradient(900px 400px at 110% 10%, rgba(139,92,246,.18), transparent 45%),
+        radial-gradient(1000px 500px at 50% 120%, rgba(34,211,238,.12), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      line-height:1.45;
+    }
+
+    .wrap{
+      max-width: 1200px;
+      margin: 32px auto;
+      padding: 0 16px 56px;
+    }
+
+    .page-head{
+      display:flex; align-items:flex-end; justify-content:space-between;
+      gap:16px; flex-wrap:wrap; margin-bottom:16px;
+    }
+    .title{
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 700;
+      letter-spacing:.3px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .title .pill{
+      font-size: .8rem; font-weight:600; color: var(--accent);
+      padding:4px 10px; border:1px solid var(--border); border-radius:999px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0));
+    }
+
+    .actions{display:flex; gap:10px; flex-wrap:wrap}
+    .btn{
+      appearance:none; border:none; cursor:pointer;
+      padding:10px 14px; border-radius:12px; color:#060404;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      box-shadow: var(--shadow);
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px; font-weight:600;
+    }
+    .btn.secondary{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      color: var(--text); border:1px solid var(--border);
+    }
+    .btn:hover{ transform: translateY(-1px); filter:saturate(1.05)}
+    .btn:active{ transform: translateY(0)}
+
+    .panel{
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(255,255,255,.02));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    /* Filter bar */
+    .filters{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+      padding:16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border-bottom:1px solid var(--border);
+    }
+    @media(min-width:720px){
+      .filters{
+        grid-template-columns: minmax(220px, 2fr) 1.3fr 1fr 1fr .8fr auto;
+        align-items:end;
+      }
+    }
+
+    .field label{
+      display:block; font-size:.85rem; color: var(--muted); margin-bottom:6px;
+    }
+    .input, .select{
+      width:100%; color:var(--text);
+      padding:10px 12px; border-radius:12px;
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      outline:none;
+    }
+    .input:focus, .select:focus{
+      border-color: rgba(99,102,241,.5);
+      box-shadow: 0 0 0 4px rgba(99,102,241,.15);
+    }
+
+    .hint{color:var(--muted); margin:12px 16px 0}
+
+    /* Table wrapper for horizontal scroll on narrow screens */
+    .table-wrap{
+      width:100%; overflow:auto; -webkit-overflow-scrolling:touch;
+    }
+
+    table{
+      width:100%;
+      border-collapse: collapse;
+      min-width:720px;
+      background: transparent;
+    }
+    thead th{
+      position: sticky; top:0; z-index:1;
+      background: linear-gradient(180deg, rgba(17,24,39,.9), rgba(17,24,39,.8));
+      backdrop-filter: blur(4px);
+      font-size:.9rem; text-align:left; color: #cbd5e1; /* slate-300 */
+      border-bottom:1px solid var(--border);
+      padding:12px 10px;
+    }
+    tbody td{
+      border-bottom:1px solid var(--border);
+      padding:12px 10px;
+    }
+    tbody tr{
+      transition: background .15s ease, transform .05s ease;
+    }
+    tbody tr:hover{
+      background: rgba(99,102,241,.06);
+    }
+
+    td.num{ text-align:right; font-variant-numeric: tabular-nums; }
+    .muted{ color: var(--muted); }
+
+    /* Row click affordance on the Q No */
+    a.q-link{
+      color: #000000; text-decoration: none; font-weight: 700;
+    }
+    a.q-link:hover{ text-decoration: underline; color: #fff; }
+
+    /* Footer / pagination */
+    .footer{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; padding:12px 16px; color: var(--muted);
+      border-top:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+      flex-wrap:wrap;
+    }
+    .pagination{
+      display:flex; gap:6px; flex-wrap:wrap;
+    }
+    .pagination a, .pagination span{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:36px; height:36px; padding:0 10px;
+      border-radius:10px; border:1px solid var(--border);
+      text-decoration:none; color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+      font-weight:600;
+    }
+    .pagination a:hover{ border-color: rgba(99,102,241,.5) }
+    .pagination .active{
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      border-color: transparent;
+    }
+
+    /* “Total” counter */
+    .total{
+      font-weight:600; color:#000000;
+    }
+
+    /* Small “legend” chips below title */
+    .chips{
+      display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--muted);
+      font-size:.85rem; margin-top:6px;
+    }
+    .chip{
+      border:1px solid var(--border);
+      padding:4px 8px; border-radius:999px;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <div class="title">Quotations <span class="pill">Live</span></div>
+        <div class="chips">
+          <span class="chip">Filter by date, salesman, or keyword</span>
+          <span class="chip">Click a Q No to view items</span>
+        </div>
+      </div>
+      <div class="actions">
+        {% if user.role.role == 'Admin' %}
+          <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
+        {% endif %}
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn secondary" href="{% url 'sales_home' %}">Home</a>
+        {% else %}
+          <a class="btn secondary" href="{% url 'home' %}">Home</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <form id="filters" class="filters" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Q No / Customer / Salesman">
+        </div>
+        <div class="field">
+          <label>Salesman</label>
+          <select class="select" name="salesman">
+            <option value="">All</option>
+            {% for s in salesmen %}
+              <option value="{{ s }}" {% if s == filters.salesman %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Start</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+        <div class="field">
+          <label>Page Size</label>
+          <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn" type="submit">Apply</button>
+        </div>
+      </form>
+
+      <!-- <p class="hint">Tip: Type at least 2 characters to live-search.</p> -->
+
+      <div class="table-wrap">
+        <table aria-label="Quotations">
+          <thead>
+            <tr>
+              <th>Posting Date</th>
+              <th>Q No</th>
+              <th>Customer</th>
+              <th>Salesman</th>
+              <th style="text-align:right">Total</th>
+            </tr>
+          </thead>
+          <tbody id="quotations-body">
+            {% include 'quotes/_quotation_rows.html' with page_obj=page_obj %}
+          </tbody>
+        </table>
+      </div>
+
+      <div id="pagination" class="footer">
+        {% include 'quotes/_pagination.html' with page_obj=page_obj %}
+        {% if total_count is not None %}
+          <div class="total">Total: {{ total_count }} quotations</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Debounced AJAX filter/search + pagination (unchanged behavior; upgraded UI only)
+  (function() {
+    const form = document.getElementById('filters');
+    const body = document.getElementById('quotations-body');
+    const pagination = document.getElementById('pagination');
+
+    let timer = null;
+    function debounce(fn, delay) {
+      return function() {
+        const ctx = this, args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(ctx, args), delay);
+      }
+    }
+
+    function qs(params) {
+      const usp = new URLSearchParams(params);
+      return usp.toString();
+    }
+
+    function collectParams(overrides={}) {
+      const data = new FormData(form);
+      const params = Object.fromEntries(data.entries());
+      for (const k in overrides) params[k] = overrides[k];
+      return params;
+    }
+
+    function load(params) {
+      const url = '{% url "quotation_search" %}?'+qs(params);
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+        .then(r => r.json())
+        .then(data => {
+          body.innerHTML = data.rows_html;
+          pagination.innerHTML = data.pagination_html + '\\n' + `<div class="total">Total: ${data.count} quotations</div>`;
+        })
+        .catch(console.error);
+    }
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      load(collectParams({ page: 1 }));
+    });
+
+    const searchInput = form.querySelector('input[name="q"]');
+    searchInput.addEventListener('input', debounce(function() {
+      const val = searchInput.value.trim();
+      if (val.length === 0 || val.length >= 2) {
+        load(collectParams({ page: 1 }));
+      }
+    }, 300));
+
+    form.querySelectorAll('select, input[type="date"], input[name="page_size"]').forEach(el => {
+      el.addEventListener('change', function() {
+        load(collectParams({ page: 1 }));
+      });
+    });
+
+    pagination.addEventListener('click', function(e) {
+      const a = e.target.closest('a[data-page]');
+      if (!a) return;
+      e.preventDefault();
+      const page = a.getAttribute('data-page');
+      load(collectParams({ page }));
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -257,3 +257,39 @@ class QuotationItem(models.Model):
     def __str__(self):
         return f"{self.item.item_description} ({self.quantity})"
 
+# Quotation models
+class SAPQuotation(models.Model):
+    q_number = models.CharField(max_length=100, unique=True)  # Document Number
+    internal_number = models.CharField(max_length=100, blank=True, null=True)
+    posting_date = models.DateField(blank=True, null=True)
+    customer_code = models.CharField(max_length=100, blank=True, null=True)
+    customer_name = models.CharField(max_length=255)
+    salesman_name = models.CharField(max_length=255, blank=True, null=True)
+    brand = models.CharField(max_length=255, blank=True, null=True)
+    bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
+    document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    status = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.q_number} - {self.customer_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["posting_date"]),
+            models.Index(fields=["salesman_name"]),
+            models.Index(fields=["customer_name"]),
+            models.Index(fields=["status"]),
+        ]
+
+
+class SAPQuotationItem(models.Model):
+    quotation = models.ForeignKey(SAPQuotation, related_name='items', on_delete=models.CASCADE)
+    item_no = models.CharField(max_length=100, blank=True, null=True)
+    description = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    row_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.quotation.q_number} - {self.description}"

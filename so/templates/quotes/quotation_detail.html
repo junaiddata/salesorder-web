@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quotation {{ quotation.q_number }}</title>
+  <style>
+    :root{
+      /* Light palette based on your reference */
+      --bg: #d9e0e4;          /* page background */
+      --bg-soft: #eef2f6;     /* soft section bg */
+      --panel: #ffffff;       /* cards/panels */
+      --panel-2: #f8fafc;     /* subtle card bg */
+      --text: #02050c;        /* main text */
+      --muted: #3f4752;       /* secondary text */
+      --brand: #6366f1;       /* indigo-500 */
+      --brand-2:#8b5cf6;      /* violet-500 */
+      --accent:#000000;       /* deep accent */
+      --ok:#10b981;           /* emerald-500 */
+      --warn:#f59e0b;         /* amber-500 */
+      --border: rgba(2,5,12,.12); /* subtle border */
+      --shadow: 0 6px 20px rgba(2,5,12,.08);
+      --radius: 16px;
+    }
+
+    *{ box-sizing: border-box }
+    html,body{ height:100% }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans";
+      color: var(--text);
+      background:
+        radial-gradient(900px 300px at -10% -10%, rgba(99,102,241,.08), transparent 40%),
+        radial-gradient(700px 280px at 110% 10%, rgba(139,92,246,.08), transparent 45%),
+        var(--bg);
+      line-height: 1.5;
+    }
+
+    .wrap{
+      max-width: 1100px;
+      margin: 28px auto 60px;
+      padding: 0 16px;
+    }
+
+    .page-head{
+      display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      margin-bottom: 14px;
+    }
+    .title{
+      font-weight: 800;
+      font-size: clamp(22px, 3.2vw, 32px);
+      letter-spacing:.2px;
+      color: var(--accent);
+    }
+    .subtitle{
+      color: var(--muted); margin-top: 4px;
+    }
+
+    .actions{ display:flex; gap:10px; flex-wrap:wrap }
+    .btn{
+      appearance:none; border:none; cursor:pointer;
+      padding:10px 14px; border-radius: 12px;
+      text-decoration:none; font-weight: 700;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color:#fff; box-shadow: var(--shadow);
+      transition: transform .15s ease, filter .15s ease;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn.secondary{
+      background: linear-gradient(180deg, #fff, #f8fafc);
+      color: var(--accent);
+      border:1px solid var(--border);
+    }
+    .btn:hover{ transform: translateY(-1px); filter: saturate(1.05) }
+    .btn:active{ transform: translateY(0) }
+
+    .grid{
+      display:grid; gap:16px; margin-top: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 860px){
+      .grid{ grid-template-columns: 1.1fr 1fr; }
+    }
+
+    .card{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .card .hd{
+      padding:12px 16px;
+      background: linear-gradient(180deg, #fff, var(--panel-2));
+      border-bottom:1px solid var(--border);
+      font-weight: 700; color: var(--accent);
+    }
+    .card .bd{ padding: 14px 16px; }
+
+    .kv{
+      display:grid; grid-template-columns: 1fr; gap:10px;
+    }
+    @media (min-width: 560px){
+      .kv{ grid-template-columns: 1fr 1fr; }
+    }
+    .kv .row{
+      display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center;
+      padding:8px 0; border-bottom: 1px dashed rgba(2,5,12,.08);
+    }
+    .kv .row:last-child{ border-bottom:0 }
+    .kv .k{ color: var(--muted); font-weight:600 }
+    .kv .v{ font-weight:600 }
+
+    /* Totals highlight */
+    .stat{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:8px; margin-top: 10px;
+      padding:12px 14px; border-radius: 12px;
+      background: linear-gradient(180deg, #fbfbff, #f2f5ff);
+      border:1px solid rgba(99,102,241,.25);
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    /* Table */
+    .table-wrap{ width:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
+    table{
+      width:100%; min-width: 720px; border-collapse: collapse; background: #fff;
+      border:1px solid var(--border); border-radius: 12px; overflow:hidden;
+    }
+    thead th{
+      position: sticky; top:0; z-index:1;
+      background: linear-gradient(180deg, #fff, #f7f9fc);
+      border-bottom:1px solid var(--border);
+      text-align:left; font-size:.92rem; color: var(--muted);
+      padding:12px 10px;
+    }
+    tbody td{
+      border-bottom:1px solid var(--border);
+      padding:12px 10px;
+    }
+    tbody tr:hover{ background: #f8fbff }
+    td.num{ text-align:right; font-variant-numeric: tabular-nums; }
+
+    .backbar{
+      display:flex; gap:10px; flex-wrap:wrap; margin-top: 8px;
+    }
+
+    .pill{
+      display:inline-block; padding:4px 10px; border-radius:999px;
+      background:#eef2ff; color:#3730a3; border:1px solid rgba(55,48,163,.2);
+      font-weight:700; font-size:.82rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="page-head">
+      <div>
+        <div class="title">Quotation {{ quotation.q_number }}</div>
+        <div class="subtitle">Details & items</div>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
+        {% if user.is_staff or user.is_superuser %}
+          <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <section>
+      <article class="card">
+      <div class="hd">Quotation Information</div>
+      <div class="bd">
+        <div class="kv">
+        <div class="row">
+          <div class="k">Customer</div>
+          <div class="v">{{ quotation.customer_name }}{% if quotation.customer_code %} <span class="pill">{{ quotation.customer_code }}</span>{% endif %}</div>
+        </div>
+        <div class="row">
+          <div class="k">Salesman</div>
+          <div class="v">{{ quotation.salesman_name }}</div>
+        </div>
+        <div class="row">
+          <div class="k">Posting Date</div>
+          <div class="v">{{ quotation.posting_date|default:"-" }}</div>
+        </div>
+        <div class="row">
+          <div class="k">BP Ref No</div>
+          <div class="v">{{ quotation.bp_reference_no|default:"—" }}</div>
+        </div>
+        <div class="row">
+          <div class="k">Q No</div>
+          <div class="v">{{ quotation.q_number }}</div>
+        </div>
+        <!-- <div class="row">
+          <div class="k">Status</div>
+          <div class="v">{{ quotation.status|default:"—" }}</div>
+        </div> -->
+        </div>
+
+        <div class="stat">
+        <span>Total</span>
+        <span>{{ quotation.document_total|floatformat:2 }}</span>
+        </div>
+      </div>
+      </article>
+    </section>
+
+    <!-- Items -->
+    <section class="card" style="margin-top:16px;">
+      <div class="hd">Items</div>
+      <div class="bd">
+        <div class="table-wrap">
+          <table aria-label="Quotation Items">
+            <thead>
+              <tr>
+                <th>Item No</th>
+                <th>Description</th>
+                <th style="text-align:right">Qty</th>
+                <th style="text-align:right">Price</th>
+                <th style="text-align:right">Row Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in items %}
+              <tr>
+                <td>{{ it.item_no }}</td>
+                <td>{{ it.description }}</td>
+                <td class="num">{{ it.quantity|floatformat:2 }}</td>
+                <td class="num">{{ it.price|floatformat:2 }}</td>
+                <td class="num">{{ it.row_total|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" style="text-align:center; color:var(--muted); padding:16px;">No items</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="backbar">
+      <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
+      <a class="btn" href="{% url 'export_sap_quotation_pdf' quotation.q_number %}">Export PDF</a>
+    </div>
+    
+
+  </div>
+</body>
+</html>
