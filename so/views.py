@@ -1734,7 +1734,7 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(
             0.5*inch,
             0.5*inch,
-            f"Generated on: {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}"
+            f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
         )
 
 def export_sales_order_to_pdf(request, order_id):
