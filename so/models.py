@@ -270,6 +270,7 @@ class SAPQuotation(models.Model):
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    remarks = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.q_number} - {self.customer_name}"

@@ -3162,3 +3162,31 @@ def export_sap_quotation_pdf(request, q_number):
     buffer.close()
     response.write(pdf)
     return response
+
+
+
+from django.views.decorators.http import require_POST
+from django.contrib import messages
+from django.shortcuts import redirect, get_object_or_404
+from django.db.models import Q
+
+@login_required
+@require_POST
+def quotation_update_remarks(request, q_number):
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Enforce the same scope rules as detail view
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPQuotation.objects.filter(
+            Q(pk=quotation.pk) & salesman_scope_q(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Quotation not found")
+
+    # Update remarks
+    new_remarks = (request.POST.get("remarks") or "").strip()
+    quotation.remarks = new_remarks
+    quotation.save(update_fields=["remarks"])
+
+    messages.success(request, "Remarks updated.")
+    return redirect("quotation_detail", q_number=quotation.q_number)

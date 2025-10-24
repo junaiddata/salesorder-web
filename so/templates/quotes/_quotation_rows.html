@@ -7,6 +7,7 @@
   <td data-label="Customer">{{ q.customer_name }}</td>
   <td data-label="Salesman"><span class="muted">{{ q.salesman_name }}</span></td>
   <td class="num" data-label="Total">{{ q.document_total|floatformat:2 }}</td>
+  <td data-label="Status">{{ q.status|default:"—" }}</td>
 </tr>
 {% empty %}
 <tr>

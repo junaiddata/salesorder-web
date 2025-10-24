@@ -207,7 +207,28 @@
       </div>
       </article>
     </section>
-
+    <!-- Remarks -->
+<!-- Remarks -->
+<section class="card" style="margin-top:16px;">
+  <div class="hd">Remarks</div>
+  <div class="bd">
+    <form method="post" action="{% url 'quotation_update_remarks' quotation.q_number %}">
+      {% csrf_token %}
+      {% if not quotation.remarks %}
+        <div style="color:var(--muted); margin-bottom:6px; font-style:italic;">
+          No remarks yet — you can add one below.
+        </div>
+      {% endif %}
+      <textarea name="remarks" rows="4"
+                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:12px;"
+                placeholder="Add internal remarks…">{{ quotation.remarks|default_if_none:"" }}</textarea>
+      <div style="margin-top:10px; display:flex; gap:10px;">
+        <button class="btn" type="submit">Save Remarks</button>
+        <a class="btn secondary" href="{% url 'quotation_detail' quotation.q_number %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</section>
     <!-- Items -->
     <section class="card" style="margin-top:16px;">
       <div class="hd">Items</div>
