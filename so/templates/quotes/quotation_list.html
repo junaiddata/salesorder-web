@@ -246,6 +246,14 @@
           <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}">
         </div>
         <div class="field">
+        <label>Status</label>
+        <select class="select" name="status">
+          <option value="">All</option>
+          <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
+          <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+        </select>
+      </div>
+        <div class="field">
           <label>&nbsp;</label>
           <button class="btn" type="submit">Apply</button>
         </div>

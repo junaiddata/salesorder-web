@@ -2758,6 +2758,7 @@ def quotation_list(request):
     salesman = request.GET.get('salesman', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
+    status = request.GET.get('status', '').strip()  # ✅ added
 
     if q:
         if q.isdigit():
@@ -2777,6 +2778,9 @@ def quotation_list(request):
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
 
+        # ✅ Status filter
+    if status:
+        qs = qs.filter(status__iexact=status)
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
         if not s:
@@ -2824,6 +2828,7 @@ def quotation_list(request):
         'filters': {
             'q': q,
             'salesman': salesman,
+            'status': status,  # ✅ added back
             'start': start,
             'end': end,
             'page_size': page_size,
@@ -2865,6 +2870,7 @@ def quotation_search(request):
     salesman = request.GET.get('salesman', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
+    status = request.GET.get('status', '').strip()  # ✅ added
 
     if q:
         if q.isdigit():
@@ -2883,6 +2889,8 @@ def quotation_search(request):
 
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
+    if status:
+        qs = qs.filter(status__iexact=status)  # ✅ Status filter
 
     def parse_date(s):
         if not s:
