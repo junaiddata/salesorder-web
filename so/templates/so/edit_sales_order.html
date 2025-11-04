@@ -568,6 +568,14 @@
                                         <label>Quantity <span class="required-mark">*</span></label>
                                         <input type="number" name="quantity" min="1" value="{{ order_item.quantity }}" required inputmode="numeric">
                                     </div>
+                                    <div class="form-group">
+                                        <label>Unit <span class="required-mark">*</span></label>
+                                        <select name="unit" class="item-unit" required>
+                                            <option value="pcs"  {% if order_item.unit == 'pcs'  %}selected{% endif %}>pcs</option>
+                                            <option value="ctn"  {% if order_item.unit == 'ctn'  %}selected{% endif %}>ctn</option>
+                                            <option value="roll" {% if order_item.unit == 'roll' %}selected{% endif %}>roll</option>
+                                        </select>
+                                        </div>
                                     
                                     <div class="form-group">
                                         <label>Price <span class="required-mark">*</span></label>
@@ -954,6 +962,14 @@
                             <label>Quantity <span class="required-mark">*</span></label>
                             <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
                         </div>
+                        <div class="form-group">
+                            <label>Unit <span class="required-mark">*</span></label>
+                            <select name="unit" class="item-unit" required>
+                                <option value="pcs"  {% if order_item.unit == 'pcs'  %}selected{% endif %}>pcs</option>
+                                <option value="ctn"  {% if order_item.unit == 'ctn'  %}selected{% endif %}>ctn</option>
+                                <option value="roll" {% if order_item.unit == 'roll' %}selected{% endif %}>roll</option>
+                            </select>
+                            </div>
                         
                         <div class="form-group">
                             <label>Price <span class="required-mark">*</span></label>

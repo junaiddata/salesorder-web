@@ -348,19 +348,22 @@ def edit_sales_order(request, order_id):
         item_ids = request.POST.getlist('item')
         quantities = request.POST.getlist('quantity')
         prices = request.POST.getlist('price')
+        units      = request.POST.getlist('unit')  # <-- add this
 
 
         order_items = []
-        for item_id, qty, price in zip(item_ids, quantities, prices):
+        for item_id, qty, price,unit in zip(item_ids, quantities, prices,units):
             item = get_object_or_404(Items, id=item_id)
             price = float(price) if price else float(item.item_price)
             quantity = int(qty)
+            unit_val = unit if unit in ['pcs', 'ctn', 'roll'] else 'pcs'  # simple guard
 
             order_items.append(OrderItem(
                 order=sales_order,
                 item=item,
                 quantity=quantity,
                 price=price,
+                unit=unit_val,  # <-- add this
                 is_custom_price=True
             ))
 
