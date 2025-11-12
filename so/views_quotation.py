@@ -32,23 +32,27 @@ def create_quotation(request):
 
             if new_customer_name:
                 # Generate customer code like in sales order
-                last_customer = Customer.objects.filter(customer_code__startswith='NEWCUSTOMER') \
-                                                .order_by('-id').first()
-                if last_customer and last_customer.customer_code[11:].isdigit():
-                    last_number = int(last_customer.customer_code[11:])
-                else:
-                    last_number = 0
+                with transaction.atomic():
+                    prefix = 'NEWCUSTOMERS'
+                    last_customer = (
+                        Customer.objects.select_for_update()
+                        .filter(customer_code__startswith=prefix)
+                        .order_by('-id')
+                        .first()
+                    )
+                    if last_customer:
+                        code_part = last_customer.customer_code[len(prefix):]
+                        last_number = int(code_part) if code_part.isdigit() else 0
+                    else:
+                        last_number = 0
 
-                new_code = f'NEWCUSTOMERS{last_number + 1}'
+                    new_code = f'{prefix}{last_number + 1}'
 
-                # Create new customer
-                customer, created = Customer.objects.get_or_create(
-                    customer_name=new_customer_name,
-                    defaults={
-                        'customer_code': new_code,
-                        'salesman': salesman
-                    }
-                )
+                    customer, created = Customer.objects.get_or_create(
+                        customer_name=new_customer_name,
+                        defaults={'customer_code': new_code, 'salesman': salesman}
+                    )
+
                 if not created:
                     messages.error(request, f'Customer "{new_customer_name}" already exists.')
                     return redirect('create_quotation')
