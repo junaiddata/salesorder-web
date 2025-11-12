@@ -271,6 +271,7 @@ class SAPQuotation(models.Model):
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
+    bill_to = models.TextField(blank=True, null=True)  # 👈 added field
 
     def __str__(self):
         return f"{self.q_number} - {self.customer_name}"

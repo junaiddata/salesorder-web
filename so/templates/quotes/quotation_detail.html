@@ -169,14 +169,19 @@
       </div>
     </header>
 
-    <section>
-      <article class="card">
-      <div class="hd">Quotation Information</div>
-      <div class="bd">
-        <div class="kv">
+<section>
+  <article class="card">
+    <div class="hd">Quotation Information</div>
+    <div class="bd">
+      <div class="kv">
         <div class="row">
           <div class="k">Customer</div>
-          <div class="v">{{ quotation.customer_name }}{% if quotation.customer_code %} <span class="pill">{{ quotation.customer_code }}</span>{% endif %}</div>
+          <div class="v">
+            {{ quotation.customer_name }}
+            {% if quotation.customer_code %}
+              <span class="pill">{{ quotation.customer_code }}</span>
+            {% endif %}
+          </div>
         </div>
         <div class="row">
           <div class="k">Salesman</div>
@@ -194,19 +199,23 @@
           <div class="k">Q No</div>
           <div class="v">{{ quotation.q_number }}</div>
         </div>
-        <!-- <div class="row">
-          <div class="k">Status</div>
-          <div class="v">{{ quotation.status|default:"—" }}</div>
-        </div> -->
-        </div>
 
-        <div class="stat">
-        <span>Total</span>
-        <span>{{ quotation.document_total|floatformat:2 }}</span>
+        <!-- 🆕 Added Bill To section -->
+        <div class="row">
+          <div class="k">Bill To</div>
+          <div class="v" style="font-size: 13px; color: #555; white-space: pre-line;">
+            {{ quotation.bill_to|default:"Not specified" }}
+          </div>
         </div>
       </div>
-      </article>
-    </section>
+
+      <div class="stat">
+        <span>Total</span>
+        <span>{{ quotation.document_total|floatformat:2 }}</span>
+      </div>
+    </div>
+  </article>
+</section>
     <!-- Remarks -->
 <!-- Remarks -->
 <section class="card" style="margin-top:16px;">

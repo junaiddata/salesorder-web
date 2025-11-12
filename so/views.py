@@ -2664,10 +2664,10 @@ def upload_quotations(request):
 
                 # Ensure expected columns exist
                 required_cols = [
-                    'Internal Number', 'Document Number', 'Posting Date',
+                    'Document Internal ID', 'Document Number', 'Posting Date',
                     'Customer/Supplier No.', 'Customer/Supplier Name', 'Sales Employee Name',
-                    'Brand', 'BP Reference No.', 'Item No.', 'Item/Service Description',
-                    'Quantity', 'Price', 'Row Total', 'Document Total', 'Status'
+                    'Manufacturer Name', 'BP Reference No.', 'Item No.', 'Item/Service Description',
+                    'Quantity', 'Price', 'Row Total', 'Document Total', 'Status','Bill To'
                 ]
                 missing = [c for c in required_cols if c not in df.columns]
                 if missing:
@@ -2711,15 +2711,16 @@ def upload_quotations(request):
                         quotation, _ = SAPQuotation.objects.update_or_create(
                             q_number=q_number,
                             defaults={
-                                'internal_number': as_str(first['Internal Number']),
+                                'internal_number': as_str(first['Document Internal ID']),
                                 'posting_date': parse_date(first['Posting Date']),
                                 'customer_code': as_str(first['Customer/Supplier No.']),
                                 'customer_name': as_str(first['Customer/Supplier Name']),
                                 'salesman_name': as_str(first['Sales Employee Name']),
-                                'brand': as_str(first['Brand']),
+                                'brand': as_str(first['Manufacturer Name']),
                                 'bp_reference_no': as_str(first['BP Reference No.']),
                                 'document_total': to_decimal(first['Document Total']),
-                                'status': as_str(first['Status'])
+                                'status': as_str(first['Status']),
+                                'bill_to': as_str(first['Bill To']),
                             }
                         )
 
