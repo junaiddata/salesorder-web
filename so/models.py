@@ -22,9 +22,9 @@ class Role(models.Model):
         
 # Create your models here.
 class Items(models.Model):
-    item_code = models.CharField(max_length=50, unique=True)
-    item_description = models.CharField(max_length=100)
-    item_upvc = models.CharField(max_length=50, blank=True, null=True)
+    item_code = models.CharField(max_length=50, unique=True,db_index=True)
+    item_description = models.CharField(max_length=100, db_index=True)
+    item_upvc = models.CharField(max_length=50, blank=True, null=True, db_index=True)
     item_cost = models.FloatField(default=0.0)
     item_firm = models.CharField(max_length=100)
 

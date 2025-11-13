@@ -3202,3 +3202,51 @@ def quotation_update_remarks(request, q_number):
 
     messages.success(request, "Remarks updated.")
     return redirect("quotation_detail", q_number=quotation.q_number)
+
+
+
+
+from django.http import JsonResponse
+from django.db.models import Q
+
+def items_search_api(request):
+    """
+    API endpoint for searching items with server-side processing for Select2.
+    """
+    search_term = request.GET.get('q', '')
+    firm_filter = request.GET.get('firm', '') # Filter by brand/firm
+
+    # Only start searching after a few characters are typed
+    if len(search_term) < 2:
+        return JsonResponse([], safe=False)
+
+    # Base queryset
+    items = Items.objects.all()
+
+    # 1. Apply the firm filter if one is provided
+    if firm_filter and firm_filter.lower() != 'all':
+        items = items.filter(item_firm=firm_filter)
+
+    # 2. Apply the search term across multiple relevant fields
+    query = (
+        Q(item_code__icontains=search_term) |
+        Q(item_description__icontains=search_term)
+    )
+    items = items.filter(query)
+
+    # 3. Limit the results to prevent sending too much data
+    items = items[:50] # Return only the top 50 matches
+
+    # 4. Format the data into the structure Select2 expects
+    results = [
+        {
+            "id": item.id,
+            "text": f"{item.item_description} ({item.item_code} - Stock: {item.item_stock})",
+            # You can pass other data here if needed
+            "stock": item.item_stock,
+            "price": item.item_price 
+        }
+        for item in items
+    ]
+
+    return JsonResponse(results, safe=False)

@@ -84,4 +84,9 @@ urlpatterns += [
     path('sapquotations/<str:q_number>/export/', views.export_sap_quotation_pdf, name='export_sap_quotation_pdf'),
     path("sapquotations/<str:q_number>/remarks/", views.quotation_update_remarks, name="quotation_update_remarks"),
 
+
+
+    ## API endpoint for fast search items 
+    path('api/items-search/', items_search_api, name='api_items_search'),
+
 ]
