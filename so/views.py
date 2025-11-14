@@ -2874,8 +2874,10 @@ def quotation_search(request):
     salesman = request.GET.get('salesman', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
-    status = request.GET.get('status', '').strip()  # ✅ added
+    status = request.GET.get('status', '').strip()
+    total_range = request.GET.get('total', '').strip()   # ✅ NEW
 
+    # --- Existing filters ---
     if q:
         if q.isdigit():
             qs = qs.filter(q_number__istartswith=q)
@@ -2893,9 +2895,11 @@ def quotation_search(request):
 
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
-    if status:
-        qs = qs.filter(status__iexact=status)  # ✅ Status filter
 
+    if status:
+        qs = qs.filter(status__iexact=status)
+
+    # --- DATE FILTER ---
     def parse_date(s):
         if not s:
             return None
@@ -2908,11 +2912,24 @@ def quotation_search(request):
 
     start_date = parse_date(start)
     end_date = parse_date(end)
+
     if start_date:
         qs = qs.filter(posting_date__gte=start_date)
     if end_date:
         qs = qs.filter(posting_date__lte=end_date)
 
+    # --- ✅ DOCUMENT TOTAL FILTER ---
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
+
+        elif total_range == "5001-10000":
+            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+
+        elif total_range == "10000+":
+            qs = qs.filter(document_total__gt=10000)
+
+    # Order + Pagination (unchanged)
     qs = qs.order_by('-posting_date', '-created_at')
 
     try:
@@ -2927,6 +2944,7 @@ def quotation_search(request):
     rows_html = render_to_string('quotes/_quotation_rows.html', {
         'page_obj': page_obj
     }, request=request)
+
     pagination_html = render_to_string('quotes/_pagination.html', {
         'page_obj': page_obj
     }, request=request)
@@ -2936,6 +2954,7 @@ def quotation_search(request):
         'pagination_html': pagination_html,
         'count': paginator.count,
     })
+
 
 
 # views.py

@@ -218,47 +218,66 @@
       </div>
     </div>
 
-    <div class="panel">
-      <form id="filters" class="filters" method="get">
-        <div class="field">
-          <label>Search</label>
-          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Q No / Customer / Salesman">
-        </div>
-        <div class="field">
-          <label>Salesman</label>
-          <select class="select" name="salesman">
-            <option value="">All</option>
-            {% for s in salesmen %}
-              <option value="{{ s }}" {% if s == filters.salesman %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label>Start</label>
-          <input class="input" type="date" name="start" value="{{ filters.start }}">
-        </div>
-        <div class="field">
-          <label>End</label>
-          <input class="input" type="date" name="end" value="{{ filters.end }}">
-        </div>
-        <div class="field">
-          <label>Page Size</label>
-          <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}">
-        </div>
-        <div class="field">
-        <label>Status</label>
-        <select class="select" name="status">
-          <option value="">All</option>
-          <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
-          <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
-        </select>
-      </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button class="btn" type="submit">Apply</button>
-        </div>
-      </form>
+<div class="panel">
+  <form id="filters" class="filters" method="get">
 
+    <div class="field">
+      <label>Search</label>
+      <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Q No / Customer / Salesman">
+    </div>
+
+    <div class="field">
+      <label>Salesman</label>
+      <select class="select" name="salesman">
+        <option value="">All</option>
+        {% for s in salesmen %}
+          <option value="{{ s }}" {% if s == filters.salesman %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Start</label>
+      <input class="input" type="date" name="start" value="{{ filters.start }}">
+    </div>
+
+    <div class="field">
+      <label>End</label>
+      <input class="input" type="date" name="end" value="{{ filters.end }}">
+    </div>
+
+    <div class="field">
+      <label>Status</label>
+      <select class="select" name="status">
+        <option value="">All</option>
+        <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
+        <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Page Size</label>
+      <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}">
+    </div>
+
+    <!-- ✅ NEW TOTAL RANGE DROPDOWN -->
+    <div class="field">
+      <label>Total Amount</label>
+      <select class="select" name="total">
+        <option value="">All</option>
+        <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 to 5,000</option>
+        <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5,001 to 10,000</option>
+        <option value="10000+" {% if filters.total == '10000+' %}selected{% endif %}>10,000 and above</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn" type="submit">Apply</button>
+    </div>
+
+  </form>
+</div>
       <!-- <p class="hint">Tip: Type at least 2 characters to live-search.</p> -->
 
       <div class="table-wrap">
