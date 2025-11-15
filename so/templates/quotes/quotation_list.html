@@ -273,6 +273,14 @@
         <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100,000 and above</option>
       </select>
     </div>
+    <div class="field">
+      <label>Remarks</label>
+      <select class="select" name="remarks">
+        <option value="">All</option>
+        <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
+        <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
+      </select>
+    </div>
 
     <div class="field">
       <label>&nbsp;</label>

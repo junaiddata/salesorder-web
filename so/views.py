@@ -2876,6 +2876,7 @@ def quotation_search(request):
     end = request.GET.get('end', '').strip()
     status = request.GET.get('status', '').strip()
     total_range = request.GET.get('total', '').strip()   # ✅ NEW
+    remarks_filter = request.GET.get('remarks', '').strip()
 
     # --- Existing filters ---
     if q:
@@ -2898,6 +2899,12 @@ def quotation_search(request):
 
     if status:
         qs = qs.filter(status__iexact=status)
+
+        # --- ✅ REMARKS FILTER ---
+    if remarks_filter == "YES":
+        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+    elif remarks_filter == "NO":
+        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
 
     # --- DATE FILTER ---
     def parse_date(s):
