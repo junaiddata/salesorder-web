@@ -267,7 +267,10 @@
         <option value="">All</option>
         <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 to 5,000</option>
         <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5,001 to 10,000</option>
-        <option value="10000+" {% if filters.total == '10000+' %}selected{% endif %}>10,000 and above</option>
+        <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10,001 to 25,000</option>
+        <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25,001 to 50,000</option>
+        <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50,001 to 100,000</option>
+        <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100,000 and above</option>
       </select>
     </div>
 

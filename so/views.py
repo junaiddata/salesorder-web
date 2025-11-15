@@ -2925,9 +2925,15 @@ def quotation_search(request):
 
         elif total_range == "5001-10000":
             qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
 
-        elif total_range == "10000+":
-            qs = qs.filter(document_total__gt=10000)
+        elif total_range == "100000+":
+            qs = qs.filter(document_total__gt=100000)
 
     # Order + Pagination (unchanged)
     qs = qs.order_by('-posting_date', '-created_at')
