@@ -109,13 +109,11 @@ class DeviceAdmin(admin.ModelAdmin):
         'id_short',
         'user',
         'device_type',
-        'device_os',
         'device_browser',
         'first_ip',
         'last_ip',
         'location_lat',      # 👈 use these names
         'location_lng',      # 👈 same names as in logs
-        'network_summary',
         'last_seen',
         'quotation_count',
     )
