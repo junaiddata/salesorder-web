@@ -566,8 +566,10 @@
             <h1>Create Quotation</h1>
             
             <form method="post" id="quotation-form">
+
                 {% csrf_token %}
-                
+                <input type="hidden" name="location_lat" id="location_lat">
+                <input type="hidden" name="location_lng" id="location_lng">
                 <!-- Basic Information -->
                 <div class="form-card">
                     <h2 class="section-header">Quotation Information</h2>
@@ -1386,7 +1388,38 @@
         setTimeout(() => {
             $('#error-message').slideUp();
         }, 5000);
+
+
     }
+
+      // Try to get location when page loads
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!navigator.geolocation) {
+      console.log("Geolocation not supported");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        const latInput = document.getElementById("location_lat");
+        const lngInput = document.getElementById("location_lng");
+
+        if (latInput && lngInput) {
+          latInput.value = position.coords.latitude;
+          lngInput.value = position.coords.longitude;
+        }
+      },
+      function (error) {
+        console.log("Geolocation error:", error);
+        // user may deny permission – that's fine, we just leave it blank
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 60000
+      }
+    );
+  });
 </script>
 </body>
 </html>

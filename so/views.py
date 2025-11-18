@@ -2,8 +2,8 @@ from django.shortcuts import render
 import openpyxl
 from openpyxl.styles import Font
 from django.contrib.auth import logout, authenticate, login
-# Create your views here.
-#upload Items file from .xlsx file which contains item_code, item_description, item_firm
+# Create your views here .
+# Upload Items file from .xlsx file which contains item_code, item_description, item_firm
 from django.http import HttpResponse
 import pandas as pd
 from .models import Items,Customer
@@ -27,6 +27,9 @@ from django.urls import reverse
 from django.http import JsonResponse
 from .utils import send_telegram_message 
 from datetime import date, datetime, timedelta
+from django.db.models.functions import Coalesce
+from django.db.models import Sum, Value, DecimalField
+from django.contrib.auth.decorators import login_required
 
 def role_required(*required_roles):  # Accept multiple roles
     def decorator(view_func):
@@ -2763,6 +2766,29 @@ def quotation_list(request):
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     status = request.GET.get('status', '').strip()  # ✅ added
+    total_range = request.GET.get('total', '').strip()     # ✅ NEW
+    remarks_filter = request.GET.get('remarks', '').strip()  # ✅ NEW
+
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(document_total__gt=100000)
+
+    if remarks_filter == "YES":
+        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+    elif remarks_filter == "NO":
+        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
+
+
 
     if q:
         if q.isdigit():
@@ -2782,9 +2808,10 @@ def quotation_list(request):
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
 
-        # ✅ Status filter
+    # ✅ Status filter
     if status:
         qs = qs.filter(status__iexact=status)
+
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
         if not s:
@@ -2802,6 +2829,11 @@ def quotation_list(request):
         qs = qs.filter(posting_date__gte=start_date)
     if end_date:
         qs = qs.filter(posting_date__lte=end_date)
+
+    # --- ✅ TOTAL VALUE FOR CURRENT FILTERS ---
+    total_value = qs.aggregate(
+        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
+    )['total']
 
     qs = qs.order_by('-posting_date', '-created_at')
 
@@ -2829,6 +2861,7 @@ def quotation_list(request):
         'page_obj': page_obj,
         'total_count': paginator.count,
         'salesmen': salesmen,
+        'total_value': total_value,      # ✅ send to template
         'filters': {
             'q': q,
             'salesman': salesman,
@@ -2836,6 +2869,8 @@ def quotation_list(request):
             'start': start,
             'end': end,
             'page_size': page_size,
+            'total': total_range,      # ✅ for keeping dropdown selected
+            'remarks': remarks_filter, # ✅ for keeping dropdown selected
         }
     })
 
@@ -2900,7 +2935,7 @@ def quotation_search(request):
     if status:
         qs = qs.filter(status__iexact=status)
 
-        # --- ✅ REMARKS FILTER ---
+    # --- ✅ REMARKS FILTER ---
     if remarks_filter == "YES":
         qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
     elif remarks_filter == "NO":
@@ -2929,7 +2964,6 @@ def quotation_search(request):
     if total_range:
         if total_range == "0-5000":
             qs = qs.filter(document_total__gte=0, document_total__lte=5000)
-
         elif total_range == "5001-10000":
             qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
         elif total_range == "10001-25000":
@@ -2938,9 +2972,13 @@ def quotation_search(request):
             qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
         elif total_range == "50001-100000":
             qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
-
         elif total_range == "100000+":
             qs = qs.filter(document_total__gt=100000)
+
+    # --- ✅ TOTAL VALUE (sum of document_total on FILTERED qs) ---
+    total_value = qs.aggregate(
+        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
+    )['total']
 
     # Order + Pagination (unchanged)
     qs = qs.order_by('-posting_date', '-created_at')
@@ -2966,6 +3004,7 @@ def quotation_search(request):
         'rows_html': rows_html,
         'pagination_html': pagination_html,
         'count': paginator.count,
+        'total_value': float(total_value or 0),   # ✅ send to frontend
     })
 
 

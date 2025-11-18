@@ -55,14 +55,22 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    # CORS MUST ALWAYS BE FIRST
+    'corsheaders.middleware.CorsMiddleware',
+
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+
+    # MUST COME BEFORE DEVICE TRACKER
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+
+    # ✅ YOUR DEVICE TRACKER HERE
+    'so.middleware.DeviceTrackingMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True  # Development only!

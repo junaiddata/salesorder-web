@@ -295,3 +295,89 @@ class SAPQuotationItem(models.Model):
 
     def __str__(self):
         return f"{self.quotation.q_number} - {self.description}"
+
+
+
+
+################ LOGS #######################
+from django.conf import settings
+from django.db import models
+
+
+import uuid
+from django.conf import settings
+from django.db import models
+
+class Device(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='devices',
+    )
+    device_label = models.CharField(max_length=100, blank=True)  # "Rashad Laptop", “Office PC” (optional)
+    user_agent = models.TextField(blank=True)
+    device_type = models.CharField(max_length=20, blank=True)    # "PC", "Mobile", etc.
+    device_os = models.CharField(max_length=100, blank=True)
+    device_browser = models.CharField(max_length=100, blank=True)
+
+    first_ip = models.GenericIPAddressField(null=True, blank=True)
+    last_ip = models.GenericIPAddressField(null=True, blank=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.device_label or f"{self.user} - {self.device_type} - {self.device_browser}"
+
+class QuotationLog(models.Model):
+    ACTION_CHOICES = (
+        ("created", "Created"),
+        ("updated", "Updated"),
+        ("deleted", "Deleted"),
+    )
+
+    quotation = models.ForeignKey(
+        'Quotation', related_name='logs', on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='quotation_logs',
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+        # 🔽 NEW FIELDS
+    location_lat = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    location_lng = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    network_label = models.CharField(
+        max_length=100, blank=True
+    )  # e.g. "DIP Office", "Home", "RAS Office"
+        # 🔹 NEW: snapshot of device info at the time of action
+    device_type = models.CharField(max_length=20, blank=True)      # "PC", "Mobile", "Tablet", ...
+    device_os = models.CharField(max_length=100, blank=True)       # "Windows 10", "Android 14", ...
+    device_browser = models.CharField(max_length=100, blank=True)  # "Chrome 125", "Edge 123", ...
+
+    device = models.ForeignKey(
+        Device,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='quotation_logs',
+    )
+
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default="created")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.quotation.id} - {self.action} by {self.user or 'Anonymous'}"
+    
+

@@ -286,7 +286,14 @@
       <label>&nbsp;</label>
       <button class="btn" type="submit">Apply</button>
     </div>
-
+    <div class="totals">
+  <span>
+    Total Value: 
+    <strong id="total-value">
+      {{ total_value|default:0|floatformat:2 }}
+    </strong>
+  </span>
+</div>
   </form>
 </div>
       <!-- <p class="hint">Tip: Type at least 2 characters to live-search.</p> -->
@@ -350,10 +357,22 @@
       const url = '{% url "quotation_search" %}?'+qs(params);
       fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
-        .then(data => {
-          body.innerHTML = data.rows_html;
-          pagination.innerHTML = data.pagination_html + '\n' + `<div class="total">Total: ${data.count} quotations</div>`;
-        })
+    .then(data => {
+      body.innerHTML = data.rows_html;
+      pagination.innerHTML = data.pagination_html + '\n' +
+        `<div class="total">Total: ${data.count} quotations</div>`;
+
+      // ✅ Update total value at top
+      if (data.total_value !== undefined) {
+        const totalSpan = document.getElementById('total-value');
+        if (totalSpan) {
+          totalSpan.textContent = Number(data.total_value).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+        }
+      }
+    })
         .catch(console.error);
     }
 

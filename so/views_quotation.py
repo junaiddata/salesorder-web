@@ -3,6 +3,8 @@ from django.db import transaction
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Quotation, QuotationItem, Customer, Salesman, Items, CustomerPrice
+from .models import Quotation, QuotationItem, CustomerPrice, Customer, Items, Salesman, QuotationLog
+from .utils import get_client_ip, label_network
 
 
 @csrf_exempt
@@ -79,6 +81,36 @@ def create_quotation(request):
                     customer=customer,
                     salesman=salesman
                 )
+                ip = get_client_ip(request)
+                network_label = label_network(ip)
+                ip = get_client_ip(request)
+                ua_string = request.META.get('HTTP_USER_AGENT', '')[:500]
+                device_type, device_os, device_browser = parse_device_info(ua_string)
+
+                try:
+                    lat = request.POST.get("location_lat")
+                    lng = request.POST.get("location_lng")
+                    lat_val = float(lat) if lat not in (None, "",) else None
+                    lng_val = float(lng) if lng not in (None, "",) else None
+                except ValueError:
+                    lat_val = None
+                    lng_val = None
+
+                QuotationLog.objects.create(
+                    quotation=quotation,
+                    user=request.user if request.user.is_authenticated else None,
+                    ip_address=ip,
+                    user_agent=ua_string,
+                    device_type=device_type,
+                    device_os=device_os,
+                    device_browser=device_browser,
+                    location_lat=lat_val,
+                    location_lng=lng_val,
+                    network_label=network_label,
+                    device=request.device_obj,   # 🔴 THIS is the important link
+                    action="created",
+                )
+
 
                 quotation_items = []
                 customer_price_updates = []
@@ -420,6 +452,7 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageTemplate, KeepTogether
+from .utils import parse_device_info
 
 # --- PDF Styles ---
 styles = getSampleStyleSheet()
