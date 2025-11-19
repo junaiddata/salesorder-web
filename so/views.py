@@ -3321,3 +3321,41 @@ def items_search_api(request):
     ]
 
     return JsonResponse(results, safe=False)
+
+
+
+
+
+# so/views.py
+
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from .models import Device
+from .utils import get_client_ip
+
+@login_required
+@require_POST
+def update_device_location(request):
+    lat = request.POST.get("lat")
+    lng = request.POST.get("lng")
+
+    try:
+        lat_val = float(lat)
+        lng_val = float(lng)
+    except (TypeError, ValueError):
+        return JsonResponse({"status": "bad-coords"}, status=400)
+
+    device = getattr(request, "device_obj", None)
+    if not device:
+        # fallback: try last device for this user
+        device = Device.objects.filter(user=request.user).order_by('-last_seen').first()
+
+    if not device:
+        return JsonResponse({"status": "no-device"}, status=400)
+
+    device.last_lat = lat_val
+    device.last_lng = lng_val
+    device.save(update_fields=["last_lat", "last_lng"])
+
+    return JsonResponse({"status": "ok"})

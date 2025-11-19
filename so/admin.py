@@ -112,10 +112,13 @@ class DeviceAdmin(admin.ModelAdmin):
         'device_browser',
         'first_ip',
         'last_ip',
-        'location_lat',      # 👈 use these names
-        'location_lng',      # 👈 same names as in logs
+        'last_lat',
+        'last_lng',
         'last_seen',
         'quotation_count',
+        'location_lat',      # 👈 use these names
+        'location_lng',      # 👈 same names as in logs
+
     )
 
     list_filter = (
@@ -156,6 +159,11 @@ class DeviceAdmin(admin.ModelAdmin):
 
     # ------- helper columns -------
 
+    def last_lat(self, obj): 
+        return obj.last_lat
+
+    def last_lng(self, obj): 
+        return obj.last_lng
     def id_short(self, obj):
         return str(obj.id).split('-')[0]
     id_short.short_description = "Device ID"

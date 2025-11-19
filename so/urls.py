@@ -83,6 +83,7 @@ urlpatterns += [
     path('sapquotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sapquotations/<str:q_number>/export/', views.export_sap_quotation_pdf, name='export_sap_quotation_pdf'),
     path("sapquotations/<str:q_number>/remarks/", views.quotation_update_remarks, name="quotation_update_remarks"),
+    path('update-device-location/', update_device_location, name='update_device_location'),
 
 
 
