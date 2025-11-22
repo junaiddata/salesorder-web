@@ -2630,6 +2630,7 @@ SALES_USER_MAP = {
     "kadar": ["A.DIP KADAR"],
     "stephy": ["A.DIP STEFFY"],
     "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR","A.DIP ADIL","D.RETAIL CUST DIP" ],
+    "retail": ["R.NAH","R.ABUDHABI" ,"R.AJMAN","R.QUSAIS","R.STORES","E.DEIRA 1","R.DEIRA 2"],
 }
 
 def salesman_scope_q(user: "User") -> Q:

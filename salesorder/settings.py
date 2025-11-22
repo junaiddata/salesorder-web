@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework.authtoken',
+    'tradelicense',
 ]
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -145,6 +146,11 @@ TIME_ZONE = "Asia/Dubai"
 TELEGRAM_BOT_TOKEN = "8282988077:AAFFFqgRMejQbfWCi843wUc9dCNu-GLzZn4"
 TELEGRAM_CREATE_CHAT_ID = "-4928205676"
 TELEGRAM_APPROVE_CHAT_ID = "-4900133568"
+
+WHATSAPP_API_VERSION = 'v22.0' # Or your preferred, active version
+WHATSAPP_ACCESS_TOKEN = 'EAAQptligo50BPxZCBoRIIoopsfBzTeTBZCOrc1XGa9xC0tGikkpp5ajjM1inCFemKZCtAiRnpWWzZB1kJq6WqgMwL7RZC8MqHynBShSCM7Y3mpm7HfKOhbyTvNCqy5A6QwK43NVfENklGeHFYEAhRVh8aljVeNkPDOGfWZChs6ytvctfBKPZCtlNgA41ZCvDqZB0t'
+WHATSAPP_PHONE_NUMBER_ID = '623707730818076'
+
 
 
 # Static files (CSS, JavaScript, Images)
