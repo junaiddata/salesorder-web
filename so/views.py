@@ -2631,6 +2631,14 @@ SALES_USER_MAP = {
     "stephy": ["A.DIP STEFFY"],
     "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR","A.DIP ADIL","D.RETAIL CUST DIP" ],
     "retail": ["R.NAH","R.ABUDHABI" ,"R.AJMAN","R.QUSAIS","R.STORES","E.DEIRA 1","R.DEIRA 2"],
+    "retailabudhabi": ["R.ABUDHABI"],
+    "retailajman": ["R.AJMAN"],
+    "retailqusais": ["R.QUSAIS"],
+    "retailstores": ["R.STORES"],
+    "exportdeira1": ["E.DEIRA 1"],
+    "retaildeira2": ["R.DEIRA 2"],
+    "retailnah": ["R.NAH"],
+    
 }
 
 def salesman_scope_q(user: "User") -> Q:
@@ -2875,6 +2883,155 @@ def quotation_list(request):
         }
     })
 
+from django.db.models import Sum, Value, Q, DecimalField
+from django.db.models.functions import Coalesce
+from datetime import datetime
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+
+@login_required
+def export_quotation_list_pdf(request):
+    """
+    Exports the filtered list of quotations to a PDF report.
+    Respects: q, salesman, start/end date, status, total range, remarks.
+    """
+    # 1. APPLY FILTERS (Exact copy from quotation_list)
+    qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
+    
+    q = request.GET.get('q', '').strip()
+    salesman = request.GET.get('salesman', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    status = request.GET.get('status', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    remarks_filter = request.GET.get('remarks', '').strip()
+
+    # Apply Total Range Filter
+    if total_range:
+        if total_range == "0-5000": qs = qs.filter(document_total__gte=0, document_total__lte=5000)
+        elif total_range == "5001-10000": qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+        elif total_range == "10001-25000": qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
+        elif total_range == "25001-50000": qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
+        elif total_range == "50001-100000": qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
+        elif total_range == "100000+": qs = qs.filter(document_total__gt=100000)
+
+    # Apply Remarks Filter
+    if remarks_filter == "YES":
+        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+    elif remarks_filter == "NO":
+        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
+
+    # Apply Search (q)
+    if q:
+        if q.isdigit():
+            qs = qs.filter(q_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(Q(customer_name__istartswith=q) | Q(salesman_name__istartswith=q))
+        else:
+            qs = qs.filter(Q(q_number__icontains=q) | Q(customer_name__icontains=q) | Q(salesman_name__icontains=q))
+
+    if salesman:
+        qs = qs.filter(salesman_name__iexact=salesman)
+    if status:
+        qs = qs.filter(status__iexact=status)
+
+    # Apply Dates
+    def parse_date(s):
+        if not s: return None
+        try:
+            if len(s) == 7: return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError: return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date: qs = qs.filter(posting_date__gte=start_date)
+    if end_date: qs = qs.filter(posting_date__lte=end_date)
+
+    # Ordering
+    qs = qs.order_by('-posting_date', '-created_at')
+
+    # Calculate Total Value of Report
+    total_value = qs.aggregate(
+        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
+    )['total']
+
+    # --- 2. GENERATE PDF ---
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Quotation_Report_{datetime.now().strftime('%Y%m%d')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    # Landscape A4 because lists are wide
+    doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # Title
+    title_text = "Quotation Sales Report"
+    if start and end:
+        title_text += f" ({start} to {end})"
+    elements.append(Paragraph(title_text, styles['Title']))
+    elements.append(Spacer(1, 20))
+
+    # Table Header
+    headers = ['Date', 'Quote #', 'Customer Name', 'Salesman', 'Status', 'Total (AED)']
+    data = [headers]
+
+    # Table Rows
+    for item in qs:
+        doc_total = item.document_total if item.document_total else 0
+        date_str = item.posting_date.strftime('%Y-%m-%d') if item.posting_date else "-"
+        
+        row = [
+            date_str,
+            item.q_number,
+            Paragraph(item.customer_name[:35] + '...' if len(item.customer_name or '') > 35 else (item.customer_name or ''), styles['Normal']),
+            Paragraph(item.salesman_name or '-', styles['Normal']),
+            item.status or '-',
+            f"{doc_total:,.2f}"
+        ]
+        data.append(row)
+
+    # Grand Total Row
+    data.append(['', '', '', '', 'GRAND TOTAL:', f"{total_value:,.2f}"])
+
+    # Table Styling
+    # Calculate column widths (Landscape A4 width approx 840 points)
+    col_widths = [70, 70, 280, 150, 80, 80]
+    
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C5530')), # Header Color
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        
+        # Data Rows
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'), # Right align totals
+        
+        # Grand Total Row styling
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.black),
+    ])
+    
+    table.setStyle(style)
+    elements.append(table)
+
+    # Footer/Summary
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph(f"Total Records: {qs.count()}", styles['Normal']))
+
+    doc.build(elements)
+    return response
 
 # =====================
 # Quotation: Detail

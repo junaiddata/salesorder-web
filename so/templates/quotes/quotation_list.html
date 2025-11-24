@@ -210,6 +210,10 @@
         {% if user.role.role == 'Admin' %}
           <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
         {% endif %}
+<button type="button" id="btn-export-pdf" class="btn btn-danger">
+        <i class="fa fa-file-pdf-o"></i> Export PDF
+    </button>
+
         {% if user.role.role == 'Salesman' %}
           <a class="btn secondary" href="{% url 'sales_home' %}">Home</a>
         {% else %}
@@ -325,8 +329,8 @@
     </div>
   </div>
 
-  <script>
-  // Debounced AJAX filter/search + pagination (unchanged behavior; upgraded UI only)
+<script>
+  // 1. AJAX Search Logic (Existing)
   (function() {
     const form = document.getElementById('filters');
     const body = document.getElementById('quotations-body');
@@ -357,22 +361,22 @@
       const url = '{% url "quotation_search" %}?'+qs(params);
       fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
-    .then(data => {
-      body.innerHTML = data.rows_html;
-      pagination.innerHTML = data.pagination_html + '\n' +
-        `<div class="total">Total: ${data.count} quotations</div>`;
+        .then(data => {
+          body.innerHTML = data.rows_html;
+          pagination.innerHTML = data.pagination_html + '\n' +
+            `<div class="total">Total: ${data.count} quotations</div>`;
 
-      // ✅ Update total value at top
-      if (data.total_value !== undefined) {
-        const totalSpan = document.getElementById('total-value');
-        if (totalSpan) {
-          totalSpan.textContent = Number(data.total_value).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          });
-        }
-      }
-    })
+          // Update total value at top
+          if (data.total_value !== undefined) {
+            const totalSpan = document.getElementById('total-value');
+            if (totalSpan) {
+              totalSpan.textContent = Number(data.total_value).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+            }
+          }
+        })
         .catch(console.error);
     }
 
@@ -403,6 +407,34 @@
       load(collectParams({ page }));
     });
   })();
-  </script>
+
+  // 2. EXPORT PDF LOGIC (Fixed)
+  document.addEventListener("DOMContentLoaded", function() {
+    const exportBtn = document.getElementById('btn-export-pdf');
+    
+    if(exportBtn){
+        exportBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Select the form that contains the filters
+            const form = document.getElementById('filters');
+            
+            // Automatically grab all inputs (q, salesman, date, etc.) from the form
+            const formData = new FormData(form);
+            
+            // Convert to URL parameters string
+            const params = new URLSearchParams(formData);
+
+            // Redirect to the Export URL with the parameters
+            const exportUrl = "{% url 'export_quotation_list_pdf' %}?" + params.toString();
+            
+            // Debugging (Optional: check console to see if params are correct)
+            console.log("Exporting with params:", params.toString());
+
+            window.location.href = exportUrl;
+        });
+    }
+  });
+</script>
 </body>
 </html>

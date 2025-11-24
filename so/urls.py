@@ -84,6 +84,8 @@ urlpatterns += [
     path('sapquotations/<str:q_number>/export/', views.export_sap_quotation_pdf, name='export_sap_quotation_pdf'),
     path("sapquotations/<str:q_number>/remarks/", views.quotation_update_remarks, name="quotation_update_remarks"),
     path('update-device-location/', update_device_location, name='update_device_location'),
+        # 1. Export the List (Summary)
+    path('quotations/export-list/', views.export_quotation_list_pdf, name='export_quotation_list_pdf'),
 
 
 
