@@ -2771,7 +2771,16 @@ def quotation_list(request):
 
     # Filters
     q = request.GET.get('q', '').strip()
-    salesman = request.GET.get('salesman', '').strip()
+    # salesman = request.GET.get('salesman', '').strip()
+    # In quotation_list and quotation_search views:
+    salesmen_filter = request.GET.getlist('salesman') # Gets ['Name1', 'Name2']
+
+    # ✅ FIX: Apply List Filter
+    if salesmen_filter:
+        # Filter out empty strings
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     status = request.GET.get('status', '').strip()  # ✅ added
@@ -2814,8 +2823,7 @@ def quotation_list(request):
                 Q(salesman_name__icontains=q)
             )
 
-    if salesman:
-        qs = qs.filter(salesman_name__iexact=salesman)
+
 
     # ✅ Status filter
     if status:
@@ -2873,7 +2881,7 @@ def quotation_list(request):
         'total_value': total_value,      # ✅ send to template
         'filters': {
             'q': q,
-            'salesman': salesman,
+            'salesmen_filter': salesmen_filter,  # ✅ for multi-select
             'status': status,  # ✅ added back
             'start': start,
             'end': end,
@@ -3064,7 +3072,16 @@ def quotation_search(request):
     qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
 
     q = request.GET.get('q', '').strip()
-    salesman = request.GET.get('salesman', '').strip()
+
+    # In quotation_list and quotation_search views:
+    salesmen_filter = request.GET.getlist('salesman') # Gets ['Name1', 'Name2']
+
+    # 2. Logic
+    if salesmen_filter:
+         clean_salesmen = [s for s in salesmen_filter if s.strip()]
+         if clean_salesmen:
+             qs = qs.filter(salesman_name__in=clean_salesmen)
+
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     status = request.GET.get('status', '').strip()
@@ -3087,8 +3104,7 @@ def quotation_search(request):
                 Q(salesman_name__icontains=q)
             )
 
-    if salesman:
-        qs = qs.filter(salesman_name__iexact=salesman)
+
 
     if status:
         qs = qs.filter(status__iexact=status)

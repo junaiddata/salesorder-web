@@ -79,7 +79,7 @@
       background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(255,255,255,.02));
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow:hidden;
+      overflow:visible;
     }
 
     /* Filter bar */
@@ -194,6 +194,98 @@
       padding:4px 8px; border-radius:999px;
       background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
     }
+/* --- Custom Multi-Select Styles --- */
+.multi-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-box {
+  cursor: pointer;
+  position: relative;
+  width: 100%;
+  color: var(--text);
+  /* Match the exact height/padding of your other inputs */
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  /* Match the exact gradient of your other inputs */
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.select-box:hover {
+  border-color: rgba(99,102,241,.5);
+}
+
+.select-box::after {
+  content: '▼';
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+/* The Dropdown List */
+.options-container {
+  display: none; 
+  position: absolute;
+  /* Push it down slightly to clear the input */
+  top: 105%; 
+  left: 0;
+  right: 0;
+  
+  /* ✅ VISUALS: Solid Dark Background + Blur for readability */
+  background: #0b1220; 
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5); /* Strong shadow to show depth */
+  
+  /* ✅ LAYOUT: High Z-Index to float above everything */
+  z-index: 9999; 
+  
+  /* ✅ HEIGHT: Tall enough for many names */
+  max-height: 300px; 
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.options-container.active {
+  display: block;
+}
+
+/* Individual Options */
+.field .option-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  
+  /* Force White Text */
+  color: #e2e8f0 !important; 
+  background: transparent;
+  margin-bottom: 0; 
+  
+  transition: all 0.1s ease;
+  font-size: 0.9rem;
+}
+
+/* Hover State */
+.field .option-label:hover {
+  /* White tint on hover */
+  background: rgba(255, 255, 255, 0.1); 
+  color: #ffffff !important; 
+}
+
+.option-label input[type="checkbox"] {
+  accent-color: var(--brand); 
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin: 0;
+}
   </style>
 </head>
 <body>
@@ -231,14 +323,26 @@
     </div>
 
     <div class="field">
-      <label>Salesman</label>
-      <select class="select" name="salesman">
-        <option value="">All</option>
-        {% for s in salesmen %}
-          <option value="{{ s }}" {% if s == filters.salesman %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
+  <label>Salesman</label>
+  
+  <div class="multi-select" id="salesman-wrapper">
+    <!-- The visible box that looks like a select input -->
+    <div class="select-box" id="salesman-trigger">
+      <span id="salesman-text">Select Salesman...</span>
     </div>
+
+    <!-- The hidden dropdown with checkboxes -->
+    <div class="options-container" id="salesman-options">
+      {% for s in salesmen %}
+        <label class="option-label">
+          <input type="checkbox" name="salesman" value="{{ s }}" 
+            {% if s in filters.salesman %}checked{% endif %}>
+          {{ s }}
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 
     <div class="field">
       <label>Start</label>
@@ -350,13 +454,23 @@
       return usp.toString();
     }
 
-    function collectParams(overrides={}) {
+function collectParams(overrides={}) {
       const data = new FormData(form);
-      const params = Object.fromEntries(data.entries());
-      for (const k in overrides) params[k] = overrides[k];
+      
+      // Use URLSearchParams to handle multiple checkboxes with same name
+      const params = new URLSearchParams();
+      for (const [key, value] of data.entries()) {
+        params.append(key, value);
+      }
+
+      // Add overrides
+      for (const k in overrides) {
+        // Remove existing page param if overriding, then append
+        if(k === 'page') params.delete('page');
+        params.append(k, overrides[k]);
+      }
       return params;
     }
-
     function load(params) {
       const url = '{% url "quotation_search" %}?'+qs(params);
       fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
@@ -435,6 +549,66 @@
         });
     }
   });
+
+/* --- Custom Multi-Select Logic --- */
+document.addEventListener("DOMContentLoaded", function() {
+  const wrapper = document.getElementById('salesman-wrapper');
+  const trigger = document.getElementById('salesman-trigger');
+  const options = document.getElementById('salesman-options');
+  const textSpan = document.getElementById('salesman-text');
+  
+  // Helper to get fresh list of checkboxes
+  const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
+
+  // 1. Toggle Dropdown visibility
+  trigger.addEventListener('click', function(e) {
+    e.stopPropagation(); 
+    options.classList.toggle('active');
+  });
+
+  // 2. Prevent closing when clicking INSIDE the dropdown (Important!)
+  options.addEventListener('click', function(e) {
+    e.stopPropagation();
+  });
+
+  // 3. Update Label Text based on selection
+  function updateLabel() {
+    const checkboxes = getCheckboxes();
+    const checked = Array.from(checkboxes).filter(c => c.checked);
+    
+    if (checked.length === 0) {
+      textSpan.textContent = "All Salesmen";
+      textSpan.style.opacity = "0.7";
+    } else if (checked.length === 1) {
+      textSpan.textContent = checked[0].value; // Show name if only 1 selected
+      textSpan.style.opacity = "1";
+    } else {
+      textSpan.textContent = `${checked.length} Selected`;
+      textSpan.style.opacity = "1";
+    }
+  }
+
+  // Initialize label on load
+  updateLabel();
+
+  // 4. Listen for changes to update text AND trigger AJAX Search
+  getCheckboxes().forEach(box => {
+    box.addEventListener('change', function() {
+      updateLabel();
+      // Trigger the existing search form submit logic
+      const form = document.getElementById('filters');
+      // Dispatch submit so the existing AJAX listener handles it
+      form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); 
+    });
+  });
+
+  // 5. Close dropdown when clicking OUTSIDE
+  document.addEventListener('click', function(e) {
+    if (!wrapper.contains(e.target)) {
+      options.classList.remove('active');
+    }
+  });
+});
 </script>
 </body>
 </html>
