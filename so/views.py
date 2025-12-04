@@ -3044,6 +3044,49 @@ def export_quotation_list_pdf(request):
 # =====================
 # Quotation: Detail
 # =====================
+import requests
+from django.core.cache import cache  # For caching API response
+from decimal import Decimal
+from django.shortcuts import render, get_object_or_404
+from django.db.models import Q
+# Import your models here
+
+def get_stock_costs():
+    """
+    Fetches stock data from API and returns a dictionary: 
+    {'item_code': cost_price_float}
+    Cached for 1 hour to improve performance.
+    """
+    # Try to get data from cache first
+    stock_data = cache.get('junaid_stock_data')
+    
+    if stock_data is None:
+        try:
+            url = "https://stock.junaidworld.com/api/stock"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Convert list to a dictionary for fast lookup: {'100003': 12.50}
+            stock_data = {}
+            for item in data:
+                try:
+                    # Key is item_code, Value is cost_price (converted to float)
+                    code = str(item.get('item_code', '')).strip()
+                    cost = float(item.get('cost_price', 0.0))
+                    stock_data[code] = cost
+                except (ValueError, TypeError):
+                    continue
+            
+            # Save to cache for 60 minutes (3600 seconds)
+            cache.set('junaid_stock_data', stock_data, 3600)
+            
+        except requests.RequestException:
+            # If API fails, return empty dict so the page doesn't crash
+            return {}
+            
+    return stock_data
+
 @login_required
 def quotation_detail(request, q_number):
     quotation = get_object_or_404(SAPQuotation, q_number=q_number)
@@ -3054,14 +3097,41 @@ def quotation_detail(request, q_number):
             Q(pk=quotation.pk) & salesman_scope_q(request.user)
         ).exists()
         if not allowed:
-            # Hide existence to avoid data leakage (or use 403 if preferred)
             raise Http404("Quotation not found")
 
-    return render(request, 'quotes/quotation_detail.html', {
-        'quotation': quotation,
-        'items': quotation.items.all().order_by('id')
-    })
+    # Get items
+    items = quotation.items.all().order_by('id')
 
+    # --- NEW CALCULATION LOGIC ---
+    stock_map = get_stock_costs()
+    total_estimated_cost = 0.0
+
+    # We iterate over items to calculate cost based on the API map
+    for item in items:
+        # Match item.item_no with the API's item_code
+        item_code = str(item.item_no).strip()
+        
+        # Get unit cost from map, default to 0.0 if not found
+        unit_cost = stock_map.get(item_code, 0.0)
+        
+        # Calculate row cost (Unit Cost * Quantity)
+        # Convert Decimal quantity to float for calculation
+        qty = float(item.quantity)
+        total_estimated_cost += (unit_cost * qty)
+
+    # Calculate Profit/Margin (Optional, but usually helpful)
+    # Convert document_total to float for math
+    doc_total = float(quotation.document_total or 0)
+    total_profit = doc_total - total_estimated_cost
+
+    context = {
+        'quotation': quotation,
+        'items': items,
+        'total_cost': total_estimated_cost, # Passed to template
+        'total_profit': total_profit,       # Passed to template
+    }
+
+    return render(request, 'quotes/quotation_detail.html', context)
 
 # =====================
 # Quotation: AJAX Search (rows + pagination HTML)

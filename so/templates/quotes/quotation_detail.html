@@ -213,6 +213,25 @@
         <span>Total</span>
         <span>{{ quotation.document_total|floatformat:2 }}</span>
       </div>
+
+      <!-- NEW: Cost & Profit Section (Visible to Staff/Superuser) -->
+
+      <div style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        {% if user.role.role == 'Admin' %}
+        <!-- Total Cost Card -->
+        <div style="background:#fff0f0; border:1px solid #fecaca; color:#991b1b; padding:10px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.9rem; font-weight:700;">Est. Cost</span>
+          <span style="font-weight:800;">{{ total_cost|floatformat:2 }}</span>
+        </div>
+
+        <!-- Total Profit Card -->
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; padding:10px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.9rem; font-weight:700;">Est. Margin</span>
+          <span style="font-weight:800;">{{ total_profit|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+      </div>
+
     </div>
   </article>
 </section>
