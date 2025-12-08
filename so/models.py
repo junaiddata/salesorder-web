@@ -403,6 +403,8 @@ class OpenSalesOrder(models.Model):
     open_qty = models.FloatField(default=0.0)                   # "Remaining" (Open Qty)
     total_available = models.FloatField(default=0.0)            # "Total avail"
     
+    dip_stock = models.FloatField(default=0.0) 
+    
     salesman_name = models.CharField(max_length=100, blank=True, null=True) # "Sales Employee"
     
     # Metadata

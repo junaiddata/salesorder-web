@@ -3657,7 +3657,8 @@ def upload_so_data(request):
                         row_total=float(row.get('Row Total', 0) or 0),
                         open_qty=float(row.get('Remaining Open Quantity', 0) or 0),
                         total_available=float(row.get('Total available Stock', 0) or 0),
-                        salesman_name=str(row.get('Sales Employee', ''))
+                        salesman_name=str(row.get('Sales Employee', '')),
+                        dip_stock=float(row.get('Dip warehouse stock', 0) or 0), 
                     ))
 
                 # 3. Database Operation (Atomic Transaction)
@@ -3774,36 +3775,30 @@ def open_so_dashboard(request):
 # --- 4. PDF EXPORT VIEW (ReportLab) ---
 @login_required
 def export_so_pdf(request):
-    # 1. Get exact same data using helper
     orders = _get_filtered_queryset(request)
 
-    # 2. Setup PDF file buffer
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=18)
     elements = []
     styles = getSampleStyleSheet()
 
-    # --- 3. LOGO & HEADER ---
-    
-    # A. Add Logo (Top Left)
+    # --- LOGO & HEADER (Keep existing logic) ---
     logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
     try:
-        # Create Image: width=150points, height=50points (Adjust as needed)
         logo = Image(logo_url, width=150, height=50)
         logo.hAlign = 'LEFT'
         elements.append(logo)
-        elements.append(Spacer(1, 10)) # Space between logo and title
-    except Exception as e:
-        # If image fails to load (internet issue), print error to console but continue generating PDF
-        print(f"Could not load PDF Logo: {e}")
+        elements.append(Spacer(1, 10))
+    except Exception:
+        pass
 
-    # B. Add Title text
-    header_text = f"Open Sales Orders - Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    header_text = f"Open Sales Orders - {request.user.username}"
     elements.append(Paragraph(header_text, styles['Heading2']))
     elements.append(Spacer(1, 12))
 
-    # 4. Build Table Data
-    data = [['Date', 'Doc No.', 'Customer', 'Item No', 'Description', 'Total SO', 'Open', 'Avail']]
+    # --- UPDATED TABLE DATA ---
+    # Added "DIP" to headers
+    data = [['Date', 'Doc No.', 'Customer', 'Item No', 'Description', 'Total SO', 'Open', 'Avail', 'DIP']]
     
     total_qty = 0
     total_open = 0
@@ -3815,11 +3810,12 @@ def export_so_pdf(request):
         p_date = obj.posting_date.strftime("%d/%m/%Y") if obj.posting_date else ""
         
         cust_cell = Paragraph(obj.customer_name[:35], normal_style)
-        desc_cell = Paragraph(obj.description[:50], normal_style)
+        desc_cell = Paragraph(obj.description[:45], normal_style) # Reduced length slightly to fit new col
         
         qty = obj.quantity
         opn = obj.open_qty
         avl = obj.total_available
+        dip = obj.dip_stock # New Field
         
         total_qty += qty
         total_open += opn
@@ -3832,14 +3828,16 @@ def export_so_pdf(request):
             desc_cell, 
             f"{qty:,.0f}", 
             f"{opn:,.0f}",
-            f"{avl:,.0f}"
+            f"{avl:,.0f}",
+            f"{dip:,.0f}" # Add to row
         ])
 
     # Footer Row
-    data.append(['', '', '', '', 'TOTALS:', f"{total_qty:,.0f}", f"{total_open:,.0f}", ''])
+    data.append(['', '', '', '', 'TOTALS:', f"{total_qty:,.0f}", f"{total_open:,.0f}", '', ''])
 
-    # 5. Create and Style Table
-    col_widths = [65, 75, 150, 70, 200, 55, 55, 55]
+    # --- UPDATED COLUMN WIDTHS ---
+    # Added width for new column, reduced Description slightly
+    col_widths = [60, 70, 140, 65, 180, 50, 50, 50, 50] 
     
     t = Table(data, colWidths=col_widths, repeatRows=1)
 
@@ -3852,7 +3850,9 @@ def export_so_pdf(request):
         
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),      
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),                
-        ('ALIGN', (5, 1), (7, -1), 'RIGHT'),                
+        
+        # Align Numbers Right (Cols 5 to 8)
+        ('ALIGN', (5, 1), (8, -1), 'RIGHT'),                
         
         # Footer Styling
         ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
@@ -3861,8 +3861,6 @@ def export_so_pdf(request):
     ]))
 
     elements.append(t)
-
-    # 6. Build
     doc.build(elements)
     buffer.seek(0)
     
