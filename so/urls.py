@@ -92,4 +92,11 @@ urlpatterns += [
     ## API endpoint for fast search items 
     path('api/items-search/', items_search_api, name='api_items_search'),
 
+
+
+    path('dashboard/open-so/', views.open_so_dashboard, name='open_so_dashboard'),
+    path('dashboard/upload-so/', views.upload_so_data, name='upload_so_data'), # New path
+    path('dashboard/open-so/pdf/', views.export_so_pdf, name='export_so_pdf'), # Add this
+    
 ]
+

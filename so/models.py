@@ -383,3 +383,37 @@ class QuotationLog(models.Model):
         return f"{self.quotation.id} - {self.action} by {self.user or 'Anonymous'}"
     
 
+
+
+
+class OpenSalesOrder(models.Model):
+    # Mapping to Excel Columns
+    document_no = models.CharField(max_length=50)               # "Document"
+    posting_date = models.DateField(null=True, blank=True)      # "Posting Date"
+    bp_reference = models.CharField(max_length=100, blank=True, null=True) # "BP Reference"
+    customer_code = models.CharField(max_length=50, blank=True, null=True) # "Customer/Supplier Code"
+    customer_name = models.CharField(max_length=255)            # "Customer/Supplier Name"
+    item_no = models.CharField(max_length=50)                   # "Item No."
+    description = models.CharField(max_length=255)              # "Item/Service Description"
+    manufacturer = models.CharField(max_length=100, blank=True, null=True) # "Manufacturer"
+    
+    # Numeric Data
+    quantity = models.FloatField(default=0.0)                   # "Quantity" (Total SO)
+    row_total = models.FloatField(default=0.0)                  # "Row Total"
+    open_qty = models.FloatField(default=0.0)                   # "Remaining" (Open Qty)
+    total_available = models.FloatField(default=0.0)            # "Total avail"
+    
+    salesman_name = models.CharField(max_length=100, blank=True, null=True) # "Sales Employee"
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.document_no} - {self.customer_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['posting_date']),
+            models.Index(fields=['salesman_name']),
+            models.Index(fields=['manufacturer']),
+        ]

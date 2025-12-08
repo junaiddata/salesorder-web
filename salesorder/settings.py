@@ -45,6 +45,9 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework.authtoken',
     'tradelicense',
+
+    'django.contrib.humanize',
+    
 ]
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

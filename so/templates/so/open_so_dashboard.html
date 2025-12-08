@@ -1,0 +1,435 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SO Customer Date Item wise</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
+    <!-- Select2 CSS (Only for Items) -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+    
+    <style>
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .filter-card { background: white; border-radius: 10px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%; border: 1px solid #e0e0e0; }
+        
+        /* Month Button Styling */
+        .month-btn { width: 45px; font-size: 13px; margin: 2px; border-radius: 4px; }
+        .month-btn.active { background-color: #212529; color: white; font-weight: bold; }
+        
+        .table-container { background: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        thead th { background-color: #212529; color: white; }
+
+        /* --- Power BI Style Filter CSS --- */
+        .pbi-dropdown-menu {
+            width: 100%;
+            padding: 10px;
+            max-height: 300px; /* Limit height */
+            overflow-y: auto;  /* Scrollable */
+        }
+        .pbi-search-box {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .pbi-checkbox-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .pbi-checkbox-item {
+            padding: 4px 0;
+            font-size: 0.9rem;
+        }
+        .pbi-checkbox-item:hover {
+            background-color: #f8f9fa;
+        }
+        .pbi-checkbox-item label {
+            width: 100%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .pbi-checkbox-item input {
+            margin-right: 8px;
+        }
+        /* Style the dropdown trigger button to look like a form input */
+        .pbi-toggle {
+            text-align: left;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pbi-toggle::after {
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid p-4">
+
+    <!-- Header & Month Filter -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="bg-white border p-3 rounded text-center fw-bold shadow-sm">
+                SO Customer Date Item wise
+                {% if user.role.role == 'Admin' %}
+                <div class="mt-2 d-flex justify-content-center gap-2">
+                    <a href="{% url 'upload_so_data' %}" class="btn btn-sm btn-primary">Upload New File</a>
+                    <button type="button" id="btnExportPdf" class="btn btn-sm btn-danger">Export PDF</button>
+                </div>
+                
+                {% endif %}
+            </div>
+            
+        </div>
+        
+        <div class="col-md-9">
+            <div class="bg-white p-3 rounded shadow-sm h-100 d-flex align-items-center flex-wrap border">
+                <span class="fw-bold me-3">Months:</span>
+                <button class="btn btn-outline-dark month-btn" data-month="1">Jan</button>
+                <button class="btn btn-outline-dark month-btn" data-month="2">Feb</button>
+                <button class="btn btn-outline-dark month-btn" data-month="3">Mar</button>
+                <button class="btn btn-outline-dark month-btn" data-month="4">Apr</button>
+                <button class="btn btn-outline-dark month-btn" data-month="5">May</button>
+                <button class="btn btn-outline-dark month-btn" data-month="6">Jun</button>
+                <button class="btn btn-outline-dark month-btn" data-month="7">Jul</button>
+                <button class="btn btn-outline-dark month-btn" data-month="8">Aug</button>
+                <button class="btn btn-outline-dark month-btn" data-month="9">Sep</button>
+                <button class="btn btn-outline-dark month-btn" data-month="10">Oct</button>
+                <button class="btn btn-outline-dark month-btn" data-month="11">Nov</button>
+                <button class="btn btn-outline-dark month-btn" data-month="12">Dec</button>
+                <small class="text-muted ms-auto">Toggle months. None = All.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTERS SECTION -->
+    <div class="row g-3">
+        
+        <!-- 1. HO / Others Checkboxes -->
+        <div class="col-md-2">
+            <div class="filter-card">
+                <div class="form-check mb-2">
+                    <input class="form-check-input filter-trigger" type="checkbox" id="checkHO" checked>
+                    <label class="form-check-label" for="checkHO">HO (Doc starts '1')</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input filter-trigger" type="checkbox" id="checkOthers" checked>
+                    <label class="form-check-label" for="checkOthers">Others</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Salesman (Power BI Style Checkbox Dropdown) -->
+        <div class="col-md-3">
+            <div class="filter-card">
+                <label class="fw-bold mb-1">Salesman</label>
+                <div class="dropdown">
+                    <button class="btn pbi-toggle" type="button" id="salesmanDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        All Selected
+                    </button>
+                    <div class="dropdown-menu pbi-dropdown-menu" aria-labelledby="salesmanDropdownBtn">
+                        <input type="text" class="form-control pbi-search-box" placeholder="Search Salesman..." onkeyup="filterList(this)">
+                        <div class="pbi-checkbox-item border-bottom mb-2 pb-2">
+                            <label><input type="checkbox" class="select-all-checkbox" data-target="salesman-checkbox"> <strong>Select All</strong></label>
+                        </div>
+                        <ul class="pbi-checkbox-list" id="salesmanList">
+                            {% for s in salesmen %}
+                                {% if s %}
+                                <li class="pbi-checkbox-item">
+                                    <label><input type="checkbox" class="filter-trigger salesman-checkbox" value="{{ s }}"> {{ s }}</label>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Manufacturer (Power BI Style Checkbox Dropdown) -->
+        <div class="col-md-3">
+            <div class="filter-card">
+                <label class="fw-bold mb-1">Manufacturer</label>
+                <div class="dropdown">
+                    <button class="btn pbi-toggle" type="button" id="mfgDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                        All Selected
+                    </button>
+                    <div class="dropdown-menu pbi-dropdown-menu" aria-labelledby="mfgDropdownBtn">
+                        <input type="text" class="form-control pbi-search-box" placeholder="Search Manufacturer..." onkeyup="filterList(this)">
+                        <div class="pbi-checkbox-item border-bottom mb-2 pb-2">
+                            <label><input type="checkbox" class="select-all-checkbox" data-target="mfg-checkbox"> <strong>Select All</strong></label>
+                        </div>
+                        <ul class="pbi-checkbox-list" id="mfgList">
+                            {% for m in manufacturers %}
+                                {% if m %}
+                                <li class="pbi-checkbox-item">
+                                    <label><input type="checkbox" class="filter-trigger mfg-checkbox" value="{{ m }}"> {{ m }}</label>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Items (Keep as Select2) -->
+        <div class="col-md-4">
+            <div class="filter-card">
+                <label class="fw-bold mb-1">Items</label>
+                <select class="form-select" id="itemFilter" multiple>
+                    {% for i in items %}
+                        {% if i %}<option value="{{ i }}">{{ i }}</option>{% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+        <div id="loadingSpinner" class="text-center py-3" style="display:none;">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+        
+        <table id="mainTable" class="table table-striped table-hover table-bordered" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Posting Date</th>
+                    <th>Customer Name</th>
+                    <th>Item No.</th>
+                    <th>Description</th>
+                    <th class="text-end">Total SO</th>
+                    <th class="text-end">Open Qty</th>
+                    <th class="text-end">Total Available</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Initial Load -->
+                {% include 'so/partials/so_table_body.html' %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    // --- Helper Function for Power BI Search Box ---
+    function filterList(inputElement) {
+        var filter = inputElement.value.toLowerCase();
+        var list = inputElement.closest('.dropdown-menu').querySelector('.pbi-checkbox-list');
+        var items = list.getElementsByTagName('li');
+
+        for (var i = 0; i < items.length; i++) {
+            var label = items[i].getElementsByTagName("label")[0];
+            var txtValue = label.textContent || label.innerText;
+            if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                items[i].style.display = "";
+            } else {
+                items[i].style.display = "none";
+            }
+        }
+    }
+
+    $(document).ready(function () {
+        
+        // 1. Initialize Item Filter (Select2)
+        $('#itemFilter').select2({
+            theme: 'bootstrap-5',
+            placeholder: "Select Items (All)",
+            allowClear: true,
+            width: '100%'
+        });
+
+        // 2. Initialize DataTable
+        function initDataTable() {
+            if ($.fn.DataTable.isDataTable('#mainTable')) {
+                $('#mainTable').DataTable().destroy();
+            }
+            $('#mainTable').DataTable({
+                "pageLength": 100,
+                "ordering": true,
+                "searching": true,
+                "info": true
+            });
+        }
+        initDataTable();
+
+        // 3. UI Logic: Update Dropdown Button Text
+        function updateDropdownText(checkboxClass, btnId, defaultText) {
+            var checkedCount = $('.' + checkboxClass + ':checked').length;
+            var totalCount = $('.' + checkboxClass).length;
+            var btn = $('#' + btnId);
+
+            if (checkedCount === 0) {
+                btn.text("All Selected"); // Or "None Selected" depending on logic
+            } else if (checkedCount === totalCount) {
+                btn.text("All Selected");
+            } else if (checkedCount === 1) {
+                // Get the name of the checked item
+                var name = $('.' + checkboxClass + ':checked').parent().text().trim();
+                btn.text(name);
+            } else {
+                btn.text(checkedCount + " Selected");
+            }
+        }
+
+        // 4. "Select All" Logic inside Dropdowns
+        $('.select-all-checkbox').on('change', function() {
+            var targetClass = $(this).data('target');
+            var isChecked = $(this).is(':checked');
+            
+            // Check/Uncheck all visible inputs
+            $('.' + targetClass).prop('checked', isChecked);
+            
+            // Trigger fetch
+            fetchFilteredData();
+        });
+
+        // 5. EVENT TRIGGERS
+
+        // A. Month Buttons
+        $('.month-btn').on('click', function() {
+            $(this).toggleClass('active');
+            fetchFilteredData();
+        });
+
+        // B. Item Select2
+        $('#itemFilter').on('change', function() {
+            fetchFilteredData();
+        });
+
+        // C. Checkboxes (HO/Others + Power BI Lists)
+        $(document).on('change', '.filter-trigger', function() {
+            // Update button texts for visual feedback
+            if ($(this).hasClass('salesman-checkbox')) {
+                updateDropdownText('salesman-checkbox', 'salesmanDropdownBtn', 'Salesman');
+            }
+            if ($(this).hasClass('mfg-checkbox')) {
+                updateDropdownText('mfg-checkbox', 'mfgDropdownBtn', 'Manufacturer');
+            }
+            
+            fetchFilteredData();
+        });
+
+        // 6. MAIN FETCH FUNCTION
+        function fetchFilteredData() {
+            // 1. Months
+            var selectedMonths = [];
+            $('.month-btn.active').each(function() {
+                selectedMonths.push($(this).data('month'));
+            });
+
+            // 2. Items (Select2)
+            var items = $('#itemFilter').val();
+
+            // 3. Salesmen (Custom Checkboxes)
+            var salesmen = [];
+            $('.salesman-checkbox:checked').each(function() {
+                salesmen.push($(this).val());
+            });
+
+            // 4. Manufacturers (Custom Checkboxes)
+            var manufacturers = [];
+            $('.mfg-checkbox:checked').each(function() {
+                manufacturers.push($(this).val());
+            });
+
+            // 5. HO / Others
+            var showHO = $('#checkHO').is(':checked');
+            var showOthers = $('#checkOthers').is(':checked');
+
+            // Loading State
+            $('#tableBody').css('opacity', '0.5');
+            $('#loadingSpinner').show();
+
+            $.ajax({
+                url: "{% url 'open_so_dashboard' %}",
+                type: "GET",
+                traditional: true, // Important for arrays
+                data: {
+                    'salesman': salesmen,
+                    'manufacturer': manufacturers,
+                    'item': items,
+                    'month': selectedMonths,
+                    'show_ho': showHO,
+                    'show_others': showOthers
+                },
+                success: function(response) {
+                    if ($.fn.DataTable.isDataTable('#mainTable')) {
+                        $('#mainTable').DataTable().destroy();
+                    }
+                    $('#tableBody').html(response);
+                    initDataTable();
+                    $('#tableBody').css('opacity', '1');
+                    $('#loadingSpinner').hide();
+                },
+                error: function(xhr) {
+                    console.log("Error:", xhr);
+                    $('#tableBody').css('opacity', '1');
+                    $('#loadingSpinner').hide();
+                }
+            });
+        }
+    });
+
+        $('#btnExportPdf').on('click', function() {
+        var params = new URLSearchParams();
+
+        // 1. HO / Others
+        if ($('#checkHO').is(':checked')) params.append('show_ho', 'true');
+        else params.append('show_ho', 'false');
+
+        if ($('#checkOthers').is(':checked')) params.append('show_others', 'true');
+        else params.append('show_others', 'false');
+
+        // 2. Months
+        $('.month-btn.active').each(function() {
+            params.append('month', $(this).data('month'));
+        });
+
+        // 3. Salesmen
+        $('.salesman-checkbox:checked').each(function() {
+            params.append('salesman', $(this).val());
+        });
+
+        // 4. Manufacturers
+        $('.mfg-checkbox:checked').each(function() {
+            params.append('manufacturer', $(this).val());
+        });
+
+        // 5. Items (Select2)
+        var selectedItems = $('#itemFilter').val();
+        if (selectedItems) {
+            selectedItems.forEach(function(item) {
+                params.append('item', item);
+            });
+        }
+
+        // Open PDF in new tab
+        var pdfUrl = "{% url 'export_so_pdf' %}?" + params.toString();
+        window.open(pdfUrl, '_blank');
+    });
+</script>
+
+</body>
+</html>

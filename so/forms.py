@@ -39,3 +39,9 @@ class ItemForm(forms.ModelForm):
             required=True,
             label='Item Firm'
         )
+
+
+from django import forms
+
+class UploadFileForm(forms.Form):
+    file = forms.FileField(label="Select Daily SO Excel File")

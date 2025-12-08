@@ -3603,3 +3603,269 @@ def update_device_location(request):
     device.save(update_fields=["last_lat", "last_lng"])
 
     return JsonResponse({"status": "ok"})
+
+
+
+import pandas as pd
+from datetime import datetime
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.db import transaction
+from .models import OpenSalesOrder
+from .forms import UploadFileForm
+
+def upload_so_data(request):
+    if request.method == 'POST':
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            excel_file = request.FILES['file']
+            
+            try:
+                # 1. Read Excel using Pandas
+                # dtype=str ensures Item Numbers like "00123" don't become 123
+                df = pd.read_excel(excel_file, dtype={'Item No.': str, 'Document': str})
+                
+                # 2. Prepare objects list
+                new_orders = []
+                
+                for _, row in df.iterrows():
+                    # Date Parsing Logic (Handle DD.MM.YY)
+                    p_date = None
+                    raw_date = str(row.get('Posting Date', '')).strip()
+                    if raw_date and raw_date != 'nan':
+                        try:
+                            # Try DD.MM.YY format first (as per your image)
+                            p_date = datetime.strptime(raw_date, '%d.%m.%y').date()
+                        except ValueError:
+                            try:
+                                # Fallback for standard Excel date format
+                                p_date = pd.to_datetime(raw_date).date()
+                            except:
+                                p_date = None
+
+                    # Create model instance
+                    new_orders.append(OpenSalesOrder(
+                        document_no=str(row.get('Document Number', '')),
+                        posting_date=p_date,
+                        bp_reference=str(row.get('BP Reference No.', '')),
+                        customer_code=str(row.get('Customer/Supplier No.', '')),
+                        customer_name=str(row.get('Customer/Supplier Name', '')),
+                        item_no=str(row.get('Item No.', '')),
+                        description=str(row.get('Item/Service Description', '')),
+                        manufacturer=str(row.get('Manufacture', '')),
+                        quantity=float(row.get('Quantity', 0) or 0),
+                        row_total=float(row.get('Row Total', 0) or 0),
+                        open_qty=float(row.get('Remaining Open Quantity', 0) or 0),
+                        total_available=float(row.get('Total available Stock', 0) or 0),
+                        salesman_name=str(row.get('Sales Employee', ''))
+                    ))
+
+                # 3. Database Operation (Atomic Transaction)
+                with transaction.atomic():
+                    # Delete ALL existing records
+                    OpenSalesOrder.objects.all().delete()
+                    
+                    # Insert NEW records
+                    OpenSalesOrder.objects.bulk_create(new_orders)
+
+                messages.success(request, f"Successfully imported {len(new_orders)} records.")
+                return redirect('open_so_dashboard') # Redirect back to your dashboard
+
+            except Exception as e:
+                messages.error(request, f"Error importing file: {str(e)}")
+                return redirect('upload_so_data')
+
+    else:
+        form = UploadFileForm()
+
+    return render(request, 'so/upload_so.html', {'form': form})
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from .models import OpenSalesOrder
+
+# ReportLab Imports for PDF
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
+
+# --- 2. HELPER FUNCTION (Filters Logic) ---
+def _get_filtered_queryset(request):
+    """
+    Applies all filters (Permissions, HO/Others, Dropdowns, Months)
+    and returns the QuerySet. Used by both Dashboard and PDF.
+    """
+    qs = OpenSalesOrder.objects.all().order_by('-posting_date')
+
+    # A. PERMISSION CHECK
+    try:
+        user_role = request.user.role.role 
+    except AttributeError:
+        user_role = 'Salesman' 
+
+    if user_role == 'Salesman':
+        current_username = request.user.username.lower()
+        if current_username in SALES_USER_MAP:
+            allowed_names = SALES_USER_MAP[current_username]
+            qs = qs.filter(salesman_name__in=allowed_names)
+        else:
+            qs = qs.none()
+
+    # B. HO vs Others Logic
+    show_ho_param = request.GET.get('show_ho')
+    show_others_param = request.GET.get('show_others')
+    
+    show_ho = True if show_ho_param is None else (show_ho_param == 'true')
+    show_others = True if show_others_param is None else (show_others_param == 'true')
+
+    if show_ho and not show_others:
+        qs = qs.filter(document_no__startswith='1')
+    elif show_others and not show_ho:
+        qs = qs.exclude(document_no__startswith='1')
+    elif not show_ho and not show_others:
+        qs = qs.none()
+
+    # C. Multi-Select Filters
+    salesmen = request.GET.getlist('salesman') 
+    if salesmen:
+        qs = qs.filter(salesman_name__in=salesmen)
+
+    manufacturers = request.GET.getlist('manufacturer')
+    if manufacturers:
+        qs = qs.filter(manufacturer__in=manufacturers)
+
+    items = request.GET.getlist('item')
+    if items:
+        qs = qs.filter(description__in=items)
+
+    # D. Month Filter
+    months = request.GET.getlist('month')
+    if months:
+        qs = qs.filter(posting_date__month__in=months)
+
+    return qs
+
+# --- 3. DASHBOARD VIEW ---
+@login_required
+def open_so_dashboard(request):
+    # Call the helper
+    qs = _get_filtered_queryset(request)
+
+    # AJAX Response
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'so/partials/so_table_body.html', {'orders': qs})
+
+    # Prepare Dropdowns (From the filtered QS as per your requirement)
+    salesmen_list = qs.values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
+    manufacturers_list = qs.values_list('manufacturer', flat=True).distinct().order_by('manufacturer')
+    items_list = qs.values_list('description', flat=True).distinct().order_by('description')
+
+    context = {
+        'orders': qs,
+        'salesmen': salesmen_list,
+        'manufacturers': manufacturers_list,
+        'items': items_list
+    }
+    return render(request, 'so/open_so_dashboard.html', context)
+
+# --- 4. PDF EXPORT VIEW (ReportLab) ---
+# --- 4. PDF EXPORT VIEW (ReportLab) ---
+@login_required
+def export_so_pdf(request):
+    # 1. Get exact same data using helper
+    orders = _get_filtered_queryset(request)
+
+    # 2. Setup PDF file buffer
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # --- 3. LOGO & HEADER ---
+    
+    # A. Add Logo (Top Left)
+    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    try:
+        # Create Image: width=150points, height=50points (Adjust as needed)
+        logo = Image(logo_url, width=150, height=50)
+        logo.hAlign = 'LEFT'
+        elements.append(logo)
+        elements.append(Spacer(1, 10)) # Space between logo and title
+    except Exception as e:
+        # If image fails to load (internet issue), print error to console but continue generating PDF
+        print(f"Could not load PDF Logo: {e}")
+
+    # B. Add Title text
+    header_text = f"Open Sales Orders - {request.user.username}"
+    elements.append(Paragraph(header_text, styles['Heading2']))
+    elements.append(Spacer(1, 12))
+
+    # 4. Build Table Data
+    data = [['Date', 'Doc No.', 'Customer', 'Item No', 'Description', 'Total SO', 'Open', 'Avail']]
+    
+    total_qty = 0
+    total_open = 0
+    
+    normal_style = styles['Normal']
+    normal_style.fontSize = 8 
+
+    for obj in orders:
+        p_date = obj.posting_date.strftime("%d/%m/%Y") if obj.posting_date else ""
+        
+        cust_cell = Paragraph(obj.customer_name[:35], normal_style)
+        desc_cell = Paragraph(obj.description[:50], normal_style)
+        
+        qty = obj.quantity
+        opn = obj.open_qty
+        avl = obj.total_available
+        
+        total_qty += qty
+        total_open += opn
+        
+        data.append([
+            p_date, 
+            obj.document_no, 
+            cust_cell, 
+            obj.item_no, 
+            desc_cell, 
+            f"{qty:,.0f}", 
+            f"{opn:,.0f}",
+            f"{avl:,.0f}"
+        ])
+
+    # Footer Row
+    data.append(['', '', '', '', 'TOTALS:', f"{total_qty:,.0f}", f"{total_open:,.0f}", ''])
+
+    # 5. Create and Style Table
+    col_widths = [65, 75, 150, 70, 200, 55, 55, 55]
+    
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),       
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),  
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),               
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),                   
+        
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),      
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),                
+        ('ALIGN', (5, 1), (7, -1), 'RIGHT'),                
+        
+        # Footer Styling
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN', (4, -1), (4, -1), 'RIGHT'), 
+    ]))
+
+    elements.append(t)
+
+    # 6. Build
+    doc.build(elements)
+    buffer.seek(0)
+    
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = 'inline; filename="sales_orders.pdf"'
+    return response

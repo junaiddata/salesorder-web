@@ -16,7 +16,7 @@ admin.site.register(IgnoreList)
 admin.site.register(QuotationItem)
 admin.site.register(SAPQuotation)
 admin.site.register(SAPQuotationItem)
-
+admin.site.register(OpenSalesOrder)
 
 
 

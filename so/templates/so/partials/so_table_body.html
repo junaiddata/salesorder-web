@@ -1,0 +1,13 @@
+{% load humanize %}
+
+{% for obj in orders %}
+<tr>
+    <td class="fw-bold">{{ obj.posting_date|date:"d/m/Y" }}</td>
+    <td class="fw-bold">{{ obj.customer_name }}</td>
+    <td class="fw-bold">{{ obj.item_no }}</td>
+    <td class="fw-bold">{{ obj.description }}</td>
+    <td class="text-end fw-bold">{{ obj.quantity|intcomma }}</td>
+    <td class="text-end fw-bold">{{ obj.open_qty|intcomma }}</td>
+    <td class="text-end fw-bold">{{ obj.total_available|intcomma }}</td>
+</tr>
+{% endfor %}
