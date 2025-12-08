@@ -3798,7 +3798,7 @@ def export_so_pdf(request):
         print(f"Could not load PDF Logo: {e}")
 
     # B. Add Title text
-    header_text = f"Open Sales Orders - {request.user.username}"
+    header_text = f"Open Sales Orders - Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     elements.append(Paragraph(header_text, styles['Heading2']))
     elements.append(Spacer(1, 12))
 
