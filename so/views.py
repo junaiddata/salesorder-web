@@ -3867,3 +3867,90 @@ def export_so_pdf(request):
     response = HttpResponse(buffer, content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="sales_orders.pdf"'
     return response
+
+
+
+
+
+
+
+import uuid
+from .models import TrustedDevice
+
+# 1. View to show the warning page
+# so/views.py
+from django.shortcuts import render, redirect
+from django.conf import settings
+from .models import TrustedDevice
+from .utils import send_telegram_message # Assuming you have this from your other code
+import uuid
+
+# 1. Register Page (Same as before)
+@login_required
+def register_device(request):
+    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+    return render(request, 'so/register_device.html', {'user_agent': user_agent})
+
+# 2. Logic to Request Approval (Modified)
+@login_required
+@require_POST
+def approve_device(request):
+    device_name = request.POST.get('device_name', 'Unknown Device')
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    ip_address = request.META.get('REMOTE_ADDR', '')
+    new_token = str(uuid.uuid4())
+
+    # Create the device, but is_approved=False by default (from model)
+    TrustedDevice.objects.create(
+        user=request.user,
+        device_token=new_token,
+        device_name=device_name,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        is_approved=False  # 🔒 Explicitly pending
+    )
+
+    # 🔔 Notify Admin via Telegram (Optional but recommended)
+    try:
+        msg = (
+            f"⚠️ <b>New Device Request</b>\n"
+            f"👤 User: {request.user.username}\n"
+            f"💻 Device: {device_name}\n"
+            f"🌐 IP: {ip_address}\n"
+            f"Please check Django Admin to approve."
+        )
+        send_telegram_message(settings.TELEGRAM_CREATE_CHAT_ID, msg)
+    except:
+        pass
+
+    # Set cookie so middleware knows this browser has *requested* access
+    response = redirect('device_pending')
+    response.set_cookie('trusted_device_token', new_token, max_age=315360000, httponly=True)
+    
+    return response
+
+# 3. New "Waiting" Page
+@login_required
+def device_pending(request):
+    # 1. Check the cookie
+    token = request.COOKIES.get('trusted_device_token')
+    
+    if token:
+        try:
+            # 2. Check the Database Status
+            device = TrustedDevice.objects.get(user=request.user, device_token=token)
+            
+            # 3. If Admin has approved it, redirect to Home immediately
+            if device.is_approved:
+                # Redirect based on your role logic
+                if hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+                    return redirect('sales_home')
+                else:
+                    return redirect('home')
+                    
+        except TrustedDevice.DoesNotExist:
+            # If token exists in cookie but not in DB, force them to register again
+            return redirect('register_device')
+
+    # 4. If still not approved, show the pending page
+    return render(request, 'so/device_pending.html')

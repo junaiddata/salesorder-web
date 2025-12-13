@@ -71,7 +71,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
     # ✅ YOUR DEVICE TRACKER HERE
-    'so.middleware.DeviceTrackingMiddleware',
+    'so.device_middleware.DeviceRestrictionMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

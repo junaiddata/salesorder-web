@@ -419,3 +419,23 @@ class OpenSalesOrder(models.Model):
             models.Index(fields=['salesman_name']),
             models.Index(fields=['manufacturer']),
         ]
+
+
+from django.db import models
+from django.contrib.auth.models import User
+import uuid
+
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    device_token = models.CharField(max_length=64, unique=True)
+    device_name = models.CharField(max_length=100)
+    user_agent = models.TextField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ Add this field
+    is_approved = models.BooleanField(default=False) 
+
+    def __str__(self):
+        status = "✅" if self.is_approved else "⏳"
+        return f"{status} {self.user.username} - {self.device_name}"

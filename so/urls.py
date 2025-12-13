@@ -97,6 +97,11 @@ urlpatterns += [
     path('dashboard/open-so/', views.open_so_dashboard, name='open_so_dashboard'),
     path('dashboard/upload-so/', views.upload_so_data, name='upload_so_data'), # New path
     path('dashboard/open-so/pdf/', views.export_so_pdf, name='export_so_pdf'), # Add this
+
+
+    path('register-device/', views.register_device, name='register_device'),
+    path('approve-device/', views.approve_device, name='approve_device'),
+    path('device-pending/', views.device_pending, name='device_pending'),
     
 ]
 

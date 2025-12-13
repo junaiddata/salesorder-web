@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Pending | Please Wait</title>
+    <style>
+        /* Base Styles (Same as Register Page) */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+
+        /* Card Container */
+        .status-card {
+            background: white;
+            width: 100%;
+            max-width: 450px;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        /* Icon Wrapper */
+        .icon-wrapper {
+            background-color: #e3f2fd; /* Light Blue */
+            color: #2196f3; /* Blue */
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+            color: #1a1a1a;
+            font-size: 24px;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            font-size: 15px;
+        }
+
+        /* Status Box */
+        .status-box {
+            background: #fff9db; /* Light Yellow */
+            border: 1px solid #ffe066;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        /* Animation for the hourglass */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(180deg); }
+        }
+        .spinning-icon {
+            display: inline-block;
+            animation: spin 2s infinite linear;
+        }
+
+        /* Buttons */
+        .btn-refresh {
+            background-color: #007bff; /* Blue */
+            color: white;
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 15px;
+        }
+
+        .btn-refresh:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-logout {
+            color: #dc3545;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .btn-logout:hover {
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="status-card">
+        <div class="icon-wrapper">
+            <span class="spinning-icon">⏳</span>
+        </div>
+        
+        <h2>Approval Pending</h2>
+        <p>Your device registration has been sent successfully. We are waiting for an administrator to approve your request.</p>
+
+        <div class="status-box">
+            Status: <strong>Waiting for Admin...</strong>
+        </div>
+
+        <!-- Using href="." reloads the current page -->
+        <a href="." class="btn-refresh">
+            🔄 Check Status (Refresh)
+        </a>
+
+        <a href="{% url 'logout' %}" class="btn-logout">Cancel and Logout</a>
+    </div>
+
+</body>
+</html>
