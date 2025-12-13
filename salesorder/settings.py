@@ -73,6 +73,8 @@ MIDDLEWARE = [
     # ✅ YOUR DEVICE TRACKER HERE
     'so.device_middleware.DeviceRestrictionMiddleware',
 
+    'so.middleware.DeviceTrackingMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
