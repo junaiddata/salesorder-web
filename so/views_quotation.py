@@ -784,16 +784,17 @@ def export_quotation_to_pdf(request, quotation_id):
     ]))
     
     # Wrap items table for alignment and add page break protection
-    items_wrapper = Table([[items_table]], colWidths=[main_table_width])
-    items_wrapper.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    # items_wrapper = Table([[items_table]], colWidths=[main_table_width])
+    # items_wrapper.setStyle(TableStyle([
+    #     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+    #     ('LEFTPADDING', (0, 0), (-1, -1), 0),
+    #     ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    # ]))
     
     # Add the items table - ReportLab will handle pagination automatically
     # The table has repeatRows=1 so headers will repeat on each page
-    elements.append(items_wrapper)
+    elements.append(items_table) 
+    
     elements.append(Spacer(1, 0.1 * inch))
 
     # 4. Summary Table (Subtotal, VAT, Grand Total)
