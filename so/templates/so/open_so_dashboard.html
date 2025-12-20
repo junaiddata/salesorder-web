@@ -171,11 +171,12 @@
             <a href="{% url 'upload_so_data' %}" class="btn btn-outline-primary btn-sm d-flex align-items-center">
                 <i class="bi bi-upload me-2"></i> Upload File
             </a>
+                    {% endif %}
             <button type="button" id="btnExportPdf" class="btn btn-danger btn-sm d-flex align-items-center">
                 <i class="bi bi-file-earmark-pdf me-2"></i> Export PDF
             </button>
         </div>
-        {% endif %}
+
     </div>
 
     <!-- Month Filter Bar -->
