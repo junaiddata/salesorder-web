@@ -457,7 +457,7 @@ from .utils import parse_device_info
 # --- PDF Styles ---
 styles = getSampleStyleSheet()
 
-# Add custom styles only if they don't exist to avoid KeyError
+# 1. Custom Styles
 if 'MainTitle' not in styles:
     styles.add(ParagraphStyle(
         name='MainTitle', 
@@ -487,16 +487,17 @@ if 'ItemDescription' not in styles:
         alignment=TA_LEFT
     ))
 
-if 'ItemDescriptionUndercost' not in styles:
+# FIX 1: Add Style for UPC Code to handle wrapping
+if 'ItemCode' not in styles:
     styles.add(ParagraphStyle(
-        name='ItemDescriptionUndercost', 
-        fontSize=10, 
-        leading=12, 
-        alignment=TA_LEFT, 
-        textColor='red'
+        name='ItemCode',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=10,
+        alignment=TA_CENTER,
+        wordWrap='CJK'  # Forces wrapping on long strings without spaces
     ))
 
-# Ensure h3 style exists (it should be in the base stylesheet)
 if 'h3' not in styles:
     styles.add(ParagraphStyle(
         name='h3',
@@ -511,28 +512,23 @@ if 'h3' not in styles:
 class QuotationPDFTemplate(BaseDocTemplate):
     """
     A custom document template for creating professional quotations.
-    This class handles the page layout, headers, footers, and page numbering.
+    Handles page layout, headers, footers, and page numbering.
     """
     def __init__(self, filename, **kwargs):
-        # Set default values before calling super()
         self.company_name = "Junaid Sanitary & Electrical Trading LLC"
         self.company_address = "Dubai Investment Parks 2, Dubai, UAE"
         self.company_contact = "Email: sales@junaid.ae | Phone: +97142367723"
-        self.page_count = 1  # Initialize with page 1
+        self.page_count = 1 
         self.logo_path = None
         
-        # Increase bottom margin to provide more space for footer
         kwargs.setdefault('bottomMargin', 1.0 * inch)
         
-        # Initialize the base class first
         super().__init__(filename, **kwargs)
         
-        # Now set the logo after initialization
         self.logo_path = self._get_logo()
 
-        # Define the content area (frame) with proper spacing for footer
         top_margin = 1.75 * inch
-        bottom_margin = 1.0 * inch  # Increased for footer space
+        bottom_margin = 1.0 * inch
         
         frame = Frame(
             self.leftMargin,
@@ -550,7 +546,6 @@ class QuotationPDFTemplate(BaseDocTemplate):
         self.addPageTemplates([template])
 
     def _get_logo(self):
-        """Fetches logo from URL with a local fallback."""
         try:
             logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
             response_img = requests.get(logo_url, timeout=5)
@@ -558,7 +553,6 @@ class QuotationPDFTemplate(BaseDocTemplate):
                 return Image(BytesIO(response_img.content), width=1.5*inch, height=0.5*inch)
         except Exception:
             try:
-                # Fallback to a local file
                 local_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'logo.png')
                 if os.path.exists(local_path):
                     return Image(local_path, width=1.5*inch, height=0.5*inch)
@@ -567,15 +561,12 @@ class QuotationPDFTemplate(BaseDocTemplate):
         return None
 
     def on_page(self, canvas, doc):
-        """This method is called on every page. It draws the header and footer."""
         self._header(canvas, doc)
         self._footer(canvas, doc)
 
     def _header(self, canvas, doc):
-        """Draws the header on each page."""
         canvas.saveState()
         
-        # Company Logo and Info Table
         header_content = []
         if self.logo_path:
             header_content.append([self.logo_path, f'{self.company_name}\n{self.company_address}\n{self.company_contact}'])
@@ -594,7 +585,6 @@ class QuotationPDFTemplate(BaseDocTemplate):
         w, h = header_table.wrap(doc.width, doc.topMargin)
         header_table.drawOn(canvas, doc.leftMargin, doc.height + doc.topMargin - h)
 
-        # Bottom border for header
         canvas.setStrokeColor(HexColor('#2C5530'))
         canvas.setLineWidth(2)
         canvas.line(doc.leftMargin, doc.height + doc.topMargin - h - 5, 
@@ -603,14 +593,11 @@ class QuotationPDFTemplate(BaseDocTemplate):
         canvas.restoreState()
 
     def _footer(self, canvas, doc):
-        """Draws the footer on each page."""
         canvas.saveState()
         
-        # Use the current page number and total page count
         footer_text = Paragraph(f"Thank you for your business! | {self.company_name}", styles['Normal'])
         page_num_text = Paragraph(f"Page {canvas.getPageNumber()} of {self.page_count}", styles['Normal'])
         
-        # Table for alignment
         footer_table = Table([[footer_text, page_num_text]], colWidths=[doc.width/2, doc.width/2])
         footer_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
@@ -620,58 +607,45 @@ class QuotationPDFTemplate(BaseDocTemplate):
         ]))
         
         w, h = footer_table.wrap(doc.width, doc.bottomMargin)
-        # Position footer higher to avoid content overlap
         footer_table.drawOn(canvas, doc.leftMargin, h + 0.2*inch)
         
         canvas.restoreState()
     
     def afterFlowable(self, flowable):
-        """
-        This is a hook that is called after each flowable is rendered.
-        We use it to capture the total page count.
-        """
-        # Update the page count to the current page number
-        # This will be the final page number when the document is complete
         self.page_count = self.page
 
 # --- The Django View ---
 def export_quotation_to_pdf(request, quotation_id):
-    """
-    Handles the request to generate and download a PDF for a specific quotation.
-    """
-    # Import your models here to avoid circular imports
-    from .models import Quotation  # Adjust import path as needed
+    # Adjust import based on your actual app name
+    from .models import Quotation 
     
     quotation = get_object_or_404(Quotation, id=quotation_id)
     quotation_items = quotation.items.all()
     
-    # Prepare HTTP response
     response = HttpResponse(content_type='application/pdf')
     filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     buffer = BytesIO()
     
-    # --- PDF Generation Logic ---
+    # 2. Adjusted Width to fit A4 (A4 width 8.27" - 1" margins = 7.27")
+    main_table_width = 7.2 * inch 
+
     doc = QuotationPDFTemplate(
         buffer,
         pagesize=A4,
         rightMargin=0.5*inch,
         leftMargin=0.5*inch,
         topMargin=0.5*inch,
-        bottomMargin=1.0*inch  # Increased bottom margin for footer
+        bottomMargin=1.0*inch
     )
     
     elements = []
     
-    # 1. Title and Status
-    # Move the title and info section higher by reducing the initial spacer
-    elements.append(Spacer(1, -1.3*inch))  # More negative value moves content further up
-
-    title_table_data = [
-        [Paragraph('QUOTATION', styles['MainTitle'])]
-    ]
-    title_table = Table(title_table_data, colWidths=[5.5*inch, 2*inch])
+    # --- Title ---
+    elements.append(Spacer(1, -1.3*inch))
+    title_table_data = [[Paragraph('QUOTATION', styles['MainTitle'])]]
+    title_table = Table(title_table_data, colWidths=[5.2*inch, 2*inch]) # Adjusted for new width
     title_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
@@ -680,13 +654,9 @@ def export_quotation_to_pdf(request, quotation_id):
         ('TEXTCOLOR', (1, 0), (1, 0), HexColor('#2C5530')),
     ]))
     elements.append(title_table)
-    elements.append(Spacer(1, 0.1*inch))  # Reduce space after title
+    elements.append(Spacer(1, 0.1*inch))
 
-    # 2. Quotation Info and Customer Info (Side-by-side)
-    # Set a common width for all main tables
-    main_table_width = 7.5 * inch
-
-    # Use Paragraph for all text to ensure consistent wrapping and height
+    # --- Info Tables ---
     quotation_data = [
         [Paragraph('Quotation Details', styles['SectionHeader'])],
         [Paragraph(f'<b>Number:</b> {quotation.quotation_number}', styles['Normal'])],
@@ -707,12 +677,9 @@ def export_quotation_to_pdf(request, quotation_id):
         [Paragraph(f'<b>Name:</b> {quotation.customer.customer_name}', styles['Normal'])],
     ]
 
-    # Add empty rows to match the height of quotation info table
-    # This ensures both tables have the same number of rows and appear balanced
     if quotation.salesman:
         customer_data.append([Paragraph(f'<b>Salesman:</b> {quotation.salesman.salesman_name}', styles['Normal'])])
     else:
-        # Add an empty row to match height if no salesman
         customer_data.append([Paragraph('', styles['Normal'])])
 
     customer_info_table = Table(customer_data, colWidths=[main_table_width / 2])
@@ -734,7 +701,7 @@ def export_quotation_to_pdf(request, quotation_id):
     elements.append(info_table)
     elements.append(Spacer(1, 0.2 * inch))
 
-    # 3. Items Table with pagination handling
+    # --- Items Table ---
     items_header = ['#', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
     items_data = [items_header]
     subtotal = 0.0
@@ -743,26 +710,31 @@ def export_quotation_to_pdf(request, quotation_id):
         line_total = item.quantity * item.price
         subtotal += line_total
 
+        # Description Paragraph
         desc_style = styles['ItemDescription']
         description_text = getattr(item.item, 'item_description', 'No description available')
         description_para = Paragraph(description_text, desc_style)
 
+        # FIX 2: UPC Code Paragraph (Fixes text overlap)
+        upc_raw = getattr(item.item, 'item_upvc', '')
+        if upc_raw is None: upc_raw = ""
+        upc_para = Paragraph(str(upc_raw), styles['ItemCode'])
+
         items_data.append([
             str(idx),
-            getattr(item.item, 'item_upvc', 'N/A'),
+            upc_para,
             description_para,
             f"{item.quantity} {item.unit}",
             f"AED {item.price:,.2f}",
             f"AED {line_total:,.2f}"
         ])
 
-    # Calculate table dimensions for better pagination control
     items_table = Table(
         items_data,
         colWidths=[
-            main_table_width * 0.04,   # #
-            main_table_width * 0.12,   # Item Code
-            main_table_width * 0.47,   # Description
+            main_table_width * 0.05,   # #
+            main_table_width * 0.15,   # UPC Code (Increased width)
+            main_table_width * 0.43,   # Description (Reduced to fit UPC)
             main_table_width * 0.07,   # Qty
             main_table_width * 0.15,   # Unit Price
             main_table_width * 0.15    # Total
@@ -783,20 +755,11 @@ def export_quotation_to_pdf(request, quotation_id):
         ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
     ]))
     
-    # Wrap items table for alignment and add page break protection
-    items_wrapper = Table([[items_table]], colWidths=[main_table_width])
-    items_wrapper.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    
-    # Add the items table - ReportLab will handle pagination automatically
-    # The table has repeatRows=1 so headers will repeat on each page
-    elements.append(items_wrapper)
+    # FIX 3: Removed 'items_wrapper' to fix LayoutError/Pagination
+    elements.append(items_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # 4. Summary Table (Subtotal, VAT, Grand Total)
+    # --- Summary Table ---
     tax_rate = 0.05
     tax_amount = subtotal * tax_rate
     grand_total = subtotal + tax_amount
@@ -818,7 +781,6 @@ def export_quotation_to_pdf(request, quotation_id):
         ('TEXTCOLOR', (0, 2), (-1, 2), white),
     ]))
     
-    # Wrap summary table for alignment and ensure it stays with the items table
     summary_wrapper = Table([[summary_table]], colWidths=[main_table_width])
     summary_wrapper.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
@@ -826,11 +788,10 @@ def export_quotation_to_pdf(request, quotation_id):
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     
-    # Use KeepTogether to prevent summary from being separated from the last items
     elements.append(KeepTogether(summary_wrapper))
     elements.append(Spacer(1, 0.3 * inch))
     
-    # 5. Remarks and Terms & Conditions
+    # --- Remarks & Terms ---
     if hasattr(quotation, 'remarks') and quotation.remarks:
         remarks_section = [
             Paragraph("Remarks:", styles['h3']),
@@ -851,10 +812,8 @@ def export_quotation_to_pdf(request, quotation_id):
     for term in terms:
         terms_section.append(Paragraph(term, styles['Normal']))
     
-    # Add terms and conditions as a group
     elements.extend(terms_section)
     
-    # Build the PDF
     doc.multiBuild(elements)
     
     pdf = buffer.getvalue()
