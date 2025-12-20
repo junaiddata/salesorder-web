@@ -207,10 +207,10 @@
         </div>
     </div>
 
-    <!-- Filters Grid -->
+<!-- Filters Grid -->
     <div class="row g-3 mb-4">
         <!-- 1. Category (HO/Others) -->
-        <div class="col-md-2">
+        <div class="col-md-2"> <!-- Kept at 2 -->
             <div class="dashboard-card p-3 d-flex flex-column justify-content-center">
                 <label class="fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">Category</label>
                 <div class="form-check">
@@ -225,7 +225,7 @@
         </div>
 
         <!-- 2. Salesman -->
-        <div class="col-md-3">
+        <div class="col-md-2"> <!-- Reduced from 3 to 2 -->
             <div class="dashboard-card p-3">
                 <label class="fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">Salesman</label>
                 <div class="dropdown">
@@ -252,7 +252,7 @@
         </div>
 
         <!-- 3. Manufacturer -->
-        <div class="col-md-3">
+        <div class="col-md-2"> <!-- Reduced from 3 to 2 -->
             <div class="dashboard-card p-3">
                 <label class="fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">Manufacturer</label>
                 <div class="dropdown">
@@ -278,8 +278,20 @@
             </div>
         </div>
 
-        <!-- 4. Items -->
-        <div class="col-md-4">
+        <!-- 4. Customer (NEW) -->
+        <div class="col-md-3"> <!-- Added New Column -->
+            <div class="dashboard-card p-3">
+                <label class="fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">Customer</label>
+                <select class="form-select" id="customerFilter" multiple>
+                    {% for c in customers %}
+                        {% if c %}<option value="{{ c }}">{{ c }}</option>{% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- 5. Items -->
+        <div class="col-md-3"> <!-- Reduced from 4 to 3 -->
             <div class="dashboard-card p-3">
                 <label class="fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">Items</label>
                 <select class="form-select" id="itemFilter" multiple>
@@ -335,7 +347,7 @@
 
 <script>
     // --- Utils: Filter List for Dropdowns ---
-    function filterList(inputElement) {
+   function filterList(inputElement) {
         var filter = inputElement.value.toLowerCase();
         var list = inputElement.closest('.dropdown-menu').querySelector('.pbi-checkbox-list');
         var items = list.getElementsByTagName('li');
@@ -357,6 +369,15 @@
             closeOnSelect: false
         });
 
+        // --- 1.1 Init Select2 (Customer - NEW) ---
+        $('#customerFilter').select2({
+            theme: 'bootstrap-5',
+            placeholder: "Search & Select Customer",
+            allowClear: true,
+            width: '100%',
+            closeOnSelect: false
+        });
+
         // --- 2. Init DataTable ---
         function initDataTable() {
             if ($.fn.DataTable.isDataTable('#mainTable')) {
@@ -367,7 +388,7 @@
                 "ordering": true,
                 "searching": true,
                 "info": true,
-                "lengthChange": false, // Clean up UI
+                "lengthChange": false, 
                 "language": {
                     "search": "",
                     "searchPlaceholder": "Search visible records..."
@@ -402,7 +423,6 @@
             var targetClass = $(this).data('target');
             $('.' + targetClass).prop('checked', $(this).is(':checked'));
             
-            // Trigger UI Update for button text
             if(targetClass.includes('salesman')) updateDropdownText('salesman-checkbox', 'salesmanDropdownBtn');
             if(targetClass.includes('mfg')) updateDropdownText('mfg-checkbox', 'mfgDropdownBtn');
             
@@ -422,17 +442,25 @@
             fetchFilteredData();
         });
 
+        // Item Filter Change
         $('#itemFilter').on('change', function() {
+            fetchFilteredData();
+        });
+
+        // Customer Filter Change (NEW)
+        $('#customerFilter').on('change', function() {
             fetchFilteredData();
         });
 
         // Reset Filters Button
         $('#resetFilters').on('click', function() {
             $('.month-btn').removeClass('active');
-            $('.filter-trigger').prop('checked', true); // Reset checkboxes to all checked
+            $('.filter-trigger').prop('checked', true); 
             $('#itemFilter').val(null).trigger('change');
             
-            // Reset UI text
+            // Reset Customer (NEW)
+            $('#customerFilter').val(null).trigger('change');
+            
             updateDropdownText('salesman-checkbox', 'salesmanDropdownBtn');
             updateDropdownText('mfg-checkbox', 'mfgDropdownBtn');
             
@@ -444,14 +472,14 @@
             // Collect Data
             var selectedMonths = $('.month-btn.active').map((_, el) => $(el).data('month')).get();
             var items = $('#itemFilter').val();
+            var customers = $('#customerFilter').val(); // (NEW)
             var salesmen = $('.salesman-checkbox:checked').map((_, el) => $(el).val()).get();
             var manufacturers = $('.mfg-checkbox:checked').map((_, el) => $(el).val()).get();
             var showHO = $('#checkHO').is(':checked');
             var showOthers = $('#checkOthers').is(':checked');
 
-            // --- STABILITY FIX: Lock Height & Show Overlay ---
             var container = $('.table-wrapper');
-            container.css('min-height', container.height() + 'px'); // Lock current height
+            container.css('min-height', container.height() + 'px'); 
             $('#loadingOverlay').addClass('show');
 
             $.ajax({
@@ -462,12 +490,12 @@
                     'salesman': salesmen,
                     'manufacturer': manufacturers,
                     'item': items,
+                    'customer': customers, // (NEW)
                     'month': selectedMonths,
                     'show_ho': showHO,
                     'show_others': showOthers
                 },
                 success: function(response) {
-                    // Destroy DataTables, replace HTML, Re-init
                     if ($.fn.DataTable.isDataTable('#mainTable')) {
                         $('#mainTable').DataTable().destroy();
                     }
@@ -476,11 +504,10 @@
                     
                     initDataTable();
                     
-                    // --- Cleanup ---
                     setTimeout(() => {
                         $('#loadingOverlay').removeClass('show');
-                        container.css('min-height', '400px'); // Release specific lock, keep min
-                    }, 100); // Slight delay for smoother visual
+                        container.css('min-height', '400px'); 
+                    }, 100); 
                 },
                 error: function(xhr) {
                     console.error("Error:", xhr);
@@ -501,6 +528,10 @@
             
             var items = $('#itemFilter').val();
             if (items) items.forEach(i => params.append('item', i));
+
+            // Customer PDF Param (NEW)
+            var customers = $('#customerFilter').val();
+            if (customers) customers.forEach(c => params.append('customer', c));
 
             window.open("{% url 'export_so_pdf' %}?" + params.toString(), '_blank');
         });

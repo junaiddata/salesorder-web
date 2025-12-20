@@ -3741,6 +3741,12 @@ def _get_filtered_queryset(request):
     if items:
         qs = qs.filter(description__in=items)
 
+    # --- ADD THIS BLOCK HERE ---
+    customers = request.GET.getlist('customer')
+    if customers:
+        qs = qs.filter(customer_name__in=customers)
+    # ---------------------------
+
     # D. Month Filter
     months = request.GET.getlist('month')
     if months:
@@ -3762,12 +3768,14 @@ def open_so_dashboard(request):
     salesmen_list = qs.values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
     manufacturers_list = qs.values_list('manufacturer', flat=True).distinct().order_by('manufacturer')
     items_list = qs.values_list('description', flat=True).distinct().order_by('description')
+    customer_list = qs.values_list('customer_name', flat=True).distinct().order_by('customer_name')
 
     context = {
         'orders': qs,
         'salesmen': salesmen_list,
         'manufacturers': manufacturers_list,
-        'items': items_list
+        'items': items_list,
+        'customers': customer_list,
     }
     return render(request, 'so/open_so_dashboard.html', context)
 
