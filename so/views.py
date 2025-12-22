@@ -3790,7 +3790,7 @@ def export_so_pdf(request):
     elements = []
     styles = getSampleStyleSheet()
 
-    # --- LOGO & HEADER (Keep existing logic) ---
+    # --- LOGO & HEADER ---
     logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
     try:
         logo = Image(logo_url, width=150, height=50)
@@ -3804,9 +3804,10 @@ def export_so_pdf(request):
     elements.append(Paragraph(header_text, styles['Heading2']))
     elements.append(Spacer(1, 12))
 
-    # --- UPDATED TABLE DATA ---
-    # Added "DIP" to headers
-    data = [['Date', 'Doc No.', 'Customer', 'Item No', 'Description', 'Total SO', 'Open', 'Avail', 'DIP']]
+    # --- TABLE HEADERS ---
+    # 10 Columns total
+    # 0:Date, 1:Doc, 2:LPO, 3:Cust, 4:Item, 5:Desc, 6:Qty, 7:Open, 8:Avail, 9:DIP
+    data = [['Date', 'Doc No.', 'LPO', 'Customer', 'Item No', 'Description', 'Total SO', 'Open', 'Avail', 'DIP']]
     
     total_qty = 0
     total_open = 0
@@ -3817,13 +3818,18 @@ def export_so_pdf(request):
     for obj in orders:
         p_date = obj.posting_date.strftime("%d/%m/%Y") if obj.posting_date else ""
         
+        # --- FIX: WRAP TEXT FOR COLUMNS ---
         cust_cell = Paragraph(obj.customer_name[:35], normal_style)
-        desc_cell = Paragraph(obj.description[:45], normal_style) # Reduced length slightly to fit new col
+        desc_cell = Paragraph(obj.description[:45], normal_style)
+        
+        # 1. Get string, 2. Wrap in Paragraph so it stays inside width 80
+        lpo_text = obj.bp_reference if obj.bp_reference else "-"
+        lpo_cell = Paragraph(lpo_text, normal_style) 
         
         qty = obj.quantity
         opn = obj.open_qty
         avl = obj.total_available
-        dip = obj.dip_stock # New Field
+        dip = obj.dip_stock
         
         total_qty += qty
         total_open += opn
@@ -3831,21 +3837,24 @@ def export_so_pdf(request):
         data.append([
             p_date, 
             obj.document_no, 
+            lpo_cell,       # <--- Insert the Paragraph object here
             cust_cell, 
             obj.item_no, 
             desc_cell, 
             f"{qty:,.0f}", 
             f"{opn:,.0f}",
             f"{avl:,.0f}",
-            f"{dip:,.0f}" # Add to row
+            f"{dip:,.0f}"
         ])
 
-    # Footer Row
-    data.append(['', '', '', '', 'TOTALS:', f"{total_qty:,.0f}", f"{total_open:,.0f}", '', ''])
+    # --- FOOTER ROW ---
+    # You added a column, so we need to add an extra empty string to keep alignment
+    # Old logic: 'TOTALS:' was at index 4. Now it should be at index 5.
+    data.append(['', '', '', '', '', 'TOTALS:', f"{total_qty:,.0f}", f"{total_open:,.0f}", '', ''])
 
-    # --- UPDATED COLUMN WIDTHS ---
-    # Added width for new column, reduced Description slightly
-    col_widths = [60, 70, 140, 65, 180, 50, 50, 50, 50] 
+    # --- COLUMN WIDTHS ---
+    # Total Columns: 10
+    col_widths = [60, 70, 80, 140, 65, 180, 50, 50, 50, 50] 
     
     t = Table(data, colWidths=col_widths, repeatRows=1)
 
@@ -3859,21 +3868,28 @@ def export_so_pdf(request):
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),      
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),                
         
-        # Align Numbers Right (Cols 5 to 8)
-        ('ALIGN', (5, 1), (8, -1), 'RIGHT'),                
+        # --- ALIGNMENT UPDATES ---
+        # Since we added LPO at index 2, the numbers shifted.
+        # Numbers are now in columns 6 (Total SO), 7 (Open), 8 (Avail), 9 (DIP)
+        ('ALIGN', (6, 1), (9, -1), 'RIGHT'),                
         
         # Footer Styling
         ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN', (4, -1), (4, -1), 'RIGHT'), 
+        # Align 'TOTALS:' text to the right
+        ('ALIGN', (5, -1), (5, -1), 'RIGHT'), 
     ]))
 
     elements.append(t)
     doc.build(elements)
     buffer.seek(0)
     
+    unique_id = str(uuid.uuid4())[:4] 
+    filename = f"sales_orders_{unique_id}.pdf"
+
     response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="sales_orders.pdf"'
+    # Using inline to open in new tab (as requested previously)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
 
