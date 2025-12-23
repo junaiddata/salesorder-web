@@ -174,6 +174,7 @@ def create_sales_order(request):
             salesman = get_object_or_404(Salesman, id=salesman_id) if salesman_id else None
             lpo_image = request.FILES.get('lpo_image')
             location = request.POST.get('location', '').strip()
+            salesman_remarks = request.POST.get('salesman_remarks', '').strip()
 
             # Validate items
             item_ids = request.POST.getlist('item')
@@ -194,7 +195,8 @@ def create_sales_order(request):
                 customer=customer,
                 salesman=salesman,
                 lpo_image=lpo_image,
-                location=location
+                location=location,
+                salesman_remarks=salesman_remarks
             )
 
             # Process order items
@@ -257,6 +259,7 @@ def create_sales_order(request):
                 f"🆕 New Sales Order Created\n"
                 f"Customer: {sales_order.customer.customer_name}\n"
                 f"Location: {sales_order.location}\n"
+                f"Remarks: {sales_order.salesman_remarks}\n"
                 f"Amount: {sales_order.total_amount}\n\n"
                 f"Please review and approve."
             )

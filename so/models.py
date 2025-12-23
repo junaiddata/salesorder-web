@@ -95,6 +95,7 @@ class SalesOrder(models.Model):
     order_taken = models.BooleanField(default=False)
     order_status = models.CharField(max_length=20, choices=STATUS, default='Pending')
     remarks = models.TextField(blank=True, null=True)
+    salesman_remarks = models.CharField(max_length=255, blank=True, null=True)
     tax= models.FloatField(default=5.0)
     lpo_image = models.ImageField(upload_to='lpo_uploads/', null=True, blank=True)  # <-- added
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

@@ -451,6 +451,10 @@
                                 <!-- Old rows with only DateField -->
                                 <span class="order-date">{{ order.order_date|date:"M j, Y" }}</span>
                             {% endif %}
+
+                        </div>
+                         <div>
+                             {{ order.salesman_remarks|default:"No remarks" }}
                         </div>
                         <span class="status-badge status-{{ order.id }}
                             {% if order.order_status == 'Approved' %}badge-approved
