@@ -111,9 +111,16 @@ class SalesOrder(models.Model):
             last_order = SalesOrder.objects.order_by('-id').first()
             if last_order and last_order.order_number:
                 last_number = int(last_order.order_number[2:])
-                new_number = last_number + 1
+                
+                # Logic to jump to 260001 if previous orders were 25xxxx
+                if last_number < 260001:
+                    new_number = 260001
+                else:
+                    new_number = last_number + 1
             else:
-                new_number = 250001
+                # If database is empty, start here
+                new_number = 260001
+            
             self.order_number = f"CO{new_number}"
 
         # Process image only if it's being updated
