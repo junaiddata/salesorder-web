@@ -677,12 +677,14 @@
                     Customers
                 </a>
             </li>
+            {% if user.username != 'alabamaadmin' %}
             <li>
                 <a href="/items/">
                     <i class="fas fa-box"></i>
                     Products
                 </a>
             </li>
+            {% endif %}
             <li>
                 <a href="#">
                     <i class="fas fa-cog"></i>

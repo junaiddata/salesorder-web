@@ -2151,7 +2151,7 @@ def generate_alabama_pdf(buffer, sales_order):
     
     # 2. Define Alabama Specific Settings (Red Theme)
     # Using the specific logo URL provided
-    current_logo_url = "https://alabamauae.com/alabamalogo3.png"
+    current_logo_url = "https://alabamauae.com/alabama4.png"
     local_logo_path = os.path.join(settings.BASE_DIR, 'static/images/alabama-logo.png')
     header_text = "CUSTOMER ORDER FORM"
     
