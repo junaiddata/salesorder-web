@@ -131,6 +131,12 @@ def get_unique_firms():
 @transaction.atomic
 def create_sales_order(request):
     if request.method == 'POST':
+
+        division = 'JUNAID' # Default
+    
+    # OPTION A: Your suggested Username check (Simplest)
+        if 'alabama' in request.user.username.lower():
+            division = 'ALABAMA'
         try:
             customer_id = request.POST.get('customer')
             new_customer_name = request.POST.get('new_customer_name', '').strip()
@@ -193,6 +199,7 @@ def create_sales_order(request):
             # Create the sales order
             sales_order = SalesOrder.objects.create(
                 customer=customer,
+                division=division,
                 salesman=salesman,
                 lpo_image=lpo_image,
                 location=location,
@@ -273,7 +280,34 @@ def create_sales_order(request):
             return redirect('create_sales_order')
 
     # GET request - show form
+    # -------------------------------------------------------------------------
+    # GET request - show form (With Multiple Salesman Filtering Logic)
+    # -------------------------------------------------------------------------
     salesmen = Salesman.objects.all()
+
+    # Filter Logic: Only apply if user is logged in AND is NOT a superuser/admin
+    if request.user.is_authenticated and not request.user.is_superuser:
+        current_username = request.user.username.lower()
+
+        # Define Mapping: 'username' -> List of ['Name1', 'Name2']
+        user_salesman_map = {
+            'alabamakadhar': ['KADER'],
+            'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
+            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
+            
+        }
+
+        if current_username in user_salesman_map:
+            target_names = user_salesman_map[current_username]
+            
+            # Build a complex query: (name contains A) OR (name contains B)
+            query = Q()
+            for name in target_names:
+                query |= Q(salesman_name__icontains=name)
+            
+            salesmen = salesmen.filter(query)
+
+    # -------------------------------------------------------------------------
     firms = Items.objects.values_list('item_firm', flat=True).distinct()
     customers = Customer.objects.all()
 
@@ -354,22 +388,21 @@ def edit_sales_order(request, order_id):
         item_ids = request.POST.getlist('item')
         quantities = request.POST.getlist('quantity')
         prices = request.POST.getlist('price')
-        units      = request.POST.getlist('unit')  # <-- add this
-
+        units = request.POST.getlist('unit') 
 
         order_items = []
-        for item_id, qty, price,unit in zip(item_ids, quantities, prices,units):
+        for item_id, qty, price, unit in zip(item_ids, quantities, prices, units):
             item = get_object_or_404(Items, id=item_id)
             price = float(price) if price else float(item.item_price)
             quantity = int(qty)
-            unit_val = unit if unit in ['pcs', 'ctn', 'roll'] else 'pcs'  # simple guard
+            unit_val = unit if unit in ['pcs', 'ctn', 'roll'] else 'pcs'
 
             order_items.append(OrderItem(
                 order=sales_order,
                 item=item,
                 quantity=quantity,
                 price=price,
-                unit=unit_val,  # <-- add this
+                unit=unit_val,
                 is_custom_price=True
             ))
 
@@ -384,10 +417,36 @@ def edit_sales_order(request, order_id):
 
         return redirect('view_sales_order_details', order_id=sales_order.id)
 
-    # GET request → render form with existing data
+    # -------------------------------------------------------------------------
+    # GET request → render form with existing data (With Filtering Logic)
+    # -------------------------------------------------------------------------
     salesmen = Salesman.objects.all()
-    firms = Items.objects.values_list('item_firm', flat=True).distinct()
+
+    # Filter Logic: Only apply if user is logged in AND is NOT a superuser/admin
+    if request.user.is_authenticated and not request.user.is_superuser:
+        current_username = request.user.username.lower()
+
+        # Define Mapping: 'username' -> List of ['Name1', 'Name2']
+        user_salesman_map = {
+            'alabamakadhar': ['KADER'],
+            'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
+            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
+            
+        }
+
+        if current_username in user_salesman_map:
+            target_names = user_salesman_map[current_username]
+            
+            # Build a complex query: (name contains A) OR (name contains B)
+            query = Q()
+            for name in target_names:
+                query |= Q(salesman_name__icontains=name)
+            
+            salesmen = salesmen.filter(query)
+
+    # -------------------------------------------------------------------------
     
+    firms = Items.objects.values_list('item_firm', flat=True).distinct()
 
     return render(request, 'so/edit_sales_order.html', {
         'sales_order': sales_order,
@@ -623,6 +682,13 @@ def view_sales_orders(request):
     # Initial queryset - all sales orders
     sales_orders = SalesOrder.objects.all()
 
+    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
+        sales_orders = SalesOrder.objects.filter(division='ALABAMA')
+    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so','manager']:
+        sales_orders = SalesOrder.objects.filter(division='JUNAID')
+    else:
+        sales_orders = SalesOrder.objects.all()
+
     # Salesman restriction
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
         salesman_name = request.user.first_name
@@ -646,7 +712,7 @@ def view_sales_orders(request):
     all_salesmen = Salesman.objects.all().order_by('salesman_name')
 
     # Pagination - 12 items per page (3x4 grid layout)
-    paginator = Paginator(sales_orders.order_by('-order_number'), 12)
+    paginator = Paginator(sales_orders.order_by('-order_date'), 12)
     
     try:
         sales_orders_page = paginator.page(page)
@@ -1745,20 +1811,58 @@ class NumberedCanvas(canvas.Canvas):
             0.5*inch,
             f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
         )
+#import response
+from django.http import HttpResponse
+
+
 
 def export_sales_order_to_pdf(request, order_id):
     sales_order = get_object_or_404(SalesOrder, id=order_id)
-    order_items = sales_order.items.all()
     
-    # Create response
+    # 1. Setup the HTTP Response (Shared logic)
     response = HttpResponse(content_type='application/pdf')
-    filename = f"CustomerOrder_{sales_order.order_number}_{sales_order.order_date.strftime('%Y%m%d')}.pdf"
+    # Use the specific order number in the filename
+    filename = f"Order_{sales_order.order_number}_{sales_order.order_date.strftime('%Y%m%d')}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
-    # Create PDF buffer
+    # 2. Create Buffer
     buffer = BytesIO()
+
+    # 3. DISPATCH: Choose the correct design function based on the order
+    # (Assuming you added the 'division' field we discussed)
+    if sales_order.division == 'ALABAMA':
+        generate_alabama_pdf(buffer, sales_order)
+    else:
+        generate_junaid(buffer, sales_order)
+
+    # 4. Finalize and Return
+    pdf_value = buffer.getvalue()
+    buffer.close()
+    response.write(pdf_value)
+    return response
+
+
+from io import BytesIO
+import os
+import requests
+from django.conf import settings
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+
+def generate_junaid(buffer, sales_order):
+    # 1. Get Items
+    order_items = sales_order.items.all()
     
-    # Create the PDF document
+    # 2. Define Junaid Specific Settings (Logo & Header)
+    current_logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    local_logo_path = os.path.join(settings.BASE_DIR, 'static/images/footer-logo.png.webp')
+    header_text = "CUSTOMER ORDER FORM"
+
+    # 3. Create the PDF document using the passed buffer
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
@@ -1809,27 +1913,25 @@ def export_sales_order_to_pdf(request, order_id):
     
     # Try to load logo
     try:
-        logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
-        response_img = requests.get(logo_url, timeout=5)
+        response_img = requests.get(current_logo_url, timeout=5)
         if response_img.status_code == 200:
             logo = Image(BytesIO(response_img.content), width=150, height=50)
             logo.hAlign = 'CENTER'
             elements.append(logo)
             elements.append(Spacer(1, 0.3*inch))
     except Exception:
-    # Fallback: load from local static file
+        # Fallback: load from local static file
         try:
-            logo_path = os.path.join(settings.BASE_DIR, 'static/images/footer-logo.png.webp')
-            if os.path.exists(logo_path):
-                logo = Image(logo_path, width=150, height=50)
+            if os.path.exists(local_logo_path):
+                logo = Image(local_logo_path, width=150, height=50)
                 logo.hAlign = 'CENTER'
                 elements.append(logo)
                 elements.append(Spacer(1, 0.3 * inch))
         except Exception:
-            pass  # Silently fail if local file also missing
+            pass 
     
     # Add title
-    elements.append(Paragraph("CUSTOMER ORDER FORM", title_style))
+    elements.append(Paragraph(header_text, title_style))
     
     # Order Information Section
     order_data = [
@@ -1868,10 +1970,7 @@ def export_sales_order_to_pdf(request, order_id):
     customer_data = [
         ['CUSTOMER INFORMATION', ''],
         ['Customer Name:', sales_order.customer.customer_name],
-        # ['Customer Code:', getattr(sales_order.customer, 'customer_code', 'N/A')],
-        # ['Address:', getattr(sales_order.customer, 'address', 'N/A')],
-        # ['Phone:', getattr(sales_order.customer, 'phone', 'N/A')],
-        # ['Email:', getattr(sales_order.customer, 'email', 'N/A')],
+        ['Customer Code:', sales_order.customer.customer_code]
     ]
     
     # Add salesman info if available
@@ -1917,7 +2016,7 @@ def export_sales_order_to_pdf(request, order_id):
             str(idx),
             item.item.item_code,
             Paragraph(item.item.item_description[:50] + '...' if len(item.item.item_description) > 50 else item.item.item_description, normal_style),
-            f"{str(item.quantity) + " " + item.unit}",
+            f"{str(item.quantity)} {item.unit}",
             f"{item.price:,.2f} ",
             f"{line_total:,.2f} "
         ])
@@ -2043,481 +2142,306 @@ def export_sales_order_to_pdf(request, order_id):
     
     elements.append(Spacer(1, 0.5*inch))
     
-    # # Signature Section
-    # sig_data = [
-    #     ['_' * 30, '', '_' * 30],
-    #     ['Authorized Signatory', '', 'Customer Signature'],
-    #     ['Junaid World', '', sales_order.customer.customer_name]
-    # ]
+    # Finalize PDF
+    doc.build(elements)
+
+def generate_alabama_pdf(buffer, sales_order):
+    # 1. Get Items
+    order_items = sales_order.items.all()
     
-    # sig_table = Table(sig_data, colWidths=[2.5*inch, 1*inch, 2.5*inch])
-    # sig_table.setStyle(TableStyle([
-    #     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-    #     ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
-    #     ('FONTSIZE', (0, 1), (-1, 1), 10),
-    #     ('FONTSIZE', (0, 2), (-1, 2), 9),
-    #     ('TEXTCOLOR', (0, 2), (-1, 2), colors.HexColor('#666666')),
-    #     ('TOPPADDING', (0, 1), (-1, 1), 10),
-    # ]))
+    # 2. Define Alabama Specific Settings (Red Theme)
+    # Using the specific logo URL provided
+    current_logo_url = "https://alabamauae.com/alabamalogo3.png"
+    local_logo_path = os.path.join(settings.BASE_DIR, 'static/images/alabama-logo.png')
+    header_text = "CUSTOMER ORDER FORM"
     
-    # elements.append(sig_table)
+    # Theme Colors
+    THEME_RED = colors.HexColor("#211F1F")  # Dark Red for headers
+    THEME_TEXT = colors.HexColor('#000000') # Black for standard text
+
+    # 3. Create the PDF document
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
+    )
     
-    # Build PDF
-    doc.build(elements, canvasmaker=NumberedCanvas)
-    if sales_order.lpo_image:
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    
+    # Custom styles - RED THEME
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Title'],
+        fontSize=24,
+        textColor=THEME_RED,
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=THEME_RED,
+        spaceAfter=12
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=THEME_TEXT,
+        spaceAfter=6
+    )
+    
+    label_style = ParagraphStyle(
+        'LabelStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#333333'),
+        fontName='Helvetica-Bold'
+    )
+    
+    # Try to load logo
+    try:
+        response_img = requests.get(current_logo_url, timeout=5)
+        if response_img.status_code == 200:
+            logo = Image(BytesIO(response_img.content), width=150, height=50)
+            logo.hAlign = 'CENTER'
+            elements.append(logo)
+            elements.append(Spacer(1, 0.3*inch))
+    except Exception:
+        # Fallback: load from local static file
         try:
-            # Create a new PDF for the LPO image
-            lpo_buffer = BytesIO()
-            lpo_doc = SimpleDocTemplate(
-                lpo_buffer,
-                pagesize=A4,
-                rightMargin=0.5*inch,
-                leftMargin=0.5*inch,
-                topMargin=0.75*inch,
-                bottomMargin=0.75*inch
-            )
-            
-            lpo_elements = []
-            lpo_elements.append(Paragraph("LPO ATTACHMENT", title_style))
-            
-            try:
-                img_path = sales_order.lpo_image.path
-                img = Image(img_path)
-                
-                # Scale image to fit page width while maintaining aspect ratio
-                available_width = 7 * inch
-                scale_factor = available_width / img.drawWidth
-                img.drawWidth *= scale_factor
-                img.drawHeight *= scale_factor
-                
-                img.hAlign = 'CENTER'
-                lpo_elements.append(Spacer(1, 0.5*inch))
-                lpo_elements.append(img)
-                
-            except Exception as e:
-                logger.error(f"Error processing LPO image: {str(e)}")
-                lpo_elements.append(Paragraph("Could not load LPO image", error_style))
-            
-            lpo_doc.build(lpo_elements)
-            
-            # Merge PDFs using PyPDF2
-            main_pdf = PdfReader(buffer)
-            lpo_pdf = PdfReader(lpo_buffer)
-            
-            output_pdf = PdfWriter()
-            
-            # Add all pages from main PDF
-            for page in main_pdf.pages:
-                output_pdf.add_page(page)
-            
-            # Add LPO page
-            for page in lpo_pdf.pages:
-                output_pdf.add_page(page)
-            
-            # Write merged PDF to final buffer
-            final_buffer = BytesIO()
-            output_pdf.write(final_buffer)
-            pdf = final_buffer.getvalue()
-            final_buffer.close()
-            
-        except Exception as e:
-            logger.error(f"Error merging PDFs: {str(e)}")
-            pdf = buffer.getvalue()  # Fallback to original PDF
-    else:
-        pdf = buffer.getvalue()
+            if os.path.exists(local_logo_path):
+                logo = Image(local_logo_path, width=150, height=50)
+                logo.hAlign = 'CENTER'
+                elements.append(logo)
+                elements.append(Spacer(1, 0.3 * inch))
+        except Exception:
+            pass 
     
-    buffer.close()
-    response.write(pdf)
-    return response
-    # Get the value of the BytesIO buffer and write it to the response
-    # pdf = buffer.getvalue()
-    # buffer.close()
-    # response.write(pdf)
+    # Add title
+    elements.append(Paragraph(header_text, title_style))
     
-    # return response
+    # Order Information Section
+    order_data = [
+        ['ORDER INFORMATION', ''],
+        ['Order Number:', f'{sales_order.order_number}'],
+        ['Order Date:', sales_order.order_date.strftime('%d-%m-%Y')],
+        ['Location:', getattr(sales_order, 'location', 'Not Specified')],
+    ]
+    
+    order_table = Table(order_data, colWidths=[2.5*inch, 4*inch])
+    order_table.setStyle(TableStyle([
+        # Header row - RED Background
+        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
+        ('SPAN', (0, 0), (-1, 0)),
+        
+        # Data rows
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#333333')),
+        
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]), # Slight Red Tint
+    ]))
+    elements.append(order_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Customer Information Section
+    customer_data = [
+        ['CUSTOMER INFORMATION', ''],
+        ['Customer Name:', sales_order.customer.customer_name],
+    ]
+    
+    # Add salesman info if available
+    if sales_order.salesman:
+        customer_data.append(['Salesman:', sales_order.salesman.salesman_name])
+    
+    customer_table = Table(customer_data, colWidths=[2.5*inch, 4*inch])
+    customer_table.setStyle(TableStyle([
+        # Header row - RED Background
+        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
+        ('SPAN', (0, 0), (-1, 0)),
+        
+        # Data rows
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#333333')),
+        
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]), # Slight Red Tint
+    ]))
+    elements.append(customer_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Items Table
+    items_data = [
+        ['S.No', 'Item Code', 'Description', 'Qty', 'Unit Price', 'Total']
+    ]
+    
+    subtotal = 0.00
+    for idx, item in enumerate(order_items, 1):
+        line_total = item.quantity * item.price
+        subtotal += line_total
+        
+        items_data.append([
+            str(idx),
+            item.item.item_code,
+            Paragraph(item.item.item_description[:50] + '...' if len(item.item.item_description) > 50 else item.item.item_description, normal_style),
+            f"{str(item.quantity)} {item.unit}",
+            f"{item.price:,.2f} ",
+            f"{line_total:,.2f} "
+        ])
+    
+    # Create items table
+    items_table = Table(
+        items_data,
+        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
+    )
+    
+    items_table.setStyle(TableStyle([
+        # Header row - RED Background
+        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        
+        # Data rows
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # S.No
+        ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Item Code
+        ('ALIGN', (2, 1), (2, -1), 'LEFT'),    # Description
+        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Qty
+        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),   # Unit Price
+        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),   # Total
+        
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        
+        # Alternate row colors - White and Very Pale Red
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]),
+    ]))
+    
+    elements.append(items_table)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Summary Section
+    summary_data = []
+    
+    # Subtotal
+    summary_data.append(['', '', '', '', 'Subtotal:', f"{subtotal:,.2f} AED"])
+    
+    # Tax if applicable
+    tax_amount = 0.00
+    if hasattr(sales_order, 'tax') and sales_order.tax:
+        tax_amount = sales_order.tax
+        summary_data.append(['', '', '', '', f'VAT (5%):', f"{tax_amount:,.2f} AED"])
+    
+    # Discount if applicable
+    if hasattr(sales_order, 'discount_amount') and sales_order.discount_amount:
+        summary_data.append(['', '', '', '', 'Discount:', f"-{sales_order.discount_amount:,.2f} AED"])
+    
+    # Total
+    total_amount = sales_order.total_amount
+    grand_total = round(total_amount + tax_amount, 2)
+    summary_data.append(['', '', '', '', 'Total Amount:      ', f"{grand_total:,.2f} AED"])
+    
+    summary_table = Table(
+        summary_data,
+        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
+    )
+    
+    summary_table.setStyle(TableStyle([
+        ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
+        ('ALIGN', (5, 0), (5, -1), 'RIGHT'),
+        ('FONTNAME', (4, 0), (5, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (4, 0), (5, -1), 10),
+        
+        # Total row styling - Red Line Above
+        ('FONTNAME', (4, -1), (5, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (4, -1), (5, -1), 12),
+        ('TEXTCOLOR', (4, -1), (5, -1), THEME_RED),
+        ('LINEABOVE', (4, -1), (5, -1), 1.5, THEME_RED),
+        ('BACKGROUND', (4, -1), (5, -1), colors.HexColor('#FFF0F0')),
+        ('TOPPADDING', (4, -1), (5, -1), 8),
+        ('BOTTOMPADDING', (4, -1), (5, -1), 8),
+    ]))
+    
+    elements.append(summary_table)
+    elements.append(Spacer(1, 0.5*inch))
+    
+    # Notes Section
+    if hasattr(sales_order, 'notes') and sales_order.notes:
+        elements.append(Paragraph("Notes:", heading_style))
+        notes_style = ParagraphStyle(
+            'NotesStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#555555'),
+            leftIndent=20,
+            rightIndent=20,
+            borderColor=colors.HexColor('#CCCCCC'),
+            borderWidth=1,
+            borderPadding=10,
+            backColor=colors.HexColor('#FFF9F9')
+        )
+        elements.append(Paragraph(sales_order.notes, notes_style))
+        elements.append(Spacer(1, 0.3*inch))
+    
+    # Terms and Conditions
+    terms_heading = Paragraph("System Generated - Terms & Conditions", heading_style)
+    elements.append(terms_heading)
+    
+    terms_style = ParagraphStyle(
+        'TermsStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#666666'),
+        leftIndent=20
+    )
+    
+    terms = [
+        "1. This document is automatically generated by Alabama Systems.",
+        "2. All disputes are subject to local jurisdiction only.",
+        "3. Payment due as per customer account terms or prior agreement.",
+    ]
+    
+    for term in terms:
+        elements.append(Paragraph(term, terms_style))
+    
+    elements.append(Spacer(1, 0.5*inch))
+    
+    # Finalize PDF
+    doc.build(elements)
 
-# # Additional function to export customer list as PDF
-# def export_customers_to_pdf(request):
-#     """Export all customers to a PDF report"""
-#     customers = Customer.objects.all().order_by('customer_name')
-    
-#     response = HttpResponse(content_type='application/pdf')
-#     filename = f"Customer_List_{datetime.now().strftime('%Y%m%d')}.pdf"
-#     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-#     buffer = BytesIO()
-#     doc = SimpleDocTemplate(
-#         buffer,
-#         pagesize=A4,
-#         rightMargin=0.5*inch,
-#         leftMargin=0.5*inch,
-#         topMargin=0.75*inch,
-#         bottomMargin=0.75*inch
-#     )
-    
-#     elements = []
-#     styles = getSampleStyleSheet()
-    
-#     # Custom styles
-#     title_style = ParagraphStyle(
-#         'CustomTitle',
-#         parent=styles['Title'],
-#         fontSize=24,
-#         textColor=colors.HexColor('#2C3E50'),
-#         spaceAfter=30,
-#         alignment=TA_CENTER
-#     )
-    
-#     # Try to load logo
-#     try:
-#         logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
-#         response_img = requests.get(logo_url, timeout=5)
-#         if response_img.status_code == 200:
-#             logo = Image(BytesIO(response_img.content), width=150, height=50)
-#             logo.hAlign = 'CENTER'
-#             elements.append(logo)
-#             elements.append(Spacer(1, 0.3*inch))
-#     except:
-#         pass
-    
-#     # Title
-#     elements.append(Paragraph("CUSTOMER LIST", title_style))
-#     elements.append(Paragraph(f"As of {datetime.now().strftime('%d-%m-%Y')}", styles['Normal']))
-#     elements.append(Spacer(1, 0.3*inch))
-    
-#     # Customer table headers
-#     data = [
-#         ['S.No', 'Customer Code', 'Customer Name', 'City', 'Phone', 'Total Orders']
-#     ]
-    
-#     # Add customer data
-#     for idx, customer in enumerate(customers, 1):
-#         order_count = customer.orders.count() if hasattr(customer, 'orders') else 0
-#         data.append([
-#             str(idx),
-#             customer.customer_code or 'N/A',
-#             customer.customer_name,
-#             getattr(customer, 'city', 'N/A'),
-#             getattr(customer, 'phone', 'N/A'),
-#             str(order_count)
-#         ])
-    
-#     # Create table
-#     table = Table(
-#         data,
-#         colWidths=[0.6*inch, 1.2*inch, 2.5*inch, 1.2*inch, 1.2*inch, 1*inch]
-#     )
-    
-#     table.setStyle(TableStyle([
-#         # Header
-#         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-#         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#         ('FONTSIZE', (0, 0), (-1, 0), 11),
-#         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        
-#         # Data
-#         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-#         ('FONTSIZE', (0, 1), (-1, -1), 9),
-#         ('ALIGN', (0, 1), (0, -1), 'CENTER'),
-#         ('ALIGN', (1, 1), (1, -1), 'CENTER'),
-#         ('ALIGN', (5, 1), (5, -1), 'CENTER'),
-        
-#         # Grid
-#         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-#         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        
-#         # Alternate rows
-#         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-#     ]))
-    
-#     elements.append(table)
-    
-#     # Summary
-#     elements.append(Spacer(1, 0.3*inch))
-#     summary_style = ParagraphStyle(
-#         'SummaryStyle',
-#         parent=styles['Normal'],
-#         fontSize=10,
-#         textColor=colors.HexColor('#2C3E50'),
-#         fontName='Helvetica-Bold'
-#     )
-#     elements.append(Paragraph(f"Total Customers: {len(customers)}", summary_style))
-    
-#     # Build PDF
-#     doc.build(elements, canvasmaker=NumberedCanvas)
-    
-#     pdf = buffer.getvalue()
-#     buffer.close()
-#     response.write(pdf)
-    
-#     return response
-
-# def export_customer_detail_pdf(request, customer_id):
-#     """Export detailed customer information with order history"""
-#     customer = get_object_or_404(Customer, id=customer_id)
-#     orders = customer.orders.all().order_by('-order_date') if hasattr(customer, 'orders') else []
-    
-#     response = HttpResponse(content_type='application/pdf')
-#     filename = f"Customer_{customer.customer_code}_{datetime.now().strftime('%Y%m%d')}.pdf"
-#     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-#     buffer = BytesIO()
-#     doc = SimpleDocTemplate(
-#         buffer,
-#         pagesize=A4,
-#         rightMargin=0.5*inch,
-#         leftMargin=0.5*inch,
-#         topMargin=0.75*inch,
-#         bottomMargin=0.75*inch
-#     )
-    
-#     elements = []
-#     styles = getSampleStyleSheet()
-    
-#     # Custom styles
-#     title_style = ParagraphStyle(
-#         'CustomTitle',
-#         parent=styles['Title'],
-#         fontSize=24,
-#         textColor=colors.HexColor('#2C3E50'),
-#         spaceAfter=30,
-#         alignment=TA_CENTER
-#     )
-    
-#     heading_style = ParagraphStyle(
-#         'CustomHeading',
-#         parent=styles['Heading2'],
-#         fontSize=14,
-#         textColor=colors.HexColor('#34495E'),
-#         spaceAfter=12,
-#         spaceBefore=20
-#     )
-    
-#     # Try to load logo
-#     try:
-#         logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
-#         response_img = requests.get(logo_url, timeout=5)
-#         if response_img.status_code == 200:
-#             logo = Image(BytesIO(response_img.content), width=150, height=50)
-#             logo.hAlign = 'CENTER'
-#             elements.append(logo)
-#             elements.append(Spacer(1, 0.3*inch))
-#     except:
-#         pass
-    
-#     # Title
-#     elements.append(Paragraph("CUSTOMER DETAIL REPORT", title_style))
-    
-#     # Customer Information
-#     elements.append(Paragraph("Customer Information", heading_style))
-    
-#     customer_info = [
-#         ['Customer Code:', customer.customer_code or 'N/A'],
-#         ['Customer Name:', customer.customer_name],
-#         ['Contact Person:', getattr(customer, 'contact_person', 'N/A')],
-#         ['Phone:', getattr(customer, 'phone', 'N/A')],
-#         ['Mobile:', getattr(customer, 'mobile', 'N/A')],
-#         ['Email:', getattr(customer, 'email', 'N/A')],
-#         ['Address:', getattr(customer, 'address', 'N/A')],
-#         ['City:', getattr(customer, 'city', 'N/A')],
-#         ['State:', getattr(customer, 'state', 'N/A')],
-#         ['Registration Date:', getattr(customer, 'created_at', datetime.now()).strftime('%d-%m-%Y') if hasattr(customer, 'created_at') else 'N/A'],
-#     ]
-    
-#     # Add salesman if available
-#     if hasattr(customer, 'salesman') and customer.salesman:
-#         customer_info.append(['Assigned Salesman:', customer.salesman.salesman_name])
-    
-#     info_table = Table(customer_info, colWidths=[2*inch, 4.5*inch])
-#     info_table.setStyle(TableStyle([
-#         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-#         ('FONTSIZE', (0, 0), (-1, -1), 10),
-#         ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-#         ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-#         ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
-#         ('TOPPADDING', (0, 0), (-1, -1), 8),
-#         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-#         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-#         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-#         ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-#     ]))
-    
-#     elements.append(info_table)
-#     elements.append(Spacer(1, 0.3*inch))
-    
-#     # Account Summary
-#     elements.append(Paragraph("Account Summary", heading_style))
-    
-#     # Calculate summary statistics
-#     total_orders = len(orders)
-#     total_amount = sum(order.total_amount for order in orders) if orders else Decimal('0.00')
-#     avg_order_value = total_amount / total_orders if total_orders > 0 else Decimal('0.00')
-    
-#     # Get last order date
-#     last_order_date = orders[0].order_date.strftime('%d-%m-%Y') if orders else 'N/A'
-    
-#     summary_data = [
-#         ['Total Orders:', str(total_orders)],
-#         ['Total Business:', f"${total_amount:,.2f}"],
-#         ['Average Order Value:', f"${avg_order_value:,.2f}"],
-#         ['Last Order Date:', last_order_date],
-#         ['Account Status:', 'Active' if total_orders > 0 else 'Inactive'],
-#     ]
-    
-#     summary_table = Table(summary_data, colWidths=[2*inch, 2*inch])
-#     summary_table.setStyle(TableStyle([
-#         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#E8F5E9')),
-#         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-#         ('FONTSIZE', (0, 0), (-1, -1), 10),
-#         ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-#         ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-#         ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#2C3E50')),
-#         ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#4CAF50')),
-#         ('TOPPADDING', (0, 0), (-1, -1), 10),
-#         ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-#         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-#     ]))
-    
-#     elements.append(summary_table)
-#     elements.append(Spacer(1, 0.3*inch))
-    
-#     # Order History
-#     if orders:
-#         elements.append(Paragraph("Order History", heading_style))
-        
-#         order_data = [
-#             ['Order #', 'Date', 'Items', 'Amount', 'Status']
-#         ]
-        
-#         for order in orders[:20]:  # Show last 20 orders
-#             item_count = order.items.count() if hasattr(order, 'items') else 0
-#             status = getattr(order, 'status', 'Completed')
-            
-#             order_data.append([
-#                 f"#{order.id}",
-#                 order.order_date.strftime('%d-%m-%Y'),
-#                 str(item_count),
-#                 f"${order.total_amount:,.2f}",
-#                 status
-#             ])
-        
-#         order_table = Table(
-#             order_data,
-#             colWidths=[1*inch, 1.5*inch, 1*inch, 1.5*inch, 1.5*inch]
-#         )
-        
-#         order_table.setStyle(TableStyle([
-#             # Header
-#             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-#             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-#             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#             ('FONTSIZE', (0, 0), (-1, 0), 11),
-#             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            
-#             # Data
-#             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-#             ('FONTSIZE', (0, 1), (-1, -1), 9),
-#             ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
-#                         ('ALIGN', (3, 1), (3, -1), 'RIGHT'),  # Amount column
-            
-#             # Grid
-#             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-#             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            
-#             # Alternate rows
-#             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-#         ]))
-        
-#         elements.append(order_table)
-        
-#         if len(orders) > 20:
-#             note_style = ParagraphStyle(
-#                 'NoteStyle',
-#                 parent=styles['Normal'],
-#                 fontSize=9,
-#                 textColor=colors.HexColor('#666666'),
-#                 alignment=TA_CENTER,
-#                 spaceBefore=10
-#             )
-#             elements.append(Paragraph(f"Showing last 20 orders out of {len(orders)} total orders", note_style))
-#     else:
-#         no_order_style = ParagraphStyle(
-#             'NoOrderStyle',
-#             parent=styles['Normal'],
-#             fontSize=11,
-#             textColor=colors.HexColor('#666666'),
-#             alignment=TA_CENTER,
-#             spaceBefore=20,
-#             spaceAfter=20
-#         )
-#         elements.append(Paragraph("No orders found for this customer", no_order_style))
-    
-#     elements.append(Spacer(1, 0.5*inch))
-    
-#     # Payment Terms and Credit Information (if available)
-#     if hasattr(customer, 'payment_terms') or hasattr(customer, 'credit_limit'):
-#         elements.append(Paragraph("Credit & Payment Information", heading_style))
-        
-#         credit_data = []
-#         if hasattr(customer, 'payment_terms') and customer.payment_terms:
-#             credit_data.append(['Payment Terms:', customer.payment_terms])
-#         if hasattr(customer, 'credit_limit') and customer.credit_limit:
-#             credit_data.append(['Credit Limit:', f"${customer.credit_limit:,.2f}"])
-#         if hasattr(customer, 'outstanding_amount'):
-#             credit_data.append(['Outstanding Amount:', f"${customer.outstanding_amount:,.2f}"])
-        
-#         if credit_data:
-#             credit_table = Table(credit_data, colWidths=[2*inch, 2*inch])
-#             credit_table.setStyle(TableStyle([
-#                 ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-#                 ('FONTSIZE', (0, 0), (-1, -1), 10),
-#                 ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-#                 ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-#                 ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
-#                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-#                 ('TOPPADDING', (0, 0), (-1, -1), 8),
-#                 ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-#             ]))
-#             elements.append(credit_table)
-    
-#     # Footer with generation info
-#     elements.append(Spacer(1, 1*inch))
-    
-#     footer_style = ParagraphStyle(
-#         'FooterStyle',
-#         parent=styles['Normal'],
-#         fontSize=8,
-#         textColor=colors.HexColor('#888888'),
-#         alignment=TA_CENTER
-#     )
-    
-#     elements.append(Paragraph("--- End of Report ---", footer_style))
-    
-#     # Build PDF
-#     doc.build(elements, canvasmaker=NumberedCanvas)
-    
-#     pdf = buffer.getvalue()
-#     buffer.close()
-#     response.write(pdf)
-    
-#     return response
-
-# # You'll also need to add these URLs to your urlpatterns:
-# """
-# urlpatterns = [
-#     # ... other patterns ...
-#     path('export/sales-order/<int:order_id>/pdf/', export_sales_order_to_pdf, name='export_sales_order_pdf'),
-#     path('export/customers/pdf/', export_customers_to_pdf, name='export_customers_pdf'),
-#     path('export/customer/<int:customer_id>/pdf/', export_customer_detail_pdf, name='export_customer_detail_pdf'),
-# ]
-# """
-
-# # And add this to your requirements.txt:
-# """
-# reportlab==4.0.4
-# requests==2.31.0
-# """
 
 
 import pandas as pd

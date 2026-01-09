@@ -331,6 +331,42 @@
     .pagination-section {
         padding: 1rem;
     }
+
+/* --- SHARED WATERMARK SETTINGS --- */
+.alabama-watermark, .junaid-watermark {
+    position: relative;
+    z-index: 1; /* Keep text on top */
+    overflow: hidden; /* Cut off image if it overflows rounded corners */
+}
+
+/* Common pseudo-element styles */
+.alabama-watermark::before, .junaid-watermark::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: -1; /* Push behind text */
+}
+
+/* --- ALABAMA SPECIFIC --- */
+.alabama-watermark::before {
+    background-image: url('https://alabamauae.com/wp-content/uploads/2026/01/LOGO-2.webp'); 
+    background-size: 70%;
+    opacity: 0.1; /* 8% Opacity */
+    /* filter: grayscale(100%); Optional: makes it grey */
+}
+
+/* --- JUNAID SPECIFIC --- */
+.junaid-watermark::before {
+    background-image: url('https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp');
+    background-size: 60%; /* Junaid logo is usually wider, so 60% fits better */
+    opacity: 0.08; /* 5% Opacity (Lower because blue is dark) */
+    /* filter: grayscale(100%); Optional: makes it grey */
+}
     </style>
 </head>
 <body>
@@ -435,6 +471,7 @@
             {% for order in sales_orders %}
             <div class="col-lg-4 col-md-6 mb-3" id="order-card-{{ order.id }}">
                 <div class="order-card 
+                {% if order.division == 'ALABAMA' %}alabama-watermark{% else %}junaid-watermark{% endif %}
                     {% if order.order_status == 'Approved' %}approved
                     {% elif order.order_status == 'Hold by A/c' %}hold
                     {% elif order.order_status == 'SO Created' %}created

@@ -83,6 +83,13 @@ class SalesOrder(models.Model):
         ('Approved', 'Approved'),
         ('SO Created', 'SO Created'),
     )
+
+    DIVISIONS = (
+        ('JUNAID', 'Junaid'),
+        ('ALABAMA', 'Alabama'),
+    )
+
+    division = models.CharField(max_length=20, choices=DIVISIONS, default='JUNAID')
     order_number = models.CharField(max_length=20, unique=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     salesman = models.ForeignKey(Salesman, on_delete=models.SET_NULL, null=True, blank=True)
@@ -108,20 +115,33 @@ class SalesOrder(models.Model):
     def save(self, *args, **kwargs):
         # Generate order number if not exists
         if not self.order_number:
-            last_order = SalesOrder.objects.order_by('-id').first()
-            if last_order and last_order.order_number:
-                last_number = int(last_order.order_number[2:])
-                
-                # Logic to jump to 260001 if previous orders were 25xxxx
-                if last_number < 260001:
-                    new_number = 260001
-                else:
-                    new_number = last_number + 1
+            if self.division == 'ALABAMA':
+                prefix = "AL"
+                # Filter specifically for Alabama orders to find the last number
+                last_order = SalesOrder.objects.filter(order_number__startswith='AL').order_by('-id').first()
+                start_number = 260001 # Start Alabama orders from 260001 or whatever you prefer
             else:
-                # If database is empty, start here
-                new_number = 260001
+                prefix = "CO"
+                # Filter specifically for Junaid orders
+                last_order = SalesOrder.objects.filter(order_number__startswith='CO').order_by('-id').first()
+                start_number = 260001
+
+            if last_order and last_order.order_number:
+                # Strip letters to get the number
+                import re
+                numbers = re.findall(r'\d+', last_order.order_number)
+                if numbers:
+                    last_number = int(numbers[0])
+                    if last_number < start_number:
+                        new_number = start_number
+                    else:
+                        new_number = last_number + 1
+                else:
+                    new_number = start_number
+            else:
+                new_number = start_number
             
-            self.order_number = f"CO{new_number}"
+            self.order_number = f"{prefix}{new_number}"
 
         # Process image only if it's being updated
         if self.lpo_image and hasattr(self.lpo_image, 'file'):
@@ -224,9 +244,17 @@ class OrderItem(models.Model):
 
 #################################################  Quotation Models #################################################
 class Quotation(models.Model):
+
+    DIVISIONS = (
+        ('JUNAID', 'Junaid World'),
+        ('ALABAMA', 'Alabama'),
+    )
+
     quotation_number = models.CharField(max_length=20, unique=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     salesman = models.ForeignKey(Salesman, on_delete=models.SET_NULL, null=True, blank=True)
+
+    division = models.CharField(max_length=20, choices=DIVISIONS, default='JUNAID')
     quotation_date = models.DateField(auto_now_add=True)
     total_amount = models.FloatField(default=0.0)
     grand_total = models.FloatField(default=0.0)
@@ -240,16 +268,29 @@ class Quotation(models.Model):
     def save(self, *args, **kwargs):
         # Generate quotation number if not exists
         if not self.quotation_number:
-            last_quotation = Quotation.objects.order_by('-id').first()
+            # Logic for different prefixes based on division
+            if self.division == 'ALABAMA':
+                prefix = "ALQ"
+            else:
+                prefix = "QTN"
+
+            last_quotation = Quotation.objects.filter(quotation_number__startswith=prefix).order_by('-id').first()
+            
             if last_quotation and last_quotation.quotation_number:
                 try:
-                    last_number = int(last_quotation.quotation_number[3:])  # Remove "QTN" prefix
-                    new_number = last_number + 1
+                    # Strip prefix and get number
+                    import re
+                    numbers = re.findall(r'\d+', last_quotation.quotation_number)
+                    if numbers:
+                        new_number = int(numbers[0]) + 1
+                    else:
+                        new_number = 1001
                 except (ValueError, IndexError):
                     new_number = 1001
             else:
                 new_number = 1001
-            self.quotation_number = f"QTN{new_number}"
+            
+            self.quotation_number = f"{prefix}{new_number}"
         
         super().save(*args, **kwargs)
 
