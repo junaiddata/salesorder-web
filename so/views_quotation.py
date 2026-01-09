@@ -263,7 +263,7 @@ def view_quotations(request):
     else:
         quotations = Quotation.objects.all()
 
-        
+
     # Salesman restriction (same logic as SalesOrder)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
         salesman_name = request.user.first_name
@@ -924,7 +924,7 @@ def generate_alabama_quotation(buffer, quotation):
     
     # --- CONFIGURATION ---
     company_config = {
-        'name': "ALABAMA", # Or full legal name
+        'name': "ALABAMA BUILDING MATERIALS TRADING", # Or full legal name
         'address': "Dubai Investment Parks 2, Dubai, UAE",
         'contact': "Email: sales@alabamauae.com", # Update if needed
         'logo_url': "https://alabamauae.com/alabama4.png",
