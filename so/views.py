@@ -712,7 +712,7 @@ def view_sales_orders(request):
     all_salesmen = Salesman.objects.all().order_by('salesman_name')
 
     # Pagination - 12 items per page (3x4 grid layout)
-    paginator = Paginator(sales_orders.order_by('-order_date'), 12)
+    paginator = Paginator(sales_orders.order_by('-order_date_time'), 12)
     
     try:
         sales_orders_page = paginator.page(page)
