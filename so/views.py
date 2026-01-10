@@ -1240,7 +1240,12 @@ def logout_view(request):
 @role_required('Admin')
 @login_required
 def home(request):
-    total_orders = SalesOrder.objects.count()
+    if request.user.username.lower() == 'alabamaadmin':
+        total_orders = SalesOrder.objects.filter(division='ALABAMA').count()
+    elif request.user.username.lower() not in ['so','manager']:
+        total_orders = SalesOrder.objects.filter(division='JUNAID').count()
+    else:
+        total_orders = SalesOrder.objects.count()
     today = date.today()
     total_orders_today = SalesOrder.objects.filter(
         order_date__year=today.year,
