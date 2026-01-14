@@ -3230,19 +3230,10 @@ from .models import SAPQuotation, SAPQuotationItem  # adjust if your items model
 @login_required
 def export_sap_quotation_pdf(request, q_number):
     """
-    Generate a PDF for SAPQuotation using the same design as your other export,
-    with field-name adaptations.
+    Generate a PDF for SAPQuotation using the new Dynamic Template.
     """
-    # Fetch quotation (and optional scope check if you implemented per-user scoping)
+    # Fetch quotation
     quotation = get_object_or_404(SAPQuotation, q_number=q_number)
-
-    # Optionally enforce user scope (uncomment if you want to apply same restriction):
-    # from .views import salesman_scope_q
-    # if not (request.user.is_superuser or request.user.is_staff):
-    #     allowed = SAPQuotation.objects.filter(Q(pk=quotation.pk) & salesman_scope_q(request.user)).exists()
-    #     if not allowed:
-    #         return HttpResponse(status=404)
-
     items_qs = quotation.items.all().order_by('id')
 
     # Prepare HTTP response
@@ -3253,9 +3244,23 @@ def export_sap_quotation_pdf(request, q_number):
 
     buffer = BytesIO()
 
-    # --- PDF doc using your existing template ---
+    # --- 1. DEFINE DEFAULT CONFIG (Junaid Settings) ---
+    company_config = {
+        'name': "Junaid Sanitary & Electrical Trading LLC",
+        'address': "Dubai Investment Parks 2, Dubai, UAE",
+        'contact': "Email: sales@junaid.ae | Phone: +97142367723",
+        'logo_url': "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp",
+        'local_logo_path': os.path.join(settings.BASE_DIR, 'static', 'images', 'footer-logo.png.webp')
+    }
+    
+    # Default Green Theme
+    theme_config = {'primary': HexColor('#2C5530')}
+
+    # --- 2. INITIALIZE TEMPLATE WITH CONFIG ---
     doc = QuotationPDFTemplate(
         buffer,
+        company_config=company_config,  # <--- Passed here
+        theme_config=theme_config,      # <--- Passed here
         pagesize=A4,
         rightMargin=0.5*inch,
         leftMargin=0.5*inch,
@@ -3266,20 +3271,22 @@ def export_sap_quotation_pdf(request, q_number):
     elements = []
 
     # --- Title ---
-    elements.append(Spacer(1, -1.3*inch))  # Keep your lifted title position
+    elements.append(Spacer(1, -1.3*inch))
 
     title_table = Table(
         [[Paragraph('QUOTATION', styles['MainTitle'])]],
-        colWidths=[7.5*inch]  # single column
+        colWidths=[7.5*inch]
     )
     title_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        # Set text color to Theme Primary
+        ('TEXTCOLOR', (0, 0), (-1, -1), theme_config['primary']), 
     ]))
     elements.append(title_table)
     elements.append(Spacer(1, 0.1*inch))
 
     # --- Two-column info (Quotation / Customer) ---
-    main_table_width = 7.5 * inch
+    main_table_width = 7.2 * inch # Updated width to match new template logic
 
     quotation_data = [
         [Paragraph('Quotation Details', styles['SectionHeader'])],
@@ -3287,13 +3294,18 @@ def export_sap_quotation_pdf(request, q_number):
         [Paragraph(f"<b>Date:</b> {quotation.posting_date or '-'}", styles['Normal'])],
         [Paragraph(f"<b>BP Ref No:</b> {quotation.bp_reference_no or '—'}", styles['Normal'])],
     ]
+    
+    # Use theme color for background
+    bg_color = theme_config['primary']
+    
     quotation_info_table = Table(quotation_data, colWidths=[main_table_width / 2])
     quotation_info_table.setStyle(TableStyle([
         ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 2),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('BACKGROUND', (0, 0), (0, 0), HexColor('#4A7C59')),
+        ('BACKGROUND', (0, 0), (0, 0), bg_color), # Theme BG
+        ('TEXTCOLOR', (0, 0), (0, 0), white),     # White text on header
     ]))
 
     customer_data = [
@@ -3301,15 +3313,16 @@ def export_sap_quotation_pdf(request, q_number):
         [Paragraph(f"<b>Name:</b> {quotation.customer_name or '—'}", styles['Normal'])],
         [Paragraph(f"<b>Code:</b> {quotation.customer_code or '—'}", styles['Normal'])],
         [Paragraph(f"<b>Salesman:</b> {quotation.salesman_name or '—'}", styles['Normal'])],
-
     ]
+    
     customer_info_table = Table(customer_data, colWidths=[main_table_width / 2])
     customer_info_table.setStyle(TableStyle([
         ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 2),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('BACKGROUND', (0, 0), (0, 0), HexColor('#4A7C59')),
+        ('BACKGROUND', (0, 0), (0, 0), bg_color), # Theme BG
+        ('TEXTCOLOR', (0, 0), (0, 0), white),     # White text on header
     ]))
 
     info_table = Table([[quotation_info_table, customer_info_table]],
@@ -3329,14 +3342,10 @@ def export_sap_quotation_pdf(request, q_number):
 
     def _to_decimal(x):
         from decimal import Decimal
-        if x is None:
-            return Decimal('0')
-        if isinstance(x, Decimal):
-            return x
-        try:
-            return Decimal(str(x))
-        except Exception:
-            return Decimal('0')
+        if x is None: return Decimal('0')
+        if isinstance(x, Decimal): return x
+        try: return Decimal(str(x))
+        except Exception: return Decimal('0')
 
     subtotal = Decimal('0')
     for idx, it in enumerate(items_qs, 1):
@@ -3345,10 +3354,13 @@ def export_sap_quotation_pdf(request, q_number):
         row_total = _to_decimal(it.row_total) if it.row_total is not None else (qty * price)
         subtotal += row_total
 
+        # Use ItemDescription style
+        desc_para = Paragraph(it.description or '—', styles['ItemDescription'])
+
         items_data.append([
             str(idx),
             it.item_no or '—',
-            Paragraph(it.description or '—', styles['ItemDescription']),
+            desc_para,
             f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0",
             f"AED {price:,.2f}",
             f"AED {row_total:,.2f}",
@@ -3357,17 +3369,17 @@ def export_sap_quotation_pdf(request, q_number):
     items_table = Table(
         items_data,
         colWidths=[
-            main_table_width * 0.04,   # #
-            main_table_width * 0.16,   # Item No.
+            main_table_width * 0.05,   # #
+            main_table_width * 0.15,   # Item No.
             main_table_width * 0.43,   # Description
-            main_table_width * 0.09,   # Qty
-            main_table_width * 0.14,   # Unit Price
-            main_table_width * 0.14    # Total
+            main_table_width * 0.07,   # Qty
+            main_table_width * 0.15,   # Unit Price
+            main_table_width * 0.15    # Total
         ],
         repeatRows=1
     )
     items_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#2C5530')),
+        ('BACKGROUND', (0, 0), (-1, 0), bg_color), # Theme BG
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
@@ -3379,17 +3391,14 @@ def export_sap_quotation_pdf(request, q_number):
         ('ALIGN', (3, 1), (3, -1), 'CENTER'),
         ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
     ]))
-    items_table.canSplit = 1
-    items_table.hAlign = 'CENTER'
-
-    elements.append(items_table)                 # <— no wrapper
+    
+    elements.append(items_table)
     elements.append(Spacer(1, 0.1 * inch))
 
     # --- Summary (VAT 5%) ---
     tax_rate = Decimal('0.05')
     tax_amount = (subtotal * tax_rate).quantize(Decimal('0.01'))
     doc_total = _to_decimal(quotation.document_total)
-    # Prefer model total if present; else compute
     grand_total = doc_total if doc_total else (subtotal + tax_amount)
 
     summary_data = [
@@ -3405,9 +3414,10 @@ def export_sap_quotation_pdf(request, q_number):
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
         ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 2), (-1, 2), 12),
-        ('BACKGROUND', (0, 2), (-1, 2), HexColor('#2C5530')),
+        ('BACKGROUND', (0, 2), (-1, 2), bg_color), # Theme BG for Total
         ('TEXTCOLOR', (0, 2), (-1, 2), white),
     ]))
+    
     summary_wrapper = Table([[summary_table]], colWidths=[main_table_width])
     summary_wrapper.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
@@ -3417,14 +3427,14 @@ def export_sap_quotation_pdf(request, q_number):
     elements.append(KeepTogether(summary_wrapper))
     elements.append(Spacer(1, 0.3 * inch))
 
-    # --- Optional: remarks / terms (adapt if your SAP model has them) ---
-    # Example (comment out if not used):
-    # if getattr(quotation, 'remarks', None):
-    #     elements.extend([
-    #         Paragraph("Remarks:", styles['h3']),
-    #         Paragraph(quotation.remarks, styles['Normal']),
-    #         Spacer(1, 0.2 * inch)
-    #     ])
+    # --- Optional: remarks / terms ---
+    if getattr(quotation, 'remarks', None):
+        elements.extend([
+            Paragraph("Remarks:", styles['h3']),
+            Paragraph(quotation.remarks, styles['Normal']),
+            Spacer(1, 0.2 * inch)
+        ])
+        
     elements.extend([
         Paragraph("Terms & Conditions:", styles['h3']),
         Paragraph("1. This quotation is valid for 30 days from the date of issue.", styles['Normal']),
