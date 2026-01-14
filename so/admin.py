@@ -19,6 +19,8 @@ class IgnoreListAdmin(admin.ModelAdmin):
 admin.site.register(QuotationItem)
 admin.site.register(SAPQuotation)
 admin.site.register(SAPQuotationItem)
+admin.site.register(SAPSalesorder)
+admin.site.register(SAPSalesorderItem)
 admin.site.register(OpenSalesOrder)
 admin.site.register(TrustedDevice)
 

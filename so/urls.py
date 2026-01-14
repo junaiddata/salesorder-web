@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from so.views import *
 from . import views_quotation
+from . import sap_salesorder_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -86,6 +87,15 @@ urlpatterns += [
     path('update-device-location/', update_device_location, name='update_device_location'),
         # 1. Export the List (Summary)
     path('quotations/export-list/', views.export_quotation_list_pdf, name='export_quotation_list_pdf'),
+
+    # SAP Salesorder URLs
+    path('sapsalesorders/upload/', sap_salesorder_views.upload_salesorders, name='upload_salesorders'),
+    path('sapsalesorders/', sap_salesorder_views.salesorder_list, name='salesorder_list'),
+    path('sapsalesorders/ajax/', sap_salesorder_views.salesorder_search, name='salesorder_search'),
+    path('sapsalesorders/<str:so_number>/', sap_salesorder_views.salesorder_detail, name='salesorder_detail'),
+    path('sapsalesorders/<str:so_number>/export/', sap_salesorder_views.export_sap_salesorder_pdf, name='export_sap_salesorder_pdf'),
+    path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
+    path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
 
 
 
