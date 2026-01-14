@@ -395,12 +395,25 @@
       <button class="btn" type="submit">Apply</button>
     </div>
     <div class="totals">
-  <span>
-    Total Value: 
-    <strong id="total-value">
-      {{ total_value|default:0|floatformat:2 }}
-    </strong>
-  </span>
+<div style="margin-top: 10px; font-size: 1.1em;">
+    <!-- Grand Total -->
+    <span style="margin-right: 20px;">
+        Total Value: 
+        <strong id="total-value">{{ total_value|default:0|floatformat:2 }}</strong>
+    </span>
+
+    <!-- 2025 Total -->
+    <span style="margin-right: 20px; color: #6c757d;"> <!-- Gray Color -->
+        2025: 
+        <strong>{{ total_2025|default:0|floatformat:2 }}</strong>
+    </span>
+
+    <!-- 2026 Total -->
+    <span style="color: #28a745;"> <!-- Green Color -->
+        2026: 
+        <strong>{{ total_2026|default:0|floatformat:2 }}</strong>
+    </span>
+</div>
 </div>
   </form>
 </div>

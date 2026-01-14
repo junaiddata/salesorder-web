@@ -2771,7 +2771,7 @@ def quotation_list(request):
             return datetime.strptime(s, '%Y-%m-%d').date()
         except ValueError:
             return None
-
+    qs_for_years = qs.all() 
     start_date = parse_date(start)
     end_date = parse_date(end)
     if start_date:
@@ -2779,10 +2779,26 @@ def quotation_list(request):
     if end_date:
         qs = qs.filter(posting_date__lte=end_date)
 
-    # --- ✅ TOTAL VALUE FOR CURRENT FILTERS ---
-    total_value = qs.aggregate(
+
+    # ---------------------------------------------------------
+    # 6. CALCULATIONS
+    # ---------------------------------------------------------
+    
+    # A. Calculate Grand Total from 'qs' (Respects Date + All Filters)
+    grand_total_agg = qs.aggregate(
         total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
-    )['total']
+    )
+    total_value = grand_total_agg['total']
+
+    # B. Calculate Years from 'qs_for_years' (Respects Salesman/Status, IGNORES Date)
+    yearly_agg = qs_for_years.aggregate(
+        total_2025=Coalesce(Sum('document_total', filter=Q(posting_date__year=2025)), Value(0, output_field=DecimalField())),
+        total_2026=Coalesce(Sum('document_total', filter=Q(posting_date__year=2026)), Value(0, output_field=DecimalField())),
+    )
+    total_2025 = yearly_agg['total_2025']
+    total_2026 = yearly_agg['total_2026']
+
+
 
     qs = qs.order_by('-posting_date', '-created_at')
 
@@ -2809,6 +2825,8 @@ def quotation_list(request):
     return render(request, 'quotes/quotation_list.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
+        'total_2025': total_2025,      # ✅ send to template
+        'total_2026': total_2026,      # ✅ send to template
         'salesmen': salesmen,
         'total_value': total_value,      # ✅ send to template
         'filters': {
