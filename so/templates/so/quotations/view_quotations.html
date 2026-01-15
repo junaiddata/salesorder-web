@@ -404,13 +404,14 @@
                 <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
                     <div class="input-group">
                         <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
-                        <input type="text" class="form-control" placeholder="Search quotations..." id="searchQuotations">
+                        <input type="text" class="form-control" placeholder="Search quotations..." id="searchQuotations" value="{{ search_query|default:'' }}">
                     </div>
                 </div>
 
 <div class="col-lg-9 col-md-6">
-    <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end">
-        <!-- Remove the hidden status input - we'll use the tabs for status -->
+    <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end" id="quotationFiltersForm">
+        <input type="hidden" name="status" id="qStatusHidden" value="{{ current_status|default:'All' }}">
+        <input type="hidden" name="q" id="qSearchHidden" value="{{ search_query|default:'' }}">
         
         <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
             <label for="startDate" class="form-label mb-0 me-2 d-none d-sm-block">From:</label>
@@ -434,6 +435,15 @@
             </select>
         </div>
         {% endif %}
+
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <label for="divisionFilter" class="form-label mb-0 me-2 d-none d-sm-block">Division:</label>
+            <select class="form-select form-select-sm" id="divisionFilter" name="division">
+                <option value="All" {% if selected_division == 'All' or not selected_division %}selected{% endif %}>All</option>
+                <option value="JUNAID" {% if selected_division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                <option value="ALABAMA" {% if selected_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+            </select>
+        </div>
 
         <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
         <a href="{% url 'view_quotations' %}" class="btn btn-outline-secondary btn-sm mb-2 mb-lg-0">Reset</a>
@@ -465,198 +475,104 @@
 
 
         <!-- Quotations List -->
-        <div class="quotations-container"> 
-            {% if quotations %}
-                <div class="row">
-                    {% for quotation in quotations %}
-                    <div class="col-lg-4 col-md-6 mb-3" id="quotation-card-{{ quotation.id }}">
-                        <div class="quotation-card 
-                        {% if quotation.division == 'ALABAMA' %}alabama-watermark{% else %}junaid-watermark{% endif %}
-                            {% if quotation.status == 'Approved' %}approved
-                            {% elif quotation.status == 'Hold by A/c' %}hold
-                            {% elif quotation.status == 'SO Created' %}created
-                            {% else %}pending{% endif %}">
-                            
-                            <!-- Header -->
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-                                <div>
-                                    <h5 class="mb-1">Quotation #{{ quotation.quotation_number }}</h5>
-                                    <span class="quotation-date">{{ quotation.quotation_date|date:"M d, Y" }}</span>
-                                </div>
-                                <span class="status-badge status-{{ quotation.id }}
-                                    {% if quotation.status == 'Approved' %}badge-approved
-                                    {% elif quotation.status == 'On Hold' %}badge-hold
-                                    {% else %}badge-pending{% endif %}">
-                                    {{ quotation.status }}
-                                </span>
-                            </div>
-
-                            <!-- Customer Info -->
-                            <div class="mb-3">
-                                <p class="customer-name mb-1">{{ quotation.customer.customer_name }}</p>
-                                {% if quotation.salesman %}
-                                    <p class="salesman-name mb-0">({{ quotation.salesman.salesman_name }})</p>
-                                {% endif %}
-                            </div>
-
-                            <!-- Footer Actions -->
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="total-amount">AED {{ quotation.total_amount|floatformat:2 }}</div>
-                                <div>
-                                    <div>
-                                    <a href="{% url 'view_quotation_details' quotation.id %}" 
-                                       class="btn btn-sm btn-outline-secondary">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    </div>
-
-
-
-                                    {% if quotation.quotation_status == "Pending" %}
-                                        <a href="{% url 'edit_quotation' quotation.id %}" 
-                                           class="btn btn-sm btn-outline-primary edit-btn ms-1">
-                                            <i class="fas fa-edit me-1"></i>Edit
-                                        </a>
-                                    {% endif %}
-
-                                    <!-- Mark as Converted Button -->
-                                    <!-- {% if quotation.quotation_status != "Converted" and quotation.quotation_status == "Approved" %}
-                                        <button class="btn btn-sm btn-success ms-1 mark-converted-btn" 
-                                                data-id="{{ quotation.id }}">
-                                            Mark as Converted
-                                        </button>
-                                    {% endif %} -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                
-                <!-- Pagination Section -->
-                {% if quotations.paginator.num_pages > 1 %}
-                <div class="pagination-section mt-5">
-                    <nav aria-label="Quotations pagination">
-                        <ul class="pagination justify-content-center">
-                            <!-- First Page -->
-                            {% if quotations.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=1{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="First">
-                                        <i class="fas fa-angle-double-left"></i>
-                                    </a>
-                                </li>
-                                <!-- Previous Page -->
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ quotations.previous_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Previous">
-                                        <i class="fas fa-angle-left"></i>
-                                    </a>
-                                </li>
-                            {% else %}
-                                <li class="page-item disabled">
-                                    <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
-                                </li>
-                                <li class="page-item disabled">
-                                    <span class="page-link"><i class="fas fa-angle-left"></i></span>
-                                </li>
-                            {% endif %}
-
-                            <!-- Page numbers with ellipsis -->
-                            {% for num in quotations.paginator.page_range %}
-                                {% if num == quotations.number %}
-                                    <li class="page-item active">
-                                        <span class="page-link">{{ num }}</span>
-                                    </li>
-                                {% elif num > quotations.number|add:'-3' and num < quotations.number|add:'3' %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
-                                    </li>
-                                {% elif num == 1 or num == quotations.paginator.num_pages %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
-                                    </li>
-                                {% elif num == quotations.number|add:'-3' or num == quotations.number|add:'3' %}
-                                    <li class="page-item disabled">
-                                        <span class="page-link">...</span>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
-
-                            <!-- Next Page -->
-                            {% if quotations.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ quotations.next_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Next">
-                                        <i class="fas fa-angle-right"></i>
-                                    </a>
-                                </li>
-                                <!-- Last Page -->
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ quotations.paginator.num_pages }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Last">
-                                        <i class="fas fa-angle-double-right"></i>
-                                    </a>
-                                </li>
-                            {% else %}
-                                <li class="page-item disabled">
-                                    <span class="page-link"><i class="fas fa-angle-right"></i></span>
-                                </li>
-                                <li class="page-item disabled">
-                                    <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                    
-                    <!-- Page info -->
-                    <div class="text-center text-muted mt-2">
-                        <small>
-                            Showing {{ quotations.start_index }} - {{ quotations.end_index }} of {{ quotations.paginator.count }} quotations
-                            {% if current_status and current_status != 'All' %}
-                                <span class="badge bg-primary ms-2">{{ current_status }}</span>
-                            {% endif %}
-                        </small>
-                    </div>
-                </div>
-                {% endif %}
-                
-            {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
-                    <h4 class="text-muted">No Quotations Found</h4>
-                    <p class="text-muted">
-                        {% if current_status and current_status != 'All' %}
-                            There are no {{ current_status }} quotations matching your criteria
-                        {% else %}
-                            There are no quotations matching your criteria
-                        {% endif %}
-                    </p>
-                    <a href="{% url 'create_quotation' %}" class="btn btn-primary mt-2">
-                        <i class="fas fa-plus-circle me-1"></i> Create New Quotation
-                    </a>
-                    {% if current_status and current_status != 'All' %}
-                        <a href="?status=All" class="btn btn-outline-secondary mt-2 ms-2">
-                            View All Quotations
-                        </a>
-                    {% endif %}
-                </div>
-            {% endif %}
+        <div class="quotations-container" id="quotationsContainer">
+            {% include 'so/quotations/_quotations_results.html' with quotations=quotations current_status=current_status selected_salesman=selected_salesman selected_division=selected_division start_date=start_date end_date=end_date query_string=query_string %}
         </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    // Simple search functionality
-    document.getElementById('searchQuotations').addEventListener('keyup', function() {
-        const searchText = this.value.toLowerCase();
-        const quotationCards = document.querySelectorAll('.quotation-card');
-        
-        quotationCards.forEach(card => {
-            const quotationText = card.textContent.toLowerCase();
-            if (quotationText.includes(searchText)) {
-                card.parentElement.style.display = 'block';
-            } else {
-                card.parentElement.style.display = 'none';
-            }
+    // AJAX search + filters (backend)
+    const quotationsContainer = document.getElementById('quotationsContainer');
+    const searchInput = document.getElementById('searchQuotations');
+    const filtersForm = document.getElementById('quotationFiltersForm');
+    const statusHidden = document.getElementById('qStatusHidden');
+    const searchHidden = document.getElementById('qSearchHidden');
+    const divisionFilter = document.getElementById('divisionFilter');
+    const salesmanFilter = document.getElementById('salesmanFilter');
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+
+    function debounce(fn, delay) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), delay);
+      };
+    }
+
+    function collectParams(overrides = {}) {
+      const params = new URLSearchParams();
+      params.set('status', statusHidden ? (statusHidden.value || 'All') : 'All');
+      params.set('start_date', startDate ? (startDate.value || '') : '');
+      params.set('end_date', endDate ? (endDate.value || '') : '');
+      params.set('salesman_filter', salesmanFilter ? (salesmanFilter.value || '') : '');
+      params.set('division', divisionFilter ? (divisionFilter.value || 'All') : 'All');
+      params.set('q', searchInput ? (searchInput.value || '') : '');
+      params.set('page', '1');
+      Object.entries(overrides).forEach(([k, v]) => params.set(k, v));
+      return params;
+    }
+
+    function loadQuotations(params) {
+      quotationsContainer.style.opacity = '0.6';
+      const url = '{% url "view_quotations_ajax" %}?' + params.toString();
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+        .then(r => r.json())
+        .then(data => {
+          quotationsContainer.innerHTML = data.html;
+          quotationsContainer.style.opacity = '1';
+          if (searchHidden) searchHidden.value = searchInput.value || '';
+        })
+        .catch(err => {
+          quotationsContainer.style.opacity = '1';
+          console.error(err);
         });
+    }
+
+    if (filtersForm) {
+      filtersForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadQuotations(collectParams({ page: '1' }));
+      });
+    }
+
+    [divisionFilter, salesmanFilter, startDate, endDate].filter(Boolean).forEach(el => {
+      el.addEventListener('change', () => loadQuotations(collectParams({ page: '1' })));
+    });
+
+    if (searchInput) {
+      searchInput.addEventListener('input', debounce(() => {
+        loadQuotations(collectParams({ page: '1' }));
+      }, 250));
+    }
+
+    // Pagination click -> AJAX
+    document.addEventListener('click', function(e) {
+      const a = e.target.closest('.pagination a.page-link');
+      if (!a) return;
+      const href = a.getAttribute('href') || '';
+      if (!href.includes('page=')) return;
+      e.preventDefault();
+      const url = new URL(href, window.location.origin);
+      const page = url.searchParams.get('page') || '1';
+      loadQuotations(collectParams({ page }));
+    });
+
+    // Tabs -> AJAX (prevent full reload)
+    document.querySelectorAll('.nav-tabs a.nav-link').forEach(link => {
+      link.addEventListener('click', function(e) {
+        const href = this.getAttribute('href') || '';
+        if (!href.startsWith('?')) return;
+        e.preventDefault();
+        const url = new URL(href, window.location.origin);
+        const status = url.searchParams.get('status') || 'All';
+        if (statusHidden) statusHidden.value = status;
+        document.querySelectorAll('.nav-tabs a.nav-link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        loadQuotations(collectParams({ page: '1' }));
+      });
     });
     
     // Update active tab based on current status

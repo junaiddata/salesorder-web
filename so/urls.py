@@ -12,6 +12,7 @@ urlpatterns = [
     path('get_items_by_firm/', views.get_items_by_firm, name='get_items_by_firm'),
     path('get_item_stock/', views.get_item_stock, name='get_item_stock'),
     path('sales-orders/', views.view_sales_orders, name='view_sales_orders'),
+    path('sales-orders/ajax/', views.view_sales_orders_ajax, name='view_sales_orders_ajax'),
     path('sales-order-details/<int:order_id>/', views.view_sales_order_details, name='view_sales_order_details'),
     path('get_customers_by_salesman/', views.get_customers_by_salesman, name='get_customers_by_salesman'),
     path('get_item_price/', views.get_item_price, name='get_item_price'),
@@ -69,6 +70,7 @@ urlpatterns = [
 
     # Quotation URLs
     path('quotations/', views_quotation.view_quotations, name='view_quotations'),
+    path('quotations/ajax/', views_quotation.view_quotations_ajax, name='view_quotations_ajax'),
     path('quotations/create/', views_quotation.create_quotation, name='create_quotation'),
     path('quotations/<int:quotation_id>/details/', views_quotation.view_quotation_details, name='view_quotation_details'),
     path('quotations/<int:quotation_id>/edit/', views_quotation.edit_quotation, name='edit_quotation'),
@@ -94,6 +96,7 @@ urlpatterns += [
     path('sapsalesorders/ajax/', sap_salesorder_views.salesorder_search, name='salesorder_search'),
     path('sapsalesorders/<str:so_number>/', sap_salesorder_views.salesorder_detail, name='salesorder_detail'),
     path('sapsalesorders/<str:so_number>/export/', sap_salesorder_views.export_sap_salesorder_pdf, name='export_sap_salesorder_pdf'),
+    path('sapsalesorders/<str:so_number>/export-open/', sap_salesorder_views.export_sap_salesorder_open_items_pdf, name='export_sap_salesorder_open_items_pdf'),
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
     path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
 

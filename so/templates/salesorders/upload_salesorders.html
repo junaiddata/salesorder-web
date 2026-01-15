@@ -3,237 +3,340 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Upload Salesorders</title>
+  <title>Upload Sales Orders</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{
-      /* Light palette matching your other pages */
-      --bg: #d9e0e4;
-      --bg-soft: #eef2f6;
-      --panel: #ffffff;
-      --panel-2: #f8fafc;
-      --text: #02050c;
-      --muted: #3f4752;
-      --brand: #6366f1;
-      --brand-2:#8b5cf6;
-      --accent:#1d0a7a;
-      --ok:#10b981;
-      --warn:#f59e0b;
-      --error:#b00020;
-      --border: rgba(2,5,12,.12);
-      --shadow: 0 6px 20px rgba(2,5,12,.08);
-      --radius: 16px;
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --error: #ef4444;
+      --error-light: #fef2f2;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
     }
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans";
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
       color: var(--text);
-      background:
-        radial-gradient(900px 300px at -10% -10%, rgba(99,102,241,.08), transparent 40%),
-        radial-gradient(700px 280px at 110% 10%, rgba(139,92,246,.08), transparent 45%),
-        var(--bg);
-      line-height:1.5;
+      line-height: 1.5;
+      min-height: 100vh;
     }
 
-    .wrap{
-      max-width: 900px;
-      margin: 28px auto 60px;
-      padding: 0 16px;
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
     }
 
-    .page-head{
-      display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;
-      margin-bottom: 16px;
-    }
-    .title{
-      font-weight: 800;
-      font-size: clamp(22px, 3.2vw, 32px);
-      letter-spacing:.2px;
-      color: var(--accent);
-    }
-    .subtitle{ color: var(--muted); margin-top: 4px; }
-
-    .panel{
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow:hidden;
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
     }
 
-    .section{
-      padding:16px;
-      border-bottom:1px solid var(--border);
-      background: linear-gradient(180deg, #fff, var(--panel-2));
-    }
-    .section:last-child{ border-bottom:0 }
-
-    .messages{
-      margin: 8px 0 0; padding-left:18px; color: var(--error);
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
     }
 
-    .upload{
-      padding:18px 16px;
-      display:grid; gap:16px;
-      grid-template-columns: 1fr;
+    .header p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 4px;
     }
 
-    .drop{
-      border:2px dashed rgba(2,5,12,.18);
-      border-radius: 14px;
-      background: linear-gradient(180deg, #fff, #f7f9fc);
-      padding: 22px;
-      text-align:center;
-      transition: border-color .15s ease, background .15s ease, transform .1s ease;
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      font-family: inherit;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
     }
-    .drop.dragover{
-      border-color: rgba(99,102,241,.6);
-      background: #eef2ff;
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
       transform: translateY(-1px);
     }
-    .drop input[type="file"]{
-      display:none;
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
     }
-    .drop .big{
-      font-weight: 800;
-      font-size: 1.05rem;
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Messages */
+    .messages {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: var(--error-light);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--error);
+    }
+
+    .messages ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .messages li {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    /* Dropzone */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      background: var(--surface-alt);
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .dropzone-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      color: var(--text-muted);
+    }
+
+    .dropzone-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .dropzone-hint {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .dropzone input[type="file"] {
+      display: none;
+    }
+
+    .file-name {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--primary-light);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      color: var(--primary-dark);
+      font-weight: 500;
+      display: none;
+    }
+
+    /* Actions */
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    /* Info Cards */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 640px) {
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .info-card {
+      padding: 20px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+    }
+
+    .info-card h3 {
+      font-size: 0.938rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .info-card ol, .info-card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .info-card li {
+      font-size: 0.813rem;
+      color: var(--text-secondary);
       margin-bottom: 6px;
     }
-    .drop .hint{ color: var(--muted); font-size:.92rem }
 
-    .btns{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .btn{
-      appearance:none; border:none; cursor:pointer;
-      padding:10px 14px; border-radius:12px;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      color:#fff; font-weight:700; text-decoration:none;
-      display:inline-flex; align-items:center; gap:8px;
-      box-shadow: var(--shadow);
-      transition: transform .15s ease, filter .15s ease;
+    .info-card .hint {
+      margin-top: 12px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
     }
-    .btn.secondary{
-      background: linear-gradient(180deg, #fff, #f8fafc);
-      color: var(--accent);
-      border:1px solid var(--border);
-    }
-    .btn:hover{ transform: translateY(-1px); filter: saturate(1.05) }
-    .btn:active{ transform: translateY(0) }
 
-    .meta{
-      background: var(--bg-soft);
-      border-top:1px solid var(--border);
-      padding: 12px 16px;
-      color: var(--muted);
-      font-size:.92rem;
+    /* Sheet info */
+    .sheet-info {
+      margin-top: 20px;
+      padding: 14px 16px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      color: var(--text-secondary);
     }
-    .meta b{ color: var(--text) }
 
-    .cols{
-      display:grid; gap:12px; grid-template-columns: 1fr;
-      padding: 12px 16px 18px;
-    }
-    @media (min-width: 720px){
-      .cols{ grid-template-columns: 1fr 1fr; }
-    }
-    .card{
-      border:1px solid var(--border);
-      border-radius: 14px;
-      background:#fff;
-      padding: 12px 14px;
-    }
-    .card h3{
-      margin: 0 0 8px; font-size: 1rem; color: var(--accent);
-    }
-    .req{
-      margin:0; padding-left: 18px; line-height:1.6;
-    }
-    .fine{ color: var(--muted); font-size:.9rem; margin-top:6px; }
-
-    .file-name{
-      color: var(--muted); font-size:.95rem; margin: 0;
-      word-break: break-all;
+    .sheet-info strong {
+      color: var(--text);
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <div class="title">Upload Salesorders</div>
-        <div class="subtitle">Excel → SAP "Salesorder - ITEMWISE"</div>
-      </div>
-      <div class="btns">
-        <a class="btn secondary" href="{% url 'salesorder_list' %}">View Salesorders</a>
-      </div>
+  <div class="container">
+    <header class="header">
+      <h1>Upload Sales Orders</h1>
+      <p>Import SAP Sales Orders from Excel</p>
     </header>
 
-    <div class="panel">
-      <div class="section">
+    <div class="card">
+      <div class="card-body">
         {% if messages %}
-          <ul class="messages">
-            {% for m in messages %}<li>{{ m }}</li>{% endfor %}
-          </ul>
-        {% endif %}
-      </div>
-
-      <form method="post" enctype="multipart/form-data" class="upload" id="upload-form">
-        {% csrf_token %}
-
-        <!-- drag & drop -->
-        <label class="drop" id="dropzone">
-          <div class="big">Drag & drop your Excel file here</div>
-          <div class="hint">or click to choose <b>.xls</b> or <b>.xlsx</b></div>
-          <input id="excel-input" type="file" name="excel_file" accept=".xls,.xlsx" required />
-        </label>
-
-        <p id="file-name" class="file-name" style="display:none;"></p>
-
-        <div class="btns">
-          <button class="btn" type="submit">Upload</button>
-          <a class="btn secondary" href="{% url 'salesorder_list' %}">Back to List</a>
-        </div>
-
-        <div class="meta">
-          Expected sheet: <b>Salesorder - ITEMWISE</b>
-        </div>
-
-        <div class="cols">
-          <div class="card">
-            <h3>Required columns</h3>
-            <ol class="req">
-              <li>Internal Number</li>
-              <li>Document Number</li>
-              <li>Posting Date</li>
-              <li>Customer/Supplier No.</li>
-              <li>Customer/Supplier Name</li>
-              <li>Sales Employee Name</li>
-              <li>Brand</li>
-              <li>BP Reference No.</li>
-              <li>Item No.</li>
-              <li>Item/Service Description</li>
-              <li>Quantity</li>
-              <li>Price</li>
-              <li>Row Total</li>
-              <li>Document Total</li>
-              <li>Status</li>
-            </ol>
-            <p class="fine">Tip: headers should match exactly (case & spacing).</p>
-          </div>
-
-          <div class="card">
-            <h3>Notes</h3>
-            <ul class="req">
-              <li>Dates like <b>11.01.2015</b> are supported.</li>
-              <li>Numbers can contain commas; we'll normalize them.</li>
-              <li>Document Number groups rows into one salesorder.</li>
-              <li>Existing items for a salesorder are replaced on re-upload.</li>
+          <div class="messages">
+            <ul>
+              {% for m in messages %}<li>{{ m }}</li>{% endfor %}
             </ul>
-            <p class="fine">Need a sample? Export one from your SAP report and keep column names.</p>
           </div>
-        </div>
-      </form>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" id="upload-form">
+          {% csrf_token %}
+
+          <label class="dropzone" id="dropzone">
+            <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+            <div class="dropzone-title">Drop your Excel file here</div>
+            <div class="dropzone-hint">or click to browse (.xls, .xlsx)</div>
+            <input id="excel-input" type="file" name="excel_file" accept=".xls,.xlsx" required />
+          </label>
+
+          <p id="file-name" class="file-name"></p>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              Upload
+            </button>
+            <a class="btn btn-secondary" href="{% url 'salesorder_list' %}">Cancel</a>
+          </div>
+
+          <div class="sheet-info">
+            Expected sheet: <strong>Salesorder - ITEMWISE</strong>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <h3>Required Columns</h3>
+              <ol>
+                <li>Document Number</li>
+                <li>Posting Date</li>
+                <li>BP Reference No.</li>
+                <li>Customer/Supplier No.</li>
+                <li>Customer/Supplier Name</li>
+                <li>Row Status</li>
+                <li>Job Type</li>
+                <li>Item No.</li>
+                <li>Item/Service Description</li>
+                <li>Manufacture</li>
+                <li>Quantity</li>
+                <li>Row Total</li>
+                <li>Remaining Open Quantity</li>
+                <li>Pending Amount</li>
+                <li>Sales Employee</li>
+                <li>Total available Stock</li>
+                <li>Dip warehouse stock</li>
+              </ol>
+              <p class="hint">Headers must match exactly (case & spacing)</p>
+            </div>
+
+            <div class="info-card">
+              <h3>Notes</h3>
+              <ul>
+                <li>Dates like <strong>11.01.2025</strong> are supported</li>
+                <li>Numbers with commas are normalized automatically</li>
+                <li>Document Number groups rows into one sales order</li>
+                <li>Existing items are replaced on re-upload</li>
+                <li>Status = <strong>Open</strong> if any line is Open</li>
+              </ul>
+              <p class="hint">Export from SAP and keep column names unchanged</p>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -244,41 +347,41 @@
       const fileName = document.getElementById('file-name');
 
       function setFileName(name){
-        fileName.textContent = "Selected file: " + name;
+        fileName.textContent = "Selected: " + name;
         fileName.style.display = 'block';
       }
 
-      // Click → open file dialog
       drop.addEventListener('click', () => input.click());
 
-      // Input change
       input.addEventListener('change', (e) => {
         const f = e.target.files && e.target.files[0];
         if (f) setFileName(f.name);
       });
 
-      // Drag & drop
       ['dragenter','dragover'].forEach(ev => {
         drop.addEventListener(ev, (e) => {
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           drop.classList.add('dragover');
-        })
+        });
       });
+
       ['dragleave','drop'].forEach(ev => {
         drop.addEventListener(ev, (e) => {
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           drop.classList.remove('dragover');
-        })
+        });
       });
+
       drop.addEventListener('drop', (e) => {
         const dt = e.dataTransfer;
         if (!dt || !dt.files || dt.files.length === 0) return;
         const f = dt.files[0];
-        if (!/\.xlsx?$/.test(f.name.toLowerCase())){
+        if (!/\.xlsx?$/i.test(f.name)){
           alert('Please drop an .xls or .xlsx file.');
           return;
         }
-        // Assign to input so it submits with the form
         input.files = dt.files;
         setFileName(f.name);
       });

@@ -1,17 +1,27 @@
 {% if page_obj.paginator.num_pages > 1 %}
-<div class="pagination" style="margin-top:1rem; display:flex; gap:8px; flex-wrap: wrap;">
+<div class="pagination">
   {% if page_obj.has_previous %}
-    <a href="#" data-page="{{ page_obj.previous_page_number }}" class="button" style="padding:6px 10px;">Prev</a>
+    <a href="#" data-page="{{ page_obj.previous_page_number }}">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+    </a>
   {% else %}
-    <span class="button" style="opacity:.5; cursor:default; padding:6px 10px;">Prev</span>
+    <span class="disabled">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+    </span>
   {% endif %}
 
-  <span style="align-self:center;">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} items)</span>
+  <span style="padding:0 8px;color:var(--text-secondary,#64748b);font-size:0.875rem;">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+  </span>
 
   {% if page_obj.has_next %}
-    <a href="#" data-page="{{ page_obj.next_page_number }}" class="button" style="padding:6px 10px;">Next</a>
+    <a href="#" data-page="{{ page_obj.next_page_number }}">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+    </a>
   {% else %}
-    <span class="button" style="opacity:.5; cursor:default; padding:6px 10px;">Next</span>
+    <span class="disabled">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+    </span>
   {% endif %}
 </div>
 {% endif %}

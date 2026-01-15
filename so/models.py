@@ -357,6 +357,7 @@ class SAPSalesorder(models.Model):
     brand = models.CharField(max_length=255, blank=True, null=True)
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    row_total_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
@@ -381,6 +382,13 @@ class SAPSalesorderItem(models.Model):
     quantity = models.DecimalField(max_digits=12, decimal_places=2)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     row_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    row_status = models.CharField(max_length=50, blank=True, null=True)
+    job_type = models.CharField(max_length=255, blank=True, null=True)
+    manufacture = models.CharField(max_length=255, blank=True, null=True)
+    remaining_open_quantity = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    pending_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    total_available_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    dip_warehouse_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
     def __str__(self):
         return f"{self.salesorder.so_number} - {self.description}"

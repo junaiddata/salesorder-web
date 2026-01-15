@@ -401,13 +401,14 @@
         <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
             <div class="input-group">
                 <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
-                <input type="text" class="form-control" placeholder="Search orders..." id="searchOrders">
+                <input type="text" class="form-control" placeholder="Search orders..." id="searchOrders" value="{{ search_query|default:'' }}">
             </div>
         </div>
 
         <div class="col-lg-9 col-md-6">
-            <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end">
+            <form method="GET" class="d-flex flex-wrap align-items-center justify-content-lg-end" id="filtersForm">
                 <input type="hidden" name="status" value="{{ current_status }}">
+                <input type="hidden" name="q" id="qHidden" value="{{ search_query|default:'' }}">
                 
                 <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
                     <label for="startDate" class="form-label mb-0 me-2 d-none d-sm-block">From:</label>
@@ -431,6 +432,15 @@
                     </select>
                 </div>
                 {% endif %}
+
+                <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+                    <label for="divisionFilter" class="form-label mb-0 me-2 d-none d-sm-block">Division:</label>
+                    <select class="form-select form-select-sm" id="divisionFilter" name="division">
+                        <option value="All" {% if selected_division == 'All' or not selected_division %}selected{% endif %}>All</option>
+                        <option value="JUNAID" {% if selected_division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                        <option value="ALABAMA" {% if selected_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+                    </select>
+                </div>
 
                 <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
                 <a href="{% url 'view_sales_orders' %}" class="btn btn-outline-secondary btn-sm mb-2 mb-lg-0">Reset</a>
@@ -465,203 +475,117 @@
 </div>
 
 <!-- Orders List -->
-<div class="orders-container">
-    {% if sales_orders %}
-        <div class="row">
-            {% for order in sales_orders %}
-            <div class="col-lg-4 col-md-6 mb-3" id="order-card-{{ order.id }}">
-                <div class="order-card 
-                {% if order.division == 'ALABAMA' %}alabama-watermark{% else %}junaid-watermark{% endif %}
-                    {% if order.order_status == 'Approved' %}approved
-                    {% elif order.order_status == 'Hold by A/c' %}hold
-                    {% elif order.order_status == 'SO Created' %}created
-                    {% else %}pending{% endif %}">
-                    
-                    <!-- Header -->
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        <div>
-                            <h5 class="mb-1">Order #{{ order.order_number }}</h5>
-                            {% if order.id >= 111 %}
-                                <!-- New rows with DateTimeField -->
-                                <span class="order-date">{{ order.order_date_time|date:"M j, g:i a" }}</span>
-                            {% else %}
-                                <!-- Old rows with only DateField -->
-                                <span class="order-date">{{ order.order_date|date:"M j, Y" }}</span>
-                            {% endif %}
-
-                        </div>
-                         <div>
-                             {{ order.salesman_remarks|default:"No remarks" }}
-                        </div>
-                        <span class="status-badge status-{{ order.id }}
-                            {% if order.order_status == 'Approved' %}badge-approved
-                            {% elif order.order_status == 'Hold by A/c' %}badge-hold
-                            {% elif order.order_status == 'SO Created' %}badge-success
-                            {% else %}badge-pending{% endif %}">
-                            {{ order.order_status }}
-                        </span>
-                    </div>
-
-                    <!-- Customer Info -->
-                    <div class="mb-3">
-                        <p class="customer-name mb-1">{{ order.customer.customer_name }}</p>
-                        {% if order.salesman %}
-                            <p class="salesman-name mb-0">({{ order.salesman.salesman_name }})</p>
-                        {% endif %}
-                    </div>
-
-                    <!-- Footer Actions -->
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="total-amount">AED {{ order.total_amount|floatformat:2 }}</div>
-                        <div>
-                            <a href="{% url 'view_sales_order_details' order.id %}" 
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="fas fa-eye"></i>
-                            </a>
-
-                            {% if order.order_status == "Pending" %}
-                                <a href="{% url 'edit_sales_order' order.id %}" 
-                                   class="btn btn-sm btn-outline-primary edit-btn ms-1">
-                                    <i class="fas fa-edit me-1"></i>Edit
-                                </a>
-                            {% endif %}
-
-                            <!-- Mark as SO Created Button -->
-                            {% if order.order_status != "SO Created" and order.order_status == "Approved" %}
-                                <button class="btn btn-sm btn-success ms-1 mark-so-btn" 
-                                        data-id="{{ order.id }}">
-                                    Mark as Done
-                                </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-         <!-- Pagination Section -->
-        {% if sales_orders.paginator.num_pages > 1 %}
-        <div class="pagination-section mt-5">
-            <nav aria-label="Orders pagination">
-                <ul class="pagination justify-content-center">
-                    <!-- First Page -->
-                    {% if sales_orders.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page=1{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="First">
-                                <i class="fas fa-angle-double-left"></i>
-                            </a>
-                        </li>
-                        <!-- Previous Page -->
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ sales_orders.previous_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Previous">
-                                <i class="fas fa-angle-left"></i>
-                            </a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
-                        </li>
-                        <li class="page-item disabled">
-                            <span class="page-link"><i class="fas fa-angle-left"></i></span>
-                        </li>
-                    {% endif %}
-
-                    <!-- Page numbers with ellipsis -->
-                    {% for num in sales_orders.paginator.page_range %}
-                        {% if num == sales_orders.number %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% elif num > sales_orders.number|add:'-3' and num < sales_orders.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
-                            </li>
-                        {% elif num == 1 or num == sales_orders.paginator.num_pages %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}">{{ num }}</a>
-                            </li>
-                        {% elif num == sales_orders.number|add:'-3' or num == sales_orders.number|add:'3' %}
-                            <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-
-                    <!-- Next Page -->
-                    {% if sales_orders.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ sales_orders.next_page_number }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Next">
-                                <i class="fas fa-angle-right"></i>
-                            </a>
-                        </li>
-                        <!-- Last Page -->
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ sales_orders.paginator.num_pages }}{% if current_status and current_status != 'All' %}&status={{ current_status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_salesman and selected_salesman != 'All' %}&salesman_filter={{ selected_salesman }}{% endif %}" aria-label="Last">
-                                <i class="fas fa-angle-double-right"></i>
-                            </a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link"><i class="fas fa-angle-right"></i></span>
-                        </li>
-                        <li class="page-item disabled">
-                            <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            
-            <!-- Page info -->
-            <div class="text-center text-muted mt-2">
-                <small>
-                    Showing {{ sales_orders.start_index }} - {{ sales_orders.end_index }} of {{ sales_orders.paginator.count }} orders
-                    {% if current_status and current_status != 'All' %}
-                        <span class="badge bg-primary ms-2">{{ current_status }}</span>
-                    {% endif %}
-                </small>
-            </div>
-        </div>
-        {% endif %}
-        
-    {% else %}
-        <div class="text-center py-5">
-            <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
-            <h4 class="text-muted">No Orders Found</h4>
-            <p class="text-muted">
-                {% if current_status and current_status != 'All' %}
-                    There are no {{ current_status }} orders matching your criteria
-                {% else %}
-                    There are no orders matching your criteria
-                {% endif %}
-            </p>
-            <a href="{% url 'create_sales_order' %}" class="btn btn-primary mt-2">
-                <i class="fas fa-plus-circle me-1"></i> Create New Order
-            </a>
-            {% if current_status and current_status != 'All' %}
-                <a href="?status=All" class="btn btn-outline-secondary mt-2 ms-2">
-                    View All Orders
-                </a>
-            {% endif %}
-        </div>
-    {% endif %}
+<div class="orders-container" id="ordersContainer">
+  {% include 'so/_sales_orders_results.html' with sales_orders=sales_orders current_status=current_status selected_salesman=selected_salesman selected_division=selected_division start_date=start_date end_date=end_date query_string=query_string %}
 </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-    // Simple search functionality
-    document.getElementById('searchOrders').addEventListener('keyup', function() {
-        const searchText = this.value.toLowerCase();
-        const orderCards = document.querySelectorAll('.order-card');
-        
-        orderCards.forEach(card => {
-            const orderText = card.textContent.toLowerCase();
-            if (orderText.includes(searchText)) {
-                card.parentElement.style.display = 'block';
-            } else {
-                card.parentElement.style.display = 'none';
-            }
+    // AJAX search + filters (backend)
+    const ordersContainer = document.getElementById('ordersContainer');
+    const searchInput = document.getElementById('searchOrders');
+    const filtersForm = document.getElementById('filtersForm');
+    const qHidden = document.getElementById('qHidden');
+    const divisionFilter = document.getElementById('divisionFilter');
+    const salesmanFilter = document.getElementById('salesmanFilter');
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+
+    function debounce(fn, delay) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), delay);
+      };
+    }
+
+    function getStatusFromHidden() {
+      const el = filtersForm.querySelector('input[name="status"]');
+      return el ? el.value : 'All';
+    }
+
+    function setStatusHidden(val) {
+      const el = filtersForm.querySelector('input[name="status"]');
+      if (el) el.value = val;
+    }
+
+    function collectParams(overrides = {}) {
+      const params = new URLSearchParams();
+      params.set('status', getStatusFromHidden() || 'All');
+      params.set('start_date', startDate ? (startDate.value || '') : '');
+      params.set('end_date', endDate ? (endDate.value || '') : '');
+      params.set('salesman_filter', salesmanFilter ? (salesmanFilter.value || '') : '');
+      params.set('division', divisionFilter ? (divisionFilter.value || 'All') : 'All');
+      params.set('q', searchInput ? (searchInput.value || '') : '');
+      params.set('page', '1');
+
+      Object.entries(overrides).forEach(([k, v]) => params.set(k, v));
+      return params;
+    }
+
+    function loadOrders(params) {
+      ordersContainer.style.opacity = '0.6';
+      const url = '{% url "view_sales_orders_ajax" %}?' + params.toString();
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+        .then(r => r.json())
+        .then(data => {
+          ordersContainer.innerHTML = data.html;
+          ordersContainer.style.opacity = '1';
+          // Keep hidden q in sync for non-js fallback
+          if (qHidden) qHidden.value = searchInput.value || '';
+        })
+        .catch(err => {
+          ordersContainer.style.opacity = '1';
+          console.error(err);
         });
+    }
+
+    // Form submit -> AJAX
+    if (filtersForm) {
+      filtersForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadOrders(collectParams({ page: '1' }));
+      });
+    }
+
+    // Change events -> AJAX
+    [divisionFilter, salesmanFilter, startDate, endDate].filter(Boolean).forEach(el => {
+      el.addEventListener('change', () => loadOrders(collectParams({ page: '1' })));
+    });
+
+    if (searchInput) {
+      searchInput.addEventListener('input', debounce(() => {
+        loadOrders(collectParams({ page: '1' }));
+      }, 250));
+    }
+
+    // Pagination click -> AJAX
+    document.addEventListener('click', function(e) {
+      const a = e.target.closest('.pagination a.page-link');
+      if (!a) return;
+      const href = a.getAttribute('href') || '';
+      if (!href.includes('page=')) return;
+      e.preventDefault();
+      const url = new URL(href, window.location.origin);
+      const page = url.searchParams.get('page') || '1';
+      loadOrders(collectParams({ page }));
+    });
+
+    // Tabs -> AJAX (prevent full reload)
+    document.querySelectorAll('.nav-tabs a.nav-link').forEach(link => {
+      link.addEventListener('click', function(e) {
+        const href = this.getAttribute('href') || '';
+        if (!href.startsWith('?')) return;
+        e.preventDefault();
+        const url = new URL(href, window.location.origin);
+        const status = url.searchParams.get('status') || 'All';
+        setStatusHidden(status);
+        // update active state
+        document.querySelectorAll('.nav-tabs a.nav-link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        loadOrders(collectParams({ page: '1' }));
+      });
     });
     
     // Update active tab based on current status

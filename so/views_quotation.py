@@ -241,6 +241,11 @@ def create_quotation(request):
 from django.shortcuts import render
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .models import Quotation, Salesman
+from django.db.models import Q
+from django.template.loader import render_to_string
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+from django.contrib.auth.decorators import login_required
 
 def view_quotations(request):
     start_date = request.GET.get('start_date')
@@ -248,6 +253,8 @@ def view_quotations(request):
     salesman_filter = request.GET.get('salesman_filter')
     page = request.GET.get('page', 1)
     status = request.GET.get('status', 'All')  # Default to 'All'
+    division = request.GET.get('division', 'All')
+    q = (request.GET.get('q') or '').strip()
 
     # Initial queryset - all quotations
     quotations = Quotation.objects.all()
@@ -277,6 +284,22 @@ def view_quotations(request):
     if end_date:
         quotations = quotations.filter(quotation_date__lte=end_date)
 
+    # Division filter
+    if division and division != 'All':
+        div = (division or '').strip().upper()
+        if div in ('ALABAMA', 'JUNAID'):
+            quotations = quotations.filter(division=div)
+
+    # Search query (backend)
+    if q:
+        quotations = quotations.filter(
+            Q(quotation_number__icontains=q)
+            | Q(customer__customer_name__icontains=q)
+            | Q(customer__customer_code__icontains=q)
+            | Q(salesman__salesman_name__icontains=q)
+            | Q(remarks__icontains=q)
+        )
+
     # Get all unique salesmen for the filter dropdown
     all_salesmen = Salesman.objects.all().order_by('salesman_name')
 
@@ -290,6 +313,22 @@ def view_quotations(request):
     except EmptyPage:
         quotations_page = paginator.page(paginator.num_pages)
 
+    # Build query string for pagination links
+    query_params = []
+    if status and status != 'All':
+        query_params.append(f"status={status}")
+    if start_date:
+        query_params.append(f"start_date={start_date}")
+    if end_date:
+        query_params.append(f"end_date={end_date}")
+    if salesman_filter:
+        query_params.append(f"salesman_filter={salesman_filter}")
+    if division and division != 'All':
+        query_params.append(f"division={division}")
+    if q:
+        query_params.append(f"q={q}")
+    query_string = "&".join(query_params)
+
     return render(request, 'so/quotations/view_quotations.html', {
         'quotations': quotations_page,
         'all_salesmen': all_salesmen,
@@ -297,7 +336,108 @@ def view_quotations(request):
         'current_status': status,
         'start_date': start_date,
         'end_date': end_date,
+        'selected_division': division or 'All',
+        'search_query': q,
+        'query_string': query_string,
     })
+
+
+@login_required
+@require_GET
+def view_quotations_ajax(request):
+    """
+    AJAX endpoint for backend filtering/search/pagination on quotations dashboard.
+    Supports:
+    - q (search)
+    - status
+    - start_date / end_date
+    - salesman_filter
+    - division: All | ALABAMA | JUNAID
+    - page
+    """
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    salesman_filter = request.GET.get('salesman_filter')
+    page = request.GET.get('page', 1)
+    status = request.GET.get('status', 'All')
+    division = request.GET.get('division', 'All')
+    q = (request.GET.get('q') or '').strip()
+
+    quotations = Quotation.objects.all()
+
+    if status and status != 'All':
+        quotations = quotations.filter(status=status)
+
+    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
+        quotations = quotations.filter(division='ALABAMA')
+    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so', 'manager']:
+        quotations = quotations.filter(division='JUNAID')
+    else:
+        quotations = Quotation.objects.all()
+
+    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+        salesman_name = request.user.first_name
+        quotations = quotations.filter(salesman__salesman_name=salesman_name)
+    elif salesman_filter and salesman_filter != 'All':
+        quotations = quotations.filter(salesman__salesman_name=salesman_filter)
+
+    if start_date:
+        quotations = quotations.filter(quotation_date__gte=start_date)
+    if end_date:
+        quotations = quotations.filter(quotation_date__lte=end_date)
+
+    if division and division != 'All':
+        div = (division or '').strip().upper()
+        if div in ('ALABAMA', 'JUNAID'):
+            quotations = quotations.filter(division=div)
+
+    if q:
+        quotations = quotations.filter(
+            Q(quotation_number__icontains=q)
+            | Q(customer__customer_name__icontains=q)
+            | Q(customer__customer_code__icontains=q)
+            | Q(salesman__salesman_name__icontains=q)
+            | Q(remarks__icontains=q)
+        )
+
+    paginator = Paginator(quotations.order_by('-created_at'), 12)
+    try:
+        quotations_page = paginator.page(page)
+    except PageNotAnInteger:
+        quotations_page = paginator.page(1)
+    except EmptyPage:
+        quotations_page = paginator.page(paginator.num_pages)
+
+    query_params = []
+    if status and status != 'All':
+        query_params.append(f"status={status}")
+    if start_date:
+        query_params.append(f"start_date={start_date}")
+    if end_date:
+        query_params.append(f"end_date={end_date}")
+    if salesman_filter:
+        query_params.append(f"salesman_filter={salesman_filter}")
+    if division and division != 'All':
+        query_params.append(f"division={division}")
+    if q:
+        query_params.append(f"q={q}")
+    query_string = "&".join(query_params)
+
+    html = render_to_string(
+        'so/quotations/_quotations_results.html',
+        {
+            'quotations': quotations_page,
+            'current_status': status or 'All',
+            'selected_salesman': salesman_filter,
+            'selected_division': division or 'All',
+            'start_date': start_date,
+            'end_date': end_date,
+            'query_string': query_string,
+        },
+        request=request
+    )
+
+    return JsonResponse({'html': html, 'count': paginator.count})
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse

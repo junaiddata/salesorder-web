@@ -671,12 +671,16 @@ from django.db.models import Q # Import Q for complex lookups
 import datetime
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.template.loader import render_to_string
+from django.views.decorators.http import require_GET
 
 def view_sales_orders(request):
     status = request.GET.get('status')
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     salesman_filter = request.GET.get('salesman_filter')
+    division = request.GET.get('division', 'All')
+    q = (request.GET.get('q') or '').strip()
     page = request.GET.get('page', 1)
 
     # Initial queryset - all sales orders
@@ -700,6 +704,24 @@ def view_sales_orders(request):
     # Apply status filter
     if status and status != "All":
         sales_orders = sales_orders.filter(order_status=status)
+
+    # Division filter (based on order_number prefix)
+    if division and division != "All":
+        div = (division or "").strip().upper()
+        if div == "ALABAMA":
+            sales_orders = sales_orders.filter(Q(order_number__istartswith="AL") | Q(division="ALABAMA"))
+        elif div == "JUNAID":
+            sales_orders = sales_orders.filter(Q(order_number__istartswith="CO") | Q(division="JUNAID"))
+
+    # Search query
+    if q:
+        sales_orders = sales_orders.filter(
+            Q(order_number__icontains=q)
+            | Q(customer__customer_name__icontains=q)
+            | Q(customer__customer_code__icontains=q)
+            | Q(salesman__salesman_name__icontains=q)
+            | Q(salesman_remarks__icontains=q)
+        )
 
     # Apply date filters
     if start_date:
@@ -731,6 +753,10 @@ def view_sales_orders(request):
         query_params.append(f"end_date={end_date}")
     if salesman_filter:
         query_params.append(f"salesman_filter={salesman_filter}")
+    if division and division != "All":
+        query_params.append(f"division={division}")
+    if q:
+        query_params.append(f"q={q}")
     
     query_string = "&".join(query_params)
 
@@ -739,9 +765,114 @@ def view_sales_orders(request):
         'current_status': status or "All",
         'all_salesmen': all_salesmen,
         'selected_salesman': salesman_filter,
+        'selected_division': division or "All",
+        'search_query': q,
         'start_date': start_date,
         'end_date': end_date,
         'query_string': query_string,
+    })
+
+
+@login_required
+@require_GET
+def view_sales_orders_ajax(request):
+    """
+    AJAX endpoint for backend filtering/search/pagination on Customer Order Forms dashboard.
+    Supports:
+    - q (search)
+    - status
+    - start_date / end_date
+    - salesman_filter
+    - division: All | ALABAMA | JUNAID (prefix filter: AL/CO)
+    - page
+    """
+    status = request.GET.get('status')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    salesman_filter = request.GET.get('salesman_filter')
+    division = request.GET.get('division', 'All')
+    q = (request.GET.get('q') or '').strip()
+    page = request.GET.get('page', 1)
+
+    sales_orders = SalesOrder.objects.all()
+
+    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
+        sales_orders = SalesOrder.objects.filter(division='ALABAMA')
+    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so', 'manager']:
+        sales_orders = SalesOrder.objects.filter(division='JUNAID')
+    else:
+        sales_orders = SalesOrder.objects.all()
+
+    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+        salesman_name = request.user.first_name
+        sales_orders = sales_orders.filter(salesman__salesman_name=salesman_name)
+    elif salesman_filter and salesman_filter != 'All':
+        sales_orders = sales_orders.filter(salesman__salesman_name=salesman_filter)
+
+    if status and status != "All":
+        sales_orders = sales_orders.filter(order_status=status)
+
+    if division and division != "All":
+        div = (division or "").strip().upper()
+        if div == "ALABAMA":
+            sales_orders = sales_orders.filter(Q(order_number__istartswith="AL") | Q(division="ALABAMA"))
+        elif div == "JUNAID":
+            sales_orders = sales_orders.filter(Q(order_number__istartswith="CO") | Q(division="JUNAID"))
+
+    if q:
+        sales_orders = sales_orders.filter(
+            Q(order_number__icontains=q)
+            | Q(customer__customer_name__icontains=q)
+            | Q(customer__customer_code__icontains=q)
+            | Q(salesman__salesman_name__icontains=q)
+            | Q(salesman_remarks__icontains=q)
+        )
+
+    if start_date:
+        sales_orders = sales_orders.filter(order_date__gte=start_date)
+    if end_date:
+        sales_orders = sales_orders.filter(order_date__lte=end_date)
+
+    paginator = Paginator(sales_orders.order_by('-order_date_time'), 12)
+    try:
+        sales_orders_page = paginator.page(page)
+    except PageNotAnInteger:
+        sales_orders_page = paginator.page(1)
+    except EmptyPage:
+        sales_orders_page = paginator.page(paginator.num_pages)
+
+    query_params = []
+    if status and status != "All":
+        query_params.append(f"status={status}")
+    if start_date:
+        query_params.append(f"start_date={start_date}")
+    if end_date:
+        query_params.append(f"end_date={end_date}")
+    if salesman_filter:
+        query_params.append(f"salesman_filter={salesman_filter}")
+    if division and division != "All":
+        query_params.append(f"division={division}")
+    if q:
+        query_params.append(f"q={q}")
+    query_string = "&".join(query_params)
+
+    html = render_to_string(
+        'so/_sales_orders_results.html',
+        {
+            'sales_orders': sales_orders_page,
+            'current_status': status or "All",
+            'selected_salesman': salesman_filter,
+            'selected_division': division or "All",
+            'start_date': start_date,
+            'end_date': end_date,
+            'query_string': query_string,
+        },
+        request=request
+    )
+
+    return JsonResponse({
+        'html': html,
+        'count': paginator.count,
     })
 
 from django.http import JsonResponse

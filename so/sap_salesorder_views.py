@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404, JsonResponse
-from django.db.models import Q, Sum, Value, DecimalField
+from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
@@ -19,9 +19,10 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor, white
-from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, KeepTogether, SimpleDocTemplate
+from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, KeepTogether, SimpleDocTemplate, Image
 from reportlab.lib.styles import getSampleStyleSheet
 from django.conf import settings
+import requests
 
 # Import models
 from .models import SAPSalesorder, SAPSalesorderItem
@@ -59,6 +60,182 @@ def salesman_scope_q_salesorder(user: "User") -> Q:
     return Q(pk__in=[])
 
 
+def _open_row_status_q(prefix: str = "") -> Q:
+    """
+    Return a Q object matching "open" line statuses.
+    Accepts both SAP styles: "Open" and "O" (case-insensitive).
+    """
+    field = f"{prefix}row_status"
+    return (
+        Q(**{f"{field}__iexact": "open"})
+        | Q(**{f"{field}__iexact": "o"})
+        | Q(**{f"{field}__iexact": "OPEN"})
+        | Q(**{f"{field}__iexact": "O"})
+    )
+
+
+@login_required
+def export_sap_salesorder_open_items_pdf(request, so_number):
+    """
+    Customer-ready PDF: export ONLY OPEN line items for a single SAP Salesorder.
+    LPO is BP Reference No.
+    Columns: Date, Doc No., LPO, Customer, Item No, Description, Total SO, Open, Avail, DIP
+    """
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+
+    # Enforce same scope rules as detail view
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+
+    items_qs = (
+        salesorder.items.all()
+        .filter(_open_row_status_q())
+        .order_by("id")
+    )
+
+    response = HttpResponse(content_type="application/pdf")
+    date_str = salesorder.posting_date.strftime("%Y%m%d") if salesorder.posting_date else "NA"
+    filename = f"Open_SalesOrder_{salesorder.so_number}_{date_str}.pdf"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    # Use stable margins + scale column widths to available width
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=landscape(A4),
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=24,
+        bottomMargin=18,
+    )
+
+    styles_local = getSampleStyleSheet()
+    normal_style = styles_local["Normal"]
+    normal_style.fontSize = 8
+    elements = []
+
+    # Header: logo + title
+    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    logo_flowable = None
+    try:
+        r = requests.get(logo_url, timeout=6)
+        r.raise_for_status()
+        logo_flowable = Image(BytesIO(r.content), width=120, height=38)
+    except Exception:
+        logo_flowable = None
+
+    title = Paragraph("Open Sales Orders - so", styles_local["Title"])
+    header_tbl = Table(
+        [[logo_flowable or "", title]],
+        colWidths=[140, None],
+    )
+    header_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "LEFT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_tbl)
+    elements.append(Spacer(1, 10))
+
+    # Build table rows
+    headers = ["Date", "Doc No.", "LPO", "Customer", "Item No", "Description", "Total SO", "Open", "Avail", "DIP"]
+    data = [headers]
+
+    def _fmt_date(d):
+        return d.strftime("%d/%m/%Y") if d else "-"
+
+    def _d(x):
+        if x is None:
+            return Decimal("0")
+        if isinstance(x, Decimal):
+            return x
+        try:
+            return Decimal(str(x))
+        except Exception:
+            return Decimal("0")
+
+    total_qty = Decimal("0")
+    total_open = Decimal("0")
+    total_avail = Decimal("0")
+    total_dip = Decimal("0")
+
+    for it in items_qs:
+        qty = _d(it.quantity)
+        open_qty = _d(it.remaining_open_quantity)
+        avail = _d(it.total_available_stock)
+        dip = _d(it.dip_warehouse_stock)
+
+        total_qty += qty
+        total_open += open_qty
+        total_avail += avail
+        total_dip += dip
+
+        cust_cell = Paragraph((salesorder.customer_name or "-")[:45], normal_style)
+        desc_cell = Paragraph((it.description or "-")[:55], normal_style)
+        lpo_cell = Paragraph((salesorder.bp_reference_no or "-")[:25], normal_style)
+
+        data.append([
+            _fmt_date(salesorder.posting_date),
+            salesorder.so_number,
+            lpo_cell,
+            cust_cell,
+            it.item_no or "-",
+            desc_cell,
+            f"{qty:,.0f}",
+            f"{open_qty:,.0f}",
+            f"{avail:,.0f}",
+            f"{dip:,.0f}",
+        ])
+
+    # Totals row (matches sample screenshot style)
+    data.append(["", "", "", "", "", "TOTALS:", f"{total_qty:,.0f}", f"{total_open:,.0f}", f"{total_avail:,.0f}", f"{total_dip:,.0f}"])
+
+    # Column widths based on the old working PDF, scaled to the available page width.
+    base_widths = [60, 70, 80, 140, 65, 180, 70, 70, 60, 60]  # give numeric cols extra space
+    page_w, _page_h = landscape(A4)
+    avail_w = page_w - doc.leftMargin - doc.rightMargin
+    scale = avail_w / float(sum(base_widths))
+    col_widths = [w * scale for w in base_widths]
+    # Guard against float rounding overflow
+    col_widths[-1] = avail_w - sum(col_widths[:-1])
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.hAlign = "LEFT"
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+
+        ("ALIGN", (6, 1), (-1, -1), "RIGHT"),
+
+        # Totals row
+        ("BACKGROUND", (0, -1), (-1, -1), colors.lightgrey),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("ALIGN", (5, -1), (5, -1), "RIGHT"),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+    return response
+
+
 @login_required
 def upload_salesorders(request):
     messages_list = []
@@ -72,10 +249,14 @@ def upload_salesorders(request):
 
                 # Ensure expected columns exist
                 required_cols = [
-                    'Document Internal ID', 'Document Number', 'Posting Date',
-                    'Customer/Supplier No.', 'Customer/Supplier Name', 'Sales Employee Name',
-                    'Manufacturer Name', 'BP Reference No.', 'Item No.', 'Item/Service Description',
-                    'Quantity', 'Price', 'Row Total', 'Document Total', 'Status', 'Bill To'
+                    'Document Number', 'Posting Date', 'BP Reference No.',
+                    'Customer/Supplier No.', 'Customer/Supplier Name',
+                    'Row Status', 'Job Type',
+                    'Item No.', 'Item/Service Description', 'Manufacture',
+                    'Quantity', 'Row Total',
+                    'Remaining Open Quantity', 'Pending Amount',
+                    'Sales Employee',
+                    'Total available Stock', 'Dip warehouse stock',
                 ]
                 missing = [c for c in required_cols if c not in df.columns]
                 if missing:
@@ -84,6 +265,8 @@ def upload_salesorders(request):
                     # Normalize numeric/text columns
                     def as_str(x):
                         try:
+                            if pd.isna(x):
+                                return ''
                             # preserve as string (e.g., to keep leading zeros)
                             return str(x).strip()
                         except Exception:
@@ -116,19 +299,35 @@ def upload_salesorders(request):
                         so_number = as_str(doc_no)
                         first = grp.iloc[0]
 
+                        # Header totals from line-level data
+                        pending_total = sum(
+                            (to_decimal(x) or Decimal('0'))
+                            for x in grp.get('Pending Amount')
+                        )
+                        row_total_sum = sum(
+                            (to_decimal(x) or Decimal('0'))
+                            for x in grp.get('Row Total')
+                        )
+
+                        # Header status: Open (O) if ANY line is Open/O, else Closed (C)
+                        any_open = any(
+                            (as_str(x).strip().lower() in ('open', 'o'))
+                            for x in grp.get('Row Status')
+                        )
+                        header_status = 'O' if any_open else 'C'
+
                         salesorder, _ = SAPSalesorder.objects.update_or_create(
                             so_number=so_number,
                             defaults={
-                                'internal_number': as_str(first['Document Internal ID']),
                                 'posting_date': parse_date(first['Posting Date']),
                                 'customer_code': as_str(first['Customer/Supplier No.']),
                                 'customer_name': as_str(first['Customer/Supplier Name']),
-                                'salesman_name': as_str(first['Sales Employee Name']),
-                                'brand': as_str(first['Manufacturer Name']),
                                 'bp_reference_no': as_str(first['BP Reference No.']),
-                                'document_total': to_decimal(first['Document Total']),
-                                'status': as_str(first['Status']),
-                                'bill_to': as_str(first['Bill To']),
+                                'salesman_name': as_str(first['Sales Employee']),
+                                # Pending Amount total is the order-level total requested
+                                'document_total': pending_total,
+                                'row_total_sum': row_total_sum,
+                                'status': header_status,
                             }
                         )
 
@@ -141,8 +340,15 @@ def upload_salesorders(request):
                                 item_no=as_str(row['Item No.']),
                                 description=as_str(row['Item/Service Description']),
                                 quantity=to_decimal(row['Quantity']) or Decimal('0'),
-                                price=to_decimal(row['Price']) or Decimal('0'),
-                                row_total=to_decimal(row['Row Total'])
+                                price=Decimal('0'),
+                                row_total=to_decimal(row['Row Total']),
+                                row_status=as_str(row['Row Status']),
+                                job_type=as_str(row['Job Type']),
+                                manufacture=as_str(row['Manufacture']),
+                                remaining_open_quantity=to_decimal(row['Remaining Open Quantity']),
+                                pending_amount=to_decimal(row['Pending Amount']),
+                                total_available_stock=to_decimal(row['Total available Stock']),
+                                dip_warehouse_stock=to_decimal(row['Dip warehouse stock']),
                             ))
                         if items_to_create:
                             SAPSalesorderItem.objects.bulk_create(items_to_create)
@@ -164,6 +370,17 @@ def upload_salesorders(request):
 def salesorder_list(request):
     # Scope by logged-in user
     qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+
+    # Derive header status from items (Open if ANY line is open)
+    open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
+    qs = qs.annotate(
+        has_open=Exists(open_items_sq),
+        display_status=Case(
+            When(has_open=True, then=Value("O")),
+            default=Value("C"),
+            output_field=CharField(),
+        ),
+    )
 
     # Filters
     q = request.GET.get('q', '').strip()
@@ -215,9 +432,15 @@ def salesorder_list(request):
                 Q(salesman_name__icontains=q)
             )
 
-    # Status filter
+    # Status filter (based on derived status)
     if status:
-        qs = qs.filter(status__iexact=status)
+        s = status.strip().upper()
+        if s in ("OPEN", "O"):
+            qs = qs.filter(has_open=True)
+        elif s in ("CLOSED", "C"):
+            qs = qs.filter(has_open=False)
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
@@ -308,33 +531,57 @@ def salesorder_detail(request, so_number):
     # Get items
     items = salesorder.items.all().order_by('id')
 
-    # Calculate estimated cost and profit
-    stock_map = get_stock_costs()
-    total_estimated_cost = 0.0
+    # Derive header status from line Row Status (Open if any Open/O).
+    # Also auto-correct stored header status if it's out of sync.
+    any_open = items.filter(_open_row_status_q()).exists()
+    derived_status = "O" if any_open else "C"
+    if (salesorder.status or "").strip().upper() not in (derived_status, "OPEN", "CLOSED"):
+        salesorder.status = derived_status
+        salesorder.save(update_fields=["status"])
 
-    # We iterate over items to calculate cost based on the API map
-    for item in items:
-        # Match item.item_no with the API's item_code
-        item_code = str(item.item_no).strip()
+    # Normalize status label for UI
+    status_raw = (salesorder.status or "").strip()
+    status_key = status_raw.upper()
+    if status_key in ("O", "OPEN"):
+        status_label = "Open"
+    elif status_key in ("C", "CLOSED"):
+        status_label = "Closed"
+    else:
+        status_label = status_raw or "—"
 
-        # Get unit cost from map, default to 0.0 if not found
-        unit_cost = stock_map.get(item_code, 0.0)
+    # Per-order totals from line data (fallbacks)
+    pending_total = salesorder.document_total
+    row_total_sum = getattr(salesorder, "row_total_sum", None)
+    pending_amount_sum = Decimal("0")
+    remaining_open_qty_sum = Decimal("0")
+    row_total_calc_sum = Decimal("0")
 
-        # Calculate row cost (Unit Cost * Quantity)
-        # Convert Decimal quantity to float for calculation
-        qty = float(item.quantity)
-        total_estimated_cost += (unit_cost * qty)
+    # Attach derived unit price for templates (since new Excel has no Price column)
+    for it in items:
+        qty = it.quantity or Decimal("0")
+        row_total = it.row_total or Decimal("0")
+        if qty and qty != 0:
+            it.unit_price = (row_total / qty).quantize(Decimal("0.01"))
+        else:
+            it.unit_price = Decimal("0.00")
 
-    # Calculate Profit/Margin
-    # Convert document_total to float for math
-    doc_total = float(salesorder.document_total or 0)
-    total_profit = doc_total - total_estimated_cost
+        pending_amount_sum += (it.pending_amount or Decimal("0"))
+        remaining_open_qty_sum += (it.remaining_open_quantity or Decimal("0"))
+        row_total_calc_sum += row_total
+
+    if pending_total is None:
+        pending_total = pending_amount_sum
+    if row_total_sum is None:
+        row_total_sum = row_total_calc_sum
 
     context = {
         'salesorder': salesorder,
         'items': items,
-        'total_cost': total_estimated_cost,
-        'total_profit': total_profit,
+        'status_label': status_label,
+        'pending_total': pending_total,
+        'row_total_sum': row_total_sum,
+        'pending_amount_sum': pending_amount_sum,
+        'remaining_open_qty_sum': remaining_open_qty_sum,
     }
 
     return render(request, 'salesorders/salesorder_detail.html', context)
@@ -347,6 +594,17 @@ def salesorder_detail(request, so_number):
 def salesorder_search(request):
     # Scope by logged-in user
     qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+
+    # Derive header status from items (Open if ANY line is open)
+    open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
+    qs = qs.annotate(
+        has_open=Exists(open_items_sq),
+        display_status=Case(
+            When(has_open=True, then=Value("O")),
+            default=Value("C"),
+            output_field=CharField(),
+        ),
+    )
 
     q = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
@@ -379,8 +637,15 @@ def salesorder_search(request):
                 Q(salesman_name__icontains=q)
             )
 
+    # Status filter (based on derived status)
     if status:
-        qs = qs.filter(status__iexact=status)
+        s = status.strip().upper()
+        if s in ("OPEN", "O"):
+            qs = qs.filter(has_open=True)
+        elif s in ("CLOSED", "C"):
+            qs = qs.filter(has_open=False)
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # Remarks filter
     if remarks_filter == "YES":
@@ -528,6 +793,7 @@ def export_sap_salesorder_pdf(request, so_number):
         [Paragraph(f"<b>Number:</b> {salesorder.so_number}", styles['Normal'])],
         [Paragraph(f"<b>Date:</b> {salesorder.posting_date or '-'}", styles['Normal'])],
         [Paragraph(f"<b>BP Ref No:</b> {salesorder.bp_reference_no or '—'}", styles['Normal'])],
+        [Paragraph(f"<b>Status:</b> {salesorder.status or '—'}", styles['Normal'])],
     ]
 
     bg_color = theme_config['primary']
@@ -589,6 +855,13 @@ def export_sap_salesorder_pdf(request, so_number):
         qty = _to_decimal(it.quantity)
         price = _to_decimal(it.price)
         row_total = _to_decimal(it.row_total) if it.row_total is not None else (qty * price)
+
+        # New Excel doesn't include unit price; derive from row_total/qty when possible
+        if (price == 0 or price is None) and qty:
+            try:
+                price = (row_total / qty).quantize(Decimal("0.01"))
+            except Exception:
+                price = Decimal("0")
         subtotal += row_total
 
         desc_para = Paragraph(it.description or '—', styles['ItemDescription'])
@@ -631,16 +904,16 @@ def export_sap_salesorder_pdf(request, so_number):
     elements.append(items_table)
     elements.append(Spacer(1, 0.1 * inch))
 
-    # Summary (VAT 5%)
-    tax_rate = Decimal('0.05')
-    tax_amount = (subtotal * tax_rate).quantize(Decimal('0.01'))
-    doc_total = _to_decimal(salesorder.document_total)
-    grand_total = doc_total if doc_total else (subtotal + tax_amount)
+    # Summary
+    # - Subtotal is computed from line Row Total (fallback qty*price)
+    # - row_total_sum is stored from Excel SUM(Row Total)
+    # - document_total is stored from Excel SUM(Pending Amount) (primary "Pending Total")
+    stored_row_total_sum = _to_decimal(getattr(salesorder, 'row_total_sum', None))
+    pending_total = _to_decimal(salesorder.document_total)
 
     summary_data = [
-        ['Subtotal:', f"AED {subtotal:,.2f}"],
-        [f'VAT ({(tax_rate*100):.0f}%):', f"AED {tax_amount:,.2f}"],
-        ['Grand Total:', f"AED {grand_total:,.2f}"],
+        ['Row Total Sum:', f"AED {stored_row_total_sum or subtotal:,.2f}"],
+        ['Pending Total:', f"AED {pending_total:,.2f}"],
     ]
     summary_table = Table(summary_data, colWidths=[main_table_width * 0.5, main_table_width * 0.5])
     summary_table.setStyle(TableStyle([
@@ -648,10 +921,10 @@ def export_sap_salesorder_pdf(request, so_number):
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 2), (-1, 2), 12),
-        ('BACKGROUND', (0, 2), (-1, 2), bg_color),
-        ('TEXTCOLOR', (0, 2), (-1, 2), white),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 12),
+        ('BACKGROUND', (0, -1), (-1, -1), bg_color),
+        ('TEXTCOLOR', (0, -1), (-1, -1), white),
     ]))
 
     summary_wrapper = Table([[summary_table]], colWidths=[main_table_width])
@@ -695,6 +968,17 @@ def export_salesorder_list_pdf(request):
     """
     # 1. APPLY FILTERS (Exact copy from salesorder_list)
     qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+
+    # Derive header status from items (Open if ANY line is open)
+    open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
+    qs = qs.annotate(
+        has_open=Exists(open_items_sq),
+        display_status=Case(
+            When(has_open=True, then=Value("O")),
+            default=Value("C"),
+            output_field=CharField(),
+        ),
+    )
     
     q = request.GET.get('q', '').strip()
     salesman = request.GET.get('salesman', '').strip()
@@ -730,8 +1014,15 @@ def export_salesorder_list_pdf(request):
 
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
+    # Status filter (based on derived status)
     if status:
-        qs = qs.filter(status__iexact=status)
+        s = status.strip().upper()
+        if s in ("OPEN", "O"):
+            qs = qs.filter(has_open=True)
+        elif s in ("CLOSED", "C"):
+            qs = qs.filter(has_open=False)
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # Apply Dates
     def parse_date(s):

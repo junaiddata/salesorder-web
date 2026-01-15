@@ -1,0 +1,143 @@
+{% if sales_orders %}
+  <div class="row">
+    {% for order in sales_orders %}
+    <div class="col-lg-4 col-md-6 mb-3" id="order-card-{{ order.id }}">
+      <div class="order-card 
+        {% if order.division == 'ALABAMA' %}alabama-watermark{% else %}junaid-watermark{% endif %}
+        {% if order.order_status == 'Approved' %}approved
+        {% elif order.order_status == 'Hold by A/c' %}hold
+        {% elif order.order_status == 'SO Created' %}created
+        {% else %}pending{% endif %}">
+        
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 class="mb-1">Order #{{ order.order_number }}</h5>
+            {% if order.id >= 111 %}
+              <span class="order-date">{{ order.order_date_time|date:"M j, g:i a" }}</span>
+            {% else %}
+              <span class="order-date">{{ order.order_date|date:"M j, Y" }}</span>
+            {% endif %}
+          </div>
+          <div>
+            {{ order.salesman_remarks|default:"No remarks" }}
+          </div>
+          <span class="status-badge status-{{ order.id }}
+            {% if order.order_status == 'Approved' %}badge-approved
+            {% elif order.order_status == 'Hold by A/c' %}badge-hold
+            {% elif order.order_status == 'SO Created' %}badge-success
+            {% else %}badge-pending{% endif %}">
+            {{ order.order_status }}
+          </span>
+        </div>
+
+        <div class="mb-3">
+          <p class="customer-name mb-1">{{ order.customer.customer_name }}</p>
+          {% if order.salesman %}
+            <p class="salesman-name mb-0">({{ order.salesman.salesman_name }})</p>
+          {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="total-amount">AED {{ order.total_amount|floatformat:2 }}</div>
+          <div>
+            <a href="{% url 'view_sales_order_details' order.id %}" class="btn btn-sm btn-outline-secondary">
+              <i class="fas fa-eye"></i>
+            </a>
+            {% if order.order_status == "Pending" %}
+              <a href="{% url 'edit_sales_order' order.id %}" class="btn btn-sm btn-outline-primary edit-btn ms-1">
+                <i class="fas fa-edit me-1"></i>Edit
+              </a>
+            {% endif %}
+            {% if order.order_status != "SO Created" and order.order_status == "Approved" %}
+              <button class="btn btn-sm btn-success ms-1 mark-so-btn" data-id="{{ order.id }}">
+                Mark as Done
+              </button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if sales_orders.paginator.num_pages > 1 %}
+  <div class="pagination-section mt-5" id="orders-pagination">
+    <nav aria-label="Orders pagination">
+      <ul class="pagination justify-content-center">
+        {% if sales_orders.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page=1{% if query_string %}&{{ query_string }}{% endif %}" aria-label="First">
+              <i class="fas fa-angle-double-left"></i>
+            </a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ sales_orders.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Previous">
+              <i class="fas fa-angle-left"></i>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>
+        {% endif %}
+
+        {% for num in sales_orders.paginator.page_range %}
+          {% if num == sales_orders.number %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num > sales_orders.number|add:'-3' and num < sales_orders.number|add:'3' %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}">{{ num }}</a>
+            </li>
+          {% elif num == 1 or num == sales_orders.paginator.num_pages %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}">{{ num }}</a>
+            </li>
+          {% elif num == sales_orders.number|add:'-3' or num == sales_orders.number|add:'3' %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+
+        {% if sales_orders.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ sales_orders.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Next">
+              <i class="fas fa-angle-right"></i>
+            </a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ sales_orders.paginator.num_pages }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Last">
+              <i class="fas fa-angle-double-right"></i>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>
+        {% endif %}
+      </ul>
+    </nav>
+
+    <div class="text-center text-muted mt-2">
+      <small>
+        Showing {{ sales_orders.start_index }} - {{ sales_orders.end_index }} of {{ sales_orders.paginator.count }} orders
+        {% if current_status and current_status != 'All' %}
+          <span class="badge bg-primary ms-2">{{ current_status }}</span>
+        {% endif %}
+        {% if selected_division and selected_division != 'All' %}
+          <span class="badge bg-secondary ms-2">{{ selected_division }}</span>
+        {% endif %}
+      </small>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
+    <h4 class="text-muted">No Orders Found</h4>
+    <p class="text-muted">There are no orders matching your criteria</p>
+    <a href="{% url 'create_sales_order' %}" class="btn btn-primary mt-2">
+      <i class="fas fa-plus-circle me-1"></i> Create New Order
+    </a>
+    {% if current_status and current_status != 'All' %}
+      <a href=\"?status=All\" class=\"btn btn-outline-secondary mt-2 ms-2\">View All Orders</a>
+    {% endif %}
+  </div>
+{% endif %}
+

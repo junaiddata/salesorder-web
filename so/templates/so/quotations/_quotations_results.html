@@ -1,0 +1,126 @@
+{% if quotations %}
+  <div class="row">
+    {% for quotation in quotations %}
+    <div class="col-lg-4 col-md-6 mb-3" id="quotation-card-{{ quotation.id }}">
+      <div class="quotation-card 
+        {% if quotation.division == 'ALABAMA' %}alabama-watermark{% else %}junaid-watermark{% endif %}
+        {% if quotation.status == 'Approved' %}approved
+        {% elif quotation.status == 'On Hold' %}hold
+        {% else %}pending{% endif %}">
+        
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 class="mb-1">Quotation #{{ quotation.quotation_number }}</h5>
+            <span class="quotation-date">{{ quotation.quotation_date|date:"M d, Y" }}</span>
+          </div>
+          <span class="status-badge status-{{ quotation.id }}
+            {% if quotation.status == 'Approved' %}badge-approved
+            {% elif quotation.status == 'On Hold' %}badge-hold
+            {% else %}badge-pending{% endif %}">
+            {{ quotation.status }}
+          </span>
+        </div>
+
+        <div class="mb-3">
+          <p class="customer-name mb-1">{{ quotation.customer.customer_name }}</p>
+          {% if quotation.salesman %}
+            <p class="salesman-name mb-0">({{ quotation.salesman.salesman_name }})</p>
+          {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="total-amount">AED {{ quotation.total_amount|floatformat:2 }}</div>
+          <div>
+            <a href="{% url 'view_quotation_details' quotation.id %}" class="btn btn-sm btn-outline-secondary">
+              <i class="fas fa-eye"></i>
+            </a>
+            {% if quotation.status == "Pending" %}
+              <a href="{% url 'edit_quotation' quotation.id %}" class="btn btn-sm btn-outline-primary edit-btn ms-1">
+                <i class="fas fa-edit me-1"></i>Edit
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if quotations.paginator.num_pages > 1 %}
+  <div class="pagination-section mt-5" id="quotations-pagination">
+    <nav aria-label="Quotations pagination">
+      <ul class="pagination justify-content-center">
+        {% if quotations.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page=1{% if query_string %}&{{ query_string }}{% endif %}" aria-label="First">
+              <i class="fas fa-angle-double-left"></i>
+            </a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ quotations.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Previous">
+              <i class="fas fa-angle-left"></i>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>
+        {% endif %}
+
+        {% for num in quotations.paginator.page_range %}
+          {% if num == quotations.number %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% elif num > quotations.number|add:'-3' and num < quotations.number|add:'3' %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}">{{ num }}</a>
+            </li>
+          {% elif num == 1 or num == quotations.paginator.num_pages %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}">{{ num }}</a>
+            </li>
+          {% elif num == quotations.number|add:'-3' or num == quotations.number|add:'3' %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+
+        {% if quotations.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ quotations.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Next">
+              <i class="fas fa-angle-right"></i>
+            </a>
+          </li>
+          <li class="page-item">
+            <a class="page-link" href="?page={{ quotations.paginator.num_pages }}{% if query_string %}&{{ query_string }}{% endif %}" aria-label="Last">
+              <i class="fas fa-angle-double-right"></i>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>
+        {% endif %}
+      </ul>
+    </nav>
+
+    <div class="text-center text-muted mt-2">
+      <small>
+        Showing {{ quotations.start_index }} - {{ quotations.end_index }} of {{ quotations.paginator.count }} quotations
+        {% if current_status and current_status != 'All' %}
+          <span class="badge bg-primary ms-2">{{ current_status }}</span>
+        {% endif %}
+        {% if selected_division and selected_division != 'All' %}
+          <span class="badge bg-secondary ms-2">{{ selected_division }}</span>
+        {% endif %}
+      </small>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="text-center py-5">
+    <i class="fas fa-file-invoice mb-3" style="font-size: 3rem; color: #dee2e6;"></i>
+    <h4 class="text-muted">No Quotations Found</h4>
+    <p class="text-muted">There are no quotations matching your criteria</p>
+    <a href="{% url 'create_quotation' %}" class="btn btn-primary mt-2">
+      <i class="fas fa-plus-circle me-1"></i> Create New Quotation
+    </a>
+  </div>
+{% endif %}
+
