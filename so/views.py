@@ -95,26 +95,64 @@ def upload_customers(request):
         file = request.FILES['file']
         df = pd.read_excel(file)
         
+        # Normalize column names (handle variations)
+        df.columns = df.columns.str.strip()
+        
+        # Map possible column name variations
+        code_col = None
+        name_col = None
+        vat_col = None
+        salesman_col = None
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            if 'bp code' in col_lower or 'customer_code' in col_lower or 'customer code' in col_lower:
+                code_col = col
+            elif 'bp name' in col_lower or 'customer_name' in col_lower or 'customer name' in col_lower:
+                name_col = col
+            elif 'vat' in col_lower and 'number' in col_lower:
+                vat_col = col
+            elif 'salesman' in col_lower:
+                salesman_col = col
+        
+        if not code_col:
+            return HttpResponse("Error: Could not find 'BP Code' or 'Customer Code' column in Excel file.", status=400)
+        if not name_col:
+            return HttpResponse("Error: Could not find 'BP Name' or 'Customer Name' column in Excel file.", status=400)
+        
+        updated_count = 0
+        created_count = 0
+        
         for index, row in df.iterrows():
-            customer_code = row['customer_code']
-            customer_name = row['customer_name']
-            salesman_name = row.get('salesman', '').strip()
+            customer_code = str(row[code_col]).strip() if pd.notna(row[code_col]) else None
+            customer_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else None
+            vat_number = str(row[vat_col]).strip() if vat_col and pd.notna(row.get(vat_col)) else None
+            salesman_name = str(row[salesman_col]).strip() if salesman_col and pd.notna(row.get(salesman_col)) else None
+
+            if not customer_code or not customer_name:
+                continue
 
             # Get or create the salesman
             salesman = None
             if salesman_name:
                 salesman, _ = Salesman.objects.get_or_create(salesman_name=salesman_name)
 
-            # Update or create the customer with the salesman
-            Customer.objects.update_or_create(
+            # Update or create the customer
+            customer, created = Customer.objects.update_or_create(
                 customer_code=customer_code,
                 defaults={
                     'customer_name': customer_name,
-                    'salesman': salesman
+                    'salesman': salesman,
+                    'vat_number': vat_number if vat_number else None,
                 }
             )
+            
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
 
-        return HttpResponse("Customers uploaded successfully.")
+        return HttpResponse(f"Upload successful! Created: {created_count}, Updated: {updated_count} customers.")
     
     return render(request, 'so/upload_customers.html')
 
@@ -581,19 +619,14 @@ from django.http import JsonResponse
 def get_items_by_firm(request):
     firm = request.GET.get('firm')
 
-    cache_key = f'items_firm_{firm or "all"}'
-    items = cache.get(cache_key)
+    # Don't cache since stock changes frequently
+    # Always fetch fresh data from database
+    if firm == 'All' or not firm:
+        qs = Items.objects.all()
+    else:
+        qs = Items.objects.filter(item_firm=firm)
 
-    if not items:
-        if firm == 'All' or not firm:
-            qs = Items.objects.all()
-        else:
-            qs = Items.objects.filter(item_firm=firm)
-
-        items = list(qs.values('id', 'item_description', 'item_code', 'item_firm', 'item_upvc','item_stock'))
-
-        # Cache results for 5 minutes
-        cache.set(cache_key, items, None)
+    items = list(qs.values('id', 'item_description', 'item_code', 'item_firm', 'item_upvc','item_stock'))
 
     return JsonResponse({'items': items})
 

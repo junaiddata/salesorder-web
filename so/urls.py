@@ -99,6 +99,14 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/export-open/', sap_salesorder_views.export_sap_salesorder_open_items_pdf, name='export_sap_salesorder_open_items_pdf'),
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
     path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
+    # Proforma Invoice (PI) URLs
+    path('proformainvoices/', sap_salesorder_views.pi_list, name='pi_list'),
+    path('sapsalesorders/<str:so_number>/pi/create/', sap_salesorder_views.create_pi, name='create_pi'),
+    # More specific routes first
+    path('pi/<str:pi_number>/edit/', sap_salesorder_views.edit_pi, name='edit_pi'),
+    path('pi/<str:pi_number>/export/', sap_salesorder_views.export_pi_pdf, name='export_pi_pdf'),
+    path('pi/<str:pi_number>/cancel/', sap_salesorder_views.cancel_pi, name='cancel_pi'),
+    path('pi/<str:pi_number>/', sap_salesorder_views.pi_detail, name='pi_detail'),
 
 
 

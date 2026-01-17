@@ -50,6 +50,7 @@ class Customer(models.Model):
     salesman = models.ForeignKey('Salesman', on_delete=models.CASCADE, null=True, blank=True)
 
     phone_number = models.CharField(max_length=15, blank=True, null=True)
+    vat_number = models.CharField(max_length=100, blank=True, null=True, help_text="VAT Number - Business Partner")
 
     #added fields
     month_pending_1 = models.FloatField(default=0.0)
@@ -356,6 +357,8 @@ class SAPSalesorder(models.Model):
     salesman_name = models.CharField(max_length=255, blank=True, null=True)
     brand = models.CharField(max_length=255, blank=True, null=True)
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
+    vat_number = models.CharField(max_length=100, blank=True, null=True, help_text="VAT Number - Business Partner (from Excel upload)")
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Discount percentage for the entire sales order")
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     row_total_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
@@ -377,6 +380,7 @@ class SAPSalesorder(models.Model):
 
 class SAPSalesorderItem(models.Model):
     salesorder = models.ForeignKey(SAPSalesorder, related_name='items', on_delete=models.CASCADE)
+    line_no = models.IntegerField(default=1, help_text="Line number within the sales order (1-based)")
     item_no = models.CharField(max_length=100, blank=True, null=True)
     description = models.CharField(max_length=255)
     quantity = models.DecimalField(max_digits=12, decimal_places=2)
@@ -390,8 +394,63 @@ class SAPSalesorderItem(models.Model):
     total_available_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     dip_warehouse_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['salesorder', 'line_no']),
+        ]
+
     def __str__(self):
         return f"{self.salesorder.so_number} - {self.description}"
+
+
+# SAP Proforma Invoice (PI) Models
+class SAPProformaInvoice(models.Model):
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    salesorder = models.ForeignKey(SAPSalesorder, related_name='proforma_invoices', on_delete=models.CASCADE)
+    pi_number = models.CharField(max_length=100, unique=True, help_text="Format: <SO_NUMBER>-P<N>")
+    sequence = models.IntegerField(help_text="Sequence number (1, 2, 3...) within the SO")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    remarks = models.TextField(blank=True, null=True, help_text="Remarks/notes for the Proforma Invoice")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_pis')
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['salesorder', 'sequence']),
+            models.Index(fields=['status']),
+        ]
+        ordering = ['salesorder', 'sequence']
+
+    def __str__(self):
+        return f"{self.pi_number} - {self.salesorder.so_number}"
+
+
+class SAPProformaInvoiceLine(models.Model):
+    pi = models.ForeignKey(SAPProformaInvoice, related_name='lines', on_delete=models.CASCADE)
+    so_item = models.ForeignKey(SAPSalesorderItem, on_delete=models.SET_NULL, null=True, blank=True, help_text="Direct reference to SO item (for accurate allocation)")
+    so_number = models.CharField(max_length=100, help_text="SO number for re-upload safety")
+    line_no = models.IntegerField(help_text="Line number from SO item")
+    # Snapshot fields (for display if SO line is deleted/re-uploaded)
+    item_no = models.CharField(max_length=100, blank=True, null=True)
+    description = models.CharField(max_length=255)
+    manufacture = models.CharField(max_length=255, blank=True, null=True)
+    job_type = models.CharField(max_length=255, blank=True, null=True)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['pi']),
+            models.Index(fields=['so_number', 'line_no']),
+            models.Index(fields=['so_item']),
+        ]
+
+    def __str__(self):
+        return f"{self.pi.pi_number} - Line {self.line_no}: {self.description}"
 
 
 
@@ -481,6 +540,52 @@ class QuotationLog(models.Model):
     
 
 
+
+class ProformaInvoiceLog(models.Model):
+    ACTION_CHOICES = (
+        ("created", "Created"),
+        ("updated", "Updated"),
+        ("cancelled", "Cancelled"),
+    )
+
+    pi = models.ForeignKey(
+        'SAPProformaInvoice', related_name='logs', on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pi_logs',
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    location_lat = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    location_lng = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    network_label = models.CharField(
+        max_length=100, blank=True
+    )
+    device_type = models.CharField(max_length=20, blank=True)
+    device_os = models.CharField(max_length=100, blank=True)
+    device_browser = models.CharField(max_length=100, blank=True)
+
+    device = models.ForeignKey(
+        Device,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pi_logs',
+    )
+
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default="created")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.pi.pi_number} - {self.action} by {self.user or 'Anonymous'}"
 
 
 class OpenSalesOrder(models.Model):

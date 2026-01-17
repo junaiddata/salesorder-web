@@ -240,6 +240,39 @@
       color: var(--success);
     }
 
+    /* Totals list (Subtotal / VAT / Grand Total) */
+    .totals-list {
+      display: grid;
+      gap: 10px;
+    }
+    .totals-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    .totals-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .totals-value {
+      font-size: 1rem;
+      color: var(--text);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .totals-row.grand {
+      background: var(--primary-light);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    .totals-row.grand .totals-value {
+      color: var(--primary);
+    }
+
     /* Remarks */
     .remarks-textarea {
       width: 100%;
@@ -323,6 +356,19 @@
       text-align: right;
     }
 
+    /* PI columns styling */
+    th.pi-col,
+    td.pi-col {
+      background: #f0f9ff;
+      border-left: 2px solid #3b82f6;
+      font-weight: 600;
+    }
+
+    th.pi-col {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
     .item-badge {
       display: inline-flex;
       padding: 2px 8px;
@@ -394,6 +440,10 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Export PDF
         </a>
+        <!-- <a class="btn btn-success" href="{% url 'create_pi' salesorder.so_number %}">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+          Create PI
+        </a> -->
         {% if user.is_staff or user.is_superuser %}
           <a class="btn btn-secondary" href="{% url 'upload_salesorders' %}">Upload New</a>
         {% endif %}
@@ -434,26 +484,51 @@
         </div>
       </div>
 
+      <!-- PI Summary (only if PIs exist) -->
+      {% if pis.exists %}
+      <div class="card">
+        <div class="card-header">Proforma Invoice Summary</div>
+        <div class="card-body">
+          <div class="totals-list">
+            <div class="totals-row">
+              <div class="totals-label">Total PI Created Amount</div>
+              <div class="totals-value">{{ total_pi_amount|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Balance Amount</div>
+              <div class="totals-value">{{ balance_amount|floatformat:2 }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Totals -->
       <div class="card">
         <div class="card-header">Order Totals</div>
         <div class="card-body">
-          <div class="stats-row" style="margin-top:0; padding-top:0; border-top:none;">
-            <div class="stat-card highlight">
-              <div class="stat-card-label">Pending Total</div>
-              <div class="stat-card-value">{{ pending_total|floatformat:2 }}</div>
+          <div class="totals-list">
+            <div class="totals-row">
+              <div class="totals-label">Subtotal</div>
+              <div class="totals-value">{{ row_total_sum|floatformat:2 }}</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-card-label">Row Total Sum</div>
-              <div class="stat-card-value">{{ row_total_sum|floatformat:2 }}</div>
+            {% if discount_percentage != 0 %}
+            <div class="totals-row">
+              <div class="totals-label">Discount ({{ discount_percentage|floatformat:2 }}%)</div>
+              <div class="totals-value">{% if discount_amount < 0 %}{{ discount_amount|floatformat:2 }}{% else %}-{{ discount_amount|floatformat:2 }}{% endif %}</div>
             </div>
-            <div class="stat-card success">
-              <div class="stat-card-label">Remaining Open Qty</div>
-              <div class="stat-card-value">{{ remaining_open_qty_sum|floatformat:2 }}</div>
+            <div class="totals-row">
+              <div class="totals-label">Total Before Tax</div>
+              <div class="totals-value">{{ total_before_tax|floatformat:2 }}</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-card-label">Pending Amount Sum</div>
-              <div class="stat-card-value">{{ pending_amount_sum|floatformat:2 }}</div>
+            {% endif %}
+            <div class="totals-row">
+              <div class="totals-label">VAT (5%)</div>
+              <div class="totals-value">{{ vat_amount|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row grand">
+              <div class="totals-label">Grand Total</div>
+              <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
             </div>
           </div>
         </div>
@@ -477,6 +552,68 @@
       </div>
     </div>
 
+    <!-- PI Summary -->
+    {% if pis %}
+    <div class="card">
+      <div class="card-header">Proforma Invoices ({{ pis|length }})</div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>PI Number</th>
+                <th>Created At</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for pi in pis %}
+              <tr>
+                <td><strong>{{ pi.pi_number }}</strong></td>
+                <td>{{ pi.created_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                  {% if pi.status == 'ACTIVE' %}
+                    <span class="item-badge item-badge-open">Active</span>
+                  {% else %}
+                    <span class="item-badge item-badge-closed">Cancelled</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if pi.status == 'ACTIVE' %}
+                    <a class="btn btn-primary" href="{% url 'pi_detail' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">
+                      View
+                    </a>
+                    <a class="btn btn-primary" href="{% url 'export_pi_pdf' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">
+                      Export PDF
+                    </a>
+                    <a class="btn btn-success" href="{% url 'edit_pi' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">
+                      Edit
+                    </a>
+                    <form method="post" action="{% url 'cancel_pi' pi.pi_number %}" style="display: inline;">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.813rem;" onclick="return confirm('Are you sure you want to cancel this PI?');">
+                        Cancel
+                      </button>
+                    </form>
+                  {% else %}
+                    <a class="btn btn-primary" href="{% url 'pi_detail' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">
+                      View
+                    </a>
+                    <a class="btn btn-secondary" href="{% url 'export_pi_pdf' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">
+                      View PDF
+                    </a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Items Table -->
     <div class="card">
       <div class="card-header">Line Items ({{ items|length }})</div>
@@ -496,6 +633,8 @@
                 <th class="num">Pending Amt</th>
                 <th class="num">Avail. Stock</th>
                 <th class="num">DIP Stock</th>
+                <th class="num pi-col">PI Sent Qty</th>
+                <th class="num pi-col">Balance Qty</th>
               </tr>
             </thead>
             <tbody>
@@ -518,10 +657,12 @@
                 <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
                 <td class="num">{{ it.total_available_stock|default_if_none:"0"|floatformat:2 }}</td>
                 <td class="num">{{ it.dip_warehouse_stock|default_if_none:"0"|floatformat:2 }}</td>
+                <td class="num pi-col">{{ it.pi_allocated_qty|floatformat:2 }}</td>
+                <td class="num pi-col">{{ it.pi_remaining_qty|floatformat:2 }}</td>
               </tr>
               {% empty %}
               <tr>
-                <td colspan="11" class="empty-state">No line items found</td>
+                <td colspan="13" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>

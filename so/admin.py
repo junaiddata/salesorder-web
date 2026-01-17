@@ -53,7 +53,7 @@ class CustomerAdmin(admin.ModelAdmin):
 
 
 from django.contrib import admin
-from .models import Quotation, QuotationLog, Device  # adjust import if needed
+from .models import Quotation, QuotationLog, Device, SAPProformaInvoice, ProformaInvoiceLog  # adjust import if needed
 
 
 class QuotationLogInline(admin.TabularInline):
@@ -204,3 +204,45 @@ class DeviceAdmin(admin.ModelAdmin):
         log = obj.quotation_logs.order_by('-created_at').first()
         return log.location_lng if log else None
     location_lng.short_description = "Lng"
+
+
+class ProformaInvoiceLogInline(admin.TabularInline):
+    model = ProformaInvoiceLog
+    extra = 0
+    ordering = ('-created_at',)
+
+    readonly_fields = (
+        'user',
+        'device',
+        'device_type',
+        'device_os',
+        'device_browser',
+        'ip_address',
+        'network_label',
+        'location_lat',
+        'location_lng',
+        'user_agent',
+        'action',
+        'created_at',
+    )
+
+
+@admin.register(SAPProformaInvoice)
+class SAPProformaInvoiceAdmin(admin.ModelAdmin):
+    inlines = [ProformaInvoiceLogInline]
+    list_display = ('pi_number', 'salesorder', 'status', 'created_at', 'created_by')
+    list_filter = ('status', 'created_at')
+    search_fields = ('pi_number', 'salesorder__so_number', 'salesorder__customer_name')
+    readonly_fields = ('pi_number', 'sequence', 'created_at', 'updated_at', 'created_by')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('pi_number', 'salesorder', 'sequence', 'status')
+        }),
+        ('Details', {
+            'fields': ('remarks',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'created_by')
+        }),
+    )

@@ -172,9 +172,14 @@
             <ul>
                 <li>Excel format (.xls or .xlsx)</li>
                 <li>Maximum file size: 5MB</li>
-                <li>Include columns: customer_code, customer_name, salesman</li>
+                <li><strong>Required columns:</strong> BP Code (or Customer Code), BP Name (or Customer Name)</li>
+                <li><strong>Optional columns:</strong> VAT Number, Salesman</li>
                 <li>First row should contain headers</li>
+                <li>The system will match customers by BP Code/Customer Code and update their information</li>
             </ul>
+            <p style="margin-top: 12px; padding: 12px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                <strong>Note:</strong> Column names can be: "BP Code" or "Customer Code", "BP Name" or "Customer Name", "VAT Number" or "VAT Number - Business Partner"
+            </p>
         </div>
     </div>
 
