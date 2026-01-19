@@ -265,6 +265,18 @@ def upload_salesorders(request):
                 # Excel upload only (as requested)
                 df = pd.read_excel(excel_file)
 
+                # Filter to only process HO customers (customer code starts with "HO")
+                if 'Customer/Supplier No.' in df.columns:
+                    # Normalize customer code for filtering
+                    df['Customer/Supplier No.'] = df['Customer/Supplier No.'].astype(str).str.strip().str.upper()
+                    df = df[df['Customer/Supplier No.'].str.startswith('HO', na=False)].reset_index(drop=True)
+                    
+                    if len(df) == 0:
+                        messages_list.append("No sales orders found with customer codes starting with 'HO'.")
+                        return render(request, 'salesorders/upload_salesorders.html', {
+                            'messages': messages_list
+                        })
+
                 missing = [c for c in required_cols if c not in df.columns]
                 if missing:
                     messages_list.append(f"Missing columns: {', '.join(missing)}")
@@ -553,13 +565,15 @@ def salesorder_list(request):
         elif len(q) < 3:
             qs = qs.filter(
                 Q(customer_name__istartswith=q) |
-                Q(salesman_name__istartswith=q)
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
             )
         else:
             qs = qs.filter(
                 Q(so_number__icontains=q) |
                 Q(customer_name__icontains=q) |
-                Q(salesman_name__icontains=q)
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q)
             )
 
     # Status filter (based on derived status)
@@ -803,13 +817,15 @@ def salesorder_search(request):
         elif len(q) < 3:
             qs = qs.filter(
                 Q(customer_name__istartswith=q) |
-                Q(salesman_name__istartswith=q)
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
             )
         else:
             qs = qs.filter(
                 Q(so_number__icontains=q) |
                 Q(customer_name__icontains=q) |
-                Q(salesman_name__icontains=q)
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q)
             )
 
     # Status filter (based on derived status)
