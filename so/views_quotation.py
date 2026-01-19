@@ -856,7 +856,7 @@ def generate_junaid_quotation(buffer, quotation):
     
     # --- CONFIGURATION ---
     company_config = {
-        'name': "Junaid Sanitary & Electrical Trading LLC",
+        'name': "JUNAID SANITARY & ELECTRICAL REQUISITES TRADING LLC",
         'address': "Dubai Investment Parks 2, Dubai, UAE",
         'contact': "Email: sales@junaid.ae | Phone: +97142367723",
         'logo_url': "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp",
