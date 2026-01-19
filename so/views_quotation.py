@@ -714,7 +714,7 @@ class QuotationPDFTemplate(BaseDocTemplate):
     Dynamic template that accepts company details and theme colors.
     """
     def __init__(self, filename, company_config, theme_config, **kwargs):
-        self.company_name = company_config.get('name', "Junaid Sanitary & Electrical Trading LLC")
+        self.company_name = company_config.get('name', "JUNAID SANITARY & ELECTRICAL REQUISITES TRADING LLC")
         self.company_address = company_config.get('address', "Dubai Investment Parks 2, Dubai, UAE")
         self.company_contact = company_config.get('contact', "Email: sales@junaid.ae | Phone: +97142367723")
         self.logo_url = company_config.get('logo_url')

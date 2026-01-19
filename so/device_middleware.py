@@ -10,6 +10,22 @@ class DeviceRestrictionMiddleware:
         if not request.user.is_authenticated or request.path.startswith('/static/') or request.path.startswith('/media/'):
             return self.get_response(request)
 
+        # Bypass device restriction for localhost and internal IPs
+        host = request.get_host().lower()
+        remote_addr = request.META.get('REMOTE_ADDR', '')
+        
+        # Check if accessing from localhost or specific IP
+        allowed_hosts = [
+            'localhost',
+            '127.0.0.1',
+            '192.168.0.43',
+        ]
+        
+        # Check hostname/port or IP address
+        host_without_port = host.split(':')[0]
+        if host_without_port in allowed_hosts or remote_addr in allowed_hosts:
+            return self.get_response(request)
+
         # Allow registration pages
         allowed_urls = [
             reverse('register_device'),
