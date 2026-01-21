@@ -2644,10 +2644,26 @@ def pi_detail(request, pi_number):
     pi_lines = []
     for line in pi.lines.all().order_by('line_no', 'id'):
         so_item = line.so_item
+        if not so_item:
+            # Fallback for old PIs: try to find by salesorder and line_no
+            so_item = SAPSalesorderItem.objects.filter(
+                salesorder=salesorder,
+                line_no=line.line_no
+            ).first()
+        
+        if not so_item:
+            # Second fallback: try by item_no and line_no
+            so_item = SAPSalesorderItem.objects.filter(
+                salesorder=salesorder,
+                item_no=line.item_no,
+                line_no=line.line_no
+            ).first()
+        
         if so_item:
             qty = so_item.quantity or Decimal("0")
             row_total = so_item.row_total or Decimal("0")
-            if qty and qty != 0:
+            # Always calculate from row_total/qty for accuracy (price field may not be reliable)
+            if qty and qty != 0 and row_total:
                 unit_price = (row_total / qty).quantize(Decimal("0.01"))
             else:
                 unit_price = Decimal("0.00")
