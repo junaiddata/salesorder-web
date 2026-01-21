@@ -325,6 +325,10 @@
             <span class="info-label">Customer</span>
             <span class="info-value">{{ salesorder.customer_name }}</span>
           </div>
+          <div class="info-item">
+            <span class="info-label">LPO Date</span>
+            <span class="info-value">{% if pi.lpo_date %}{{ pi.lpo_date|date:"d/m/Y" }}{% else %}—{% endif %}</span>
+          </div>
         </div>
       </div>
     </div>

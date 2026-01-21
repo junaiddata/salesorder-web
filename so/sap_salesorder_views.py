@@ -1539,6 +1539,16 @@ def create_pi(request, so_number):
                 # Default standard format
                 remarks = "Note: Cheque to be prepared in favor of: \n1) JUNAID SANITARY & ELECTRICAL MAT. TRDG. LLC \nTax Registration Number 100225006400003\n2) PAYMENT : CDC Against Delivery\n3)  DELIVERY: Ex-Stock Subject to Receipt of cheque copy against this Proforma Invoice within 4 working days"
             
+            # Get LPO Date
+            lpo_date_str = request.POST.get('lpo_date', '').strip()
+            lpo_date = None
+            if lpo_date_str:
+                try:
+                    from datetime import datetime
+                    lpo_date = datetime.strptime(lpo_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    lpo_date = None
+            
             # Create PI
             pi = SAPProformaInvoice.objects.create(
                 salesorder=salesorder,
@@ -1546,6 +1556,7 @@ def create_pi(request, so_number):
                 sequence=next_seq,
                 status='ACTIVE',
                 remarks=remarks,
+                lpo_date=lpo_date,
                 created_by=request.user if request.user.is_authenticated else None,
             )
             
@@ -1796,7 +1807,8 @@ def export_pi_pdf(request, pi_number):
     # Get bp_reference_no - ensure we get the actual value
     bp_reference = str(salesorder.bp_reference_no).strip() if salesorder.bp_reference_no else ""
     posting_date = salesorder.posting_date.strftime('%d.%m.%y') if salesorder.posting_date else ''
-    lpo_date = ""
+    # Get LPO Date from PI (format: DD.MM.YY)
+    lpo_date = pi.lpo_date.strftime('%d.%m.%y') if pi.lpo_date else ""
     salesman = salesorder.salesman_name or ""
     
     # Get VAT Number from salesorder (from Excel upload)
@@ -2908,9 +2920,20 @@ def edit_pi(request, pi_number):
                     'items_with_data': items_with_data,
                 })
             
-            # Update PI remarks
+            # Get LPO Date
+            lpo_date_str = request.POST.get('lpo_date', '').strip()
+            lpo_date = None
+            if lpo_date_str:
+                try:
+                    from datetime import datetime
+                    lpo_date = datetime.strptime(lpo_date_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    lpo_date = None
+            
+            # Update PI remarks and lpo_date
             pi.remarks = remarks
-            pi.save(update_fields=['remarks'])
+            pi.lpo_date = lpo_date
+            pi.save(update_fields=['remarks', 'lpo_date'])
             
             # Delete existing PI lines
             pi.lines.all().delete()

@@ -343,6 +343,23 @@
             <div class="empty-state">No items available.</div>
           {% endif %}
 
+          <!-- LPO Date Section -->
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <label for="lpo_date" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.875rem;">
+              LPO Date <span style="color: var(--text-muted); font-weight: normal;">(will appear in PDF)</span>
+            </label>
+            <input 
+              type="date" 
+              id="lpo_date" 
+              name="lpo_date" 
+              value="{% if pi.lpo_date %}{{ pi.lpo_date|date:'Y-m-d' }}{% endif %}"
+              style="width: 100%; max-width: 300px; padding: 10px; font-size: 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: inherit;"
+            >
+            <p style="margin-top: 6px; font-size: 0.813rem; color: var(--text-muted);">
+              Optional: Enter the LPO (Letter of Purchase Order) date.
+            </p>
+          </div>
+
           <!-- Remarks Section -->
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
             <label for="remarks" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.875rem;">
