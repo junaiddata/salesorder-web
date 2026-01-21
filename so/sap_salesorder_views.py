@@ -2539,6 +2539,13 @@ def pi_list(request):
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     so_number_filter = request.GET.get('so_number', '').strip()
+    salesman_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
+
+    # Apply Salesman Filter
+    if salesman_filter:
+        clean_salesmen = [s for s in salesman_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesorder__salesman_name__in=clean_salesmen)
 
     # Search filter
     if q:
@@ -2609,15 +2616,27 @@ def pi_list(request):
     # Calculate total count
     total_count = paginator.count
 
+    # Distinct salesmen list (restricted to the same scope)
+    salesmen = (
+        SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+
     return render(request, 'salesorders/pi_list.html', {
         'page_obj': page_obj,
         'total_count': total_count,
+        'salesmen': salesmen,
         'filters': {
             'q': q,
             'status': status,
             'start': start,
             'end': end,
             'so_number': so_number_filter,
+            'salesman': salesman_filter,
             'page_size': page_size,
         }
     })
