@@ -92,6 +92,8 @@ urlpatterns += [
 
     # SAP Salesorder URLs
     path('sapsalesorders/upload/', sap_salesorder_views.upload_salesorders, name='upload_salesorders'),
+    path('sapsalesorders/sync-api/', sap_salesorder_views.sync_salesorders_from_api, name='sync_salesorders_api'),
+    path('sapsalesorders/sync-api-receive/', sap_salesorder_views.sync_salesorders_api_receive, name='sync_salesorders_api_receive'),
     path('sapsalesorders/', sap_salesorder_views.salesorder_list, name='salesorder_list'),
     path('sapsalesorders/ajax/', sap_salesorder_views.salesorder_search, name='salesorder_search'),
     path('sapsalesorders/<str:so_number>/', sap_salesorder_views.salesorder_detail, name='salesorder_detail'),

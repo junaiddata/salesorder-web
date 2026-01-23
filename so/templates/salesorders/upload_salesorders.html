@@ -259,7 +259,7 @@
   <div class="container">
     <header class="header">
       <h1>Upload Sales Orders</h1>
-      <p>Import SAP Sales Orders from Excel</p>
+      <p>Import SAP Sales Orders from Excel or Sync from API</p>
     </header>
 
     <div class="card">
@@ -271,6 +271,40 @@
             </ul>
           </div>
         {% endif %}
+
+        <!-- API Sync Section -->
+        <div style="margin-bottom: 24px; padding: 20px; background: var(--primary-light); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-sm);">
+          <h3 style="font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Sync from API (Live Data)
+          </h3>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 16px;">
+            Fetch all open orders and new orders from the last 5 days directly from SAP API.
+          </p>
+          <form method="post" action="{% url 'sync_salesorders_api' %}" style="display: inline-block;">
+            {% csrf_token %}
+            <input type="hidden" name="days_back" value="3">
+            <button type="submit" class="btn btn-primary" style="background: var(--success);">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Sync from API
+            </button>
+          </form>
+          {% if sync_stats %}
+            <div style="margin-top: 12px; padding: 12px; background: var(--surface); border-radius: var(--radius-sm); font-size: 0.813rem;">
+              <strong>Last Sync:</strong> {{ sync_stats.total_orders }} orders 
+              ({{ sync_stats.created }} created, {{ sync_stats.updated }} updated, {{ sync_stats.closed }} closed)
+            </div>
+          {% endif %}
+        </div>
+
+        <div style="text-align: center; margin: 24px 0; color: var(--text-muted); font-size: 0.875rem;">
+          <span style="display: inline-block; padding: 0 16px; background: var(--bg); position: relative; z-index: 1;">OR</span>
+          <hr style="margin: -12px 0 0 0; border: none; border-top: 1px solid var(--border);">
+        </div>
 
         <form method="post" enctype="multipart/form-data" id="upload-form">
           {% csrf_token %}

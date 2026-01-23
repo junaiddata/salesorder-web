@@ -24,6 +24,10 @@ from reportlab.graphics.shapes import Drawing, Line
 from reportlab.lib.styles import getSampleStyleSheet
 from django.conf import settings
 import requests
+import logging
+import json
+
+logger = logging.getLogger(__name__)
 
 # Import models
 from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog
@@ -32,6 +36,7 @@ from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPPro
 from .views import get_stock_costs, SALES_USER_MAP
 from .views_quotation import QuotationPDFTemplate, styles
 from .utils import get_client_ip, label_network, parse_device_info
+from .api_client import SAPAPIClient
 
 
 # Map usernames -> the exact salesman_name values they are allowed to see.
@@ -485,7 +490,7 @@ def upload_salesorders(request):
                             )
 
                             if len(items_to_create) >= 10000:
-                                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=10000)
+                                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
                                 items_to_create = []
 
                         if items_to_create:
@@ -506,6 +511,731 @@ def upload_salesorders(request):
 
 
 # =====================
+# Salesorder: API Sync
+# =====================
+@login_required
+def sync_salesorders_from_api(request):
+    """Sync sales orders from SAP API"""
+    messages_list = []
+    sync_stats = {
+        'created': 0,
+        'updated': 0,
+        'closed': 0,
+        'total_orders': 0,
+        'total_items': 0,
+        'api_calls': 0,
+        'errors': []
+    }
+    
+    if request.method == 'POST':
+        try:
+            client = SAPAPIClient()
+            days_back = int(request.POST.get('days_back', getattr(settings, 'SAP_SYNC_DAYS_BACK', 3)))
+            specific_date = request.POST.get('specific_date', '').strip()
+            docnum = request.POST.get('docnum', '').strip()
+            
+            # Fetch data from API
+            all_orders = []
+            
+            if docnum:
+                # Single DocNum query
+                orders = client.fetch_salesorders_by_docnum(int(docnum))
+                all_orders.extend(orders)
+                sync_stats['api_calls'] = 1
+            elif specific_date:
+                # Single date query
+                orders = client.fetch_salesorders_by_date(specific_date)
+                all_orders.extend(orders)
+                sync_stats['api_calls'] = 1
+            else:
+                # Default: sync all (open orders + last N days)
+                all_orders = client.sync_all_salesorders(days_back=days_back)
+                sync_stats['api_calls'] = 1 + days_back  # 1 for open orders + N for days
+            
+            # Filter by HO customers
+            all_orders = client._filter_ho_customers(all_orders)
+            
+            if not all_orders:
+                messages.warning(request, "No sales orders found (after filtering by HO customers).")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Map API responses to model format
+            mapped_orders = []
+            for api_order in all_orders:
+                try:
+                    mapped = client._map_api_response_to_model(api_order)
+                    mapped_orders.append(mapped)
+                except Exception as e:
+                    logger.error(f"Error mapping order {api_order.get('DocNum')}: {e}")
+                    sync_stats['errors'].append(f"Error mapping order {api_order.get('DocNum')}: {str(e)}")
+            
+            if not mapped_orders:
+                messages.error(request, "No orders could be mapped successfully.")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Get list of SO numbers from API response (for closing missing orders)
+            api_so_numbers = set(mapped['so_number'] for mapped in mapped_orders if mapped.get('so_number'))
+            
+            # Prepare data for bulk operations
+            so_numbers = [m['so_number'] for m in mapped_orders if m.get('so_number')]
+            sync_stats['total_orders'] = len(so_numbers)
+            
+            with transaction.atomic():
+                # Fetch existing orders
+                try:
+                    existing_map = SAPSalesorder.objects.in_bulk(so_numbers, field_name="so_number")
+                except TypeError:
+                    existing_map = {o.so_number: o for o in SAPSalesorder.objects.filter(so_number__in=so_numbers)}
+                
+                to_create = []
+                to_update = []
+                
+                def _dec2(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0.00")
+                        return Decimal(str(x)).quantize(Decimal("0.01"))
+                    except Exception:
+                        return Decimal("0.00")
+                
+                # Process each mapped order
+                for mapped in mapped_orders:
+                    so_no = mapped.get('so_number')
+                    if not so_no:
+                        continue
+                    
+                    defaults = {
+                        "posting_date": mapped.get('posting_date'),
+                        "customer_code": mapped.get('customer_code', ''),
+                        "customer_name": mapped.get('customer_name', ''),
+                        "bp_reference_no": mapped.get('bp_reference_no', ''),
+                        "salesman_name": mapped.get('salesman_name', ''),
+                        "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),  # Exact value from API
+                        "document_total": _dec2(mapped.get('document_total', 0)),
+                        "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
+                        "status": mapped.get('status', 'C'),
+                        "vat_number": mapped.get('vat_number', '') or '',  # VAT Number from BusinessPartner.FederalTaxID
+                        "customer_address": mapped.get('customer_address', '') or '',  # Address from main API response
+                        "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
+                        "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
+                        "last_synced_at": datetime.now(),  # Track sync time
+                    }
+                    
+                    if mapped.get('internal_number'):
+                        defaults["internal_number"] = mapped.get('internal_number')
+                    
+                    obj = existing_map.get(so_no)
+                    if obj is None:
+                        to_create.append(SAPSalesorder(so_number=so_no, **defaults))
+                        sync_stats['created'] += 1
+                    else:
+                        for k, v in defaults.items():
+                            setattr(obj, k, v)
+                        to_update.append(obj)
+                        sync_stats['updated'] += 1
+                
+                # Bulk create/update
+                if to_create:
+                    SAPSalesorder.objects.bulk_create(to_create, batch_size=5000)
+                
+                if to_update:
+                    update_fields = [
+                        "posting_date", "customer_code", "customer_name", "bp_reference_no",
+                        "salesman_name", "discount_percentage", "document_total", "row_total_sum",
+                        "status", "vat_number", "internal_number", "last_synced_at"
+                    ]
+                    SAPSalesorder.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+                
+                # Re-fetch ids for FK mapping
+                order_id_map = dict(
+                    SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
+                )
+                
+                # Delete existing items for these salesorders
+                SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
+                
+                # Build items list + bulk insert
+                items_to_create = []
+                
+                def _dec_any(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0")
+                        return Decimal(str(x))
+                    except Exception:
+                        return Decimal("0")
+                
+                for mapped in mapped_orders:
+                    so_no = mapped.get('so_number')
+                    so_id = order_id_map.get(so_no)
+                    if not so_id:
+                        continue
+                    
+                    for item_data in mapped.get('items', []):
+                        items_to_create.append(
+                            SAPSalesorderItem(
+                                salesorder_id=so_id,
+                                line_no=item_data.get('line_no', 1),
+                                item_no=item_data.get('item_no', ''),
+                                description=item_data.get('description', ''),
+                                quantity=_dec_any(item_data.get('quantity', 0)),
+                                price=_dec_any(item_data.get('price', 0)),
+                                row_total=_dec_any(item_data.get('row_total', 0)),
+                                row_status=item_data.get('row_status', 'C'),
+                                job_type=item_data.get('job_type', ''),
+                                manufacture=item_data.get('manufacture', ''),
+                                remaining_open_quantity=_dec_any(item_data.get('remaining_open_quantity', 0)),
+                                pending_amount=_dec_any(item_data.get('pending_amount', 0)),
+                                total_available_stock=_dec_any(item_data.get('total_available_stock', 0)),
+                                dip_warehouse_stock=_dec_any(item_data.get('dip_warehouse_stock', 0)),
+                            )
+                        )
+                        
+                        if len(items_to_create) >= 10000:
+                            SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=10000)
+                            items_to_create = []
+                
+                if items_to_create:
+                    SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
+                
+                sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_orders)
+                
+                # Close missing orders (orders that were open but not in API response)
+                # Find orders that were previously open but are NOT in the API response
+                previously_open_orders = SAPSalesorder.objects.filter(
+                    status__in=['O', 'OPEN'],
+                    so_number__isnull=False
+                ).exclude(so_number__in=api_so_numbers)
+                
+                closed_count = 0
+                for order in previously_open_orders:
+                    order.status = 'C'
+                    order.save(update_fields=['status'])
+                    
+                    # Close all items
+                    order.items.all().update(
+                        row_status='C',
+                        remaining_open_quantity=Decimal('0'),
+                        pending_amount=Decimal('0')
+                    )
+                    closed_count += 1
+                
+                sync_stats['closed'] = closed_count
+                
+                # Create/Update SAP PIs for orders where is_sap_pi=True
+                from so.models import SAPProformaInvoice, SAPProformaInvoiceLine
+                sap_pis_created = 0
+                sap_pis_updated = 0
+                
+                for mapped in mapped_orders:
+                    so_no = mapped.get('so_number')
+                    is_sap_pi = mapped.get('is_sap_pi', False)
+                    sap_pi_lpo_date = mapped.get('sap_pi_lpo_date')
+                    
+                    if not is_sap_pi or not so_no:
+                        continue
+                    
+                    try:
+                        salesorder = SAPSalesorder.objects.get(so_number=so_no)
+                        
+                        # SAP PI numbering requirement: use the SAME number as the Sales Order.
+                        # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
+                        desired_pi_number = f"{so_no}"
+                        legacy_pi_number = f"{so_no}-SAP"
+                        pi_number = desired_pi_number
+                        
+                        # Check if SAP PI already exists (new or legacy number)
+                        sap_pi = SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).first()
+                        created = False
+                        if sap_pi is None:
+                            sap_pi = SAPProformaInvoice.objects.filter(pi_number=legacy_pi_number).first()
+                            if sap_pi is not None:
+                                # Rename legacy PI number to desired one (if free)
+                                if not SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).exists():
+                                    sap_pi.pi_number = desired_pi_number
+                                    sap_pi.save(update_fields=["pi_number"])
+                        if sap_pi is None:
+                            sap_pi = SAPProformaInvoice.objects.create(
+                                pi_number=desired_pi_number,
+                                salesorder=salesorder,
+                                sequence=0,  # SAP PIs use sequence 0
+                                status='ACTIVE',
+                                is_sap_pi=True,
+                            )
+                            created = True
+                        
+                        if not created:
+                            # Update existing SAP PI
+                            sap_pi.salesorder = salesorder
+                            sap_pi.status = 'ACTIVE'
+                            sap_pi.is_sap_pi = True
+                            if sap_pi_lpo_date:
+                                sap_pi.lpo_date = sap_pi_lpo_date
+                            sap_pi.save()
+                            sap_pis_updated += 1
+                        else:
+                            if sap_pi_lpo_date:
+                                sap_pi.lpo_date = sap_pi_lpo_date
+                                sap_pi.save(update_fields=["lpo_date"])
+                            sap_pis_created += 1
+                        
+                        # Delete existing lines and recreate from SO items
+                        sap_pi.lines.all().delete()
+                        
+                        # Create PI lines from all SO items
+                        so_items = salesorder.items.all().order_by('line_no')
+                        pi_lines_to_create = []
+                        
+                        for so_item in so_items:
+                            pi_lines_to_create.append(
+                                SAPProformaInvoiceLine(
+                                    pi=sap_pi,
+                                    so_item=so_item,
+                                    so_number=so_no,
+                                    line_no=so_item.line_no,
+                                    item_no=so_item.item_no or '',
+                                    description=so_item.description or '',
+                                    manufacture=so_item.manufacture or '',
+                                    job_type=so_item.job_type or '',
+                                    quantity=so_item.quantity or Decimal('0'),
+                                )
+                            )
+                        
+                        if pi_lines_to_create:
+                            SAPProformaInvoiceLine.objects.bulk_create(pi_lines_to_create, batch_size=1000)
+                        
+                    except SAPSalesorder.DoesNotExist:
+                        logger.warning(f"Salesorder {so_no} not found when creating SAP PI")
+                        continue
+                    except Exception as e:
+                        logger.error(f"Error creating SAP PI for {so_no}: {e}")
+                        continue
+                
+                # Update Customer model with address and phone from API (outside atomic block to avoid transaction issues)
+                from so.models import Customer
+                for mapped in mapped_orders:
+                    customer_code = mapped.get('customer_code', '').strip()
+                    customer_address = mapped.get('customer_address', '').strip()
+                    customer_phone = mapped.get('customer_phone', '').strip()
+                    
+                    if customer_code:
+                        try:
+                            # Truncate phone to current field max_length (safety check - until migration is run)
+                            if customer_phone:
+                                max_phone_len = Customer._meta.get_field('phone_number').max_length
+                                if len(customer_phone) > max_phone_len:
+                                    customer_phone = customer_phone[:max_phone_len]
+                                    logger.warning(f"Truncated phone number for customer {customer_code} to {max_phone_len} chars")
+                            
+                            customer, created = Customer.objects.get_or_create(
+                                customer_code=customer_code,
+                                defaults={'customer_name': mapped.get('customer_name', '').strip() or customer_code}
+                            )
+                            # Update address and phone if provided
+                            if customer_address:
+                                customer.address = customer_address
+                            if customer_phone:
+                                customer.phone_number = customer_phone
+                            # Update VAT number if provided
+                            vat_num = mapped.get('vat_number', '').strip()
+                            if vat_num:
+                                customer.vat_number = vat_num
+                            customer.save()
+                        except Exception as e:
+                            logger.warning(f"Error updating Customer {customer_code}: {e}")
+                
+                messages.success(
+                    request,
+                    f"Synced {sync_stats['total_orders']} sales orders: "
+                    f"{sync_stats['created']} created, {sync_stats['updated']} updated, "
+                    f"{sync_stats['closed']} closed. Total items: {sync_stats['total_items']}. "
+                    f"SAP PIs: {sap_pis_created} created, {sap_pis_updated} updated."
+                )
+                return redirect('salesorder_list')
+                
+        except Exception as e:
+            logger.exception("Error syncing sales orders from API")
+            messages.error(request, f"Error syncing from API: {str(e)}")
+            sync_stats['errors'].append(str(e))
+    
+    return render(request, 'salesorders/upload_salesorders.html', {
+        'messages': messages_list,
+        'sync_stats': sync_stats
+    })
+
+
+# =====================
+# Salesorder: API Sync Receive (from PC script)
+# =====================
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+@require_POST
+def sync_salesorders_api_receive(request):
+    """
+    Receive sales orders data from PC script via HTTP API
+    This endpoint is called by the PC sync script
+    """
+    from django.http import JsonResponse
+    
+    try:
+        # Get data from request (JSON)
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            # Try to parse as JSON anyway
+            try:
+                data = json.loads(request.body)
+            except:
+                data = request.POST.dict()
+        
+        # Verify API key
+        api_key = data.get('api_key')
+        expected_key = getattr(settings, 'VPS_API_KEY', 'your-secret-api-key')
+        
+        if not api_key or api_key != expected_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key'
+            }, status=401)
+        
+        orders = data.get('orders', [])
+        api_so_numbers = data.get('api_so_numbers', [])
+        
+        if not orders:
+            return JsonResponse({
+                'success': False,
+                'error': 'No orders provided'
+            })
+        
+        # Process orders (reuse existing sync logic)
+        stats = {
+            'created': 0,
+            'updated': 0,
+            'closed': 0,
+            'total_items': 0
+        }
+        
+        so_numbers = [m['so_number'] for m in orders if m.get('so_number')]
+        api_so_numbers_set = set(api_so_numbers)
+        
+        with transaction.atomic():
+            # Fetch existing orders
+            try:
+                existing_map = {o.so_number: o for o in SAPSalesorder.objects.filter(so_number__in=so_numbers)}
+            except Exception:
+                existing_map = {}
+            
+            to_create = []
+            to_update = []
+            
+            def _dec2(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0.00")
+                    return Decimal(str(x)).quantize(Decimal("0.01"))
+                except Exception:
+                    return Decimal("0.00")
+            
+            # Process each mapped order
+            for mapped in orders:
+                so_no = mapped.get('so_number')
+                if not so_no:
+                    continue
+                
+                # Parse posting_date if it's a string
+                posting_date = mapped.get('posting_date')
+                if isinstance(posting_date, str):
+                    try:
+                        posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        posting_date = None
+                elif posting_date and hasattr(posting_date, 'date'):
+                    posting_date = posting_date.date() if hasattr(posting_date, 'date') else posting_date
+
+                # Parse SAP PI LPO date (U_Lpdate) if it's a string
+                sap_pi_lpo_date = mapped.get('sap_pi_lpo_date')
+                if isinstance(sap_pi_lpo_date, str):
+                    try:
+                        sap_pi_lpo_date = datetime.strptime(sap_pi_lpo_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        sap_pi_lpo_date = None
+                elif sap_pi_lpo_date and hasattr(sap_pi_lpo_date, 'date'):
+                    sap_pi_lpo_date = sap_pi_lpo_date.date() if hasattr(sap_pi_lpo_date, 'date') else sap_pi_lpo_date
+                
+                defaults = {
+                    "posting_date": posting_date,
+                    "customer_code": mapped.get('customer_code', ''),
+                    "customer_name": mapped.get('customer_name', ''),
+                    "bp_reference_no": mapped.get('bp_reference_no', ''),
+                    "salesman_name": mapped.get('salesman_name', ''),
+                    "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),  # Exact value from API
+                    "document_total": _dec2(mapped.get('document_total', 0)),
+                    "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
+                    "status": mapped.get('status', 'C'),
+                    "vat_number": mapped.get('vat_number', '') or '',  # VAT Number from BusinessPartner.FederalTaxID
+                    "customer_address": mapped.get('customer_address', '') or '',  # Address from main API response
+                    "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
+                    "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
+                }
+                
+                # Add last_synced_at only if field exists in model (after migration)
+                if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
+                    defaults["last_synced_at"] = datetime.now()
+                
+                if mapped.get('internal_number'):
+                    defaults["internal_number"] = mapped.get('internal_number')
+                
+                obj = existing_map.get(so_no)
+                if obj is None:
+                    to_create.append(SAPSalesorder(so_number=so_no, **defaults))
+                    stats['created'] += 1
+                else:
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    to_update.append(obj)
+                    stats['updated'] += 1
+            
+            # Bulk create/update (optimized batch sizes for better performance)
+            if to_create:
+                SAPSalesorder.objects.bulk_create(to_create, batch_size=5000)
+            
+            if to_update:
+                update_fields = [
+                    "posting_date", "customer_code", "customer_name", "bp_reference_no",
+                    "salesman_name", "discount_percentage", "document_total", "row_total_sum",
+                    "status", "vat_number", "customer_address", "customer_phone", "internal_number", "is_sap_pi"
+                ]
+                # Add last_synced_at only if field exists in model (after migration)
+                if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
+                    update_fields.append("last_synced_at")
+                    # Update last_synced_at for all objects being updated
+                    for obj in to_update:
+                        obj.last_synced_at = datetime.now()
+                
+                SAPSalesorder.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+            
+            # Re-fetch ids for FK mapping
+            order_id_map = dict(
+                SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
+            )
+            
+            # Delete existing items for these salesorders
+            SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
+            
+            # Build items list + bulk insert
+            items_to_create = []
+            
+            def _dec_any(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0")
+                    return Decimal(str(x))
+                except Exception:
+                    return Decimal("0")
+            
+            for mapped in orders:
+                so_no = mapped.get('so_number')
+                so_id = order_id_map.get(so_no)
+                if not so_id:
+                    continue
+                
+                for item_data in mapped.get('items', []):
+                    items_to_create.append(
+                        SAPSalesorderItem(
+                            salesorder_id=so_id,
+                            line_no=item_data.get('line_no', 1),
+                            item_no=item_data.get('item_no', ''),
+                            description=item_data.get('description', ''),
+                            quantity=_dec_any(item_data.get('quantity', 0)),
+                            price=_dec_any(item_data.get('price', 0)),
+                            row_total=_dec_any(item_data.get('row_total', 0)),
+                            row_status=item_data.get('row_status', 'C'),
+                            job_type=item_data.get('job_type', ''),
+                            manufacture=item_data.get('manufacture', ''),
+                            remaining_open_quantity=_dec_any(item_data.get('remaining_open_quantity', 0)),
+                            pending_amount=_dec_any(item_data.get('pending_amount', 0)),
+                            total_available_stock=_dec_any(item_data.get('total_available_stock', 0)),
+                            dip_warehouse_stock=_dec_any(item_data.get('dip_warehouse_stock', 0)),
+                        )
+                    )
+                    
+                    if len(items_to_create) >= 20000:
+                        SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
+                        items_to_create = []
+            
+            if items_to_create:
+                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
+            
+            stats['total_items'] = sum(len(m.get('items', [])) for m in orders)
+            
+            # Close missing orders
+            previously_open_orders = SAPSalesorder.objects.filter(
+                status__in=['O', 'OPEN'],
+                so_number__isnull=False
+            ).exclude(so_number__in=api_so_numbers_set)
+            
+            closed_count = 0
+            for order in previously_open_orders:
+                order.status = 'C'
+                order.save(update_fields=['status'])
+                
+                SAPSalesorderItem.objects.filter(salesorder=order).update(
+                    row_status='C',
+                    remaining_open_quantity=Decimal('0'),
+                    pending_amount=Decimal('0')
+                )
+                closed_count += 1
+            
+            stats['closed'] = closed_count
+            
+            # Create/Update SAP PIs for orders where is_sap_pi=True
+            from so.models import SAPProformaInvoice, SAPProformaInvoiceLine
+            stats['sap_pis_created'] = 0
+            stats['sap_pis_updated'] = 0
+            
+            for mapped in orders:
+                so_no = mapped.get('so_number')
+                is_sap_pi = mapped.get('is_sap_pi', False)
+                sap_pi_lpo_date = mapped.get('sap_pi_lpo_date')
+                
+                if not is_sap_pi or not so_no:
+                    continue
+                
+                try:
+                    salesorder = SAPSalesorder.objects.get(so_number=so_no)
+                    
+                    # SAP PI numbering requirement: use the SAME number as the Sales Order.
+                    # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
+                    desired_pi_number = f"{so_no}"
+                    legacy_pi_number = f"{so_no}-SAP"
+                    pi_number = desired_pi_number
+                    
+                    # Check if SAP PI already exists (new or legacy number)
+                    sap_pi = SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).first()
+                    created = False
+                    if sap_pi is None:
+                        sap_pi = SAPProformaInvoice.objects.filter(pi_number=legacy_pi_number).first()
+                        if sap_pi is not None:
+                            if not SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).exists():
+                                sap_pi.pi_number = desired_pi_number
+                                sap_pi.save(update_fields=["pi_number"])
+                    if sap_pi is None:
+                        sap_pi = SAPProformaInvoice.objects.create(
+                            pi_number=desired_pi_number,
+                            salesorder=salesorder,
+                            sequence=0,  # SAP PIs use sequence 0
+                            status='ACTIVE',
+                            is_sap_pi=True,
+                        )
+                        created = True
+                    
+                    if not created:
+                        # Update existing SAP PI
+                        sap_pi.salesorder = salesorder
+                        sap_pi.status = 'ACTIVE'
+                        sap_pi.is_sap_pi = True
+                        if sap_pi_lpo_date:
+                            sap_pi.lpo_date = sap_pi_lpo_date
+                        sap_pi.save()
+                        stats['sap_pis_updated'] += 1
+                    else:
+                        if sap_pi_lpo_date:
+                            sap_pi.lpo_date = sap_pi_lpo_date
+                            sap_pi.save(update_fields=["lpo_date"])
+                        stats['sap_pis_created'] += 1
+                    
+                    # Delete existing lines and recreate from SO items
+                    sap_pi.lines.all().delete()
+                    
+                    # Create PI lines from all SO items
+                    so_items = salesorder.items.all().order_by('line_no')
+                    pi_lines_to_create = []
+                    
+                    for so_item in so_items:
+                        pi_lines_to_create.append(
+                            SAPProformaInvoiceLine(
+                                pi=sap_pi,
+                                so_item=so_item,
+                                so_number=so_no,
+                                line_no=so_item.line_no,
+                                item_no=so_item.item_no or '',
+                                description=so_item.description or '',
+                                manufacture=so_item.manufacture or '',
+                                job_type=so_item.job_type or '',
+                                quantity=so_item.quantity or Decimal('0'),
+                            )
+                        )
+                    
+                    if pi_lines_to_create:
+                        SAPProformaInvoiceLine.objects.bulk_create(pi_lines_to_create, batch_size=1000)
+                    
+                except SAPSalesorder.DoesNotExist:
+                    logger.warning(f"Salesorder {so_no} not found when creating SAP PI")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error creating SAP PI for {so_no}: {e}")
+                    continue
+        
+        # Update Customer model with address and phone from API (outside atomic block to avoid transaction issues)
+        from so.models import Customer
+        for mapped in orders:
+            customer_code = mapped.get('customer_code', '').strip()
+            customer_address = mapped.get('customer_address', '').strip()
+            customer_phone = mapped.get('customer_phone', '').strip()
+            
+            if customer_code:
+                try:
+                    # Truncate phone to max 50 chars (safety check - until migration is run, also check for old 15 char limit)
+                    if customer_phone:
+                        # Check current field max_length from database
+                        max_phone_len = Customer._meta.get_field('phone_number').max_length
+                        if len(customer_phone) > max_phone_len:
+                            customer_phone = customer_phone[:max_phone_len]
+                            logger.warning(f"Truncated phone number for customer {customer_code} to {max_phone_len} chars")
+                    
+                    customer, created = Customer.objects.get_or_create(
+                        customer_code=customer_code,
+                        defaults={'customer_name': mapped.get('customer_name', '').strip() or customer_code}
+                    )
+                    # Update address and phone if provided
+                    if customer_address:
+                        customer.address = customer_address
+                    if customer_phone:
+                        customer.phone_number = customer_phone
+                    # Update VAT number if provided
+                    vat_num = mapped.get('vat_number', '').strip()
+                    if vat_num:
+                        customer.vat_number = vat_num
+                    customer.save()
+                except Exception as e:
+                    logger.warning(f"Error updating Customer {customer_code}: {e}")
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats,
+            'message': f'Synced {len(orders)} orders successfully'
+        })
+        
+    except Exception as e:
+        logger.exception('Error in sync_salesorders_api_receive')
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Full error traceback: {error_details}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }, status=500)
+
+
+# =====================
 # Salesorder: List
 # =====================
 @login_required
@@ -521,6 +1251,11 @@ def salesorder_list(request):
             When(has_open=True, then=Value("O")),
             default=Value("C"),
             output_field=CharField(),
+        ),
+        # Calculate pending_total = sum of pending_amount from all items
+        pending_total=Coalesce(
+            Sum('items__pending_amount'),
+            Value(0, output_field=DecimalField())
         ),
     )
 
@@ -618,7 +1353,7 @@ def salesorder_list(request):
     total_2025 = yearly_agg['total_2025']
     total_2026 = yearly_agg['total_2026']
 
-    qs = qs.order_by('-posting_date', '-created_at')
+    qs = qs.order_by('-posting_date', '-so_number')
 
     # Pagination
     try:
@@ -700,7 +1435,11 @@ def salesorder_detail(request, so_number):
         status_label = status_raw or "—"
 
     # Totals
-    pending_total = salesorder.document_total
+    # Pending Total = Sum of OpenAmount (pending_amount) from all items
+    pending_total = items.aggregate(
+        total=Coalesce(Sum("pending_amount"), Value(0, output_field=DecimalField()))
+    )["total"] or Decimal("0.00")
+    
     row_total_sum = getattr(salesorder, "row_total_sum", None)
     row_total_calc_sum = Decimal("0")
 
@@ -719,22 +1458,34 @@ def salesorder_detail(request, so_number):
         it.pi_allocated_qty = allocated.get(it.id, Decimal("0"))
         it.pi_remaining_qty = max(Decimal("0"), qty - it.pi_allocated_qty)
 
-    if pending_total is None:
-        pending_total = items.aggregate(
-            total=Coalesce(Sum("pending_amount"), Value(0, output_field=DecimalField()))
-        )["total"]
     if row_total_sum is None:
         row_total_sum = row_total_calc_sum
 
-    # Discount calculation (before tax)
-    discount_percentage = salesorder.discount_percentage or Decimal("0.00")
-    discount_amount = (row_total_sum * discount_percentage / 100).quantize(Decimal("0.01")) if row_total_sum is not None else Decimal("0.00")
-    total_before_tax = (row_total_sum - discount_amount).quantize(Decimal("0.01")) if row_total_sum is not None else Decimal("0.00")
+    # Use values from API if available, otherwise calculate
+    # Subtotal = row_total_sum (sum of all line totals)
+    subtotal = row_total_sum or Decimal("0.00")
     
-    # VAT / Grand Total (based on Total Before Tax)
+    # Discount: Use from API if available, otherwise calculate
+    # For API data: discount_percentage is exact value, but we display rounded to 1 decimal
+    discount_percentage_exact = salesorder.discount_percentage or Decimal("0.00")
+    discount_percentage_display = round(float(discount_percentage_exact), 1)  # Round to 1 decimal for display
+    
+    # Use TotalDiscount from API directly (if we had it stored), otherwise calculate from percentage
+    # For now, calculate from percentage (we'll store TotalDiscount from API in future if needed)
+    discount_amount = (subtotal * discount_percentage_exact / 100).quantize(Decimal("0.01")) if subtotal is not None else Decimal("0.00")
+    total_before_tax = (subtotal - discount_amount).quantize(Decimal("0.01")) if subtotal is not None else Decimal("0.00")
+    
+    # VAT: Use VatSum from API directly (if we had it stored), otherwise calculate at 5%
+    # For now, calculate at 5% (we'll store VatSum from API in future if needed)
     vat_rate = Decimal("0.05")
     vat_amount = (total_before_tax * vat_rate).quantize(Decimal("0.01")) if total_before_tax is not None else Decimal("0.00")
-    grand_total = (total_before_tax + vat_amount).quantize(Decimal("0.01")) if total_before_tax is not None else Decimal("0.00")
+    
+    # Grand Total calculation: Subtotal - TotalDiscount + VatSum
+    # Formula: Grand Total = Subtotal - Discount + VAT
+    grand_total = (subtotal - discount_amount + vat_amount).quantize(Decimal("0.01"))
+    
+    # Pending Total = sum of OpenAmount (already stored in document_total from API sync)
+    # This represents the open/pending amount, not the full document total
     
     # Calculate Total PI Amount (sum of all active PI line totals)
     total_pi_amount = Decimal("0.00")
@@ -764,7 +1515,9 @@ def salesorder_detail(request, so_number):
         'status_label': status_label,
         'pending_total': pending_total,
         'row_total_sum': row_total_sum,
-        'discount_percentage': discount_percentage,
+        'subtotal': subtotal,
+        'discount_percentage': discount_percentage_display,  # Display rounded to 1 decimal
+        'discount_percentage_exact': discount_percentage_exact,  # Exact value for calculations
         'discount_amount': discount_amount,
         'total_before_tax': total_before_tax,
         'vat_amount': vat_amount,
@@ -792,6 +1545,11 @@ def salesorder_search(request):
             When(has_open=True, then=Value("O")),
             default=Value("C"),
             output_field=CharField(),
+        ),
+        # Calculate pending_total = sum of pending_amount from all items
+        pending_total=Coalesce(
+            Sum('items__pending_amount'),
+            Value(0, output_field=DecimalField())
         ),
     )
 
@@ -883,7 +1641,7 @@ def salesorder_search(request):
     )['total']
 
     # Order + Pagination
-    qs = qs.order_by('-posting_date', '-created_at')
+    qs = qs.order_by('-posting_date', '-so_number')
 
     try:
         page_size = int(request.GET.get('page_size', 20))
@@ -1172,8 +1930,13 @@ def export_salesorder_list_pdf(request):
             default=Value("C"),
             output_field=CharField(),
         ),
+        # Calculate pending_total = sum of pending_amount from all items
+        pending_total=Coalesce(
+            Sum('items__pending_amount'),
+            Value(0, output_field=DecimalField())
+        ),
     )
-    
+
     q = request.GET.get('q', '').strip()
     salesman = request.GET.get('salesman', '').strip()
     start = request.GET.get('start', '').strip()
@@ -1822,20 +2585,28 @@ def export_pi_pdf(request, pi_number):
                 vat_str = vat_str[:-2]
             vat_number = vat_str
     
-    # Get other customer details (if needed)
+    # Get customer address and phone from SAPSalesorder (from API)
+    customer_address = salesorder.customer_address or ""
+    customer_tel = salesorder.customer_phone or ""
+    
+    # Also try to get from Customer model as fallback
     customer_email = ""
     customer_po_box = ""
-    customer_tel = ""
     customer_fax = ""
     if customer_code:
         try:
             from .models import Customer
             customer = Customer.objects.filter(customer_code=customer_code).first()
             if customer:
-                customer_email = customer.email or ""
-                customer_po_box = customer.po_box or ""
-                customer_tel = customer.phone or ""
-                customer_fax = customer.fax or ""
+                # Use Customer model data if not available in SAPSalesorder
+                if not customer_address and customer.address:
+                    customer_address = customer.address
+                if not customer_tel and customer.phone_number:
+                    customer_tel = customer.phone_number
+                # These fields may not exist in Customer model, but check anyway
+                customer_email = getattr(customer, 'email', '') or ""
+                customer_po_box = getattr(customer, 'po_box', '') or ""
+                customer_fax = getattr(customer, 'fax', '') or ""
         except Exception:
             pass
     
@@ -2176,12 +2947,24 @@ def export_pi_pdf(request, pi_number):
     cust_left = []
     cust_left.append([Paragraph(f"<b>{customer_name}</b>", customer_bold)])
     cust_left.append([Spacer(1, 0.05*inch)])
-    cust_left.append([Paragraph(f"PO BOX {customer_po_box}", address_style)])
-    cust_left.append([Spacer(1, 0.05*inch)])
-    cust_left.append([Paragraph(f"TEL: {customer_tel}", address_style)])
-    cust_left.append([Paragraph(f"FAX: {customer_fax}", address_style)])
-    cust_left.append([Spacer(1, 0.05*inch)])
-    cust_left.append([Paragraph(f"{customer_email}", email_style)])
+    # Add address if available (from API)
+    if customer_address:
+        cust_left.append([Paragraph(f"{customer_address}", address_style)])
+        cust_left.append([Spacer(1, 0.05*inch)])
+    # Add PO BOX if available
+    if customer_po_box:
+        cust_left.append([Paragraph(f"PO BOX {customer_po_box}", address_style)])
+        cust_left.append([Spacer(1, 0.05*inch)])
+    # Add TEL if available (from API)
+    if customer_tel:
+        cust_left.append([Paragraph(f"TEL: {customer_tel}", address_style)])
+    # Add FAX if available
+    if customer_fax:
+        cust_left.append([Paragraph(f"FAX: {customer_fax}", address_style)])
+    # Add email if available
+    if customer_email:
+        cust_left.append([Spacer(1, 0.05*inch)])
+        cust_left.append([Paragraph(f"{customer_email}", email_style)])
     
     cust_left_table = Table(cust_left, colWidths=[3.2*inch])
     cust_left_table.setStyle(TableStyle([
@@ -2708,10 +3491,12 @@ def pi_detail(request, pi_number):
             'line_total': line_total,
         })
     
-    # Calculate totals
+    # Calculate totals (keep same logic for PI)
     subtotal = sum(item['line_total'] for item in pi_lines)
-    discount_percentage = salesorder.discount_percentage or Decimal("0.00")
-    discount_amount = (subtotal * discount_percentage / 100).quantize(Decimal("0.01"))
+    # Use exact discount_percentage for calculations (from API)
+    discount_percentage_exact = salesorder.discount_percentage or Decimal("0.00")
+    discount_percentage_display = round(float(discount_percentage_exact), 1)  # Round to 1 decimal for display
+    discount_amount = (subtotal * discount_percentage_exact / 100).quantize(Decimal("0.01"))
     total_before_tax = (subtotal - discount_amount).quantize(Decimal("0.01"))
     vat_rate = Decimal("0.05")
     vat_amount = (total_before_tax * vat_rate).quantize(Decimal("0.01"))
@@ -2722,7 +3507,8 @@ def pi_detail(request, pi_number):
         'salesorder': salesorder,
         'pi_lines': pi_lines,
         'subtotal': subtotal,
-        'discount_percentage': discount_percentage,
+        'discount_percentage': discount_percentage_display,  # Display rounded to 1 decimal
+        'discount_percentage_exact': discount_percentage_exact,  # Exact value for calculations
         'discount_amount': discount_amount,
         'total_before_tax': total_before_tax,
         'vat_amount': vat_amount,

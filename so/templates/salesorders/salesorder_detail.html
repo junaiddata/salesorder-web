@@ -510,11 +510,11 @@
           <div class="totals-list">
             <div class="totals-row">
               <div class="totals-label">Subtotal</div>
-              <div class="totals-value">{{ row_total_sum|floatformat:2 }}</div>
+              <div class="totals-value">{{ subtotal|floatformat:2 }}</div>
             </div>
             {% if discount_percentage != 0 %}
             <div class="totals-row">
-              <div class="totals-label">Discount ({{ discount_percentage|floatformat:2 }}%)</div>
+              <div class="totals-label">Discount ({{ discount_percentage|floatformat:1 }}%)</div>
               <div class="totals-value">{% if discount_amount < 0 %}{{ discount_amount|floatformat:2 }}{% else %}-{{ discount_amount|floatformat:2 }}{% endif %}</div>
             </div>
             <div class="totals-row">

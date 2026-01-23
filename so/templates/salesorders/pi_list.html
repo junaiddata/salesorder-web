@@ -448,7 +448,12 @@
             {% for pi in page_obj %}
               <tr>
                 <td>{{ pi.created_at|date:"d/m/Y" }}</td>
-                <td><a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a></td>
+                <td>
+                  <a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a>
+                  {% if pi.is_sap_pi %}
+                    <span class="badge" style="background: #4A90D9; color: white; font-size: 0.7rem; margin-left: 4px; padding: 2px 6px;">SAP</span>
+                  {% endif %}
+                </td>
                 <td><a href="{% url 'salesorder_detail' pi.salesorder.so_number %}" class="pi-link">{{ pi.salesorder.so_number }}</a></td>
                 <td>{{ pi.salesorder.customer_name }}</td>
                 <td>{{ pi.salesorder.salesman_name|default:"—" }}</td>

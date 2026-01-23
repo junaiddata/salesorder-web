@@ -49,7 +49,8 @@ class Customer(models.Model):
     customer_name = models.CharField(max_length=100)
     salesman = models.ForeignKey('Salesman', on_delete=models.CASCADE, null=True, blank=True)
 
-    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    phone_number = models.CharField(max_length=50, blank=True, null=True)
+    address = models.TextField(blank=True, null=True, help_text="Customer address from SAP API")
     vat_number = models.CharField(max_length=100, blank=True, null=True, help_text="VAT Number - Business Partner")
 
     #added fields
@@ -362,6 +363,9 @@ class SAPSalesorder(models.Model):
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     row_total_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)
+    is_sap_pi = models.BooleanField(default=False, help_text="True if this SO has a Proforma Invoice created in SAP (U_PROFORMAINVOICE=Y)")
+    customer_address = models.TextField(blank=True, null=True, help_text="Customer address from SAP API (Address field)")
+    customer_phone = models.CharField(max_length=50, blank=True, null=True, help_text="Customer phone from SAP API (BusinessPartner.Phone1)")
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
     bill_to = models.TextField(blank=True, null=True)
@@ -397,6 +401,9 @@ class SAPSalesorderItem(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['salesorder', 'line_no']),
+            models.Index(fields=['item_no']),  # For manufacturer lookup optimization
+            models.Index(fields=['pending_amount']),  # For pending_total calculation
+            models.Index(fields=['row_status']),  # For status filtering
         ]
 
     def __str__(self):
@@ -411,9 +418,10 @@ class SAPProformaInvoice(models.Model):
     ]
 
     salesorder = models.ForeignKey(SAPSalesorder, related_name='proforma_invoices', on_delete=models.CASCADE)
-    pi_number = models.CharField(max_length=100, unique=True, help_text="Format: <SO_NUMBER>-P<N>")
-    sequence = models.IntegerField(help_text="Sequence number (1, 2, 3...) within the SO")
+    pi_number = models.CharField(max_length=100, unique=True, help_text="Format: <SO_NUMBER>-P<N> for app PIs, <SO_NUMBER>-SAP for SAP PIs")
+    sequence = models.IntegerField(help_text="Sequence number (1, 2, 3...) within the SO. For SAP PIs, use 0.")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    is_sap_pi = models.BooleanField(default=False, help_text="True if this PI was created in SAP (U_PROFORMAINVOICE=Y)")
     lpo_date = models.DateField(blank=True, null=True, help_text="LPO date for this Proforma Invoice")
     remarks = models.TextField(blank=True, null=True, help_text="Remarks/notes for the Proforma Invoice")
     created_at = models.DateTimeField(auto_now_add=True)

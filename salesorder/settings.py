@@ -114,7 +114,7 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', ''),
     }
 }
-
+VPS_API_KEY = 'rLEkUZQiljwQWPS5ZJ8m6zawpsr9QUvRqYka-hj7fBw'  # Or your own secret key
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -155,6 +155,15 @@ TELEGRAM_APPROVE_CHAT_ID = "-4900133568"
 WHATSAPP_API_VERSION = 'v22.0' # Or your preferred, active version
 WHATSAPP_ACCESS_TOKEN = 'EAAQptligo50BPxZCBoRIIoopsfBzTeTBZCOrc1XGa9xC0tGikkpp5ajjM1inCFemKZCtAiRnpWWzZB1kJq6WqgMwL7RZC8MqHynBShSCM7Y3mpm7HfKOhbyTvNCqy5A6QwK43NVfENklGeHFYEAhRVh8aljVeNkPDOGfWZChs6ytvctfBKPZCtlNgA41ZCvDqZB0t'
 WHATSAPP_PHONE_NUMBER_ID = '623707730818076'
+
+# SAP API Configuration
+SAP_API_BASE_URL = "http://192.168.1.103/IntegrationApi/api/SalesOrder"
+SAP_API_TIMEOUT = 30
+SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders from last 3 days (today + 3 days = 4 days total)
+
+# VPS API Configuration (for PC script to send data to VPS)
+VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL
+VPS_API_KEY = os.getenv('VPS_API_KEY', 'rLEkUZQiljwQWPS5ZJ8m6zawpsr9QUvRqYka-hj7fBw')  # Must match between PC script and VPS
 
 
 
