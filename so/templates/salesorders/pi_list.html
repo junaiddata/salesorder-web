@@ -392,8 +392,8 @@
           <label>Status</label>
           <select class="select" name="status">
             <option value="">All</option>
-            <option value="ACTIVE" {% if filters.status == 'ACTIVE' or filters.status == 'A' %}selected{% endif %}>Active</option>
-            <option value="CANCELLED" {% if filters.status == 'CANCELLED' or filters.status == 'C' %}selected{% endif %}>Cancelled</option>
+            <option value="OPEN" {% if filters.status == 'OPEN' or filters.status == 'O' %}selected{% endif %}>Open</option>
+            <option value="CLOSED" {% if filters.status == 'CLOSED' or filters.status == 'C' %}selected{% endif %}>Closed</option>
           </select>
         </div>
 
@@ -458,10 +458,12 @@
                 <td>{{ pi.salesorder.customer_name }}</td>
                 <td>{{ pi.salesorder.salesman_name|default:"—" }}</td>
                 <td>
-                  {% if pi.status == 'ACTIVE' %}
-                    <span class="badge badge-active">Active</span>
+                  {% if pi.status == 'OPEN' or pi.status == 'O' or pi.status == 'ACTIVE' or pi.status == 'A' %}
+                    <span class="badge badge-active">Open</span>
+                  {% elif pi.status == 'CLOSED' or pi.status == 'C' or pi.status == 'CANCELLED' %}
+                    <span class="badge badge-cancelled">Closed</span>
                   {% else %}
-                    <span class="badge badge-cancelled">Cancelled</span>
+                    <span class="badge badge-cancelled">{{ pi.status|default:"—" }}</span>
                   {% endif %}
                 </td>
                 <td>

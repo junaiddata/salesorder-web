@@ -162,8 +162,8 @@ SAP_API_TIMEOUT = 30
 SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders from last 3 days (today + 3 days = 4 days total)
 
 # VPS API Configuration (for PC script to send data to VPS)
-VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL
-VPS_API_KEY = os.getenv('VPS_API_KEY', 'rLEkUZQiljwQWPS5ZJ8m6zawpsr9QUvRqYka-hj7fBw')  # Must match between PC script and VPS
+VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'http://localhost:8000')  # Production VPS URL
+VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')  # Must match between PC script and VPS
 
 
 

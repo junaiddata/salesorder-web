@@ -744,6 +744,18 @@ def sync_salesorders_from_api(request):
                     try:
                         salesorder = SAPSalesorder.objects.get(so_number=so_no)
                         
+                        # Map SO status to PI status (same as SO)
+                        # SO status "O" or "OPEN" -> PI status "OPEN"
+                        # SO status "C" or "CLOSED" -> PI status "CLOSED"
+                        so_status = (salesorder.status or '').strip().upper()
+                        if so_status in ('O', 'OPEN'):
+                            pi_status = 'OPEN'
+                        elif so_status in ('C', 'CLOSED'):
+                            pi_status = 'CLOSED'
+                        else:
+                            # Default to OPEN if status is unclear
+                            pi_status = 'OPEN'
+                        
                         # SAP PI numbering requirement: use the SAME number as the Sales Order.
                         # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
                         desired_pi_number = f"{so_no}"
@@ -765,7 +777,7 @@ def sync_salesorders_from_api(request):
                                 pi_number=desired_pi_number,
                                 salesorder=salesorder,
                                 sequence=0,  # SAP PIs use sequence 0
-                                status='ACTIVE',
+                                status=pi_status,  # Match SO status
                                 is_sap_pi=True,
                             )
                             created = True
@@ -773,7 +785,7 @@ def sync_salesorders_from_api(request):
                         if not created:
                             # Update existing SAP PI
                             sap_pi.salesorder = salesorder
-                            sap_pi.status = 'ACTIVE'
+                            sap_pi.status = pi_status  # Match SO status
                             sap_pi.is_sap_pi = True
                             if sap_pi_lpo_date:
                                 sap_pi.lpo_date = sap_pi_lpo_date
@@ -1111,6 +1123,18 @@ def sync_salesorders_api_receive(request):
                 try:
                     salesorder = SAPSalesorder.objects.get(so_number=so_no)
                     
+                    # Map SO status to PI status (same as SO)
+                    # SO status "O" or "OPEN" -> PI status "OPEN"
+                    # SO status "C" or "CLOSED" -> PI status "CLOSED"
+                    so_status = (salesorder.status or '').strip().upper()
+                    if so_status in ('O', 'OPEN'):
+                        pi_status = 'OPEN'
+                    elif so_status in ('C', 'CLOSED'):
+                        pi_status = 'CLOSED'
+                    else:
+                        # Default to OPEN if status is unclear
+                        pi_status = 'OPEN'
+                    
                     # SAP PI numbering requirement: use the SAME number as the Sales Order.
                     # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
                     desired_pi_number = f"{so_no}"
@@ -1131,7 +1155,7 @@ def sync_salesorders_api_receive(request):
                             pi_number=desired_pi_number,
                             salesorder=salesorder,
                             sequence=0,  # SAP PIs use sequence 0
-                            status='ACTIVE',
+                            status=pi_status,  # Match SO status
                             is_sap_pi=True,
                         )
                         created = True
@@ -1139,7 +1163,7 @@ def sync_salesorders_api_receive(request):
                     if not created:
                         # Update existing SAP PI
                         sap_pi.salesorder = salesorder
-                        sap_pi.status = 'ACTIVE'
+                        sap_pi.status = pi_status  # Match SO status
                         sap_pi.is_sap_pi = True
                         if sap_pi_lpo_date:
                             sap_pi.lpo_date = sap_pi_lpo_date
@@ -3363,13 +3387,13 @@ def pi_list(request):
                 Q(salesorder__salesman_name__icontains=q)
             )
 
-    # Status filter
+    # Status filter (use PI status)
     if status:
         s = status.strip().upper()
-        if s in ("ACTIVE", "A"):
-            qs = qs.filter(status='ACTIVE')
-        elif s in ("CANCELLED", "C"):
-            qs = qs.filter(status='CANCELLED')
+        if s in ("OPEN", "O", "ACTIVE", "A"):
+            qs = qs.filter(status__in=['OPEN', 'O', 'ACTIVE'])
+        elif s in ("CLOSED", "C", "CANCELLED"):
+            qs = qs.filter(status__in=['CLOSED', 'C', 'CANCELLED'])
         else:
             qs = qs.filter(status__iexact=status)
 
@@ -3591,8 +3615,9 @@ def edit_pi(request, pi_number):
         if not allowed:
             raise Http404("Proforma Invoice not found")
     
-    # Only allow editing ACTIVE PIs
-    if pi.status != 'ACTIVE':
+    # Only allow editing OPEN PIs
+    pi_status = (pi.status or '').strip().upper()
+    if pi_status not in ('OPEN', 'O', 'ACTIVE', 'A'):
         messages.error(request, f"Cannot edit {pi_number} - it is {pi.status}.")
         return redirect("salesorder_detail", so_number=pi.salesorder.so_number)
     
