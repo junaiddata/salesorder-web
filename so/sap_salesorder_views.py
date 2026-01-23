@@ -744,23 +744,10 @@ def sync_salesorders_from_api(request):
                     try:
                         salesorder = SAPSalesorder.objects.get(so_number=so_no)
                         
-                        # Map SO status to PI status (same as SO)
-                        # SO status "O" or "OPEN" -> PI status "OPEN"
-                        # SO status "C" or "CLOSED" -> PI status "CLOSED"
-                        so_status = (salesorder.status or '').strip().upper()
-                        if so_status in ('O', 'OPEN'):
-                            pi_status = 'OPEN'
-                        elif so_status in ('C', 'CLOSED'):
-                            pi_status = 'CLOSED'
-                        else:
-                            # Default to OPEN if status is unclear
-                            pi_status = 'OPEN'
-                        
                         # SAP PI numbering requirement: use the SAME number as the Sales Order.
                         # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
                         desired_pi_number = f"{so_no}"
                         legacy_pi_number = f"{so_no}-SAP"
-                        pi_number = desired_pi_number
                         
                         # Check if SAP PI already exists (new or legacy number)
                         sap_pi = SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).first()
@@ -777,15 +764,14 @@ def sync_salesorders_from_api(request):
                                 pi_number=desired_pi_number,
                                 salesorder=salesorder,
                                 sequence=0,  # SAP PIs use sequence 0
-                                status=pi_status,  # Match SO status
+                                status='ACTIVE',  # Keep PI status as ACTIVE (SO status shown in UI)
                                 is_sap_pi=True,
                             )
                             created = True
                         
                         if not created:
-                            # Update existing SAP PI
+                            # Update existing SAP PI (don't change status - SO status shown in UI)
                             sap_pi.salesorder = salesorder
-                            sap_pi.status = pi_status  # Match SO status
                             sap_pi.is_sap_pi = True
                             if sap_pi_lpo_date:
                                 sap_pi.lpo_date = sap_pi_lpo_date
@@ -1123,23 +1109,10 @@ def sync_salesorders_api_receive(request):
                 try:
                     salesorder = SAPSalesorder.objects.get(so_number=so_no)
                     
-                    # Map SO status to PI status (same as SO)
-                    # SO status "O" or "OPEN" -> PI status "OPEN"
-                    # SO status "C" or "CLOSED" -> PI status "CLOSED"
-                    so_status = (salesorder.status or '').strip().upper()
-                    if so_status in ('O', 'OPEN'):
-                        pi_status = 'OPEN'
-                    elif so_status in ('C', 'CLOSED'):
-                        pi_status = 'CLOSED'
-                    else:
-                        # Default to OPEN if status is unclear
-                        pi_status = 'OPEN'
-                    
                     # SAP PI numbering requirement: use the SAME number as the Sales Order.
                     # Backwards-compat: if an old "-SAP" PI exists, rename it to the SO number.
                     desired_pi_number = f"{so_no}"
                     legacy_pi_number = f"{so_no}-SAP"
-                    pi_number = desired_pi_number
                     
                     # Check if SAP PI already exists (new or legacy number)
                     sap_pi = SAPProformaInvoice.objects.filter(pi_number=desired_pi_number).first()
@@ -1155,15 +1128,14 @@ def sync_salesorders_api_receive(request):
                             pi_number=desired_pi_number,
                             salesorder=salesorder,
                             sequence=0,  # SAP PIs use sequence 0
-                            status=pi_status,  # Match SO status
+                            status='ACTIVE',  # Keep PI status as ACTIVE (SO status shown in UI)
                             is_sap_pi=True,
                         )
                         created = True
                     
                     if not created:
-                        # Update existing SAP PI
+                        # Update existing SAP PI (don't change status - SO status shown in UI)
                         sap_pi.salesorder = salesorder
-                        sap_pi.status = pi_status  # Match SO status
                         sap_pi.is_sap_pi = True
                         if sap_pi_lpo_date:
                             sap_pi.lpo_date = sap_pi_lpo_date
@@ -3387,15 +3359,15 @@ def pi_list(request):
                 Q(salesorder__salesman_name__icontains=q)
             )
 
-    # Status filter (use PI status)
+    # Status filter (use SO status, not PI status)
     if status:
         s = status.strip().upper()
-        if s in ("OPEN", "O", "ACTIVE", "A"):
-            qs = qs.filter(status__in=['OPEN', 'O', 'ACTIVE'])
-        elif s in ("CLOSED", "C", "CANCELLED"):
-            qs = qs.filter(status__in=['CLOSED', 'C', 'CANCELLED'])
+        if s in ("OPEN", "O"):
+            qs = qs.filter(salesorder__status__in=['O', 'OPEN'])
+        elif s in ("CLOSED", "C"):
+            qs = qs.filter(salesorder__status__in=['C', 'CLOSED'])
         else:
-            qs = qs.filter(status__iexact=status)
+            qs = qs.filter(salesorder__status__iexact=status)
 
     # SO Number filter
     if so_number_filter:
@@ -3615,10 +3587,10 @@ def edit_pi(request, pi_number):
         if not allowed:
             raise Http404("Proforma Invoice not found")
     
-    # Only allow editing OPEN PIs
-    pi_status = (pi.status or '').strip().upper()
-    if pi_status not in ('OPEN', 'O', 'ACTIVE', 'A'):
-        messages.error(request, f"Cannot edit {pi_number} - it is {pi.status}.")
+    # Only allow editing PIs for OPEN Sales Orders (use SO status)
+    so_status = (pi.salesorder.status or '').strip().upper()
+    if so_status not in ('O', 'OPEN'):
+        messages.error(request, f"Cannot edit {pi_number} - Sales Order is Closed.")
         return redirect("salesorder_detail", so_number=pi.salesorder.so_number)
     
     salesorder = pi.salesorder

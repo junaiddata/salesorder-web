@@ -458,12 +458,12 @@
                 <td>{{ pi.salesorder.customer_name }}</td>
                 <td>{{ pi.salesorder.salesman_name|default:"—" }}</td>
                 <td>
-                  {% if pi.status == 'OPEN' or pi.status == 'O' or pi.status == 'ACTIVE' or pi.status == 'A' %}
+                  {% if pi.salesorder.status == 'O' or pi.salesorder.status == 'OPEN' %}
                     <span class="badge badge-active">Open</span>
-                  {% elif pi.status == 'CLOSED' or pi.status == 'C' or pi.status == 'CANCELLED' %}
+                  {% elif pi.salesorder.status == 'C' or pi.salesorder.status == 'CLOSED' %}
                     <span class="badge badge-cancelled">Closed</span>
                   {% else %}
-                    <span class="badge badge-cancelled">{{ pi.status|default:"—" }}</span>
+                    <span class="badge badge-cancelled">{{ pi.salesorder.status|default:"—" }}</span>
                   {% endif %}
                 </td>
                 <td>

@@ -413,16 +413,14 @@ class SAPSalesorderItem(models.Model):
 # SAP Proforma Invoice (PI) Models
 class SAPProformaInvoice(models.Model):
     STATUS_CHOICES = [
-        ('OPEN', 'Open'),
-        ('CLOSED', 'Closed'),
-        ('ACTIVE', 'Active'),  # Legacy support
-        ('CANCELLED', 'Cancelled'),  # Legacy support
+        ('ACTIVE', 'Active'),
+        ('CANCELLED', 'Cancelled'),
     ]
 
     salesorder = models.ForeignKey(SAPSalesorder, related_name='proforma_invoices', on_delete=models.CASCADE)
-    pi_number = models.CharField(max_length=100, unique=True, help_text="Format: <SO_NUMBER>-P<N> for app PIs, <SO_NUMBER>-SAP for SAP PIs")
+    pi_number = models.CharField(max_length=100, unique=True, help_text="Format: <SO_NUMBER>-P<N> for app PIs, <SO_NUMBER> for SAP PIs")
     sequence = models.IntegerField(help_text="Sequence number (1, 2, 3...) within the SO. For SAP PIs, use 0.")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     is_sap_pi = models.BooleanField(default=False, help_text="True if this PI was created in SAP (U_PROFORMAINVOICE=Y)")
     lpo_date = models.DateField(blank=True, null=True, help_text="LPO date for this Proforma Invoice")
     remarks = models.TextField(blank=True, null=True, help_text="Remarks/notes for the Proforma Invoice")
