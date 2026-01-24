@@ -422,6 +422,7 @@ class SAPProformaInvoice(models.Model):
     sequence = models.IntegerField(help_text="Sequence number (1, 2, 3...) within the SO. For SAP PIs, use 0.")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     is_sap_pi = models.BooleanField(default=False, help_text="True if this PI was created in SAP (U_PROFORMAINVOICE=Y)")
+    pi_date = models.DateField(blank=True, null=True, help_text="PI date - SO date for SAP PIs, creation date for app PIs")
     lpo_date = models.DateField(blank=True, null=True, help_text="LPO date for this Proforma Invoice")
     remarks = models.TextField(blank=True, null=True, help_text="Remarks/notes for the Proforma Invoice")
     created_at = models.DateTimeField(auto_now_add=True)

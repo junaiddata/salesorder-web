@@ -447,7 +447,7 @@
           <tbody>
             {% for pi in page_obj %}
               <tr>
-                <td>{{ pi.created_at|date:"d/m/Y" }}</td>
+                <td>{{ pi.pi_date|default:pi.created_at|date:"d/m/Y" }}</td>
                 <td>
                   <a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a>
                   {% if pi.is_sap_pi %}

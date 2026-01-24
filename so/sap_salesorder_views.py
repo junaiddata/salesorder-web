@@ -766,22 +766,21 @@ def sync_salesorders_from_api(request):
                                 sequence=0,  # SAP PIs use sequence 0
                                 status='ACTIVE',  # Keep PI status as ACTIVE (SO status shown in UI)
                                 is_sap_pi=True,
+                                pi_date=salesorder.posting_date,  # Use SO date for SAP PI
+                                lpo_date=sap_pi_lpo_date,
                             )
                             created = True
+                            sap_pis_created += 1
                         
                         if not created:
                             # Update existing SAP PI (don't change status - SO status shown in UI)
                             sap_pi.salesorder = salesorder
                             sap_pi.is_sap_pi = True
+                            sap_pi.pi_date = salesorder.posting_date  # Always sync PI date with SO date
                             if sap_pi_lpo_date:
                                 sap_pi.lpo_date = sap_pi_lpo_date
                             sap_pi.save()
                             sap_pis_updated += 1
-                        else:
-                            if sap_pi_lpo_date:
-                                sap_pi.lpo_date = sap_pi_lpo_date
-                                sap_pi.save(update_fields=["lpo_date"])
-                            sap_pis_created += 1
                         
                         # Delete existing lines and recreate from SO items
                         sap_pi.lines.all().delete()
@@ -1130,22 +1129,21 @@ def sync_salesorders_api_receive(request):
                             sequence=0,  # SAP PIs use sequence 0
                             status='ACTIVE',  # Keep PI status as ACTIVE (SO status shown in UI)
                             is_sap_pi=True,
+                            pi_date=salesorder.posting_date,  # Use SO date for SAP PI
+                            lpo_date=sap_pi_lpo_date,
                         )
                         created = True
+                        stats['sap_pis_created'] += 1
                     
                     if not created:
                         # Update existing SAP PI (don't change status - SO status shown in UI)
                         sap_pi.salesorder = salesorder
                         sap_pi.is_sap_pi = True
+                        sap_pi.pi_date = salesorder.posting_date  # Always sync PI date with SO date
                         if sap_pi_lpo_date:
                             sap_pi.lpo_date = sap_pi_lpo_date
                         sap_pi.save()
                         stats['sap_pis_updated'] += 1
-                    else:
-                        if sap_pi_lpo_date:
-                            sap_pi.lpo_date = sap_pi_lpo_date
-                            sap_pi.save(update_fields=["lpo_date"])
-                        stats['sap_pis_created'] += 1
                     
                     # Delete existing lines and recreate from SO items
                     sap_pi.lines.all().delete()
@@ -2309,12 +2307,14 @@ def create_pi(request, so_number):
                     lpo_date = None
             
             # Create PI
+            from datetime import date
             pi = SAPProformaInvoice.objects.create(
                 salesorder=salesorder,
                 pi_number=pi_number,
                 sequence=next_seq,
                 status='ACTIVE',
                 remarks=remarks,
+                pi_date=date.today(),  # App PIs use today's date
                 lpo_date=lpo_date,
                 created_by=request.user if request.user.is_authenticated else None,
             )
@@ -3387,12 +3387,12 @@ def pi_list(request):
     start_date = parse_date(start)
     end_date = parse_date(end)
     if start_date:
-        qs = qs.filter(created_at__date__gte=start_date)
+        qs = qs.filter(pi_date__gte=start_date)
     if end_date:
-        qs = qs.filter(created_at__date__lte=end_date)
+        qs = qs.filter(pi_date__lte=end_date)
 
-    # Order by most recent first
-    qs = qs.order_by('-created_at', '-sequence')
+    # Order by most recent first (by pi_date, then created_at for fallback)
+    qs = qs.order_by('-pi_date', '-created_at', '-sequence')
 
     # Pagination
     try:
