@@ -435,6 +435,52 @@
       margin-bottom: 12px;
       opacity: 0.4;
     }
+
+    /* Live Updates Badge */
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border-radius: 20px;
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+      animation: pulse-live 2s ease-in-out infinite;
+    }
+
+    .live-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-live {
+      0%, 100% {
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+        transform: scale(1.02);
+      }
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.6;
+        transform: scale(0.8);
+      }
+    }
   </style>
 </head>
 <body>
@@ -442,7 +488,12 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <h1>Sales Orders</h1>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <h1>Sales Orders</h1>
+          <span class="live-badge" title="Stock data is fetched live from Items model">
+            Live Updates
+          </span>
+        </div>
         <p>View and manage your SAP sales orders</p>
       </div>
       <div class="header-actions">
