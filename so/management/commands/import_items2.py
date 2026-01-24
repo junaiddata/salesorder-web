@@ -47,7 +47,7 @@ class Command(BaseCommand):
             # Safely parse numeric fields
             cost_price = safe_float(item.get("cost_price"))
             price = safe_float(item.get("minimum_selling_price"))
-            stock = safe_float(item.get("stock_quantity"))
+            stock = safe_float(item.get("dip_stock"))
 
             if item_code in existing_codes:
                 obj = Items.objects.get(item_code=item_code)
