@@ -30,7 +30,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # Configuration - EDIT THESE
-VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'http://localhost:8000')  # Production VPS URL
+VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL
 VPS_API_KEY = os.getenv('VPS_API_KEY', 'rLEkUZQiljwQWPS5ZJ8m6zawpsr9QUvRqYka-hj7fBw')  # Must match VPS
 
 # Log file configuration
