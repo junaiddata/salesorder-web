@@ -1437,7 +1437,18 @@ def salesorder_detail(request, so_number):
     row_total_sum = getattr(salesorder, "row_total_sum", None)
     row_total_calc_sum = Decimal("0")
 
-    # Attach derived unit price and PI allocation info for templates
+    # Batch load live stock from Items model (for all item_no values)
+    from so.models import Items
+    item_codes = [it.item_no for it in items if it.item_no]
+    stock_lookup = {}
+    if item_codes:
+        for item in Items.objects.filter(item_code__in=item_codes).only('item_code', 'total_available_stock', 'dip_warehouse_stock'):
+            stock_lookup[item.item_code] = {
+                'total_available_stock': item.total_available_stock or Decimal("0"),
+                'dip_warehouse_stock': item.dip_warehouse_stock or Decimal("0"),
+            }
+
+    # Attach derived unit price, live stock, and PI allocation info for templates
     for it in items:
         qty = it.quantity or Decimal("0")
         row_total = it.row_total or Decimal("0")
@@ -1447,6 +1458,11 @@ def salesorder_detail(request, so_number):
             it.unit_price = Decimal("0.00")
 
         row_total_calc_sum += row_total
+        
+        # Live stock from Items model (overrides stored values)
+        stock_data = stock_lookup.get(it.item_no, {})
+        it.total_available_stock = stock_data.get('total_available_stock', Decimal("0"))
+        it.dip_warehouse_stock = stock_data.get('dip_warehouse_stock', Decimal("0"))
         
         # Attach PI allocation info (using item ID for accurate matching)
         it.pi_allocated_qty = allocated.get(it.id, Decimal("0"))
