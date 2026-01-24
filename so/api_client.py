@@ -20,6 +20,8 @@ class SAPAPIClient:
         # Cache for manufacturer lookups (item_code -> manufacturer)
         self._manufacturer_cache = {}
         self._manufacturer_cache_loaded = False
+        # Cache for stock lookups (item_code -> {'total_available_stock': ..., 'dip_warehouse_stock': ...})
+        self._stock_cache = {}
     
     def _make_request(self, payload: Dict[str, Any], page_number: int = 1) -> Optional[Dict]:
         """
@@ -218,8 +220,8 @@ class SAPAPIClient:
         
         logger.info(f"Total unique orders after sync: {len(all_orders)}")
         
-        # Step 3: Preload all manufacturers for all orders (batch optimization)
-        logger.info("Step 3: Preloading manufacturers for all items...")
+        # Step 3: Preload all manufacturers and stock for all orders (batch optimization)
+        logger.info("Step 3: Preloading manufacturers and stock for all items...")
         all_item_codes = set()
         for order in all_orders:
             for line in order.get('DocumentLines', []):
@@ -229,7 +231,8 @@ class SAPAPIClient:
         
         if all_item_codes:
             self._load_manufacturer_cache(list(all_item_codes))
-            logger.info(f"Preloaded manufacturers for {len(all_item_codes)} unique items")
+            self._load_stock_cache(list(all_item_codes))
+            logger.info(f"Preloaded manufacturers and stock for {len(all_item_codes)} unique items")
         
         return all_orders
     
@@ -279,6 +282,76 @@ class SAPAPIClient:
                     
         except Exception as e:
             logger.warning(f"Error batch loading manufacturers: {e}")
+    
+    def _load_stock_cache(self, item_codes: List[str]):
+        """
+        Batch load stock (total_available_stock, dip_warehouse_stock) from Items model
+        to avoid N+1 queries.
+        
+        Args:
+            item_codes: List of item codes to load
+        """
+        if not item_codes:
+            return
+        
+        # Filter out already cached items
+        uncached_codes = [code for code in item_codes if code and code not in self._stock_cache]
+        if not uncached_codes:
+            return
+        
+        try:
+            items = Items.objects.filter(item_code__in=uncached_codes).only(
+                'item_code', 'total_available_stock', 'dip_warehouse_stock'
+            )
+            for item in items:
+                self._stock_cache[item.item_code] = {
+                    'total_available_stock': item.total_available_stock or 0,
+                    'dip_warehouse_stock': item.dip_warehouse_stock or 0,
+                }
+            # Cache misses (items not found)
+            for code in uncached_codes:
+                if code not in self._stock_cache:
+                    self._stock_cache[code] = {
+                        'total_available_stock': 0,
+                        'dip_warehouse_stock': 0,
+                    }
+        except Exception as e:
+            logger.warning(f"Error batch loading stock: {e}")
+    
+    def _get_stock_from_item_code(self, item_code: str) -> Dict[str, float]:
+        """
+        Lookup stock from Items model by item_code (uses cache)
+        
+        Args:
+            item_code: Item code from API
+        
+        Returns:
+            Dict with 'total_available_stock' and 'dip_warehouse_stock' (defaults to 0 if not found)
+        """
+        if not item_code:
+            return {'total_available_stock': 0, 'dip_warehouse_stock': 0}
+        
+        # Check cache first
+        if item_code in self._stock_cache:
+            return self._stock_cache[item_code]
+        
+        # Fallback: single query (should rarely happen if batch loading is used)
+        try:
+            item = Items.objects.only('total_available_stock', 'dip_warehouse_stock').get(item_code=item_code)
+            stock_data = {
+                'total_available_stock': float(item.total_available_stock or 0),
+                'dip_warehouse_stock': float(item.dip_warehouse_stock or 0),
+            }
+            self._stock_cache[item_code] = stock_data
+            return stock_data
+        except Items.DoesNotExist:
+            logger.debug(f"Item not found in Items table for stock lookup: {item_code}")
+            stock_data = {'total_available_stock': 0, 'dip_warehouse_stock': 0}
+            self._stock_cache[item_code] = stock_data
+            return stock_data
+        except Exception as e:
+            logger.warning(f"Error looking up stock for item {item_code}: {e}")
+            return {'total_available_stock': 0, 'dip_warehouse_stock': 0}
     
     def _get_manufacturer_from_item_code(self, item_code: str) -> str:
         """
@@ -392,16 +465,20 @@ class SAPAPIClient:
         document_lines = api_order.get('DocumentLines', [])
         items = []
         
-        # Batch load manufacturers for all items in this order (optimization)
+        # Batch load manufacturers and stock for all items in this order (optimization)
         item_codes = [str(line.get('ItemCode', '')) for line in document_lines if line.get('ItemCode')]
         if item_codes:
             self._load_manufacturer_cache(item_codes)
+            self._load_stock_cache(item_codes)
         
         for idx, line in enumerate(document_lines):
             item_code = str(line.get('ItemCode', '')) if line.get('ItemCode') else ''
             
             # Lookup manufacturer from cache (already loaded above)
             manufacture = self._get_manufacturer_from_item_code(item_code)
+            
+            # Lookup stock from cache (already loaded above)
+            stock_data = self._get_stock_from_item_code(item_code)
             
             # Line Status mapping
             line_status = line.get('LineStatus', '')
@@ -438,8 +515,8 @@ class SAPAPIClient:
                 'job_type': '',  # Not in API response
                 'remaining_open_quantity': remaining_open_qty,  # Use RemainingOpenQuantity from API
                 'pending_amount': pending_amount,  # Calculate from RemainingOpenQuantity
-                'total_available_stock': 0,  # Not in API response
-                'dip_warehouse_stock': 0,  # Not in API response
+                'total_available_stock': stock_data.get('total_available_stock', 0),  # From Items model
+                'dip_warehouse_stock': stock_data.get('dip_warehouse_stock', 0),  # From Items model
             }
             
             items.append(item_data)

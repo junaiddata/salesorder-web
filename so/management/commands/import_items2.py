@@ -1,4 +1,5 @@
 import requests
+from decimal import Decimal
 from django.core.management.base import BaseCommand
 from so.models import Items, IgnoreList
 from django.core.cache import cache
@@ -47,7 +48,9 @@ class Command(BaseCommand):
             # Safely parse numeric fields
             cost_price = safe_float(item.get("cost_price"))
             price = safe_float(item.get("minimum_selling_price"))
-            stock = safe_float(item.get("dip_stock"))
+            stock = int(safe_float(item.get("dip_stock")))  # IntegerField
+            total_stock = Decimal(str(safe_float(item.get("total_stock"))))  # DecimalField
+            dip_stock = Decimal(str(safe_float(item.get("dip_stock"))))  # DecimalField
 
             if item_code in existing_codes:
                 obj = Items.objects.get(item_code=item_code)
@@ -57,6 +60,8 @@ class Command(BaseCommand):
                 obj.item_firm = item.get("manufacturer", "")
                 obj.item_price = price
                 obj.item_stock = stock
+                obj.total_available_stock = total_stock
+                obj.dip_warehouse_stock = dip_stock
                 items_to_update.append(obj)
                 updated += 1
             else:
@@ -68,6 +73,8 @@ class Command(BaseCommand):
                     item_firm=item.get("manufacturer", ""),
                     item_price=price,
                     item_stock=stock,
+                    total_available_stock=total_stock,
+                    dip_warehouse_stock=dip_stock,
                 )
                 new_items.append(obj)
                 created += 1
@@ -76,7 +83,7 @@ class Command(BaseCommand):
         if items_to_update:
             Items.objects.bulk_update(
                 items_to_update,
-                ["item_description", "item_upvc", "item_cost", "item_firm", "item_price", "item_stock"]
+                ["item_description", "item_upvc", "item_cost", "item_firm", "item_price", "item_stock", "total_available_stock", "dip_warehouse_stock"]
             )
 
         if new_items:

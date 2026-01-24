@@ -30,6 +30,8 @@ class Items(models.Model):
 
     item_price = models.FloatField(default=0.0)
     item_stock = models.IntegerField(default=0)
+    total_available_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Total stock from API (total_stock)")
+    dip_warehouse_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DIP warehouse stock from API (dip_stock)")
     class Meta:
         indexes = [
             models.Index(fields=['item_firm']),
