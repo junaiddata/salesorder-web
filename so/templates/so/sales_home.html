@@ -63,6 +63,7 @@
             text-align: center;
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
             transition: all 0.3s ease;
+            position: relative;
         }
 
         .action-button:hover {
@@ -108,6 +109,29 @@
         .action-description {
             font-size: 14px;
             color: #666;
+        }
+
+        .live-badge-small {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            padding: 2px 5px;
+            border-radius: 8px;
+            line-height: 1;
+            animation: pulse-live-small 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-live-small {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .logout-section {
@@ -217,6 +241,7 @@
                 <div class="action-description">Browse all SAP Quotations</div>
             </a>
             <a href="/sapsalesorders" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
                 <div class="action-icon">
                     <i class="fas fa-list"></i>
                 </div>
@@ -224,6 +249,7 @@
                 <div class="action-description">Browse all SAP Salesorders</div>
             </a>
             <a href="/proformainvoices/" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
                 <div class="action-icon">
                     <i class="fas fa-file-invoice"></i>
                 </div>
