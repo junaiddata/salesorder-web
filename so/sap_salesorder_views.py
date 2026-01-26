@@ -30,7 +30,7 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
@@ -3467,6 +3467,7 @@ def old_pi_list(request):
     q = request.GET.get('q', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
 
     # Search filter
     if q:
@@ -3502,27 +3503,81 @@ def old_pi_list(request):
     # Order by most recent first
     qs = qs.order_by('-posting_date', '-created_at')
 
-    # Pagination
+    # Get all quotations first (before pagination) to calculate salesman names
+    all_quotations = list(qs)
+
+    # Prepare quotations with salesman names from Customer model
+    quotations_with_salesman = []
+    for quotation in all_quotations:
+        salesman_name = 'PI'  # Default
+        
+        # Check if customer name is 'DEBIT CUSTOMER ( CASH )'
+        if quotation.customer_name and 'DEBIT CUSTOMER ( CASH )' in quotation.customer_name.upper():
+            salesman_name = 'PI'
+        else:
+            # Try to find customer by customer_code first, then by customer_name
+            customer = None
+            if quotation.customer_code:
+                try:
+                    customer = Customer.objects.get(customer_code=quotation.customer_code)
+                except Customer.DoesNotExist:
+                    pass
+            
+            # If not found by code, try by name (case-insensitive)
+            if not customer and quotation.customer_name:
+                try:
+                    customer = Customer.objects.get(customer_name__iexact=quotation.customer_name)
+                except (Customer.DoesNotExist, Customer.MultipleObjectsReturned):
+                    pass
+            
+            # Get salesman from customer if found
+            if customer and customer.salesman:
+                salesman_name = customer.salesman.salesman_name
+        
+        quotations_with_salesman.append({
+            'quotation': quotation,
+            'salesman_name': salesman_name
+        })
+
+    # Apply salesman filter
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            quotations_with_salesman = [
+                item for item in quotations_with_salesman
+                if item['salesman_name'] in clean_salesmen
+            ]
+
+    # Get distinct salesman names for filter dropdown (from all quotations, before filtering)
+    all_salesmen_set = set(item['salesman_name'] for item in quotations_with_salesman)
+    all_salesmen = sorted(all_salesmen_set)
+
+    # Pagination (after filtering)
     try:
         page_size = int(request.GET.get('page_size', 100))
     except ValueError:
         page_size = 20
     page_size = max(5, min(page_size, 100))
-    paginator = Paginator(qs, page_size)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Calculate total count
-    total_count = paginator.count
+    
+    from django.core.paginator import Paginator
+    paginator = Paginator(quotations_with_salesman, page_size)
+    page_number = request.GET.get('page', 1)
+    try:
+        page_obj = paginator.get_page(page_number)
+    except:
+        page_obj = paginator.get_page(1)
 
     return render(request, 'salesorders/old_pi_list.html', {
+        'quotations_with_salesman': list(page_obj),
         'page_obj': page_obj,
-        'total_count': total_count,
+        'total_count': paginator.count,
+        'salesmen': all_salesmen,
         'filters': {
             'q': q,
             'start': start,
             'end': end,
             'page_size': page_size,
+            'salesman': salesmen_filter,
         }
     })
 
