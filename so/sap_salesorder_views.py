@@ -30,10 +30,10 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation
 
 # Import shared utilities
-from .views import get_stock_costs, SALES_USER_MAP
+from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
 from .views_quotation import QuotationPDFTemplate, styles
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
@@ -3444,6 +3444,84 @@ def pi_list(request):
             'end': end,
             'so_number': so_number_filter,
             'salesman': salesman_filter,
+            'page_size': page_size,
+        }
+    })
+
+
+@login_required
+def old_pi_list(request):
+    """
+    List old PIs - SAP Quotations where salesman_name='PI' and status='Open'.
+    These are the old PIs that were previously done in quotations.
+    """
+    # Scope by logged-in user - filter quotations by salesman scope
+    qs = SAPQuotation.objects.filter(
+        salesman_scope_q(request.user)
+    ).filter(
+        salesman_name__iexact='PI',
+        status__iexact='Open'
+    ).select_related()
+
+    # Filters
+    q = request.GET.get('q', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+
+    # Search filter
+    if q:
+        if q.isdigit():
+            # Search by quotation number
+            qs = qs.filter(q_number__icontains=q)
+        elif len(q) < 3:
+            qs = qs.filter(customer_name__istartswith=q)
+        else:
+            qs = qs.filter(
+                Q(q_number__icontains=q) |
+                Q(customer_name__icontains=q)
+            )
+
+    # Date filters
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:  # YYYY-MM
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    # Order by most recent first
+    qs = qs.order_by('-posting_date', '-created_at')
+
+    # Pagination
+    try:
+        page_size = int(request.GET.get('page_size', 100))
+    except ValueError:
+        page_size = 20
+    page_size = max(5, min(page_size, 100))
+    paginator = Paginator(qs, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Calculate total count
+    total_count = paginator.count
+
+    return render(request, 'salesorders/old_pi_list.html', {
+        'page_obj': page_obj,
+        'total_count': total_count,
+        'filters': {
+            'q': q,
+            'start': start,
+            'end': end,
             'page_size': page_size,
         }
     })

@@ -3238,11 +3238,15 @@ def quotation_detail(request, q_number):
     doc_total = float(quotation.document_total or 0)
     total_profit = doc_total - total_estimated_cost
 
+    # Check if user came from old PI list
+    from_old_pi = request.GET.get('from') == 'old_pi'
+
     context = {
         'quotation': quotation,
         'items': items,
         'total_cost': total_estimated_cost, # Passed to template
         'total_profit': total_profit,       # Passed to template
+        'from_old_pi': from_old_pi,         # Passed to template
     }
 
     return render(request, 'quotes/quotation_detail.html', context)

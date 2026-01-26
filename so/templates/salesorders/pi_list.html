@@ -408,6 +408,7 @@
         <p>View and manage all Proforma Invoices</p>
       </div>
       <div style="display: flex; gap: 10px;">
+        <a class="btn btn-primary" href="{% url 'old_pi_list' %}">View Old PIs</a>
         {% if user.role.role == 'Salesman' %}
           <a class="btn btn-secondary" href="{% url 'sales_home' %}">Home</a>
         {% else %}

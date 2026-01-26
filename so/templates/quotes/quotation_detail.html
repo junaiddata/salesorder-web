@@ -162,7 +162,15 @@
         <div class="subtitle">Details & items</div>
       </div>
       <div class="actions">
+        {% if from_old_pi %}
+          <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
+        {% else %}
+          {% if from_old_pi %}
+        <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
+      {% else %}
         <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
+      {% endif %}
+        {% endif %}
         {% if user.is_staff or user.is_superuser %}
           <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
         {% endif %}
@@ -291,7 +299,11 @@
     </section>
 
     <div class="backbar">
-      <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
+      {% if from_old_pi %}
+        <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
+      {% else %}
+        <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
+      {% endif %}
       <a class="btn" href="{% url 'export_sap_quotation_pdf' quotation.q_number %}">Export PDF</a>
     </div>
     
