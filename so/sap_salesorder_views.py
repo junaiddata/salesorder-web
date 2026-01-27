@@ -649,7 +649,7 @@ def sync_salesorders_from_api(request):
                     update_fields = [
                         "posting_date", "customer_code", "customer_name", "bp_reference_no",
                         "salesman_name", "discount_percentage", "document_total", "row_total_sum",
-                        "status", "vat_number", "internal_number", "last_synced_at"
+                        "status", "vat_number", "customer_address", "customer_phone", "closing_remarks", "internal_number", "last_synced_at"
                     ]
                     SAPSalesorder.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
                 
@@ -1015,7 +1015,7 @@ def sync_salesorders_api_receive(request):
                 update_fields = [
                     "posting_date", "customer_code", "customer_name", "bp_reference_no",
                     "salesman_name", "discount_percentage", "document_total", "row_total_sum",
-                    "status", "vat_number", "customer_address", "customer_phone", "internal_number", "is_sap_pi"
+                    "status", "vat_number", "customer_address", "customer_phone", "closing_remarks", "internal_number", "is_sap_pi"
                 ]
                 # Add last_synced_at only if field exists in model (after migration)
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
