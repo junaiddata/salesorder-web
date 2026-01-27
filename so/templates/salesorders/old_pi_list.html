@@ -115,7 +115,7 @@
 
     @media (min-width: 1024px) {
       .filters-grid {
-        grid-template-columns: 2fr 1fr 1fr 1fr auto;
+        grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
       }
     }
 
@@ -280,6 +280,11 @@
       color: var(--success);
     }
 
+    .badge-cancelled {
+      background: var(--error-light);
+      color: var(--error);
+    }
+
     .table-footer {
       display: flex;
       align-items: center;
@@ -397,6 +402,15 @@
           <input class="input" type="date" name="end" value="{{ filters.end }}">
         </div>
 
+        <div class="field">
+          <label>Status</label>
+          <select class="select" name="status">
+            <option value="">Open Only</option>
+            <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
+            <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+
         <div class="field" style="display: flex; align-items: flex-end;">
           <button type="submit" class="btn btn-primary" style="width: 100%;">Filter</button>
         </div>
@@ -429,11 +443,23 @@
                 <td>{{ item.salesman_name|default:"PI" }}</td>
                 <td>{{ item.quotation.document_total|default:"0.00"|floatformat:2 }}</td>
                 <td>
-                  <span class="badge badge-active">{{ item.quotation.status|default:"Open" }}</span>
+                  {% if item.quotation.status|upper == 'CLOSED' or item.quotation.status|upper == 'C' %}
+                    <span class="badge badge-cancelled">Closed</span>
+                  {% else %}
+                    <span class="badge badge-active">Open</span>
+                  {% endif %}
                 </td>
                 <td>
-                  <a class="btn btn-primary" href="{% url 'quotation_detail' item.quotation.q_number %}?from=old_pi" style="padding: 6px 12px; font-size: 0.813rem;">View</a>
-                  <a class="btn btn-secondary" href="{% url 'export_old_pi_pdf' item.quotation.q_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <a class="btn btn-primary" href="{% url 'quotation_detail' item.quotation.q_number %}?from=old_pi" style="padding: 6px 12px; font-size: 0.813rem;">View</a>
+                    <a class="btn btn-secondary" href="{% url 'export_old_pi_pdf' item.quotation.q_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a>
+                    {% if item.quotation.status|upper != 'CLOSED' and item.quotation.status|upper != 'C' %}
+                      <form method="post" action="{% url 'quotation_close' item.quotation.q_number %}?from=old_pi" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn" style="padding: 6px 12px; font-size: 0.813rem; background: var(--error); color: white; border: none; cursor: pointer;" onclick="return confirm('Are you sure you want to close this quotation?')">Close</button>
+                      </form>
+                    {% endif %}
+                  </div>
                 </td>
               </tr>
             {% empty %}

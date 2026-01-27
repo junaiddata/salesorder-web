@@ -2816,20 +2816,35 @@ def upload_quotations(request):
                         q_number = as_str(doc_no)
                         first = grp.iloc[0]
 
+                        # Get existing quotation to check current status
+                        existing_quotation = SAPQuotation.objects.filter(q_number=q_number).first()
+                        current_status = existing_quotation.status if existing_quotation else None
+                        
+                        # Prepare defaults - preserve "Closed" status if manually set
+                        defaults = {
+                            'internal_number': as_str(first['Document Internal ID']),
+                            'posting_date': parse_date(first['Posting Date']),
+                            'customer_code': as_str(first['Customer/Supplier No.']),
+                            'customer_name': as_str(first['Customer/Supplier Name']),
+                            'salesman_name': as_str(first['Sales Employee Name']),
+                            'brand': as_str(first['Manufacturer Name']),
+                            'bp_reference_no': as_str(first['BP Reference No.']),
+                            'document_total': to_decimal(first['Document Total']),
+                            'bill_to': as_str(first['Bill To']),
+                        }
+                        
+                        # Status handling: preserve "Closed" if manually set, otherwise update from API
+                        api_status = as_str(first['Status'])
+                        if current_status and current_status.upper() in ('CLOSED', 'C'):
+                            # Don't change manually closed quotations back to Open
+                            defaults['status'] = current_status
+                        else:
+                            # Update status from API (Open can become Closed, but Closed won't become Open)
+                            defaults['status'] = api_status
+                        
                         quotation, _ = SAPQuotation.objects.update_or_create(
                             q_number=q_number,
-                            defaults={
-                                'internal_number': as_str(first['Document Internal ID']),
-                                'posting_date': parse_date(first['Posting Date']),
-                                'customer_code': as_str(first['Customer/Supplier No.']),
-                                'customer_name': as_str(first['Customer/Supplier Name']),
-                                'salesman_name': as_str(first['Sales Employee Name']),
-                                'brand': as_str(first['Manufacturer Name']),
-                                'bp_reference_no': as_str(first['BP Reference No.']),
-                                'document_total': to_decimal(first['Document Total']),
-                                'status': as_str(first['Status']),
-                                'bill_to': as_str(first['Bill To']),
-                            }
+                            defaults=defaults
                         )
 
                         # Refresh items: remove old, add new
@@ -3645,6 +3660,35 @@ def quotation_update_remarks(request, q_number):
 
     messages.success(request, "Remarks updated.")
     return redirect("quotation_detail", q_number=quotation.q_number)
+
+
+@login_required
+@require_POST
+def quotation_close(request, q_number):
+    """
+    Manually close a quotation (old PI).
+    Once closed, sync/upload will not change it back to Open.
+    """
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Enforce the same scope rules as detail view
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPQuotation.objects.filter(
+            Q(pk=quotation.pk) & salesman_scope_q(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Quotation not found")
+
+    quotation.status = 'Closed'
+    quotation.save(update_fields=['status'])
+
+    messages.success(request, f"Quotation {q_number} has been closed.")
+    
+    # Redirect back to old PI list if came from there
+    from_old_pi = request.GET.get('from') == 'old_pi'
+    if from_old_pi:
+        return redirect('old_pi_list')
+    return redirect('quotation_detail', q_number=q_number)
 
 
 

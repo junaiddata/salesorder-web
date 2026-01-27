@@ -4235,12 +4235,23 @@ def old_pi_list(request):
     These are the old PIs that were previously done in quotations.
     """
     # Scope by logged-in user - filter quotations by salesman scope
+    # Filter by salesman_name='PI' and status='Open' (but also show Closed if manually closed)
     qs = SAPQuotation.objects.filter(
         salesman_scope_q(request.user)
     ).filter(
-        salesman_name__iexact='PI',
-        status__iexact='Open'
+        salesman_name__iexact='PI'
     ).select_related()
+    
+    # Filter by status - show Open by default, but allow filtering Closed
+    status_filter = request.GET.get('status', '').strip()
+    if status_filter:
+        if status_filter.upper() in ('CLOSED', 'C'):
+            qs = qs.filter(status__iexact='Closed')
+        elif status_filter.upper() in ('OPEN', 'O'):
+            qs = qs.filter(status__iexact='Open')
+    else:
+        # Default: show only Open (old behavior)
+        qs = qs.filter(status__iexact='Open')
 
     # Filters
     q = request.GET.get('q', '').strip()
@@ -4355,6 +4366,7 @@ def old_pi_list(request):
             'q': q,
             'start': start,
             'end': end,
+            'status': status_filter,
             'page_size': page_size,
             'salesman': salesmen_filter,
         }
