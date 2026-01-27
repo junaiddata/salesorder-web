@@ -405,8 +405,7 @@
         <div class="field">
           <label>Status</label>
           <select class="select" name="status">
-            <option value="">Open Only</option>
-            <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
+            <option value="">Open</option>
             <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
           </select>
         </div>
