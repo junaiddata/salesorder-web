@@ -472,6 +472,15 @@
           </select>
         </div>
 
+        <div class="field">
+          <label>Cheque</label>
+          <select class="select" name="cheque">
+            <option value="">All</option>
+            <option value="yes" {% if filters.cheque == 'yes' %}selected{% endif %}>Received</option>
+            <option value="no" {% if filters.cheque == 'no' %}selected{% endif %}>Not Received</option>
+          </select>
+        </div>
+
         <div class="field salesman-field">
           <label>Salesman</label>
           <div class="multi-select" id="salesman-wrapper">
@@ -516,6 +525,7 @@
               <th>Customer</th>
               <th>Salesman</th>
               <th>Status</th>
+              <th>Cheque</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -525,7 +535,7 @@
                 <td>{{ pi.pi_date|default:pi.created_at|date:"d/m/Y" }}</td>
                 <td>
                   <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a>
+                    <a href="{% url 'pi_detail' pi.pi_number %}?from=pi_list" class="pi-link">{{ pi.pi_number }}</a>
                     {% if pi.is_sap_pi %}
                       <span class="badge" style="background: #4A90D9; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: inline-block;">SAP</span>
                     {% endif %}
@@ -544,13 +554,20 @@
                   {% endif %}
                 </td>
                 <td>
-                  <a class="btn btn-primary" href="{% url 'pi_detail' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">View</a>
+                  {% if pi.cheque_received %}
+                    <span class="badge badge-active" title="Cheque received">✓</span>
+                  {% else %}
+                    <span class="badge" style="background: var(--warning-light); color: var(--warning);" title="No cheque">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a class="btn btn-primary" href="{% url 'pi_detail' pi.pi_number %}?from=pi_list" style="padding: 6px 12px; font-size: 0.813rem;">View</a>
                   <a class="btn btn-secondary" href="{% url 'export_pi_pdf' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a>
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="7" class="empty-state">No Proforma Invoices found.</td>
+                <td colspan="8" class="empty-state">No Proforma Invoices found.</td>
               </tr>
             {% endfor %}
           </tbody>

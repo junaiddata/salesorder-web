@@ -414,6 +414,14 @@ class SAPSalesorderItem(models.Model):
 
 
 # SAP Proforma Invoice (PI) Models
+def cheque_upload_path(instance, filename):
+    """Generate upload path for cheque attachments: cheques/PI_NUMBER/filename"""
+    import os
+    ext = filename.split('.')[-1]
+    new_filename = f"cheque_{instance.pi_number}.{ext}"
+    return os.path.join('cheques', instance.pi_number, new_filename)
+
+
 class SAPProformaInvoice(models.Model):
     STATUS_CHOICES = [
         ('ACTIVE', 'Active'),
@@ -428,6 +436,11 @@ class SAPProformaInvoice(models.Model):
     pi_date = models.DateField(blank=True, null=True, help_text="PI date - SO date for SAP PIs, creation date for app PIs")
     lpo_date = models.DateField(blank=True, null=True, help_text="LPO date for this Proforma Invoice")
     remarks = models.TextField(blank=True, null=True, help_text="Remarks/notes for the Proforma Invoice")
+    
+    # Cheque attachment fields
+    cheque_attachment = models.FileField(upload_to=cheque_upload_path, blank=True, null=True, help_text="Cheque copy (PDF/Image)")
+    cheque_received = models.BooleanField(default=False, help_text="Auto-set to Yes when cheque attachment is uploaded")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_pis')

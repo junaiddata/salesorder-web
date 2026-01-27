@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404, JsonResponse
 from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField
@@ -4118,6 +4119,14 @@ def pi_list(request):
     so_number_filter = request.GET.get('so_number', '').strip()
     salesman_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
     pi_type_filter = request.GET.get('pi_type', '').strip()  # 'SAP' or 'inApp'
+    cheque_filter = request.GET.get('cheque', '').strip()  # 'yes' or 'no'
+
+    # Apply Cheque Received Filter
+    if cheque_filter:
+        if cheque_filter.lower() == 'yes':
+            qs = qs.filter(cheque_received=True)
+        elif cheque_filter.lower() == 'no':
+            qs = qs.filter(cheque_received=False)
 
     # Apply PI Type Filter
     if pi_type_filter:
@@ -4223,6 +4232,7 @@ def pi_list(request):
             'so_number': so_number_filter,
             'salesman': salesman_filter,
             'pi_type': pi_type_filter,
+            'cheque': cheque_filter,
             'page_size': page_size,
         }
     })
@@ -4438,6 +4448,9 @@ def pi_detail(request, pi_number):
     vat_amount = (total_before_tax * vat_rate).quantize(Decimal("0.01"))
     grand_total = (total_before_tax + vat_amount).quantize(Decimal("0.01"))
     
+    # Check if user came from PI list
+    from_pi_list = request.GET.get('from') == 'pi_list'
+    
     return render(request, 'salesorders/pi_detail.html', {
         'pi': pi,
         'salesorder': salesorder,
@@ -4449,6 +4462,7 @@ def pi_detail(request, pi_number):
         'total_before_tax': total_before_tax,
         'vat_amount': vat_amount,
         'grand_total': grand_total,
+        'from_pi_list': from_pi_list,
     })
 
 
@@ -4508,6 +4522,127 @@ def cancel_pi(request, pi_number):
         messages.success(request, f"PI {pi_number} has been cancelled. Quantities are now available.")
     
     return redirect("salesorder_detail", so_number=pi.salesorder.so_number)
+
+
+@login_required
+@require_POST
+def upload_cheque(request, pi_number):
+    """
+    Upload cheque copy attachment for a Proforma Invoice.
+    Automatically sets cheque_received to True when attachment is uploaded.
+    Images are compressed to save space (max 1200px width, 75% quality).
+    PDFs are stored as-is.
+    """
+    from PIL import Image as PILImage
+    from django.core.files.base import ContentFile
+    
+    pi = get_object_or_404(SAPProformaInvoice, pi_number=pi_number)
+    
+    # Enforce scope
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=pi.salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Proforma Invoice not found")
+    
+    cheque_file = request.FILES.get('cheque_file')
+    
+    if cheque_file:
+        # Delete old file if exists
+        if pi.cheque_attachment:
+            pi.cheque_attachment.delete(save=False)
+        
+        # Get file extension
+        file_name = cheque_file.name.lower()
+        is_image = any(file_name.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
+        
+        if is_image:
+            # Compress image to save space
+            try:
+                file_content = cheque_file.read()
+                img = PILImage.open(BytesIO(file_content))
+                
+                # Convert RGBA to RGB for JPEG (if needed)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                
+                # Resize if width > 1200px
+                max_width = 1200
+                if img.width > max_width:
+                    ratio = max_width / float(img.width)
+                    new_height = int(float(img.height) * ratio)
+                    img = img.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
+                
+                # Save compressed
+                buffer = BytesIO()
+                img_format = 'JPEG'  # Always save as JPEG for better compression
+                img.save(buffer, format=img_format, quality=75, optimize=True)
+                buffer.seek(0)
+                
+                # Generate filename
+                new_filename = f"cheque_{pi_number}.jpg"
+                pi.cheque_attachment.save(new_filename, ContentFile(buffer.getvalue()), save=False)
+                
+                # Log compression savings
+                original_size = len(file_content) / 1024  # KB
+                compressed_size = buffer.tell() / 1024  # KB
+                logger.info(f"Cheque image compressed: {original_size:.1f}KB -> {compressed_size:.1f}KB ({pi_number})")
+                
+            except Exception as e:
+                logger.error(f"Error compressing cheque image for {pi_number}: {e}")
+                # Fallback: save original file
+                cheque_file.seek(0)
+                pi.cheque_attachment = cheque_file
+        else:
+            # For PDFs and other files, save as-is
+            pi.cheque_attachment = cheque_file
+        
+        pi.cheque_received = True
+        pi.save(update_fields=['cheque_attachment', 'cheque_received'])
+        messages.success(request, f"Cheque copy uploaded successfully for PI {pi_number}.")
+    else:
+        messages.error(request, "No file selected.")
+    
+    # Preserve the 'from' parameter if present
+    from_param = request.GET.get('from', '')
+    redirect_url = reverse("pi_detail", args=[pi_number])
+    if from_param:
+        redirect_url += f"?from={from_param}"
+    return redirect(redirect_url)
+
+
+@login_required
+@require_POST
+def remove_cheque(request, pi_number):
+    """
+    Remove cheque copy attachment from a Proforma Invoice.
+    Automatically sets cheque_received to False when attachment is removed.
+    """
+    pi = get_object_or_404(SAPProformaInvoice, pi_number=pi_number)
+    
+    # Enforce scope
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=pi.salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Proforma Invoice not found")
+    
+    if pi.cheque_attachment:
+        pi.cheque_attachment.delete(save=False)
+        pi.cheque_received = False
+        pi.save(update_fields=['cheque_attachment', 'cheque_received'])
+        messages.success(request, f"Cheque copy removed from PI {pi_number}.")
+    else:
+        messages.warning(request, "No cheque attachment to remove.")
+    
+    # Preserve the 'from' parameter if present
+    from_param = request.GET.get('from', '')
+    redirect_url = reverse("pi_detail", args=[pi_number])
+    if from_param:
+        redirect_url += f"?from={from_param}"
+    return redirect(redirect_url)
 
 
 @login_required

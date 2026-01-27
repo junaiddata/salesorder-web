@@ -111,6 +111,8 @@ urlpatterns += [
     path('pi/<str:pi_number>/edit/', sap_salesorder_views.edit_pi, name='edit_pi'),
     path('pi/<str:pi_number>/export/', sap_salesorder_views.export_pi_pdf, name='export_pi_pdf'),
     path('pi/<str:pi_number>/cancel/', sap_salesorder_views.cancel_pi, name='cancel_pi'),
+    path('pi/<str:pi_number>/upload-cheque/', sap_salesorder_views.upload_cheque, name='upload_cheque'),
+    path('pi/<str:pi_number>/remove-cheque/', sap_salesorder_views.remove_cheque, name='remove_cheque'),
     path('pi/<str:pi_number>/', sap_salesorder_views.pi_detail, name='pi_detail'),
 
 

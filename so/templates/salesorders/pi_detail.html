@@ -266,6 +266,123 @@
       padding: 40px;
       color: var(--text-muted);
     }
+
+    /* Cheque attachment styles */
+    .cheque-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .cheque-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+    }
+
+    .cheque-status.received {
+      background: var(--success-light);
+      border: 1px solid var(--success);
+    }
+
+    .cheque-status.not-received {
+      background: var(--warning-light);
+      border: 1px solid var(--warning);
+    }
+
+    .cheque-status-icon {
+      font-size: 1.5rem;
+    }
+
+    .cheque-status-text {
+      font-weight: 600;
+    }
+
+    .cheque-status.received .cheque-status-text {
+      color: var(--success);
+    }
+
+    .cheque-status.not-received .cheque-status-text {
+      color: var(--warning);
+    }
+
+    .cheque-upload-form {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .cheque-upload-form .file-input-wrapper {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .cheque-upload-form input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-alt);
+      font-size: 0.875rem;
+    }
+
+    .cheque-preview {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface-alt);
+      border-radius: var(--radius-sm);
+    }
+
+    .cheque-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .cheque-preview-title {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .cheque-preview-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .cheque-preview img {
+      max-width: 100%;
+      max-height: 400px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    .cheque-preview-pdf {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+
+    .cheque-preview-pdf-icon {
+      font-size: 2rem;
+      color: var(--error);
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -276,9 +393,15 @@
         <p>PI: {{ pi.pi_number }} - Sales Order: <a href="{% url 'salesorder_detail' salesorder.so_number %}" style="color: var(--primary); text-decoration: none;">{{ salesorder.so_number }}</a> - {{ salesorder.customer_name }}</p>
       </div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        {% if from_pi_list %}
+        <a class="btn btn-secondary" href="{% url 'pi_list' %}">
+          Back to PI
+        </a>
+        {% else %}
         <a class="btn btn-secondary" href="{% url 'salesorder_detail' salesorder.so_number %}">
           Back to SO
         </a>
+        {% endif %}
         {% if pi.status == 'ACTIVE' %}
         <a class="btn btn-success" href="{% url 'edit_pi' pi.pi_number %}">
           Edit
@@ -329,6 +452,80 @@
             <span class="info-label">LPO Date</span>
             <span class="info-value">{% if pi.lpo_date %}{{ pi.lpo_date|date:"d/m/Y" }}{% else %}—{% endif %}</span>
           </div>
+          <div class="info-item">
+            <span class="info-label">Cheque Received</span>
+            <span class="info-value">
+              {% if pi.cheque_received %}
+                <span class="badge badge-active">Yes</span>
+              {% else %}
+                <span class="badge" style="background: var(--warning-light); color: var(--warning);">No</span>
+              {% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cheque Copy Attachment -->
+    <div class="card">
+      <div class="card-header">Cheque Copy</div>
+      <div class="card-body">
+        <div class="cheque-section">
+          <!-- Cheque Status -->
+          <div class="cheque-status {% if pi.cheque_received %}received{% else %}not-received{% endif %}">
+            <span class="cheque-status-icon">{% if pi.cheque_received %}✓{% else %}⏳{% endif %}</span>
+            <span class="cheque-status-text">
+              {% if pi.cheque_received %}
+                Cheque copy received
+              {% else %}
+                No cheque copy attached
+              {% endif %}
+            </span>
+          </div>
+
+          <!-- Upload Form -->
+          <form method="post" action="{% url 'upload_cheque' pi.pi_number %}{% if from_pi_list %}?from=pi_list{% endif %}" enctype="multipart/form-data" class="cheque-upload-form">
+            {% csrf_token %}
+            <div class="file-input-wrapper">
+              <input type="file" name="cheque_file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" required>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              {% if pi.cheque_attachment %}Replace{% else %}Upload{% endif %} Cheque Copy
+            </button>
+          </form>
+
+          <!-- Preview existing attachment -->
+          {% if pi.cheque_attachment %}
+          <div class="cheque-preview">
+            <div class="cheque-preview-header">
+              <span class="cheque-preview-title">Attached Cheque Copy</span>
+              <div class="cheque-preview-actions">
+                <a href="{{ pi.cheque_attachment.url }}" target="_blank" class="btn btn-secondary">
+                  View Full
+                </a>
+                <form method="post" action="{% url 'remove_cheque' pi.pi_number %}{% if from_pi_list %}?from=pi_list{% endif %}" style="display: inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to remove this cheque copy?')">
+                    Remove
+                  </button>
+                </form>
+              </div>
+            </div>
+            {% with ext=pi.cheque_attachment.name|lower %}
+              {% if '.pdf' in ext %}
+                <div class="cheque-preview-pdf">
+                  <span class="cheque-preview-pdf-icon">📄</span>
+                  <div>
+                    <div style="font-weight: 600;">PDF Document</div>
+                    <div style="color: var(--text-muted); font-size: 0.875rem;">{{ pi.cheque_attachment.name|default:"cheque.pdf" }}</div>
+                  </div>
+                </div>
+              {% else %}
+                <img src="{{ pi.cheque_attachment.url }}" alt="Cheque Copy">
+              {% endif %}
+            {% endwith %}
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
