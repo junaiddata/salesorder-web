@@ -433,7 +433,7 @@
                 </td>
                 <td>
                   <a class="btn btn-primary" href="{% url 'quotation_detail' item.quotation.q_number %}?from=old_pi" style="padding: 6px 12px; font-size: 0.813rem;">View</a>
-                  <!-- <a class="btn btn-secondary" href="{% url 'export_sap_quotation_pdf' item.quotation.q_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a> -->
+                  <a class="btn btn-secondary" href="{% url 'export_old_pi_pdf' item.quotation.q_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a>
                 </td>
               </tr>
             {% empty %}

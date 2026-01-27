@@ -3327,7 +3327,763 @@ def export_pi_pdf(request, pi_number):
     buffer.close()
     response.write(pdf_content)
     return response
+
+
+@login_required
+def export_old_pi_pdf(request, q_number):
+    """
+    Export Old PI (SAPQuotation) as PDF using the PI format.
+    This is for quotations where salesman_name='PI' and status='Open'.
+    """
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
     
+    # Enforce scope - check if user has access to this quotation
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPQuotation.objects.filter(
+            Q(pk=quotation.pk) & salesman_scope_q(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Quotation not found")
+    
+    quotation_items = quotation.items.all().order_by('id')
+    
+    # Build items list from quotation items
+    items_data = []
+    subtotal = Decimal("0")
+    line_counter = 1
+    
+    for item in quotation_items:
+        qty = item.quantity or Decimal("0")
+        # Use row_total if available, otherwise calculate from price * quantity
+        if item.row_total:
+            row_total = item.row_total
+        else:
+            row_total = (item.price * qty).quantize(Decimal("0.01"))
+        
+        # Calculate unit price
+        if qty and qty != 0:
+            unit_price = (row_total / qty).quantize(Decimal("0.01"))
+        else:
+            unit_price = Decimal("0.00")
+        
+        line_total = row_total.quantize(Decimal("0.01"))
+        subtotal += line_total
+        
+        items_data.append({
+            'line_num': f"{line_counter:03d}",
+            'item_no': item.item_no or "-",
+            'description': item.description,
+            'quantity': qty,
+            'uom': 'PCS',
+            'unit_price': unit_price,
+            'tax_rate': Decimal("5.00"),
+            'line_total': line_total,
+        })
+        line_counter += 1
+    
+    # Calculate totals - assume no discount for old PIs
+    discount_percent = Decimal("0.00")
+    discount_amount = Decimal("0.00")
+    total_before_tax = subtotal.quantize(Decimal("0.01"))
+    vat_rate = Decimal("5.00")
+    vat_amount = (total_before_tax * vat_rate / 100).quantize(Decimal("0.01"))
+    grand_total = (total_before_tax + vat_amount).quantize(Decimal("0.01"))
+    
+    # Colors matching the PI format
+    DARK_BLUE = HexColor('#1E3A5F')
+    ORANGE = HexColor('#f0ab00')
+    LIGHT_GRAY = HexColor('#F5F5F5')
+    GRAY_TEXT = HexColor('#808080')
+    BLUE_TEXT = HexColor('#2E5090')
+    RED_TEXT = HexColor('#C0392B')
+    GOLD_BG = HexColor('#FEF3C7')
+    BLUE_BAR = HexColor('#4A90D9')
+    LIGHT_BLUE = HexColor('#4A90D9')
+    
+    # Get data from quotation
+    customer_name = quotation.customer_name or ""
+    customer_code = quotation.customer_code or ""
+    bp_reference = str(quotation.bp_reference_no).strip() if quotation.bp_reference_no else ""
+    posting_date = quotation.posting_date.strftime('%d.%m.%y') if quotation.posting_date else ''
+    salesman = 'PI'  # Default
+    
+    # Get customer data and salesman name from Customer model
+    customer_address = ""
+    customer_tel = ""
+    customer_email = ""
+    customer_po_box = ""
+    customer_fax = ""
+    
+    if customer_code:
+        try:
+            customer = Customer.objects.filter(customer_code=customer_code).first()
+            if customer:
+                customer_address = customer.address or ""
+                customer_tel = customer.phone_number or ""
+                customer_email = getattr(customer, 'email', '') or ""
+                customer_po_box = getattr(customer, 'po_box', '') or ""
+                customer_fax = getattr(customer, 'fax', '') or ""
+                # Get salesman name from customer
+                if customer.salesman:
+                    salesman = customer.salesman.salesman_name
+        except Exception:
+            pass
+    
+    # If salesman not found by code, try by customer name (case-insensitive)
+    if salesman == 'PI' and customer_name:
+        try:
+            customer = Customer.objects.filter(customer_name__iexact=customer_name).first()
+            if customer and customer.salesman:
+                salesman = customer.salesman.salesman_name
+        except Exception:
+            pass
+    
+    # Check if customer name is 'DEBIT CUSTOMER ( CASH )' - keep as PI
+    if customer_name and 'DEBIT CUSTOMER ( CASH )' in customer_name.upper():
+        salesman = 'PI'
+    
+    # Estimate total pages
+    items_per_first_page = 10
+    items_per_continuation_page = 20
+    total_items = len(items_data)
+    
+    if total_items <= items_per_first_page:
+        total_pages = 1
+    else:
+        remaining_items = total_items - items_per_first_page
+        additional_pages = (remaining_items + items_per_continuation_page - 1) // items_per_continuation_page
+        total_pages = 1 + additional_pages
+    
+    # Generate PDF
+    response = HttpResponse(content_type="application/pdf")
+    response['Content-Disposition'] = f'attachment; filename="PI_{q_number}.pdf"'
+    
+    buffer = BytesIO()
+    
+    # Create custom document with page templates (same structure as PI)
+    margin = 0.3*inch
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=margin,
+        bottomMargin=margin,
+    )
+    
+    available_width = A4[0] - (2 * margin)
+    
+    # Define frames
+    first_page_frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height,
+        id='first_page_frame'
+    )
+    
+    later_page_frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height - 0.8*inch,
+        id='later_page_frame',
+        topPadding=0.8*inch
+    )
+    
+    # Create header/footer handler
+    header_handler = HeaderFooterCanvas(q_number, posting_date, total_pages)
+    
+    first_page_template = PageTemplate(
+        id='first_page',
+        frames=[first_page_frame],
+        onPage=lambda canvas, doc: None
+    )
+    
+    later_page_template = PageTemplate(
+        id='later_pages',
+        frames=[later_page_frame],
+        onPage=header_handler
+    )
+    
+    doc.addPageTemplates([first_page_template, later_page_template])
+    
+    elements = []
+    pdf_styles = getSampleStyleSheet()
+    
+    # Import TA_RIGHT, TA_CENTER for alignment
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    
+    # Custom styles (same as PI format)
+    company_style = ParagraphStyle(
+        'CompanyName',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        textColor=DARK_BLUE,
+        leading=11,
+    )
+    
+    address_style = ParagraphStyle(
+        'Address',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    
+    normal_style = ParagraphStyle(
+        'NormalPI',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    
+    bold_style = ParagraphStyle(
+        'BoldPI',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    
+    small_style = ParagraphStyle(
+        'SmallPI',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    
+    gray_label = ParagraphStyle(
+        'GrayLabel',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=GRAY_TEXT,
+    )
+    
+    title_style = ParagraphStyle(
+        'PITitle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=DARK_BLUE,
+    )
+    
+    customer_bold = ParagraphStyle(
+        'CustomerBold',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    
+    email_style = ParagraphStyle(
+        'EmailStyle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=HexColor('#0066CC'),
+    )
+    
+    # Helper function for section headers
+    def create_section_header(text, bar_color=ORANGE, width=3*inch):
+        header_table = Table([
+            ["", Paragraph(f"<b>{text}</b>", bold_style)]
+        ], colWidths=[0.08*inch, width - 0.08*inch])
+        header_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, 0), bar_color),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 0),
+            ('LEFTPADDING', (1, 0), (1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return header_table
+    
+    # Load logo
+    logo_path = os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png')
+    logo_img = None
+    if os.path.exists(logo_path):
+        try:
+            logo_img = Image(logo_path, width=2.3*inch, height=0.9*inch)
+        except Exception:
+            logo_img = None
+    
+    # First page header section (same structure as export_pi_pdf)
+    left_elements = []
+    if logo_img:
+        left_elements.append([logo_img])
+    else:
+        left_elements.append([Paragraph("<b>JUNAID</b>", company_style)])
+    
+    left_elements.append([Spacer(1, 0.1*inch)])
+    left_elements.append([Paragraph("<b>Junaid Sanitary & Electrical Materials Trading (L.L.C)</b>", company_style)])
+    left_elements.append([Spacer(1, 0.05*inch)])
+    left_elements.append([Paragraph("Dubai Investment Park-2, Dubai", address_style)])
+    left_elements.append([Paragraph("04-2367723", address_style)])
+    left_elements.append([Paragraph("100225006400003", address_style)])
+    
+    left_table = Table(left_elements, colWidths=[3*inch])
+    left_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    
+    # Right side - Title with orange bar
+    title_with_bar = Table([
+        ["", Paragraph("<b>PROFORMA INVOICE</b>", title_style)]
+    ], colWidths=[0.1*inch, 3.9*inch])
+    title_with_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), ORANGE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (0, 0), (0, 0), 0),
+        ('LEFTPADDING', (1, 0), (1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    
+    # Document info rows
+    doc_info_header = Table([
+        [Paragraph("Document Number", gray_label), 
+         Paragraph("Document Date", gray_label), 
+         Paragraph("Page", gray_label)],
+    ], colWidths=[1.5*inch, 1.3*inch, 0.7*inch])
+    
+    doc_info_values = Table([
+        [Paragraph(f"<b>{q_number}</b>", bold_style), 
+         Paragraph(f"<b>{posting_date}</b>", bold_style), 
+         Paragraph(f"<b>1/{total_pages}</b>", bold_style)],
+    ], colWidths=[1.5*inch, 1.3*inch, 0.7*inch])
+    
+    # Customer No row (removed VAT Number)
+    cust_header = Table([
+        [Paragraph("Customer No.", gray_label)],
+    ], colWidths=[3.5*inch])
+    
+    arrow_cell = Table([
+        [Paragraph("<font color='#E67E22'>➡</font>", ParagraphStyle('Arrow', fontSize=8)),
+         Paragraph(f"<b>{customer_code}</b>", bold_style)]
+    ], colWidths=[0.2*inch, 3.3*inch])
+    arrow_cell.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    cust_values = Table([
+        [arrow_cell],
+    ], colWidths=[3.5*inch])
+    cust_values.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    # LPO Ref row (removed LPO Date)
+    ref_header = Table([
+        [Paragraph("LPO Ref", gray_label)],
+    ], colWidths=[3.5*inch])
+    
+    ref_values = Table([
+        [Paragraph(f"<b>{bp_reference}</b>", bold_style)],
+    ], colWidths=[3.5*inch])
+    
+    # Your Contact row
+    contact_header = Table([
+        [Paragraph("Your Contact", gray_label)],
+    ], colWidths=[3.5*inch])
+    
+    contact_values = Table([
+        [Paragraph(f"<b>{salesman}</b>", bold_style)],
+    ], colWidths=[3.5*inch])
+    
+    # Combine right column
+    right_elements = [
+        [title_with_bar],
+        [Spacer(1, 0.05*inch)],
+        [doc_info_header],
+        [doc_info_values],
+        [Spacer(1, 0.1*inch)],
+        [cust_header],
+        [cust_values],
+        [Spacer(1, 0.1*inch)],
+        [ref_header],
+        [ref_values],
+        [Spacer(1, 0.1*inch)],
+        [contact_header],
+        [contact_values],
+    ]
+    
+    right_table = Table(right_elements, colWidths=[4*inch])
+    right_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    
+    # Combine header
+    header_row = Table([[left_table, right_table]], colWidths=[3.2*inch, available_width - 3.2*inch])
+    header_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    
+    elements.append(header_row)
+    elements.append(Spacer(1, 0.05*inch))
+    
+    # Blue dotted separator line
+    separator_line = Drawing(available_width, 2)
+    separator_line.add(Line(0, 1, available_width, 1, strokeColor=LIGHT_BLUE, strokeWidth=1, strokeDashArray=[2, 2]))
+    elements.append(separator_line)
+    elements.append(Spacer(1, 0.05*inch))
+    
+    # Customer details section
+    cust_left = []
+    cust_left.append([Paragraph(f"<b>{customer_name}</b>", customer_bold)])
+    cust_left.append([Spacer(1, 0.05*inch)])
+    if customer_address:
+        cust_left.append([Paragraph(f"{customer_address}", address_style)])
+        cust_left.append([Spacer(1, 0.05*inch)])
+    if customer_po_box:
+        cust_left.append([Paragraph(f"PO BOX {customer_po_box}", address_style)])
+        cust_left.append([Spacer(1, 0.05*inch)])
+    if customer_tel:
+        cust_left.append([Paragraph(f"TEL: {customer_tel}", address_style)])
+    if customer_fax:
+        cust_left.append([Paragraph(f"FAX: {customer_fax}", address_style)])
+    if customer_email:
+        cust_left.append([Spacer(1, 0.05*inch)])
+        cust_left.append([Paragraph(f"{customer_email}", email_style)])
+    
+    cust_left_table = Table(cust_left, colWidths=[3.2*inch])
+    cust_left_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    
+    cust_right = []
+    cust_right.append([Paragraph("Delivery Address", gray_label)])
+    cust_right.append([Spacer(1, 0.05*inch)])
+    cust_right.append([Paragraph(f"<b>{customer_name}</b>", customer_bold)])
+    
+    cust_right_table = Table(cust_right, colWidths=[4*inch])
+    cust_right_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    
+    cust_row = Table([[cust_left_table, cust_right_table]], colWidths=[3.2*inch, available_width - 3.2*inch])
+    cust_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    
+    elements.append(cust_row)
+    elements.append(Spacer(1, 0.08*inch))
+    
+    # Blue dotted separator line
+    separator_line2 = Drawing(available_width, 2)
+    separator_line2.add(Line(0, 1, available_width, 1, strokeColor=LIGHT_BLUE, strokeWidth=1, strokeDashArray=[2, 2]))
+    elements.append(separator_line2)
+    elements.append(Spacer(1, 0.05*inch))
+    
+    # Currency label
+    currency_style_right = ParagraphStyle('Currency', fontSize=8, alignment=TA_RIGHT)
+    currency_label = Table([
+        ["", Paragraph("<b>Currency:</b>AED", currency_style_right)]
+    ], colWidths=[available_width - 1.5*inch, 1.5*inch])
+    currency_label.setStyle(TableStyle([
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(currency_label)
+    elements.append(Spacer(1, 0.05*inch))
+    
+    # Line items table
+    table_header_style = ParagraphStyle(
+        'TableHeader',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=7,
+        textColor=colors.black,
+        alignment=TA_CENTER,
+    )
+    
+    arrow_style = ParagraphStyle(
+        'ArrowStyle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=ORANGE,
+    )
+    
+    red_style = ParagraphStyle(
+        'RedStyle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=RED_TEXT,
+        alignment=TA_CENTER,
+    )
+    
+    line_num_style = ParagraphStyle(
+        'LineNumStyle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        textColor=ORANGE,
+        alignment=TA_CENTER,
+    )
+    
+    # Build table data
+    table_data = [[
+        "",
+        Paragraph("<b>Description</b>", table_header_style),
+        Paragraph("<b>Item Code</b>", table_header_style),
+        Paragraph("<b>Quantity</b>", table_header_style),
+        Paragraph("<b>UoM</b>", table_header_style),
+        Paragraph("<b>Price</b>", table_header_style),
+        Paragraph("<b>Tax %</b>", table_header_style),
+        Paragraph("<b>Total</b>", table_header_style),
+    ]]
+    
+    for item in items_data:
+        arrow_code = Table([
+            [Paragraph("➡", arrow_style), Paragraph(item['item_no'], small_style)]
+        ], colWidths=[0.15*inch, 0.65*inch])
+        arrow_code.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        table_data.append([
+            Paragraph(f"<b>{item['line_num']}</b>", line_num_style),
+            Paragraph(item['description'], small_style),
+            arrow_code,
+            Paragraph(f"{item['quantity']:,.0f}", ParagraphStyle('Qty', fontSize=7, alignment=TA_CENTER)),
+            Paragraph(item['uom'], ParagraphStyle('UoM', fontSize=7, alignment=TA_CENTER)),
+            Paragraph(f"{item['unit_price']:,.2f}", ParagraphStyle('Price', fontSize=7, alignment=TA_RIGHT)),
+            Paragraph(f"{item['tax_rate']:.2f}", red_style),
+            Paragraph(f"{item['line_total']:,.2f}", ParagraphStyle('Total', fontSize=7, alignment=TA_RIGHT)),
+        ])
+    
+    # Column widths
+    base_widths = [0.35*inch, 2.65*inch, 0.85*inch, 0.7*inch, 0.5*inch, 0.7*inch, 0.4*inch, 0.85*inch]
+    total_base_width = sum(base_widths)
+    if total_base_width > available_width:
+        scale = available_width / total_base_width
+        col_widths = [w * scale for w in base_widths]
+    else:
+        col_widths = base_widths.copy()
+        col_widths[-1] = available_width - sum(col_widths[:-1])
+    
+    items_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), LIGHT_GRAY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 7),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, HexColor('#CCCCCC')),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.5, HexColor('#EEEEEE')),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTSIZE", (0, 1), (-1, -1), 7),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("ALIGN", (0, 1), (0, -1), "CENTER"),
+        ("ALIGN", (3, 1), (3, -1), "CENTER"),
+        ("ALIGN", (4, 1), (4, -1), "CENTER"),
+        ("ALIGN", (5, 1), (5, -1), "RIGHT"),
+        ("ALIGN", (6, 1), (6, -1), "CENTER"),
+        ("ALIGN", (7, 1), (7, -1), "RIGHT"),
+    ]))
+    
+    elements.append(items_table)
+    elements.append(Spacer(1, 0.1*inch))
+    
+    # Tax details & totals section
+    tax_header = create_section_header("Tax Details", ORANGE, 1.5*inch)
+    
+    tax_table_header = [
+        Paragraph("<b>Tax %</b>", ParagraphStyle('TaxTH', fontSize=7, alignment=TA_CENTER)),
+        Paragraph("<b>Base Amount</b>", ParagraphStyle('TaxTH', fontSize=7, alignment=TA_CENTER)),
+        Paragraph("<b>Tax</b>", ParagraphStyle('TaxTH', fontSize=7, alignment=TA_CENTER)),
+        Paragraph("<b>Gross</b>", ParagraphStyle('TaxTH', fontSize=7, alignment=TA_CENTER)),
+    ]
+    tax_table_values = [
+        f"{vat_rate:.2f}",
+        f"{total_before_tax:,.2f}",
+        f"{vat_amount:,.2f}",
+        f"{grand_total:,.2f}",
+    ]
+    
+    tax_table = Table([tax_table_header, tax_table_values], colWidths=[0.6*inch, 1.2*inch, 0.9*inch, 1.1*inch])
+    tax_table.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 1, HexColor('#CCCCCC')),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, HexColor('#CCCCCC')),
+        ("LINEBEFORE", (1, 0), (1, -1), 0.5, HexColor('#CCCCCC')),
+        ("LINEBEFORE", (2, 0), (2, -1), 0.5, HexColor('#CCCCCC')),
+        ("LINEBEFORE", (3, 0), (3, -1), 0.5, HexColor('#CCCCCC')),
+        ("BACKGROUND", (0, 0), (-1, 0), LIGHT_GRAY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    
+    # Totals on right side
+    totals_label_style = ParagraphStyle('TotalsLabel', fontSize=8, fontName='Helvetica-Bold', textColor=HexColor('#333333'))
+    totals_value_style = ParagraphStyle('TotalsValue', fontSize=8, fontName='Helvetica-Bold', alignment=TA_RIGHT, textColor=HexColor('#1E3A5F'))
+    
+    discount_label = "<b>Discount Subtotal:</b>"
+    discount_display = f"<b>AED {discount_amount:,.2f}</b>"
+    
+    totals_data = [
+        [Paragraph("<b>Order Subtotal:</b>", totals_label_style), Paragraph(f"<b>AED {subtotal:,.2f}</b>", totals_value_style)],
+        [Paragraph(discount_label, totals_label_style), Paragraph(discount_display, totals_value_style)],
+        [Paragraph("<b>Total Before Tax:</b>", totals_label_style), Paragraph(f"<b>AED {total_before_tax:,.2f}</b>", totals_value_style)],
+        [Paragraph("<b>Total Tax Amount:</b>", totals_label_style), Paragraph(f"<b>AED {vat_amount:,.2f}</b>", totals_value_style)],
+        [Paragraph("<b>Total Amount:</b>", totals_label_style), Paragraph(f"<b>AED {grand_total:,.2f}</b>", totals_value_style)],
+    ]
+    
+    totals_table = Table(totals_data, colWidths=[1.5*inch, 1.5*inch])
+    totals_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, LIGHT_BLUE, 1, (2, 2)),
+        ("LINEBELOW", (0, 1), (-1, 1), 1, LIGHT_BLUE, 1, (2, 2)),
+        ("LINEBELOW", (0, 2), (-1, 2), 1, LIGHT_BLUE, 1, (2, 2)),
+        ("LINEBELOW", (0, 3), (-1, 3), 1, LIGHT_BLUE, 1, (2, 2)),
+        ("BACKGROUND", (0, -1), (-1, -1), GOLD_BG),
+    ]))
+    
+    # Combine tax section
+    left_section = Table([
+        [tax_header],
+        [Spacer(1, 0.08*inch)],
+        [tax_table]
+    ], colWidths=[3.8*inch])
+    left_section.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    
+    left_section_width = available_width * 0.55
+    right_section_width = available_width * 0.45
+    summary_row = Table([[left_section, totals_table]], colWidths=[left_section_width, right_section_width])
+    summary_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+    ]))
+    elements.append(summary_row)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Additional expenses
+    exp_header = create_section_header("Additional Expenses", ORANGE, 1.8*inch)
+    shipping_label = Table([
+        [exp_header, "", Paragraph("<b>Shipping Type:</b>", bold_style), ""]
+    ], colWidths=[2*inch, available_width - 4.5*inch, 1.2*inch, 1.3*inch])
+    shipping_label.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+    ]))
+    elements.append(shipping_label)
+    elements.append(Spacer(1, 0.15*inch))
+    
+    # Terms & conditions - use default text
+    default_terms = """Note: Cheque to be prepared in favor of: 
+1) JUNAID SANITARY & ELECTRICAL MAT. TRDG. LLC 
+Tax Registration Number 100225006400003
+2) PAYMENT : As per credit terms
+3)  DELIVERY: Ex-Stock Subject to Receipt of cheque copy against this Proforma Invoice within 4 working days"""
+    
+    terms_text = quotation.remarks if quotation.remarks else default_terms
+    
+    terms_header = Table([
+        ["", Paragraph("<b>TERMS & CONDITIONS:-</b>", bold_style)]
+    ], colWidths=[0.08*inch, available_width - 0.08*inch])
+    terms_header.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), BLUE_BAR),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (0, 0), (0, 0), 0),
+        ('LEFTPADDING', (1, 0), (1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(terms_header)
+    
+    if terms_text:
+        lines = terms_text.split('\n')
+        terms_rows = []
+        for line in lines:
+            line = line.strip()
+            if line:
+                terms_rows.append([Paragraph(f"• {line}", normal_style)])
+        if terms_rows:
+            terms_table = Table(terms_rows, colWidths=[available_width])
+            terms_table.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(terms_table)
+    
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Footer
+    footer_text = Table([
+        [Paragraph("<i>With Best Regards,</i>", normal_style)],
+        [Spacer(1, 0.15*inch)],
+        [Paragraph("Prepared By <b>ANISH/ADIL</b>- sales support email <b>sales@junaid.ae</b>", normal_style)],
+    ], colWidths=[available_width])
+    footer_text.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(footer_text)
+    
+    # Build PDF
+    doc.build(elements)
+    
+    pdf_content = buffer.getvalue()
+    buffer.close()
+    response.write(pdf_content)
+    return response
 
 
 @login_required
@@ -3347,6 +4103,14 @@ def pi_list(request):
     end = request.GET.get('end', '').strip()
     so_number_filter = request.GET.get('so_number', '').strip()
     salesman_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
+    pi_type_filter = request.GET.get('pi_type', '').strip()  # 'SAP' or 'inApp'
+
+    # Apply PI Type Filter
+    if pi_type_filter:
+        if pi_type_filter.upper() == 'SAP':
+            qs = qs.filter(is_sap_pi=True)
+        elif pi_type_filter.upper() == 'INAPP':
+            qs = qs.filter(is_sap_pi=False)
 
     # Apply Salesman Filter
     if salesman_filter:
@@ -3444,6 +4208,7 @@ def pi_list(request):
             'end': end,
             'so_number': so_number_filter,
             'salesman': salesman_filter,
+            'pi_type': pi_type_filter,
             'page_size': page_size,
         }
     })

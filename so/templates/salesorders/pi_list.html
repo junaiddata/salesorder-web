@@ -115,7 +115,7 @@
 
     @media (min-width: 1024px) {
       .filters-grid {
-        grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr auto;
       }
     }
 
@@ -185,10 +185,24 @@
       color: var(--primary);
       font-weight: 600;
       text-decoration: none;
+      white-space: nowrap;
     }
 
     .pi-link:hover {
       text-decoration: underline;
+    }
+
+    /* SAP Badge styling - ensure it doesn't break layout */
+    .sap-badge {
+      background: #4A90D9;
+      color: white;
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1.2;
     }
 
     .badge {
@@ -449,6 +463,15 @@
           </select>
         </div>
 
+        <div class="field">
+          <label>PI Type</label>
+          <select class="select" name="pi_type">
+            <option value="">All</option>
+            <option value="SAP" {% if filters.pi_type == 'SAP' %}selected{% endif %}>SAP</option>
+            <option value="inApp" {% if filters.pi_type == 'inApp' %}selected{% endif %}>inApp</option>
+          </select>
+        </div>
+
         <div class="field salesman-field">
           <label>Salesman</label>
           <div class="multi-select" id="salesman-wrapper">
@@ -501,10 +524,12 @@
               <tr>
                 <td>{{ pi.pi_date|default:pi.created_at|date:"d/m/Y" }}</td>
                 <td>
-                  <a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a>
-                  {% if pi.is_sap_pi %}
-                    <span class="badge" style="background: #4A90D9; color: white; font-size: 0.7rem; margin-left: 4px; padding: 2px 6px;">SAP</span>
-                  {% endif %}
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <a href="{% url 'pi_detail' pi.pi_number %}" class="pi-link">{{ pi.pi_number }}</a>
+                    {% if pi.is_sap_pi %}
+                      <span class="badge" style="background: #4A90D9; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: inline-block;">SAP</span>
+                    {% endif %}
+                  </div>
                 </td>
                 <td><a href="{% url 'salesorder_detail' pi.salesorder.so_number %}" class="pi-link">{{ pi.salesorder.so_number }}</a></td>
                 <td>{{ pi.salesorder.customer_name }}</td>
