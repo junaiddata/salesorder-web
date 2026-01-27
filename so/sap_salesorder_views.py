@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.template.loader import render_to_string
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import pandas as pd
 import os
@@ -2412,7 +2412,7 @@ def create_pi(request, so_number):
 
 import os
 from io import BytesIO
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -4101,6 +4101,60 @@ Tax Registration Number 100225006400003
     return response
 
 
+def calculate_pi_grand_total(pi):
+    """
+    Calculate grand total (including VAT) for a Proforma Invoice.
+    Returns Decimal grand total.
+    """
+    subtotal = Decimal("0")
+    
+    # Get PI lines with calculated unit prices
+    for line in pi.lines.all().order_by('line_no', 'id'):
+        so_item = line.so_item
+        if not so_item:
+            # Fallback: try to find by salesorder and line_no
+            so_item = SAPSalesorderItem.objects.filter(
+                salesorder=pi.salesorder,
+                line_no=line.line_no
+            ).first()
+        
+        if not so_item:
+            # Second fallback: try by item_no and line_no
+            so_item = SAPSalesorderItem.objects.filter(
+                salesorder=pi.salesorder,
+                item_no=line.item_no,
+                line_no=line.line_no
+            ).first()
+        
+        if so_item:
+            qty = so_item.quantity or Decimal("0")
+            row_total = so_item.row_total or Decimal("0")
+            # Calculate unit price from row_total/qty
+            if qty and qty != 0 and row_total:
+                unit_price = (row_total / qty).quantize(Decimal("0.01"))
+            else:
+                unit_price = Decimal("0.00")
+        else:
+            unit_price = Decimal("0.00")
+        
+        line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
+        subtotal += line_total
+    
+    # Apply discount
+    discount_percentage = pi.salesorder.discount_percentage or Decimal("0.00")
+    discount_amount = (subtotal * discount_percentage / 100).quantize(Decimal("0.01"))
+    total_before_tax = (subtotal - discount_amount).quantize(Decimal("0.01"))
+    
+    # Calculate VAT (5%)
+    vat_rate = Decimal("0.05")
+    vat_amount = (total_before_tax * vat_rate).quantize(Decimal("0.01"))
+    
+    # Grand total
+    grand_total = (total_before_tax + vat_amount).quantize(Decimal("0.01"))
+    
+    return grand_total
+
+
 @login_required
 def pi_list(request):
     """
@@ -4109,7 +4163,7 @@ def pi_list(request):
     # Scope by logged-in user - filter PIs by their salesorder's salesman scope
     qs = SAPProformaInvoice.objects.filter(
         salesorder__in=SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
-    ).select_related('salesorder')
+    ).select_related('salesorder').prefetch_related('lines', 'lines__so_item', 'salesorder__items')
 
     # Filters
     q = request.GET.get('q', '').strip()
@@ -4209,6 +4263,23 @@ def pi_list(request):
 
     # Calculate total count
     total_count = paginator.count
+    
+    # Calculate grand totals for each PI in the current page (for display)
+    pis_with_totals = []
+    for pi in page_obj:
+        try:
+            grand_total = calculate_pi_grand_total(pi)
+            pis_with_totals.append({
+                'pi': pi,
+                'grand_total': grand_total,
+            })
+        except Exception as e:
+            logger.warning(f"Error calculating grand total for PI {pi.pi_number} in list: {e}")
+            # Still add PI with 0 total so it shows up
+            pis_with_totals.append({
+                'pi': pi,
+                'grand_total': Decimal("0.00"),
+            })
 
     # Distinct salesmen list (restricted to the same scope)
     salesmen = (
@@ -4222,6 +4293,7 @@ def pi_list(request):
 
     return render(request, 'salesorders/pi_list.html', {
         'page_obj': page_obj,
+        'pis_with_totals': pis_with_totals,  # Dict mapping pi -> grand_total for display
         'total_count': total_count,
         'salesmen': salesmen,
         'filters': {

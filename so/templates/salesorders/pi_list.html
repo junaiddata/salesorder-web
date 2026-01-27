@@ -177,6 +177,10 @@
       color: var(--text);
     }
 
+    tbody td.num, thead th.num {
+      text-align: right;
+    }
+
     tbody tr:hover {
       background: var(--surface-hover);
     }
@@ -439,10 +443,10 @@
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="PI No, SO No, Customer...">
         </div>
 
-        <div class="field">
+        <!-- <div class="field">
           <label>SO Number</label>
           <input class="input" type="text" name="so_number" value="{{ filters.so_number }}" placeholder="SO Number">
-        </div>
+        </div> -->
 
         <div class="field">
           <label>Start Date</label>
@@ -521,16 +525,18 @@
             <tr>
               <th>Date</th>
               <th>PI Number</th>
-              <th>SO Number</th>
+              <!-- <th>SO Number</th> -->
               <th>Customer</th>
               <th>Salesman</th>
               <th>Status</th>
+              <th class="num">Total Amount</th>
               <th>Cheque</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {% for pi in page_obj %}
+            {% for item in pis_with_totals %}
+              {% with pi=item.pi grand_total=item.grand_total %}
               <tr>
                 <td>{{ pi.pi_date|default:pi.created_at|date:"d/m/Y" }}</td>
                 <td>
@@ -541,7 +547,7 @@
                     {% endif %}
                   </div>
                 </td>
-                <td><a href="{% url 'salesorder_detail' pi.salesorder.so_number %}" class="pi-link">{{ pi.salesorder.so_number }}</a></td>
+                <!-- <td><a href="{% url 'salesorder_detail' pi.salesorder.so_number %}" class="pi-link">{{ pi.salesorder.so_number }}</a></td> -->
                 <td>{{ pi.salesorder.customer_name }}</td>
                 <td>{{ pi.salesorder.salesman_name|default:"—" }}</td>
                 <td>
@@ -552,6 +558,9 @@
                   {% else %}
                     <span class="badge badge-cancelled">{{ pi.salesorder.status|default:"—" }}</span>
                   {% endif %}
+                </td>
+                <td class="num" style="font-weight: 600;">
+                  AED {{ grand_total|floatformat:2 }}
                 </td>
                 <td>
                   {% if pi.cheque_received %}
@@ -565,9 +574,10 @@
                   <a class="btn btn-secondary" href="{% url 'export_pi_pdf' pi.pi_number %}" style="padding: 6px 12px; font-size: 0.813rem;">PDF</a>
                 </td>
               </tr>
+              {% endwith %}
             {% empty %}
               <tr>
-                <td colspan="8" class="empty-state">No Proforma Invoices found.</td>
+                <td colspan="9" class="empty-state">No Proforma Invoices found.</td>
               </tr>
             {% endfor %}
           </tbody>
