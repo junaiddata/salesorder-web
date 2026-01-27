@@ -368,6 +368,7 @@ class SAPSalesorder(models.Model):
     is_sap_pi = models.BooleanField(default=False, help_text="True if this SO has a Proforma Invoice created in SAP (U_PROFORMAINVOICE=Y)")
     customer_address = models.TextField(blank=True, null=True, help_text="Customer address from SAP API (Address field)")
     customer_phone = models.CharField(max_length=50, blank=True, null=True, help_text="Customer phone from SAP API (BusinessPartner.Phone1)")
+    closing_remarks = models.TextField(blank=True, null=True, help_text="Closing remarks from SAP API (ClosingRemarks field) - used as default remarks for SAP PIs")
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
     bill_to = models.TextField(blank=True, null=True)

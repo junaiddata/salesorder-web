@@ -423,6 +423,11 @@ class SAPAPIClient:
         customer_phone = str(bp.get('Phone1', '')).strip() if bp.get('Phone1') else ''
         # Extract Address from main API response (where DocNum, DocDate are)
         customer_address = str(api_order.get('Address', '')).strip() if api_order.get('Address') else ''
+        # Extract ClosingRemarks from API response
+        closing_remarks = str(api_order.get('ClosingRemarks', '')).strip() if api_order.get('ClosingRemarks') else ''
+        # Replace \r with \n for proper line breaks
+        if closing_remarks:
+            closing_remarks = closing_remarks.replace('\r', '\n')
         
         # Sales Person
         sales_person = api_order.get('SalesPerson', {})
@@ -538,6 +543,7 @@ class SAPAPIClient:
             'vat_number': vat_number,  # VAT Number from BusinessPartner.FederalTaxID
             'customer_address': customer_address,  # Address from main API response
             'customer_phone': customer_phone,  # Phone1 from BusinessPartner
+            'closing_remarks': closing_remarks,  # ClosingRemarks from API
             'is_sap_pi': is_sap_pi,  # True if U_PROFORMAINVOICE=Y
             'sap_pi_lpo_date': sap_pi_lpo_date,  # From API field U_Lpdate (date or None)
             'document_total': pending_total,  # Pending total = sum of OpenAmount

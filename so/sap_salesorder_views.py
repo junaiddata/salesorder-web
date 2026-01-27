@@ -623,6 +623,7 @@ def sync_salesorders_from_api(request):
                         "vat_number": mapped.get('vat_number', '') or '',  # VAT Number from BusinessPartner.FederalTaxID
                         "customer_address": mapped.get('customer_address', '') or '',  # Address from main API response
                         "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
+                        "closing_remarks": mapped.get('closing_remarks', '') or '',  # ClosingRemarks from API
                         "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
                         "last_synced_at": datetime.now(),  # Track sync time
                     }
@@ -760,6 +761,8 @@ def sync_salesorders_from_api(request):
                                     sap_pi.pi_number = desired_pi_number
                                     sap_pi.save(update_fields=["pi_number"])
                         if sap_pi is None:
+                            # Use closing_remarks from salesorder if available
+                            remarks = salesorder.closing_remarks if salesorder.closing_remarks else ''
                             sap_pi = SAPProformaInvoice.objects.create(
                                 pi_number=desired_pi_number,
                                 salesorder=salesorder,
@@ -768,6 +771,7 @@ def sync_salesorders_from_api(request):
                                 is_sap_pi=True,
                                 pi_date=salesorder.posting_date,  # Use SO date for SAP PI
                                 lpo_date=sap_pi_lpo_date,
+                                remarks=remarks,  # Use closing_remarks from salesorder
                             )
                             created = True
                             sap_pis_created += 1
@@ -779,6 +783,9 @@ def sync_salesorders_from_api(request):
                             sap_pi.pi_date = salesorder.posting_date  # Always sync PI date with SO date
                             if sap_pi_lpo_date:
                                 sap_pi.lpo_date = sap_pi_lpo_date
+                            # Update remarks from salesorder closing_remarks if available
+                            if salesorder.closing_remarks:
+                                sap_pi.remarks = salesorder.closing_remarks
                             sap_pi.save()
                             sap_pis_updated += 1
                         
@@ -979,6 +986,7 @@ def sync_salesorders_api_receive(request):
                     "vat_number": mapped.get('vat_number', '') or '',  # VAT Number from BusinessPartner.FederalTaxID
                     "customer_address": mapped.get('customer_address', '') or '',  # Address from main API response
                     "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
+                    "closing_remarks": mapped.get('closing_remarks', '') or '',  # ClosingRemarks from API
                     "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
                 }
                 
@@ -1123,6 +1131,8 @@ def sync_salesorders_api_receive(request):
                                 sap_pi.pi_number = desired_pi_number
                                 sap_pi.save(update_fields=["pi_number"])
                     if sap_pi is None:
+                        # Use closing_remarks from salesorder if available
+                        remarks = salesorder.closing_remarks if salesorder.closing_remarks else ''
                         sap_pi = SAPProformaInvoice.objects.create(
                             pi_number=desired_pi_number,
                             salesorder=salesorder,
@@ -1131,6 +1141,7 @@ def sync_salesorders_api_receive(request):
                             is_sap_pi=True,
                             pi_date=salesorder.posting_date,  # Use SO date for SAP PI
                             lpo_date=sap_pi_lpo_date,
+                            remarks=remarks,  # Use closing_remarks from salesorder
                         )
                         created = True
                         stats['sap_pis_created'] += 1
@@ -1142,6 +1153,9 @@ def sync_salesorders_api_receive(request):
                         sap_pi.pi_date = salesorder.posting_date  # Always sync PI date with SO date
                         if sap_pi_lpo_date:
                             sap_pi.lpo_date = sap_pi_lpo_date
+                        # Update remarks from salesorder closing_remarks if available
+                        if salesorder.closing_remarks:
+                            sap_pi.remarks = salesorder.closing_remarks
                         sap_pi.save()
                         stats['sap_pis_updated'] += 1
                     
