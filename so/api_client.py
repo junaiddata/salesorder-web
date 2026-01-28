@@ -238,7 +238,7 @@ class SAPAPIClient:
     
     def _filter_ho_customers(self, orders: List[Dict]) -> List[Dict]:
         """
-        Filter orders to only include those where CardCode starts with "HO"
+        Filter orders to only include those where CardCode starts with "HO" or "SD"
         
         Args:
             orders: List of sales order dictionaries
@@ -249,8 +249,10 @@ class SAPAPIClient:
         filtered = []
         for order in orders:
             card_code = order.get('CardCode', '') or order.get('BusinessPartner', {}).get('CardCode', '')
-            if isinstance(card_code, str) and card_code.strip().upper().startswith('HO'):
-                filtered.append(order)
+            if isinstance(card_code, str):
+                card_code_upper = card_code.strip().upper()
+                if card_code_upper.startswith('HO') or card_code_upper.startswith('SD'):
+                    filtered.append(order)
         return filtered
     
     def _load_manufacturer_cache(self, item_codes: List[str]):

@@ -200,15 +200,15 @@ class Command(BaseCommand):
                     api_calls += max(1, (len(orders) + 19) // 20)  # Ceiling division
                     logger.info(f'      Found {len(orders)} orders for {date} ({len([o for o in orders if o.get("DocNum") not in seen_docnums])} new)')
             
-            # Filter by HO customers
+            # Filter by HO and SD customers
             orders_before_filter = len(all_orders)
             all_orders = client._filter_ho_customers(all_orders)
-            logger.info(f'  Filtered: {orders_before_filter} -> {len(all_orders)} orders (HO customers only)')
-            self.stdout.write(self.style.SUCCESS(f'\n  ✓ Fetched {len(all_orders)} orders (after HO filter)'))
+            logger.info(f'  Filtered: {orders_before_filter} -> {len(all_orders)} orders (HO and SD customers only)')
+            self.stdout.write(self.style.SUCCESS(f'\n  ✓ Fetched {len(all_orders)} orders (after HO/SD filter)'))
             
             if not all_orders:
-                logger.warning('  No sales orders found (after filtering by HO customers).')
-                self.stdout.write(self.style.WARNING('  No sales orders found (after filtering by HO customers).'))
+                logger.warning('  No sales orders found (after filtering by HO and SD customers).')
+                self.stdout.write(self.style.WARNING('  No sales orders found (after filtering by HO and SD customers).'))
                 return
             
             # Step 2: Map API responses to model format

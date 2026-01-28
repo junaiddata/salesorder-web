@@ -146,16 +146,16 @@ def sync_salesorders(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
             api_calls += max(1, (len(orders) + 19) // 20)
             log_message(f"      Found {len(orders)} orders ({new_count} new)")
         
-        # Filter by HO customers
+        # Filter by HO and SD customers
         orders_before_filter = len(all_orders)
         all_orders = client._filter_ho_customers(all_orders)
-        log_message(f"  Filtered: {orders_before_filter} -> {len(all_orders)} orders (HO customers only)")
+        log_message(f"  Filtered: {orders_before_filter} -> {len(all_orders)} orders (HO and SD customers only)")
         
         if not all_orders:
-            log_message("  No sales orders found (after filtering by HO customers).", level="WARNING")
+            log_message("  No sales orders found (after filtering by HO and SD customers).", level="WARNING")
             return {"success": True, "stats": {"total": 0}, "error": None}
         
-        log_message(f"  ✓ Fetched {len(all_orders)} orders (after HO filter)")
+        log_message(f"  ✓ Fetched {len(all_orders)} orders (after HO/SD filter)")
         
         # Step 2: Map API responses
         log_message("[STEP 2] Mapping API responses...")

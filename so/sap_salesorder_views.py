@@ -271,14 +271,14 @@ def upload_salesorders(request):
                 # Excel upload only (as requested)
                 df = pd.read_excel(excel_file)
 
-                # Filter to only process HO customers (customer code starts with "HO")
+                # Filter to only process HO and SD customers (customer code starts with "HO" or "SD")
                 if 'Customer/Supplier No.' in df.columns:
                     # Normalize customer code for filtering
                     df['Customer/Supplier No.'] = df['Customer/Supplier No.'].astype(str).str.strip().str.upper()
-                    df = df[df['Customer/Supplier No.'].str.startswith('HO', na=False)].reset_index(drop=True)
+                    df = df[df['Customer/Supplier No.'].str.startswith(('HO', 'SD'), na=False)].reset_index(drop=True)
                     
                     if len(df) == 0:
-                        messages_list.append("No sales orders found with customer codes starting with 'HO'.")
+                        messages_list.append("No sales orders found with customer codes starting with 'HO' or 'SD'.")
                         return render(request, 'salesorders/upload_salesorders.html', {
                             'messages': messages_list
                         })
@@ -553,11 +553,11 @@ def sync_salesorders_from_api(request):
                 all_orders = client.sync_all_salesorders(days_back=days_back)
                 sync_stats['api_calls'] = 1 + days_back  # 1 for open orders + N for days
             
-            # Filter by HO customers
+            # Filter by HO and SD customers
             all_orders = client._filter_ho_customers(all_orders)
             
             if not all_orders:
-                messages.warning(request, "No sales orders found (after filtering by HO customers).")
+                messages.warning(request, "No sales orders found (after filtering by HO and SD customers).")
                 return render(request, 'salesorders/upload_salesorders.html', {
                     'messages': messages_list,
                     'sync_stats': sync_stats
