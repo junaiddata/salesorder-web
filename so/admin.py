@@ -19,7 +19,9 @@ class IgnoreListAdmin(admin.ModelAdmin):
 admin.site.register(QuotationItem)
 admin.site.register(SAPQuotation)
 admin.site.register(SAPQuotationItem)
-admin.site.register(SAPSalesorder)
+@admin.register(SAPSalesorder)
+class SAPSalesorderAdmin(admin.ModelAdmin):
+    search_fields = ('so_number', 'customer_name')  # Add more relevant fields as needed
 admin.site.register(SAPSalesorderItem)
 admin.site.register(OpenSalesOrder)
 admin.site.register(TrustedDevice)
