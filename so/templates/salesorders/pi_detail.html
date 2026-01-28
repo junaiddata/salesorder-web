@@ -545,6 +545,9 @@
                   <th>Manufacture</th>
                   <th>Job Type</th>
                   <th class="num">Quantity</th>
+                  {% if show_open_qty %}
+                  <th class="num">Open Qty</th>
+                  {% endif %}
                   <th class="num">Unit Price</th>
                   <th class="num">Line Total</th>
                 </tr>
@@ -558,6 +561,9 @@
                     <td>{{ item.line.manufacture|default:"—" }}</td>
                     <td>{{ item.line.job_type|default:"—" }}</td>
                     <td class="num">{{ item.line.quantity|floatformat:2 }}</td>
+                    {% if show_open_qty %}
+                    <td class="num">{{ item.remaining_open_qty|floatformat:2 }}</td>
+                    {% endif %}
                     <td class="num">{{ item.unit_price|floatformat:2 }}</td>
                     <td class="num"><strong>{{ item.line_total|floatformat:2 }}</strong></td>
                   </tr>

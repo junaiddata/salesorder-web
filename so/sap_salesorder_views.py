@@ -4499,14 +4499,18 @@ def pi_detail(request, pi_number):
                 unit_price = (row_total / qty).quantize(Decimal("0.01"))
             else:
                 unit_price = Decimal("0.00")
+            # Get remaining open quantity from SO item
+            remaining_open_qty = so_item.remaining_open_quantity or Decimal("0")
         else:
             unit_price = Decimal("0.00")
+            remaining_open_qty = Decimal("0")
         
         line_total = (unit_price * line.quantity).quantize(Decimal("0.01"))
         pi_lines.append({
             'line': line,
             'unit_price': unit_price,
             'line_total': line_total,
+            'remaining_open_qty': remaining_open_qty,
         })
     
     # Calculate totals (keep same logic for PI)
@@ -4523,6 +4527,58 @@ def pi_detail(request, pi_number):
     # Check if user came from PI list
     from_pi_list = request.GET.get('from') == 'pi_list'
     
+    # Check if SO is Open (for showing open quantity column)
+    so_status_raw = (salesorder.status or "").strip().upper()
+    is_so_open = so_status_raw in ("O", "OPEN")
+    
+    # Check if PI is complete (for SAP PIs: all SO items included with complete quantities)
+    is_pi_complete = False
+    if pi.is_sap_pi:
+        # For SAP PIs, check if all SO items are included and quantities match
+        so_items = salesorder.items.all().order_by('line_no')
+        pi_line_count = len(pi_lines)
+        so_item_count = so_items.count()
+        
+        if pi_line_count == so_item_count:
+            # Check if all quantities match
+            quantities_match = True
+            pi_lines_by_line_no = {item['line'].line_no: item['line'] for item in pi_lines}
+            for so_item in so_items:
+                pi_line = pi_lines_by_line_no.get(so_item.line_no)
+                if not pi_line:
+                    quantities_match = False
+                    break
+                so_qty = so_item.quantity or Decimal("0")
+                pi_qty = pi_line.quantity or Decimal("0")
+                if abs(so_qty - pi_qty) > Decimal("0.01"):  # Allow small rounding differences
+                    quantities_match = False
+                    break
+            is_pi_complete = quantities_match
+    else:
+        # For app PIs, check if all SO items are included with complete quantities
+        so_items = salesorder.items.all().order_by('line_no')
+        pi_line_count = len(pi_lines)
+        so_item_count = so_items.count()
+        
+        if pi_line_count == so_item_count:
+            # Check if all quantities match
+            quantities_match = True
+            pi_lines_by_line_no = {item['line'].line_no: item['line'] for item in pi_lines}
+            for so_item in so_items:
+                pi_line = pi_lines_by_line_no.get(so_item.line_no)
+                if not pi_line:
+                    quantities_match = False
+                    break
+                so_qty = so_item.quantity or Decimal("0")
+                pi_qty = pi_line.quantity or Decimal("0")
+                if abs(so_qty - pi_qty) > Decimal("0.01"):  # Allow small rounding differences
+                    quantities_match = False
+                    break
+            is_pi_complete = quantities_match
+    
+    # Show open quantity column if SO is Open AND (PI is SAP PI OR PI is complete)
+    show_open_qty = is_so_open and (pi.is_sap_pi or is_pi_complete)
+    
     return render(request, 'salesorders/pi_detail.html', {
         'pi': pi,
         'salesorder': salesorder,
@@ -4535,6 +4591,8 @@ def pi_detail(request, pi_number):
         'vat_amount': vat_amount,
         'grand_total': grand_total,
         'from_pi_list': from_pi_list,
+        'is_so_open': is_so_open,
+        'show_open_qty': show_open_qty,
     })
 
 
