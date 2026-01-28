@@ -265,9 +265,12 @@ class Quotation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='Pending')
     remarks = models.TextField(blank=True, null=True)
+    customer_display_name = models.CharField(max_length=255, blank=True, null=True, 
+        help_text="Optional display name for walk-in/CASH customers")
 
     def __str__(self):
-        return f"Quotation {self.quotation_number} - {self.customer.customer_name}"
+        display_name = self.customer_display_name or self.customer.customer_name
+        return f"Quotation {self.quotation_number} - {display_name}"
 
     def save(self, *args, **kwargs):
         # Generate quotation number if not exists

@@ -22,7 +22,10 @@
         </div>
 
         <div class="mb-3">
-          <p class="customer-name mb-1">{{ quotation.customer.customer_name }}</p>
+          <p class="customer-name mb-1">{{ quotation.customer_display_name|default:quotation.customer.customer_name }}</p>
+          {% if quotation.customer_display_name %}
+            <p class="salesman-name mb-0" style="font-size: 0.8rem; color: #999;">({{ quotation.customer.customer_name }})</p>
+          {% endif %}
           {% if quotation.salesman %}
             <p class="salesman-name mb-0">({{ quotation.salesman.salesman_name }})</p>
           {% endif %}

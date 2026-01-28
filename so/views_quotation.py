@@ -27,48 +27,20 @@ def create_quotation(request):
             # 1. Customer handling
             # -------------------------
             customer_id = request.POST.get('customer')
-            new_customer_name = request.POST.get('new_customer_name', '').strip()
+            customer_display_name = request.POST.get('new_customer_name', '').strip()  # Used as display name for CASH customers
 
-            if not customer_id and not new_customer_name:
-                messages.error(request, 'Please select a customer or enter a new customer name.')
+            if not customer_id:
+                messages.error(request, 'Please select a customer.')
                 return redirect('create_quotation')
 
-            # Get salesman FIRST (required for both new and existing customers)
+            # Get salesman FIRST (required)
             salesman_id = request.POST.get('salesman')
             if not salesman_id:
                 messages.error(request, 'Salesman is required.')
                 return redirect('create_quotation')
                 
             salesman = get_object_or_404(Salesman, id=salesman_id)
-
-            if new_customer_name:
-                # Generate customer code like in sales order
-                with transaction.atomic():
-                    prefix = 'NEWCUSTOMERS'
-                    last_customer = (
-                        Customer.objects.select_for_update()
-                        .filter(customer_code__startswith=prefix)
-                        .order_by('-id')
-                        .first()
-                    )
-                    if last_customer:
-                        code_part = last_customer.customer_code[len(prefix):]
-                        last_number = int(code_part) if code_part.isdigit() else 0
-                    else:
-                        last_number = 0
-
-                    new_code = f'{prefix}{last_number + 1}'
-
-                    customer, created = Customer.objects.get_or_create(
-                        customer_name=new_customer_name,
-                        defaults={'customer_code': new_code, 'salesman': salesman}
-                    )
-
-                if not created:
-                    messages.error(request, f'Customer "{new_customer_name}" already exists.')
-                    return redirect('create_quotation')
-            else:
-                customer = get_object_or_404(Customer, id=customer_id)
+            customer = get_object_or_404(Customer, id=customer_id)
 
             # -------------------------
             # 2. Items validation
@@ -93,8 +65,9 @@ def create_quotation(request):
             quotation = Quotation.objects.create(
                 customer=customer,
                 salesman=salesman,
-                division=division,  # <--- Logic added here
-                remarks=remarks     # <--- Remarks added here
+                division=division,
+                remarks=remarks,
+                customer_display_name=customer_display_name if customer_display_name else None
             )
 
             # -------------------------
@@ -263,12 +236,13 @@ def view_quotations(request):
     if status and status != 'All':
         quotations = quotations.filter(status=status)
     
-    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
-        quotations = quotations.filter(division='ALABAMA')
-    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so','manager']:
-        quotations = quotations.filter(division='JUNAID')
-    else:
-        quotations = Quotation.objects.all()
+    # Apply user-based division restrictions
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() == 'alabamaadmin':
+            quotations = quotations.filter(division='ALABAMA')
+        elif request.user.username.lower() not in ['so', 'manager']:
+            quotations = quotations.filter(division='JUNAID')
+        # else: so/manager see all quotations - no additional filter
 
 
     # Salesman restriction (same logic as SalesOrder)
@@ -298,6 +272,7 @@ def view_quotations(request):
             | Q(customer__customer_code__icontains=q)
             | Q(salesman__salesman_name__icontains=q)
             | Q(remarks__icontains=q)
+            | Q(customer_display_name__icontains=q)
         )
 
     # Get all unique salesmen for the filter dropdown
@@ -368,12 +343,13 @@ def view_quotations_ajax(request):
     if status and status != 'All':
         quotations = quotations.filter(status=status)
 
-    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
-        quotations = quotations.filter(division='ALABAMA')
-    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so', 'manager']:
-        quotations = quotations.filter(division='JUNAID')
-    else:
-        quotations = Quotation.objects.all()
+    # Apply user-based division restrictions
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() == 'alabamaadmin':
+            quotations = quotations.filter(division='ALABAMA')
+        elif request.user.username.lower() not in ['so', 'manager']:
+            quotations = quotations.filter(division='JUNAID')
+        # else: so/manager see all quotations - no additional filter
 
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
         salesman_name = request.user.first_name
@@ -398,6 +374,7 @@ def view_quotations_ajax(request):
             | Q(customer__customer_code__icontains=q)
             | Q(salesman__salesman_name__icontains=q)
             | Q(remarks__icontains=q)
+            | Q(customer_display_name__icontains=q)
         )
 
     paginator = Paginator(quotations.order_by('-created_at'), 12)
@@ -519,37 +496,37 @@ def edit_quotation(request, quotation_id):
     if request.method == 'POST':
         customer = get_object_or_404(Customer, id=request.POST.get('customer'))
         salesman = get_object_or_404(Salesman, id=request.POST.get('salesman')) if request.POST.get('salesman') else None
-        
+        customer_display_name = request.POST.get('customer_display_name', '').strip()
 
         # Update main quotation fields
         quotation.customer = customer
         quotation.salesman = salesman
-        # if valid_until:
-        #     quotation.valid_until = valid_until
-        # quotation.save()
+        quotation.customer_display_name = customer_display_name if customer_display_name else None
 
         # Get new items from POST
         item_ids = request.POST.getlist('item')  # dropdown selection
         quantities = request.POST.getlist('quantity')
         prices = request.POST.getlist('price')
+        units = request.POST.getlist('unit')
 
-        # Validate we have the same number of items, quantities, and prices
-        if len(item_ids) != len(quantities) or len(item_ids) != len(prices):
+        # Validate we have the same number of items, quantities, prices, and units
+        if len(item_ids) != len(quantities) or len(item_ids) != len(prices) or len(item_ids) != len(units):
             messages.error(request, 'Invalid form data: mismatched item fields')
             return redirect('edit_quotation', quotation_id=quotation.id)
 
         quotation_items = []
         has_undercost_items = False
         
-        for i, (item_id, qty, price) in enumerate(zip(item_ids, quantities, prices)):
+        for i, (item_id, qty, price, unit) in enumerate(zip(item_ids, quantities, prices, units)):
             if not item_id:  # Skip empty items
                 continue
                 
             try:
                 quantity = int(qty) if qty else 0
-                price = float(price) if price else 0.0
+                price_val = float(price) if price else 0.0
+                unit_val = unit if unit in ['pcs', 'ctn', 'roll'] else 'pcs'
                 
-                if quantity <= 0 or price < 0:
+                if quantity <= 0 or price_val < 0:
                     continue  # Skip invalid items
                     
                 # Get item from Items table
@@ -557,15 +534,16 @@ def edit_quotation(request, quotation_id):
                 
                 # Check if item is undercost
                 undercost_limit = item.item_cost  # 10% above cost
-                if price < undercost_limit:
+                if price_val < undercost_limit:
                     has_undercost_items = True
                 
                 quotation_items.append(QuotationItem(
                     quotation=quotation,
                     item=item,  # Link to Items model
                     quantity=quantity,
-                    price=price,
-                    line_total=quantity * price
+                    price=price_val,
+                    unit=unit_val,
+                    line_total=quantity * price_val
                 ))
             except (ValueError, Items.DoesNotExist):
                 # Skip invalid items but continue processing others
@@ -915,9 +893,11 @@ def generate_junaid_quotation(buffer, quotation):
         ('BACKGROUND', (0, 0), (0, 0), SECONDARY_COLOR),
     ]))
 
+    # Use customer_display_name if available, otherwise use customer.customer_name
+    display_name = quotation.customer_display_name or quotation.customer.customer_name
     customer_data = [
         [Paragraph('Customer Information', styles['SectionHeader'])],
-        [Paragraph(f'<b>Name:</b> {quotation.customer.customer_name}', styles['Normal'])],
+        [Paragraph(f'<b>Name:</b> {display_name}', styles['Normal'])],
     ]
 
     if quotation.salesman:
@@ -1123,9 +1103,11 @@ def generate_alabama_quotation(buffer, quotation):
         ('BACKGROUND', (0, 0), (0, 0), PRIMARY_COLOR), # Use Red for headers
     ]))
 
+    # Use customer_display_name if available, otherwise use customer.customer_name
+    display_name = quotation.customer_display_name or quotation.customer.customer_name
     customer_data = [
         [Paragraph('Customer Information', styles['SectionHeader'])],
-        [Paragraph(f'<b>Name:</b> {quotation.customer.customer_name}', styles['Normal'])],
+        [Paragraph(f'<b>Name:</b> {display_name}', styles['Normal'])],
     ]
 
     if quotation.salesman:

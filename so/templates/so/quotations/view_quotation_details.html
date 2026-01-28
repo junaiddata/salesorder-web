@@ -566,7 +566,10 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">Customer Name</span>
-                        <span class="info-value">{{ quotation.customer.customer_name }}</span>
+                        <span class="info-value">{{ quotation.customer_display_name|default:quotation.customer.customer_name }}</span>
+                        {% if quotation.customer_display_name %}
+                        <span style="font-size: 12px; color: var(--sap-gray-500);">({{ quotation.customer.customer_name }})</span>
+                        {% endif %}
                     </div>
                     <div class="info-item">
                         <span class="info-label">Quotation Date</span>

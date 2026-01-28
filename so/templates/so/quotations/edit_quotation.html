@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#4CAF50">
+    <meta name="theme-color" content="#0b0431">
     <title>Edit Quotation</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Select2 for searchable dropdowns -->
@@ -44,7 +44,7 @@
         
         /* Mobile App Header */
         .app-header {
-            background: #4CAF50;
+            background: #0b0431;
             color: white;
             padding: 16px;
             position: sticky;
@@ -134,8 +134,8 @@
         }
         
         .select2-container--focus .select2-selection--single {
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+            border-color: #0b0431;
+            box-shadow: 0 0 0 3px rgba(11, 4, 49, 0.1);
         }
         
         /* Select2 Dropdown */
@@ -163,7 +163,7 @@
         }
         
         .select2-results__option--highlighted {
-            background-color: #4CAF50;
+            background-color: #0b0431;
         }
         
         /* Regular inputs */
@@ -180,8 +180,8 @@
         
         input:focus {
             outline: none;
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+            border-color: #0b0431;
+            box-shadow: 0 0 0 3px rgba(11, 4, 49, 0.1);
         }
         
         input:disabled {
@@ -269,22 +269,22 @@
         }
         
         .btn-primary {
-            background-color: #4CAF50;
+            background-color: #0b0431;
             color: white;
         }
         
         .btn-primary:active:not(:disabled) {
-            background-color: #45a049;
+            background-color: #1a0952;
         }
         
         .btn-secondary {
             background-color: #fff;
-            color: #4CAF50;
-            border: 2px solid #4CAF50;
+            color: #0b0431;
+            border: 2px solid #0b0431;
         }
         
         .btn-secondary:active:not(:disabled) {
-            background-color: #f0f9f0;
+            background-color: #f0f0f5;
         }
         
         .btn-danger {
@@ -494,11 +494,16 @@
                             Customer <span class="required-mark">*</span>
                         </label>
                         <select id="customer" name="customer" required class="searchable-select">
-                            <option value="">Select Customer</option>
-                            {% for customer in quotation.salesman.customers.all %}
-                                <option value="{{ customer.id }}" {% if customer.id == quotation.customer.id %}selected{% endif %}>{{ customer.customer_name }}</option>
-                            {% endfor %}
+                            <option value="{{ quotation.customer.id }}" selected>{{ quotation.customer.customer_name }}</option>
                         </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_display_name">Customer Display Name (Optional)</label>
+                        <input type="text" name="customer_display_name" id="customer_display_name" 
+                            value="{{ quotation.customer_display_name|default:'' }}"
+                            placeholder="E.g. Walk-in customer name, project reference">
+                        <p class="help-text" style="font-size: 13px; color: #6c757d; margin-top: 4px;">For CASH/walk-in customers - this name will appear on the quotation</p>
                     </div>
 <!-- 
                     <div class="form-group">
@@ -561,12 +566,21 @@
                                     <div class="item-stock" style="font-size:14px;color:#888;">{{ quotation_item.item.item_stock }}</div>
                                 </div>
                                 
-                                <div class="qty-price-grid">
+                                <div class="qty-price-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                                     <div class="form-group">
                                         <label>Quantity <span class="required-mark">*</span></label>
                                         <input type="number" name="quantity" min="1" value="{{ quotation_item.quantity }}" required inputmode="numeric">
                                     </div>
                                     
+                                    <div class="form-group">
+                                        <label>Unit <span class="required-mark">*</span></label>
+                                        <select name="unit" class="item-unit" required style="width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; height: 48px;">
+                                            <option value="pcs" {% if quotation_item.unit == 'pcs' %}selected{% endif %}>pcs</option>
+                                            <option value="ctn" {% if quotation_item.unit == 'ctn' %}selected{% endif %}>ctn</option>
+                                            <option value="roll" {% if quotation_item.unit == 'roll' %}selected{% endif %}>roll</option>
+                                        </select>
+                                    </div>
+
                                     <div class="form-group">
                                         <label>Price <span class="required-mark">*</span></label>
                                         <input type="number" name="price" class="item-price" 
@@ -939,12 +953,21 @@
                             <div class="item-stock" style="font-size:14px;color:#888;">--</div>
                         </div>
                         
-                        <div class="qty-price-grid">
+                        <div class="qty-price-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                             <div class="form-group">
                                 <label>Quantity <span class="required-mark">*</span></label>
                                 <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
                             </div>
                             
+                            <div class="form-group">
+                                <label>Unit <span class="required-mark">*</span></label>
+                                <select name="unit" class="item-unit" required style="width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; height: 48px;">
+                                    <option value="pcs">pcs</option>
+                                    <option value="ctn">ctn</option>
+                                    <option value="roll">roll</option>
+                                </select>
+                            </div>
+
                             <div class="form-group">
                                 <label>Price <span class="required-mark">*</span></label>
                                 <input type="number" name="price" class="item-price" 
