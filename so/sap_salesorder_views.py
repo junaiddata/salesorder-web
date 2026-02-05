@@ -31,7 +31,7 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
@@ -5371,6 +5371,44 @@ def sync_arinvoices_api_receive(request):
             # Delete existing items for these invoices
             SAPARInvoiceItem.objects.filter(invoice__invoice_number__in=invoice_numbers).delete()
             
+            # Helper function to ensure item exists (similar to _ensure_item_exists in api_client)
+            def _ensure_item_exists_vps(item_code: str, item_description: str, upc_code: str = None):
+                """Ensure an item exists in Items table on VPS. If not, create it and remove from IgnoreList."""
+                if not item_code:
+                    return None
+                
+                try:
+                    # Try to get existing item
+                    item = Items.objects.get(item_code=item_code)
+                    return item
+                except Items.DoesNotExist:
+                    # Create new item
+                    try:
+                        item = Items.objects.create(
+                            item_code=item_code,
+                            item_description=item_description[:100] if len(item_description) > 100 else item_description,
+                            item_upvc=upc_code or '',
+                            item_cost=0.0,
+                            item_firm='',
+                            item_price=0.0,
+                            item_stock=0,
+                            total_available_stock=None,
+                            dip_warehouse_stock=None
+                        )
+                        logger.info(f"Auto-created Items record on VPS for item_code: {item_code}")
+                        
+                        # Remove from IgnoreList if exists
+                        try:
+                            IgnoreList.objects.filter(item_code=item_code).delete()
+                            logger.info(f"Removed item_code {item_code} from IgnoreList on VPS")
+                        except Exception as e:
+                            logger.warning(f"Error removing {item_code} from IgnoreList on VPS: {e}")
+                        
+                        return item
+                    except Exception as e:
+                        logger.error(f"Error creating Items record on VPS for {item_code}: {e}")
+                        return None
+            
             # Build items list + bulk insert
             items_to_create = []
             
@@ -5389,14 +5427,22 @@ def sync_arinvoices_api_receive(request):
                     continue
                 
                 for item_data in mapped.get('items', []):
-                    item_id = item_data.get('item_id')
+                    # Ensure item exists on VPS before creating invoice item
+                    item_code = item_data.get('item_code', '')
+                    item_description = item_data.get('item_description', '')
+                    upc_code = item_data.get('upc_code', '')
+                    
+                    # Get or create item on VPS
+                    item_obj = _ensure_item_exists_vps(item_code, item_description, upc_code)
+                    item_id = item_obj.id if item_obj else None
+                    
                     items_to_create.append(
                         SAPARInvoiceItem(
                             invoice_id=invoice_id,
-                            item_id=item_id,
+                            item_id=item_id,  # ForeignKey to Items (created/retrieved on VPS)
                             line_no=item_data.get('line_no', 1),
-                            item_code=item_data.get('item_code', ''),
-                            item_description=item_data.get('item_description', ''),
+                            item_code=item_code,
+                            item_description=item_description,
                             quantity=_dec_any(item_data.get('quantity', 0)),
                             price=_dec_any(item_data.get('price', 0)),
                             price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
@@ -5404,7 +5450,7 @@ def sync_arinvoices_api_receive(request):
                             line_total=_dec_any(item_data.get('line_total', 0)),
                             tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                             tax_total=_dec_any(item_data.get('tax_total', 0)),
-                            upc_code=item_data.get('upc_code', ''),
+                            upc_code=upc_code,
                         )
                     )
                     
@@ -5806,6 +5852,44 @@ def sync_arcreditmemos_api_receive(request):
             # Delete existing items for these credit memos
             SAPARCreditMemoItem.objects.filter(credit_memo__credit_memo_number__in=creditmemo_numbers).delete()
             
+            # Helper function to ensure item exists (similar to _ensure_item_exists in api_client)
+            def _ensure_item_exists_vps(item_code: str, item_description: str, upc_code: str = None):
+                """Ensure an item exists in Items table on VPS. If not, create it and remove from IgnoreList."""
+                if not item_code:
+                    return None
+                
+                try:
+                    # Try to get existing item
+                    item = Items.objects.get(item_code=item_code)
+                    return item
+                except Items.DoesNotExist:
+                    # Create new item
+                    try:
+                        item = Items.objects.create(
+                            item_code=item_code,
+                            item_description=item_description[:100] if len(item_description) > 100 else item_description,
+                            item_upvc=upc_code or '',
+                            item_cost=0.0,
+                            item_firm='',
+                            item_price=0.0,
+                            item_stock=0,
+                            total_available_stock=None,
+                            dip_warehouse_stock=None
+                        )
+                        logger.info(f"Auto-created Items record on VPS for item_code: {item_code}")
+                        
+                        # Remove from IgnoreList if exists
+                        try:
+                            IgnoreList.objects.filter(item_code=item_code).delete()
+                            logger.info(f"Removed item_code {item_code} from IgnoreList on VPS")
+                        except Exception as e:
+                            logger.warning(f"Error removing {item_code} from IgnoreList on VPS: {e}")
+                        
+                        return item
+                    except Exception as e:
+                        logger.error(f"Error creating Items record on VPS for {item_code}: {e}")
+                        return None
+            
             # Build items list + bulk insert
             items_to_create = []
             
@@ -5824,14 +5908,22 @@ def sync_arcreditmemos_api_receive(request):
                     continue
                 
                 for item_data in mapped.get('items', []):
-                    item_id = item_data.get('item_id')
+                    # Ensure item exists on VPS before creating credit memo item
+                    item_code = item_data.get('item_code', '')
+                    item_description = item_data.get('item_description', '')
+                    upc_code = item_data.get('upc_code', '')
+                    
+                    # Get or create item on VPS
+                    item_obj = _ensure_item_exists_vps(item_code, item_description, upc_code)
+                    item_id = item_obj.id if item_obj else None
+                    
                     items_to_create.append(
                         SAPARCreditMemoItem(
                             credit_memo_id=creditmemo_id,
-                            item_id=item_id,
+                            item_id=item_id,  # ForeignKey to Items (created/retrieved on VPS)
                             line_no=item_data.get('line_no', 1),
-                            item_code=item_data.get('item_code', ''),
-                            item_description=item_data.get('item_description', ''),
+                            item_code=item_code,
+                            item_description=item_description,
                             quantity=_dec_any(item_data.get('quantity', 0)),
                             price=_dec_any(item_data.get('price', 0)),
                             price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
@@ -5839,7 +5931,7 @@ def sync_arcreditmemos_api_receive(request):
                             line_total=_dec_any(item_data.get('line_total', 0)),
                             tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                             tax_total=_dec_any(item_data.get('tax_total', 0)),
-                            upc_code=item_data.get('upc_code', ''),
+                            upc_code=upc_code,
                         )
                     )
                     
