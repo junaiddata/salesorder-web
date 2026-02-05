@@ -5126,11 +5126,13 @@ def sync_arinvoices_from_api(request):
                         "customer_address": mapped.get('customer_address', ''),
                         "salesman_name": mapped.get('salesman_name', ''),
                         "salesman_code": mapped.get('salesman_code'),
+                        "store": mapped.get('store', 'HO'),
                         "bp_reference_no": mapped.get('bp_reference_no', ''),
                         "doc_total": _dec2(mapped.get('doc_total', 0)),
                         "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
                         "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                         "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                        "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
                         "discount_percent": _dec2(mapped.get('discount_percent', 0)),
                         "cancel_status": mapped.get('cancel_status', ''),
                         "document_status": mapped.get('document_status', ''),
@@ -5155,8 +5157,8 @@ def sync_arinvoices_from_api(request):
                 if to_update:
                     update_fields = [
                         "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
-                        "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
-                        "doc_total", "doc_total_without_vat", "vat_sum", "discount_percent",
+                        "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
+                        "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                         "cancel_status", "document_status", "vat_number", "comments"
                     ]
                     SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
@@ -5200,6 +5202,8 @@ def sync_arinvoices_from_api(request):
                                 price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                                 discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                                 line_total=_dec_any(item_data.get('line_total', 0)),
+                                cost_price=_dec_any(item_data.get('cost_price', 0)),
+                                gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                                 tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                                 tax_total=_dec_any(item_data.get('tax_total', 0)),
                                 upc_code=item_data.get('upc_code', ''),
@@ -5357,8 +5361,8 @@ def sync_arinvoices_api_receive(request):
             if to_update:
                 update_fields = [
                     "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
-                    "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
-                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                    "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
+                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                     "cancel_status", "document_status", "vat_number", "comments"
                 ]
                 SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
@@ -5448,6 +5452,8 @@ def sync_arinvoices_api_receive(request):
                             price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                             discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                             line_total=_dec_any(item_data.get('line_total', 0)),
+                            cost_price=_dec_any(item_data.get('cost_price', 0)),
+                            gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                             tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                             tax_total=_dec_any(item_data.get('tax_total', 0)),
                             upc_code=upc_code,
@@ -5607,11 +5613,13 @@ def sync_arcreditmemos_from_api(request):
                         "customer_address": mapped.get('customer_address', ''),
                         "salesman_name": mapped.get('salesman_name', ''),
                         "salesman_code": mapped.get('salesman_code'),
+                        "store": mapped.get('store', 'HO'),
                         "bp_reference_no": mapped.get('bp_reference_no', ''),
                         "doc_total": _dec2(mapped.get('doc_total', 0)),
                         "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
                         "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                         "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                        "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
                         "discount_percent": _dec2(mapped.get('discount_percent', 0)),
                         "cancel_status": mapped.get('cancel_status', ''),
                         "document_status": mapped.get('document_status', ''),
@@ -5637,7 +5645,7 @@ def sync_arcreditmemos_from_api(request):
                     update_fields = [
                         "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
                         "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
-                        "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                        "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                         "cancel_status", "document_status", "vat_number", "comments"
                     ]
                     SAPARCreditMemo.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
@@ -5809,6 +5817,7 @@ def sync_arcreditmemos_api_receive(request):
                     "customer_address": mapped.get('customer_address', ''),
                     "salesman_name": mapped.get('salesman_name', ''),
                     "salesman_code": mapped.get('salesman_code'),
+                    "store": mapped.get('store', 'HO'),
                     "bp_reference_no": mapped.get('bp_reference_no', ''),
                     "doc_total": _dec2(mapped.get('doc_total', 0)),
                     "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
@@ -5838,7 +5847,7 @@ def sync_arcreditmemos_api_receive(request):
             if to_update:
                 update_fields = [
                     "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
-                    "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
+                    "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
                     "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
                     "cancel_status", "document_status", "vat_number", "comments"
                 ]
@@ -5929,6 +5938,8 @@ def sync_arcreditmemos_api_receive(request):
                             price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                             discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                             line_total=_dec_any(item_data.get('line_total', 0)),
+                            cost_price=_dec_any(item_data.get('cost_price', 0)),
+                            gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                             tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                             tax_total=_dec_any(item_data.get('tax_total', 0)),
                             upc_code=upc_code,
@@ -5973,9 +5984,14 @@ def arinvoice_list(request):
     q = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    store_filter = request.GET.get('store', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     total_range = request.GET.get('total', '').strip()
+    
+    # Apply Store Filter
+    if store_filter:
+        qs = qs.filter(store=store_filter)
     
     # Apply List Filter
     if salesmen_filter:
@@ -6050,11 +6066,13 @@ def arinvoice_list(request):
     grand_total_agg = qs.aggregate(
         total=Coalesce(Sum('doc_total'), Value(0, output_field=DecimalField())),
         total_without_vat=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
-        vat_total=Coalesce(Sum('vat_sum'), Value(0, output_field=DecimalField()))
+        vat_total=Coalesce(Sum('vat_sum'), Value(0, output_field=DecimalField())),
+        total_gross_profit=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
     )
     total_value = grand_total_agg['total']
     total_without_vat_value = grand_total_agg['total_without_vat']
     vat_total_value = grand_total_agg['vat_total']
+    total_gross_profit_value = grand_total_agg['total_gross_profit']
     
     qs = qs.order_by('-posting_date', '-invoice_number')
     
@@ -6084,11 +6102,13 @@ def arinvoice_list(request):
         'total_value': total_value,
         'total_without_vat_value': total_without_vat_value,
         'vat_total_value': vat_total_value,
+        'total_gross_profit_value': total_gross_profit_value,
         'salesmen': salesmen,
         'filters': {
             'q': q,
             'salesmen_filter': salesmen_filter,
             'cancel_status': cancel_status_filter or 'All',
+            'store': store_filter,
             'start': start,
             'end': end,
             'page_size': page_size,
@@ -6117,9 +6137,14 @@ def export_arinvoice_list_excel(request):
     q = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    store_filter = request.GET.get('store', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     total_range = request.GET.get('total', '').strip()
+    
+    # Apply Store Filter
+    if store_filter:
+        qs = qs.filter(store=store_filter)
     
     # Apply List Filter
     if salesmen_filter:
@@ -6324,6 +6349,7 @@ def arinvoice_detail(request, invoice_number):
         'discount_amount': discount_amount,
         'vat_amount': vat_amount,
         'grand_total': grand_total,
+        'total_gross_profit': invoice.total_gross_profit or Decimal("0.00"),
         'cancel_status_label': cancel_status_label,
         'related_cancellation': related_cancellation,
         'rounding_diff_amount': invoice.rounding_diff_amount or Decimal("0.00"),
@@ -6346,9 +6372,14 @@ def arcreditmemo_list(request):
     q = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    store_filter = request.GET.get('store', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     total_range = request.GET.get('total', '').strip()
+    
+    # Apply Store Filter
+    if store_filter:
+        qs = qs.filter(store=store_filter)
     
     # Apply List Filter
     if salesmen_filter:
@@ -6462,6 +6493,7 @@ def arcreditmemo_list(request):
             'q': q,
             'salesmen_filter': salesmen_filter,
             'cancel_status': cancel_status_filter or 'All',
+            'store': store_filter,
             'start': start,
             'end': end,
             'page_size': page_size,
@@ -6519,6 +6551,7 @@ def arcreditmemo_detail(request, credit_memo_number):
         'discount_amount': discount_amount,
         'vat_amount': vat_amount,
         'grand_total': grand_total,
+        'total_gross_profit': creditmemo.total_gross_profit or Decimal("0.00"),
         'cancel_status_label': cancel_status_label,
         'related_cancellation': related_cancellation,
         'rounding_diff_amount': creditmemo.rounding_diff_amount or Decimal("0.00"),

@@ -848,6 +848,10 @@ class SAPAPIClient:
         salesman_name = sales_person.get('SalesEmployeeName', '') or ''
         salesman_code = sales_person.get('SalesEmployeeCode') or None
         
+        # Calculate store based on salesman_name
+        # If salesman_name starts with 'R.' or 'E.', store = 'Others', else 'HO'
+        store = 'Others' if salesman_name and (salesman_name.strip().startswith('R.') or salesman_name.strip().startswith('E.')) else 'HO'
+        
         # Other header fields
         customer_address = str(api_invoice.get('Address', '')).strip() if api_invoice.get('Address') else ''
         bp_reference = api_invoice.get('NumAtCard', '') or ''
@@ -903,13 +907,19 @@ class SAPAPIClient:
             price_after_vat = line.get('PriceAfterVAT', 0) or 0
             discount_percent_line = line.get('DiscountPercent', 0) or 0
             line_total = line.get('LineTotal', 0) or 0
+            cost_price = line.get('GrossProfitTotalBasePrice', 0) or 0  # Total cost price for this line
             tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
             tax_total = line.get('TaxTotal', 0) or 0
+            
+            # Calculate Gross Profit = LineTotal - cost_price
+            gross_profit = line_total - cost_price
             
             # Apply sign multiplier to item amounts (for csCancellation)
             price = price * sign_multiplier
             price_after_vat = price_after_vat * sign_multiplier
             line_total = line_total * sign_multiplier
+            cost_price = cost_price * sign_multiplier
+            gross_profit = gross_profit * sign_multiplier
             tax_total = tax_total * sign_multiplier
             
             item_data = {
@@ -921,6 +931,8 @@ class SAPAPIClient:
                 'price_after_vat': price_after_vat,
                 'discount_percent': discount_percent_line,
                 'line_total': line_total,
+                'cost_price': cost_price,
+                'gross_profit': gross_profit,
                 'tax_percentage': tax_percentage,
                 'tax_total': tax_total,
                 'upc_code': upc_code,
@@ -928,6 +940,9 @@ class SAPAPIClient:
             }
             
             items.append(item_data)
+        
+        # Calculate total gross profit (sum of all item gross_profit)
+        total_gross_profit = sum(item.get('gross_profit', 0) or 0 for item in items)
         
         return {
             'invoice_number': docnum,
@@ -939,10 +954,12 @@ class SAPAPIClient:
             'customer_address': customer_address,
             'salesman_name': salesman_name or '',
             'salesman_code': salesman_code,
+            'store': store,
             'bp_reference_no': bp_reference or '',
             'doc_total': doc_total,
             'doc_total_without_vat': doc_total_without_vat,
             'vat_sum': vat_sum,
+            'total_gross_profit': total_gross_profit,
             'discount_percent': discount_percent,
             'cancel_status': cancel_status,
             'document_status': document_status,
@@ -1000,6 +1017,10 @@ class SAPAPIClient:
         salesman_name = sales_person.get('SalesEmployeeName', '') or ''
         salesman_code = sales_person.get('SalesEmployeeCode') or None
         
+        # Calculate store based on salesman_name
+        # If salesman_name starts with 'R.' or 'E.', store = 'Others', else 'HO'
+        store = 'Others' if salesman_name and (salesman_name.strip().startswith('R.') or salesman_name.strip().startswith('E.')) else 'HO'
+        
         # Other header fields
         customer_address = str(api_creditmemo.get('Address', '')).strip() if api_creditmemo.get('Address') else ''
         bp_reference = api_creditmemo.get('NumAtCard', '') or ''
@@ -1055,13 +1076,20 @@ class SAPAPIClient:
             price_after_vat = line.get('PriceAfterVAT', 0) or 0
             discount_percent_line = line.get('DiscountPercent', 0) or 0
             line_total = line.get('LineTotal', 0) or 0
+            cost_price = line.get('GrossProfitTotalBasePrice', 0) or 0  # Total cost price for this line
             tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
             tax_total = line.get('TaxTotal', 0) or 0
             
+            # Calculate Gross Profit = LineTotal - cost_price
+            gross_profit = line_total - cost_price
+            
             # Apply sign multiplier to item amounts
+            quantity = quantity * sign_multiplier # Quantity also needs to be signed for credit memos
             price = price * sign_multiplier
             price_after_vat = price_after_vat * sign_multiplier
             line_total = line_total * sign_multiplier
+            cost_price = cost_price * sign_multiplier
+            gross_profit = gross_profit * sign_multiplier
             tax_total = tax_total * sign_multiplier
             
             item_data = {
@@ -1073,6 +1101,8 @@ class SAPAPIClient:
                 'price_after_vat': price_after_vat,
                 'discount_percent': discount_percent_line,
                 'line_total': line_total,
+                'cost_price': cost_price,
+                'gross_profit': gross_profit,
                 'tax_percentage': tax_percentage,
                 'tax_total': tax_total,
                 'upc_code': upc_code,
@@ -1080,6 +1110,9 @@ class SAPAPIClient:
             }
             
             items.append(item_data)
+        
+        # Calculate total gross profit (sum of all item gross_profit)
+        total_gross_profit = sum(item.get('gross_profit', 0) or 0 for item in items)
         
         return {
             'credit_memo_number': docnum,
@@ -1091,10 +1124,12 @@ class SAPAPIClient:
             'customer_address': customer_address,
             'salesman_name': salesman_name or '',
             'salesman_code': salesman_code,
+            'store': store,
             'bp_reference_no': bp_reference or '',
             'doc_total': doc_total,
             'doc_total_without_vat': doc_total_without_vat,
             'vat_sum': vat_sum,
+            'total_gross_profit': total_gross_profit,
             'discount_percent': discount_percent,
             'cancel_status': cancel_status,
             'document_status': document_status,

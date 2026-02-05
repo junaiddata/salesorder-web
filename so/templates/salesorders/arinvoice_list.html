@@ -504,6 +504,15 @@
         </div>
 
         <div class="field">
+          <label>Store</label>
+          <select class="select" name="store">
+            <option value="">All Stores</option>
+            <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
+            <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label>Amount Range</label>
           <select class="select" name="total">
             <option value="">All</option>
@@ -527,17 +536,21 @@
       </form>
 
       <div class="stats-bar">
-        <div class="stat-item">
+        <!-- <div class="stat-item">
           <span class="stat-label">Total Value (with VAT):</span>
           <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
-        </div>
+        </div> -->
         <div class="stat-item">
           <span class="stat-label">Total (without VAT):</span>
           <span class="stat-value">{{ total_without_vat_value|default:0|floatformat:2 }}</span>
         </div>
-        <div class="stat-item">
+        <!-- <div class="stat-item">
           <span class="stat-label">Total VAT:</span>
           <span class="stat-value highlight">{{ vat_total_value|default:0|floatformat:2 }}</span>
+        </div> -->
+        <div class="stat-item">
+          <span class="stat-label">Total GP:</span>
+          <span class="stat-value">{{ total_gross_profit_value|default:0|floatformat:2 }}</span>
         </div>
       </div>
     </div>

@@ -330,11 +330,13 @@ class Command(BaseCommand):
                                 "customer_address": mapped.get('customer_address', ''),
                                 "salesman_name": mapped.get('salesman_name', ''),
                                 "salesman_code": mapped.get('salesman_code'),
+                                "store": mapped.get('store', 'HO'),
                                 "bp_reference_no": mapped.get('bp_reference_no', ''),
                                 "doc_total": _dec2(mapped.get('doc_total', 0)),
                                 "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
                                 "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                                 "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                                "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
                                 "discount_percent": _dec2(mapped.get('discount_percent', 0)),
                                 "cancel_status": mapped.get('cancel_status', ''),
                                 "document_status": mapped.get('document_status', ''),
@@ -361,8 +363,8 @@ class Command(BaseCommand):
                         if to_update:
                             update_fields = [
                                 "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
-                                "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
-                                "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                                "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
+                                "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                                 "cancel_status", "document_status", "vat_number", "comments"
                             ]
                             SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
@@ -408,6 +410,8 @@ class Command(BaseCommand):
                                         price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                                         discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                                         line_total=_dec_any(item_data.get('line_total', 0)),
+                                        cost_price=_dec_any(item_data.get('cost_price', 0)),
+                                        gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                                         tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                                         tax_total=_dec_any(item_data.get('tax_total', 0)),
                                         upc_code=item_data.get('upc_code', ''),
@@ -434,78 +438,112 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f'  ✗ Error saving to local database: {e}'))
                     raise
             else:
+                # Step 3: Send to VPS via HTTP API (in batches to avoid request size limits)
                 logger.info('[STEP 3] Sending data to VPS via HTTP API...')
                 self.stdout.write('\n[STEP 3] Sending data to VPS via HTTP API...')
+                
+                # Batch size: send 200 invoices per request to avoid exceeding DATA_UPLOAD_MAX_MEMORY_SIZE
+                BATCH_SIZE = 200
+                total_batches = (len(serialized_invoices) + BATCH_SIZE - 1) // BATCH_SIZE
+                
+                logger.info(f'  Sending {len(serialized_invoices)} invoices in {total_batches} batches (batch size: {BATCH_SIZE})...')
+                self.stdout.write(f'  Sending {len(serialized_invoices)} invoices in {total_batches} batches (batch size: {BATCH_SIZE})...')
+                
+                vps_url = f"{VPS_BASE_URL}/saparinvoices/sync-api-receive/"
+                total_created = 0
+                total_updated = 0
+                total_items = 0
+                failed_batches = 0
+                
                 try:
-                    vps_url = f"{VPS_BASE_URL}/saparinvoices/sync-api-receive/"
-                    payload = {
-                        "invoices": serialized_invoices,
-                        "api_invoice_numbers": api_invoice_numbers,
-                        "api_key": VPS_API_KEY,
-                        "sync_metadata": {
-                            "api_calls": api_calls,
-                            "days_back": days_back,
-                            "sync_time": datetime.now().isoformat(),
+                    for batch_idx in range(total_batches):
+                        start_idx = batch_idx * BATCH_SIZE
+                        end_idx = min(start_idx + BATCH_SIZE, len(serialized_invoices))
+                        batch_invoices = serialized_invoices[start_idx:end_idx]
+                        batch_invoice_numbers = [inv['invoice_number'] for inv in batch_invoices if inv.get('invoice_number')]
+                        
+                        logger.info(f'  Batch {batch_idx + 1}/{total_batches}: Sending {len(batch_invoices)} invoices...')
+                        self.stdout.write(f'  Batch {batch_idx + 1}/{total_batches}: Sending {len(batch_invoices)} invoices...')
+                        
+                        payload = {
+                            "invoices": batch_invoices,
+                            "api_invoice_numbers": batch_invoice_numbers,
+                            "api_key": VPS_API_KEY
                         }
-                    }
-                    
-                    logger.info(f'  Sending {len(serialized_invoices)} invoices to VPS...')
-                    logger.info(f'  VPS URL: {vps_url}')
-                    self.stdout.write(f'  Sending {len(serialized_invoices)} invoices to VPS...')
-                    
-                    send_start = datetime.now()
-                    response = requests.post(vps_url, json=payload, timeout=300)  # 5 min timeout
-                    send_duration = (datetime.now() - send_start).total_seconds()
-                    
-                    response.raise_for_status()
-                    
-                    result = response.json()
-                    success = result.get("success", False)
-                    stats = result.get("stats", {})
-                    error = result.get("error")
-                    
-                    if success:
-                        created = stats.get("created", 0)
-                        updated = stats.get("updated", 0)
-                        total_items = stats.get("total_items", 0)
                         
-                        logger.info(f'  ✓ Successfully synced to VPS (took {send_duration:.2f}s)')
-                        logger.info(f'    Created: {created}')
-                        logger.info(f'    Updated: {updated}')
+                        send_start = datetime.now()
+                        try:
+                            response = requests.post(vps_url, json=payload, timeout=300)  # 5 min timeout
+                            send_duration = (datetime.now() - send_start).total_seconds()
+                            
+                            response.raise_for_status()
+                            
+                            result = response.json()
+                            success = result.get("success", False)
+                            stats = result.get("stats", {})
+                            error = result.get("error")
+                            
+                            if success:
+                                batch_created = stats.get("created", 0)
+                                batch_updated = stats.get("updated", 0)
+                                batch_items = stats.get("total_items", 0)
+                                
+                                total_created += batch_created
+                                total_updated += batch_updated
+                                total_items += batch_items
+                                
+                                logger.info(f'    ✓ Batch {batch_idx + 1} completed (took {send_duration:.2f}s): {batch_created} created, {batch_updated} updated, {batch_items} items')
+                                self.stdout.write(self.style.SUCCESS(f'    ✓ Batch {batch_idx + 1} completed: {batch_created} created, {batch_updated} updated'))
+                            else:
+                                error_msg = f"VPS returned error for batch {batch_idx + 1}: {error}"
+                                logger.error(f'    ✗ {error_msg}')
+                                self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: {error}'))
+                                failed_batches += 1
+                                
+                        except requests.HTTPError as e:
+                            resp = getattr(e, "response", None)
+                            status_code = getattr(resp, "status_code", None)
+                            resp_text = ""
+                            try:
+                                resp_text = resp.text if resp is not None else ""
+                            except Exception:
+                                resp_text = ""
+                            error_msg = f"Failed to send batch {batch_idx + 1} to VPS: HTTP {status_code}"
+                            logger.error(f'    ✗ {error_msg}')
+                            if resp_text:
+                                logger.error('    VPS response body (truncated):')
+                                logger.error(resp_text[:2000])
+                            self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: HTTP {status_code}'))
+                            if resp_text:
+                                self.stdout.write(self.style.ERROR(f'    Error: {resp_text[:500]}'))
+                            failed_batches += 1
+                            
+                        except requests.RequestException as e:
+                            error_msg = f"Failed to send batch {batch_idx + 1} to VPS: {str(e)}"
+                            logger.error(f'    ✗ {error_msg}')
+                            logger.exception(f'Error sending batch {batch_idx + 1} to VPS')
+                            self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: {str(e)}'))
+                            failed_batches += 1
+                    
+                    # Summary
+                    if failed_batches == 0:
+                        logger.info(f'  ✓ Successfully synced all batches to VPS')
+                        logger.info(f'    Total Created: {total_created}')
+                        logger.info(f'    Total Updated: {total_updated}')
                         logger.info(f'    Total Items: {total_items}')
-                        
-                        self.stdout.write(self.style.SUCCESS(f'  ✓ Successfully synced to VPS'))
-                        self.stdout.write(f'    Created: {created}')
-                        self.stdout.write(f'    Updated: {updated}')
-                        self.stdout.write(f'    Total Items: {total_items}')
+                        self.stdout.write(self.style.SUCCESS(f'  ✓ Successfully synced all batches to VPS'))
+                        self.stdout.write(self.style.SUCCESS(f'    Total: {total_created} created, {total_updated} updated, {total_items} items'))
                     else:
-                        logger.error(f'  ✗ VPS sync failed: {error}')
-                        self.stdout.write(self.style.ERROR(f'  ✗ Failed: {error}'))
+                        logger.warning(f'  ⚠ Completed with {failed_batches} failed batches out of {total_batches}')
+                        logger.info(f'    Successful: {total_created} created, {total_updated} updated, {total_items} items')
+                        self.stdout.write(self.style.WARNING(f'  ⚠ Completed with {failed_batches} failed batches'))
+                        self.stdout.write(self.style.SUCCESS(f'    Successful: {total_created} created, {total_updated} updated'))
                         return
                         
-                except requests.HTTPError as e:
-                    resp = getattr(e, "response", None)
-                    status_code = getattr(resp, "status_code", None)
-                    resp_text = ""
-                    try:
-                        resp_text = resp.text if resp is not None else ""
-                    except Exception:
-                        resp_text = ""
-
-                    error_msg = f"Failed to send to VPS: HTTP {status_code} for url: {vps_url}"
+                except Exception as e:
+                    error_msg = f"Unexpected error during batch sync: {str(e)}"
                     logger.error(f'  ✗ {error_msg}')
-                    if resp_text:
-                        logger.error('  VPS response body (truncated):')
-                        logger.error(resp_text[:4000])
-                    self.stdout.write(self.style.ERROR(f'  ✗ {error_msg}'))
-                    if resp_text:
-                        self.stdout.write(self.style.ERROR('  VPS response body (truncated):'))
-                        self.stdout.write(resp_text[:1000])
-                    return
-                except requests.RequestException as e:
-                    error_msg = f"Failed to send to VPS: {str(e)}"
-                    logger.error(f'  ✗ {error_msg}')
-                    logger.exception('Error sending to VPS')
+                    logger.exception('Unexpected error during batch sync')
                     self.stdout.write(self.style.ERROR(f'  ✗ {error_msg}'))
                     return
             

@@ -493,11 +493,13 @@ class SAPARInvoice(models.Model):
     customer_address = models.TextField(blank=True, null=True, help_text="Address from API")
     salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="SalesPerson.SalesEmployeeName from API")
     salesman_code = models.IntegerField(blank=True, null=True, help_text="SalesPerson.SalesEmployeeCode from API")
+    store = models.CharField(max_length=50, blank=True, null=True, help_text="Store: 'HO' or 'Others' (based on salesman_name: 'R.' or 'E.' prefix = 'Others', else 'HO')")
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True, help_text="NumAtCard from API")
     doc_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal from API (with VAT)")
     doc_total_without_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal - VatSum - RoundingDiffAmount (if negative like -10.4, subtracting it gives actual subtotal)")
     vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="VatSum from API")
     rounding_diff_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="RoundingDiffAmount from API (added to doc_total_without_vat, not to doc_total)")
+    total_gross_profit = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Total Gross Profit = sum of all item gross_profit (calculated)")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
     cancel_status = models.CharField(max_length=50, blank=True, null=True, help_text="CancelStatus: csNo, csYes, csCancellation")
     document_status = models.CharField(max_length=50, blank=True, null=True, help_text="DocumentStatus from API")
@@ -529,6 +531,8 @@ class SAPARInvoiceItem(models.Model):
     price_after_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="PriceAfterVAT from API")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
     line_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="LineTotal from API")
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="GrossProfitTotalBasePrice from API (total cost price for this line)")
+    gross_profit = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Gross Profit = LineTotal - cost_price (calculated)")
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, help_text="TaxPercentagePerRow from API")
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="TaxTotal from API")
     upc_code = models.CharField(max_length=100, blank=True, null=True, help_text="U_UPCCODE from API")
@@ -555,6 +559,7 @@ class SAPARCreditMemo(models.Model):
     customer_address = models.TextField(blank=True, null=True, help_text="Address from API")
     salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="SalesPerson.SalesEmployeeName from API")
     salesman_code = models.IntegerField(blank=True, null=True, help_text="SalesPerson.SalesEmployeeCode from API")
+    store = models.CharField(max_length=50, blank=True, null=True, help_text="Store: 'HO' or 'Others' (based on salesman_name: 'R.' or 'E.' prefix = 'Others', else 'HO')")
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True, help_text="NumAtCard from API")
     doc_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal from API (with VAT)")
     doc_total_without_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal - VatSum - RoundingDiffAmount (if negative like -10.4, subtracting it gives actual subtotal)")
@@ -577,6 +582,7 @@ class SAPARCreditMemo(models.Model):
             models.Index(fields=["customer_code"]),
             models.Index(fields=["cancel_status"]),
             models.Index(fields=["customer_name"]),
+            models.Index(fields=["store"]),
         ]
 
 
@@ -591,6 +597,8 @@ class SAPARCreditMemoItem(models.Model):
     price_after_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="PriceAfterVAT from API")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
     line_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="LineTotal from API")
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="GrossProfitTotalBasePrice from API (total cost price for this line)")
+    gross_profit = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Gross Profit = LineTotal - cost_price (calculated)")
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, help_text="TaxPercentagePerRow from API")
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="TaxTotal from API")
     upc_code = models.CharField(max_length=100, blank=True, null=True, help_text="U_UPCCODE from API")
