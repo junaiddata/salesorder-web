@@ -482,6 +482,128 @@ class SAPProformaInvoiceLine(models.Model):
         return f"{self.pi.pi_number} - Line {self.line_no}: {self.description}"
 
 
+# SAP AR Invoice Models
+class SAPARInvoice(models.Model):
+    invoice_number = models.CharField(max_length=100, unique=True, help_text="DocNum from API")
+    internal_number = models.CharField(max_length=100, blank=True, null=True, help_text="DocEntry from API")
+    posting_date = models.DateField(blank=True, null=True, help_text="DocDate from API")
+    doc_due_date = models.DateField(blank=True, null=True, help_text="DocDueDate from API")
+    customer_code = models.CharField(max_length=100, blank=True, null=True, help_text="CardCode from API")
+    customer_name = models.CharField(max_length=255, help_text="CardName from API")
+    customer_address = models.TextField(blank=True, null=True, help_text="Address from API")
+    salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="SalesPerson.SalesEmployeeName from API")
+    salesman_code = models.IntegerField(blank=True, null=True, help_text="SalesPerson.SalesEmployeeCode from API")
+    bp_reference_no = models.CharField(max_length=255, blank=True, null=True, help_text="NumAtCard from API")
+    doc_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal from API (with VAT)")
+    doc_total_without_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal - VatSum - RoundingDiffAmount (if negative like -10.4, subtracting it gives actual subtotal)")
+    vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="VatSum from API")
+    rounding_diff_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="RoundingDiffAmount from API (added to doc_total_without_vat, not to doc_total)")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
+    cancel_status = models.CharField(max_length=50, blank=True, null=True, help_text="CancelStatus: csNo, csYes, csCancellation")
+    document_status = models.CharField(max_length=50, blank=True, null=True, help_text="DocumentStatus from API")
+    vat_number = models.CharField(max_length=100, blank=True, null=True, help_text="FederalTaxID from API (VAT number)")
+    comments = models.TextField(blank=True, null=True, help_text="Comments from API")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.invoice_number} - {self.customer_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["posting_date"]),
+            models.Index(fields=["customer_code"]),
+            models.Index(fields=["cancel_status"]),
+            models.Index(fields=["customer_name"]),
+        ]
+
+
+class SAPARInvoiceItem(models.Model):
+    invoice = models.ForeignKey(SAPARInvoice, related_name='items', on_delete=models.CASCADE)
+    item = models.ForeignKey('Items', on_delete=models.SET_NULL, null=True, blank=True, help_text="Link to Items table for analytics")
+    line_no = models.IntegerField(default=1, help_text="LineNum from API (0-based, converted to 1-based)")
+    item_code = models.CharField(max_length=100, blank=True, null=True, help_text="ItemCode from API")
+    item_description = models.CharField(max_length=255, help_text="ItemDescription from API")
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, help_text="Quantity from API")
+    price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Price from API")
+    price_after_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="PriceAfterVAT from API")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="LineTotal from API")
+    tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, help_text="TaxPercentagePerRow from API")
+    tax_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="TaxTotal from API")
+    upc_code = models.CharField(max_length=100, blank=True, null=True, help_text="U_UPCCODE from API")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['invoice', 'line_no']),
+            models.Index(fields=['item_code']),
+            models.Index(fields=['item']),
+        ]
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} - {self.item_description}"
+
+
+# SAP AR Credit Memo Models
+class SAPARCreditMemo(models.Model):
+    credit_memo_number = models.CharField(max_length=100, unique=True, help_text="DocNum from API")
+    internal_number = models.CharField(max_length=100, blank=True, null=True, help_text="DocEntry from API")
+    posting_date = models.DateField(blank=True, null=True, help_text="DocDate from API")
+    doc_due_date = models.DateField(blank=True, null=True, help_text="DocDueDate from API")
+    customer_code = models.CharField(max_length=100, blank=True, null=True, help_text="CardCode from API")
+    customer_name = models.CharField(max_length=255, help_text="CardName from API")
+    customer_address = models.TextField(blank=True, null=True, help_text="Address from API")
+    salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="SalesPerson.SalesEmployeeName from API")
+    salesman_code = models.IntegerField(blank=True, null=True, help_text="SalesPerson.SalesEmployeeCode from API")
+    bp_reference_no = models.CharField(max_length=255, blank=True, null=True, help_text="NumAtCard from API")
+    doc_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal from API (with VAT)")
+    doc_total_without_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal - VatSum - RoundingDiffAmount (if negative like -10.4, subtracting it gives actual subtotal)")
+    vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="VatSum from API")
+    rounding_diff_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="RoundingDiffAmount from API (subtracted from doc_total_without_vat, not from doc_total)")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
+    cancel_status = models.CharField(max_length=50, blank=True, null=True, help_text="CancelStatus: csNo, csYes, csCancellation")
+    document_status = models.CharField(max_length=50, blank=True, null=True, help_text="DocumentStatus from API")
+    vat_number = models.CharField(max_length=100, blank=True, null=True, help_text="FederalTaxID from API (VAT number)")
+    comments = models.TextField(blank=True, null=True, help_text="Comments from API")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.credit_memo_number} - {self.customer_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["posting_date"]),
+            models.Index(fields=["customer_code"]),
+            models.Index(fields=["cancel_status"]),
+            models.Index(fields=["customer_name"]),
+        ]
+
+
+class SAPARCreditMemoItem(models.Model):
+    credit_memo = models.ForeignKey(SAPARCreditMemo, related_name='items', on_delete=models.CASCADE)
+    item = models.ForeignKey('Items', on_delete=models.SET_NULL, null=True, blank=True, help_text="Link to Items table for analytics")
+    line_no = models.IntegerField(default=1, help_text="LineNum from API (0-based, converted to 1-based)")
+    item_code = models.CharField(max_length=100, blank=True, null=True, help_text="ItemCode from API")
+    item_description = models.CharField(max_length=255, help_text="ItemDescription from API")
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, help_text="Quantity from API")
+    price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Price from API")
+    price_after_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="PriceAfterVAT from API")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="LineTotal from API")
+    tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, help_text="TaxPercentagePerRow from API")
+    tax_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="TaxTotal from API")
+    upc_code = models.CharField(max_length=100, blank=True, null=True, help_text="U_UPCCODE from API")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['credit_memo', 'line_no']),
+            models.Index(fields=['item_code']),
+            models.Index(fields=['item']),
+        ]
+
+    def __str__(self):
+        return f"{self.credit_memo.credit_memo_number} - {self.item_description}"
 
 
 ################ LOGS #######################

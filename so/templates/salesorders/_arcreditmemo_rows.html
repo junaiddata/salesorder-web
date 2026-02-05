@@ -1,0 +1,31 @@
+{% for creditmemo in page_obj %}
+<tr>
+  <td>{{ creditmemo.posting_date|date:"M d, Y"|default:"-" }}</td>
+  <td>
+    <a class="so-link" href="{% url 'arcreditmemo_detail' creditmemo.credit_memo_number %}">{{ creditmemo.credit_memo_number }}</a>
+  </td>
+  <td>{{ creditmemo.customer_name }}</td>
+  <td class="text-muted">{{ creditmemo.salesman_name|default:"—" }}</td>
+  <td class="text-muted">{{ creditmemo.bp_reference_no|default:"—" }}</td>
+  <td class="num">{{ creditmemo.doc_total|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ creditmemo.doc_total_without_vat|default_if_none:"0"|floatformat:2 }}</td>
+  <td>
+    {% if creditmemo.cancel_status == 'csNo' %}
+      <span class="badge badge-open">Active</span>
+    {% elif creditmemo.cancel_status == 'csYes' %}
+      <span class="badge badge-closed" style="background: #fee2e2; color: #dc2626;">Cancelled</span>
+    {% elif creditmemo.cancel_status == 'csCancellation' %}
+      <span class="badge badge-closed" style="background: #fef3c7; color: #d97706;">Cancellation</span>
+    {% else %}
+      <span class="badge badge-closed">{{ creditmemo.cancel_status|default:"—" }}</span>
+    {% endif %}
+  </td>
+</tr>
+{% empty %}
+<tr>
+  <td colspan="8" class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 8px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    No AR credit memos found
+  </td>
+</tr>
+{% endfor %}

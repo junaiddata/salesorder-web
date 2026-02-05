@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AR Credit Memos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --bg-pattern: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #fafbfc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* Filters */
+    .filters-card {
+      margin-bottom: 20px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    @media (min-width: 1024px) {
+      .filters-grid {
+        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
+      }
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .input:focus, .select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.875rem;
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+    }
+
+    .stat-value {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-value.highlight {
+      color: var(--success);
+    }
+
+    /* Multi-select */
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--text-muted);
+    }
+
+    .select-box::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    /* Table */
+    .table-card {
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 800px;
+    }
+
+    thead th {
+      padding: 14px 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 14px 16px;
+      font-size: 0.875rem;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text);
+    }
+
+    tbody tr {
+      transition: background var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .so-link {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .so-link:hover {
+      text-decoration: underline;
+    }
+
+    .text-muted {
+      color: var(--text-secondary);
+    }
+
+    /* Status Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 20px;
+    }
+
+    .badge-open {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .badge-closed {
+      background: var(--bg);
+      color: var(--text-secondary);
+    }
+
+    /* Footer / Pagination */
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .pagination {
+      display: flex;
+      gap: 6px;
+    }
+
+    .pagination a, .pagination span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 12px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .pagination a:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .pagination .active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .pagination .disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .total-count {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .total-count strong {
+      color: var(--text);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>AR Credit Memos</h1>
+        <p>View and manage your SAP AR credit memos</p>
+      </div>
+      <div class="header-actions">
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">Home</a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+      <form id="filters" class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Credit Memo No, Customer, Salesman...">
+        </div>
+
+        <div class="field">
+          <label>Salesman</label>
+          <div class="multi-select" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger">
+              <span id="salesman-text">All Salesmen</span>
+            </div>
+            <div class="options-container" id="salesman-options">
+              {% for s in salesmen %}
+                <label class="option-label">
+                  <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
+                  {{ s }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Start Date</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+
+        <div class="field">
+          <label>End Date</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+
+        <div class="field">
+          <label>Cancel Status</label>
+          <select class="select" name="cancel_status">
+            <option value="All" {% if filters.cancel_status == 'All' %}selected{% endif %}>All</option>
+            <option value="csNo" {% if filters.cancel_status == 'csNo' %}selected{% endif %}>Active</option>
+            <option value="csYes" {% if filters.cancel_status == 'csYes' %}selected{% endif %}>Cancelled</option>
+            <option value="csCancellation" {% if filters.cancel_status == 'csCancellation' %}selected{% endif %}>Cancellation</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Amount Range</label>
+          <select class="select" name="total">
+            <option value="">All</option>
+            <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 - 5K</option>
+            <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5K - 10K</option>
+            <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10K - 25K</option>
+            <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25K - 50K</option>
+            <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50K - 100K</option>
+            <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100K+</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
+        </div>
+
+        <div class="field" style="align-self:end;">
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">Total Value (with VAT):</span>
+          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total (without VAT):</span>
+          <span class="stat-value">{{ total_without_vat_value|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total VAT:</span>
+          <span class="stat-value highlight">{{ vat_total_value|default:0|floatformat:2 }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Credit Memo Number</th>
+              <th>Customer</th>
+              <th>Salesman</th>
+              <th>BP Reference</th>
+              <th style="text-align:right">Total (with VAT)</th>
+              <th style="text-align:right">Total (without VAT)</th>
+              <th>Cancel Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% include 'salesorders/_arcreditmemo_rows.html' with page_obj=page_obj %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+        {% if total_count is not None %}
+          <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> credit memos</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Multi-Select
+  document.addEventListener("DOMContentLoaded", function() {
+    const wrapper = document.getElementById('salesman-wrapper');
+    const trigger = document.getElementById('salesman-trigger');
+    const options = document.getElementById('salesman-options');
+    const textSpan = document.getElementById('salesman-text');
+    const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
+
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      options.classList.toggle('active');
+    });
+
+    options.addEventListener('click', e => e.stopPropagation());
+
+    function updateLabel() {
+      const checked = Array.from(getCheckboxes()).filter(c => c.checked);
+      if (checked.length === 0) {
+        textSpan.textContent = "All Salesmen";
+        textSpan.style.opacity = "0.6";
+      } else if (checked.length === 1) {
+        textSpan.textContent = checked[0].value;
+        textSpan.style.opacity = "1";
+      } else {
+        textSpan.textContent = `${checked.length} Selected`;
+        textSpan.style.opacity = "1";
+      }
+    }
+
+    updateLabel();
+
+    getCheckboxes().forEach(box => {
+      box.addEventListener('change', function() {
+        updateLabel();
+        document.getElementById('filters').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      });
+    });
+
+    document.addEventListener('click', e => {
+      if (!wrapper.contains(e.target)) options.classList.remove('active');
+    });
+  });
+</script>
+</body>
+</html>

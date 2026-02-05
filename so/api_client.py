@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from django.conf import settings
-from so.models import Items
+from so.models import Items, IgnoreList
 
 logger = logging.getLogger(__name__)
 
@@ -556,5 +556,550 @@ class SAPAPIClient:
             'total_discount': total_discount,  # TotalDiscount from API
             'doc_total_full': doc_total,  # Full DocTotal from API (for reference)
             'status': status,
+            'items': items,
+        }
+    
+    def fetch_arinvoices_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
+        """
+        Fetch AR Invoices for a date range (with pagination)
+        
+        Args:
+            from_date: Start date in YYYY-MM-DD format
+            to_date: End date in YYYY-MM-DD format
+        
+        Returns:
+            List of AR invoices for that date range from all pages
+        """
+        payload = {"FromDate": from_date, "ToDate": to_date}
+        base_url = getattr(settings, 'SAP_AR_INVOICE_API_URL', 'http://192.168.1.103/IntegrationApi/api/ARInvoice')
+        logger.info(f"Fetching AR invoices for date range: {from_date} to {to_date} (with pagination)...")
+        all_invoices = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_invoices)} AR invoices for {from_date} to {to_date} (all pages)")
+        return all_invoices
+    
+    def fetch_arinvoices_last_n_days(self, days: int = 3) -> List[Dict]:
+        """
+        Fetch AR Invoices for the last N days (one call per day range)
+        
+        Args:
+            days: Number of days to go back (default: 3)
+        
+        Returns:
+            Combined list of all AR invoices from the last N days (deduplicated by DocNum)
+        """
+        all_invoices = []
+        seen_docnums = set()
+        
+        # Calculate date range: from (today - days) to today
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days-1)  # Include today + last N-1 days
+        
+        from_date_str = start_date.strftime('%Y-%m-%d')
+        to_date_str = end_date.strftime('%Y-%m-%d')
+        
+        logger.info(f"Fetching AR invoices for last {days} days: {from_date_str} to {to_date_str}")
+        invoices = self.fetch_arinvoices_by_date_range(from_date_str, to_date_str)
+        
+        # Deduplicate by DocNum
+        for invoice in invoices:
+            docnum = invoice.get('DocNum')
+            if docnum and docnum not in seen_docnums:
+                all_invoices.append(invoice)
+                seen_docnums.add(docnum)
+        
+        logger.info(f"Total unique AR invoices from last {days} days: {len(all_invoices)}")
+        return all_invoices
+    
+    def fetch_arcreditmemos_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
+        """
+        Fetch AR Credit Memos for a date range (with pagination)
+        
+        Args:
+            from_date: Start date in YYYY-MM-DD format
+            to_date: End date in YYYY-MM-DD format
+        
+        Returns:
+            List of AR credit memos for that date range from all pages
+        """
+        payload = {"FromDate": from_date, "ToDate": to_date}
+        base_url = getattr(settings, 'SAP_AR_CREDIT_MEMO_API_URL', 'http://192.168.1.103/IntegrationApi/api/ARCreditMemo')
+        logger.info(f"Fetching AR credit memos for date range: {from_date} to {to_date} (with pagination)...")
+        all_creditmemos = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_creditmemos)} AR credit memos for {from_date} to {to_date} (all pages)")
+        return all_creditmemos
+    
+    def fetch_arcreditmemos_last_n_days(self, days: int = 3) -> List[Dict]:
+        """
+        Fetch AR Credit Memos for the last N days (one call per day range)
+        
+        Args:
+            days: Number of days to go back (default: 3)
+        
+        Returns:
+            Combined list of all AR credit memos from the last N days (deduplicated by DocNum)
+        """
+        all_creditmemos = []
+        seen_docnums = set()
+        
+        # Calculate date range: from (today - days) to today
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days-1)  # Include today + last N-1 days
+        
+        from_date_str = start_date.strftime('%Y-%m-%d')
+        to_date_str = end_date.strftime('%Y-%m-%d')
+        
+        logger.info(f"Fetching AR credit memos for last {days} days: {from_date_str} to {to_date_str}")
+        creditmemos = self.fetch_arcreditmemos_by_date_range(from_date_str, to_date_str)
+        
+        # Deduplicate by DocNum
+        for creditmemo in creditmemos:
+            docnum = creditmemo.get('DocNum')
+            if docnum and docnum not in seen_docnums:
+                all_creditmemos.append(creditmemo)
+                seen_docnums.add(docnum)
+        
+        logger.info(f"Total unique AR credit memos from last {days} days: {len(all_creditmemos)}")
+        return all_creditmemos
+    
+    def _fetch_all_pages_with_url(self, payload: Dict[str, Any], base_url: str, records_per_page: int = 20) -> List[Dict]:
+        """
+        Fetch all pages of results from API using a specific base URL
+        
+        Args:
+            payload: Request payload
+            base_url: Base URL for the API endpoint
+            records_per_page: Number of records per page (default: 20)
+        
+        Returns:
+            Combined list of all records from all pages
+        """
+        all_records = []
+        
+        # Fetch first page to get total count
+        first_page = self._make_request_with_url(payload, base_url, page_number=1)
+        if first_page is None:
+            return []
+        
+        records = first_page.get('value', [])
+        total_count = first_page.get('count', len(records))
+        all_records.extend(records)
+        
+        # Calculate number of pages needed
+        if total_count > records_per_page:
+            total_pages = (total_count + records_per_page - 1) // records_per_page  # Ceiling division
+            logger.info(f"Total records: {total_count}, fetching {total_pages} pages (20 records per page)")
+            
+            # Fetch remaining pages
+            for page_num in range(2, total_pages + 1):
+                logger.info(f"  Fetching page {page_num}/{total_pages}...")
+                page_result = self._make_request_with_url(payload, base_url, page_number=page_num)
+                if page_result is None:
+                    logger.warning(f"  Failed to fetch page {page_num}, continuing...")
+                    continue
+                
+                page_records = page_result.get('value', [])
+                all_records.extend(page_records)
+                logger.info(f"  ✓ Fetched page {page_num}/{total_pages}: {len(page_records)} records")
+        
+        return all_records
+    
+    def _make_request_with_url(self, payload: Dict[str, Any], base_url: str, page_number: int = 1) -> Optional[Dict]:
+        """
+        Make POST request to SAP API with pagination support using a specific base URL
+        
+        Args:
+            payload: Request payload
+            base_url: Base URL for the API endpoint
+            page_number: Page number to fetch (default: 1)
+        
+        Returns:
+            Dictionary with 'value' (list of records), 'count' (total count), or None if error
+        """
+        try:
+            # Add pageNumber to payload
+            request_payload = payload.copy()
+            if page_number > 1:
+                request_payload['pageNumber'] = page_number
+            
+            response = requests.post(
+                base_url,
+                json=request_payload,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # API returns data in 'value' key with 'odata.count' for total
+            if isinstance(data, dict):
+                return {
+                    'value': data.get('value', []),
+                    'count': int(data.get('odata.count', 0)) if data.get('odata.count') else 0
+                }
+            elif isinstance(data, list):
+                return {
+                    'value': data,
+                    'count': len(data)
+                }
+            else:
+                logger.warning(f"Unexpected API response format: {data}")
+                return {'value': [], 'count': 0}
+                
+        except requests.exceptions.Timeout:
+            logger.error(f"API request timeout after {self.timeout}s: {payload}, page: {page_number}, url: {base_url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request error: {e}, payload: {payload}, page: {page_number}, url: {base_url}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in API request: {e}, payload: {payload}, page: {page_number}, url: {base_url}")
+            return None
+    def _ensure_item_exists(self, item_code: str, item_description: str, upc_code: str = None):
+        """
+        Ensure an item exists in Items table. If not, create it and remove from IgnoreList.
+        
+        Args:
+            item_code: Item code from API
+            item_description: Item description from API
+            upc_code: UPC code from API (U_UPCCODE)
+        
+        Returns:
+            Items instance (existing or newly created)
+        """
+        if not item_code:
+            return None
+        
+        try:
+            # Try to get existing item
+            item = Items.objects.get(item_code=item_code)
+            return item
+        except Items.DoesNotExist:
+            # Create new item
+            try:
+                item = Items.objects.create(
+                    item_code=item_code,
+                    item_description=item_description[:100] if len(item_description) > 100 else item_description,
+                    item_upvc=upc_code or '',
+                    item_cost=0.0,
+                    item_firm='',
+                    item_price=0.0,
+                    item_stock=0,
+                    total_available_stock=None,
+                    dip_warehouse_stock=None
+                )
+                logger.info(f"Auto-created Items record for item_code: {item_code}")
+                
+                # Remove from IgnoreList if exists
+                try:
+                    IgnoreList.objects.filter(item_code=item_code).delete()
+                    logger.info(f"Removed item_code {item_code} from IgnoreList")
+                except Exception as e:
+                    logger.warning(f"Error removing {item_code} from IgnoreList: {e}")
+                
+                return item
+            except Exception as e:
+                logger.error(f"Error creating Items record for {item_code}: {e}")
+                return None
+    
+    def _map_arinvoice_api_response(self, api_invoice: Dict) -> Dict:
+        """
+        Map API response to Django model format for AR Invoice
+        
+        Args:
+            api_invoice: Single AR invoice from API response
+        
+        Returns:
+            Dictionary with mapped fields for SAPARInvoice and SAPARInvoiceItem
+        """
+        # Extract header fields
+        docnum = str(api_invoice.get('DocNum', ''))
+        doc_entry = str(api_invoice.get('DocEntry', '')) if api_invoice.get('DocEntry') else None
+        
+        # Date parsing
+        doc_date_str = api_invoice.get('DocDate', '')
+        posting_date = None
+        if doc_date_str:
+            try:
+                posting_date = datetime.strptime(doc_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    posting_date = datetime.strptime(doc_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse DocDate: {doc_date_str}")
+        
+        doc_due_date_str = api_invoice.get('DocDueDate', '')
+        doc_due_date = None
+        if doc_due_date_str:
+            try:
+                doc_due_date = datetime.strptime(doc_due_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    doc_due_date = datetime.strptime(doc_due_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse DocDueDate: {doc_due_date_str}")
+        
+        # Business Partner
+        bp = api_invoice.get('BusinessPartner', {})
+        customer_code = bp.get('CardCode', '') or api_invoice.get('CardCode', '')
+        customer_name = bp.get('CardName', '') or api_invoice.get('CardName', '')
+        vat_number = str(bp.get('FederalTaxID', '')).strip() if bp.get('FederalTaxID') else ''
+        
+        # Sales Person
+        sales_person = api_invoice.get('SalesPerson', {})
+        salesman_name = sales_person.get('SalesEmployeeName', '') or ''
+        salesman_code = sales_person.get('SalesEmployeeCode') or None
+        
+        # Other header fields
+        customer_address = str(api_invoice.get('Address', '')).strip() if api_invoice.get('Address') else ''
+        bp_reference = api_invoice.get('NumAtCard', '') or ''
+        doc_total = api_invoice.get('DocTotal', 0) or 0
+        vat_sum = api_invoice.get('VatSum', 0) or 0
+        discount_percent = api_invoice.get('DiscountPercent', 0) or 0
+        cancel_status = api_invoice.get('CancelStatus', '') or ''
+        document_status = api_invoice.get('DocumentStatus', '') or ''
+        comments = str(api_invoice.get('Comments', '')).strip() if api_invoice.get('Comments') else ''
+        rounding_diff_amount = api_invoice.get('RoundingDiffAmount', 0) or 0
+        
+        # Calculate doc_total_without_vat
+        # RoundingDiffAmount (if negative like -10.4) should be SUBTRACTED from doc_total_without_vat
+        # Formula: doc_total_without_vat = DocTotal - VATSum - RoundingDiffAmount
+        # Example: DocTotal - VATSum - (-10.4) = DocTotal - VATSum + 10.4 (gets actual subtotal)
+        # but NOT added to doc_total
+        doc_total_without_vat = doc_total - vat_sum
+        if rounding_diff_amount:
+            doc_total_without_vat = doc_total_without_vat - rounding_diff_amount
+        
+        # AR Invoice: If cancel_status is 'csCancellation', make all amounts negative
+        # This reverses the original invoice, so totals will be correct
+        sign_multiplier = -1 if cancel_status == 'csCancellation' else 1
+        
+        # Apply sign to header amounts
+        doc_total = doc_total * sign_multiplier
+        doc_total_without_vat = doc_total_without_vat * sign_multiplier
+        vat_sum = vat_sum * sign_multiplier
+        # Also apply sign to rounding_diff_amount for consistency
+        rounding_diff_amount = rounding_diff_amount * sign_multiplier
+        
+        # Map document lines
+        document_lines = api_invoice.get('DocumentLines', [])
+        items = []
+        
+        for idx, line in enumerate(document_lines):
+            item_code = str(line.get('ItemCode', '')) if line.get('ItemCode') else ''
+            item_description = line.get('ItemDescription', '') or ''
+            upc_code = line.get('U_UPCCODE', '') or ''
+            
+            # Ensure item exists in Items table
+            item_obj = self._ensure_item_exists(item_code, item_description, upc_code)
+            
+            # Line number (0-based in API, convert to 1-based)
+            line_num = line.get('LineNum', idx)
+            if isinstance(line_num, int):
+                line_no = line_num + 1 if line_num >= 0 else idx + 1
+            else:
+                line_no = idx + 1
+            
+            quantity = line.get('Quantity', 0) or 0
+            price = line.get('Price', 0) or 0
+            price_after_vat = line.get('PriceAfterVAT', 0) or 0
+            discount_percent_line = line.get('DiscountPercent', 0) or 0
+            line_total = line.get('LineTotal', 0) or 0
+            tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
+            tax_total = line.get('TaxTotal', 0) or 0
+            
+            # Apply sign multiplier to item amounts (for csCancellation)
+            price = price * sign_multiplier
+            price_after_vat = price_after_vat * sign_multiplier
+            line_total = line_total * sign_multiplier
+            tax_total = tax_total * sign_multiplier
+            
+            item_data = {
+                'line_no': line_no,
+                'item_code': item_code,
+                'item_description': item_description,
+                'quantity': quantity,
+                'price': price,
+                'price_after_vat': price_after_vat,
+                'discount_percent': discount_percent_line,
+                'line_total': line_total,
+                'tax_percentage': tax_percentage,
+                'tax_total': tax_total,
+                'upc_code': upc_code,
+                'item_id': item_obj.id if item_obj else None,  # For ForeignKey
+            }
+            
+            items.append(item_data)
+        
+        return {
+            'invoice_number': docnum,
+            'internal_number': doc_entry,
+            'posting_date': posting_date,
+            'doc_due_date': doc_due_date,
+            'customer_code': customer_code or '',
+            'customer_name': customer_name or '',
+            'customer_address': customer_address,
+            'salesman_name': salesman_name or '',
+            'salesman_code': salesman_code,
+            'bp_reference_no': bp_reference or '',
+            'doc_total': doc_total,
+            'doc_total_without_vat': doc_total_without_vat,
+            'vat_sum': vat_sum,
+            'discount_percent': discount_percent,
+            'cancel_status': cancel_status,
+            'document_status': document_status,
+            'vat_number': vat_number,
+            'comments': comments,
+            'rounding_diff_amount': rounding_diff_amount,
+            'items': items,
+        }
+    
+    def _map_arcreditmemo_api_response(self, api_creditmemo: Dict) -> Dict:
+        """
+        Map API response to Django model format for AR Credit Memo
+        
+        Args:
+            api_creditmemo: Single AR credit memo from API response
+        
+        Returns:
+            Dictionary with mapped fields for SAPARCreditMemo and SAPARCreditMemoItem
+        """
+        # Extract header fields
+        docnum = str(api_creditmemo.get('DocNum', ''))
+        doc_entry = str(api_creditmemo.get('DocEntry', '')) if api_creditmemo.get('DocEntry') else None
+        
+        # Date parsing
+        doc_date_str = api_creditmemo.get('DocDate', '')
+        posting_date = None
+        if doc_date_str:
+            try:
+                posting_date = datetime.strptime(doc_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    posting_date = datetime.strptime(doc_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse DocDate: {doc_date_str}")
+        
+        doc_due_date_str = api_creditmemo.get('DocDueDate', '')
+        doc_due_date = None
+        if doc_due_date_str:
+            try:
+                doc_due_date = datetime.strptime(doc_due_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    doc_due_date = datetime.strptime(doc_due_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse DocDueDate: {doc_due_date_str}")
+        
+        # Business Partner
+        bp = api_creditmemo.get('BusinessPartner', {})
+        customer_code = bp.get('CardCode', '') or api_creditmemo.get('CardCode', '')
+        customer_name = bp.get('CardName', '') or api_creditmemo.get('CardName', '')
+        vat_number = str(bp.get('FederalTaxID', '')).strip() if bp.get('FederalTaxID') else ''
+        
+        # Sales Person
+        sales_person = api_creditmemo.get('SalesPerson', {})
+        salesman_name = sales_person.get('SalesEmployeeName', '') or ''
+        salesman_code = sales_person.get('SalesEmployeeCode') or None
+        
+        # Other header fields
+        customer_address = str(api_creditmemo.get('Address', '')).strip() if api_creditmemo.get('Address') else ''
+        bp_reference = api_creditmemo.get('NumAtCard', '') or ''
+        doc_total = api_creditmemo.get('DocTotal', 0) or 0
+        vat_sum = api_creditmemo.get('VatSum', 0) or 0
+        discount_percent = api_creditmemo.get('DiscountPercent', 0) or 0
+        cancel_status = api_creditmemo.get('CancelStatus', '') or ''
+        document_status = api_creditmemo.get('DocumentStatus', '') or ''
+        comments = str(api_creditmemo.get('Comments', '')).strip() if api_creditmemo.get('Comments') else ''
+        rounding_diff_amount = api_creditmemo.get('RoundingDiffAmount', 0) or 0
+        
+        # Calculate doc_total_without_vat
+        # RoundingDiffAmount (if negative like -10.4) should be SUBTRACTED from doc_total_without_vat
+        # Formula: doc_total_without_vat = DocTotal - VATSum - RoundingDiffAmount
+        # Example: DocTotal - VATSum - (-10.4) = DocTotal - VATSum + 10.4 (gets actual subtotal)
+        # but NOT subtracted from doc_total
+        doc_total_without_vat = doc_total - vat_sum
+        if rounding_diff_amount:
+            doc_total_without_vat = doc_total_without_vat - rounding_diff_amount
+        
+        # AR Credit Memo: All credit memos are negative by default (they're credits/reductions)
+        # BUT if cancel_status is 'csCancellation', make them positive (reversing the credit)
+        # So: if cancel_status != 'csCancellation', multiply by -1 (make negative)
+        #     if cancel_status == 'csCancellation', keep positive (multiply by 1)
+        sign_multiplier = 1 if cancel_status == 'csCancellation' else -1
+        
+        # Apply sign to header amounts
+        doc_total = doc_total * sign_multiplier
+        doc_total_without_vat = doc_total_without_vat * sign_multiplier
+        vat_sum = vat_sum * sign_multiplier
+        
+        # Map document lines
+        document_lines = api_creditmemo.get('DocumentLines', [])
+        items = []
+        
+        for idx, line in enumerate(document_lines):
+            item_code = str(line.get('ItemCode', '')) if line.get('ItemCode') else ''
+            item_description = line.get('ItemDescription', '') or ''
+            upc_code = line.get('U_UPCCODE', '') or ''
+            
+            # Ensure item exists in Items table
+            item_obj = self._ensure_item_exists(item_code, item_description, upc_code)
+            
+            # Line number (0-based in API, convert to 1-based)
+            line_num = line.get('LineNum', idx)
+            if isinstance(line_num, int):
+                line_no = line_num + 1 if line_num >= 0 else idx + 1
+            else:
+                line_no = idx + 1
+            
+            quantity = line.get('Quantity', 0) or 0
+            price = line.get('Price', 0) or 0
+            price_after_vat = line.get('PriceAfterVAT', 0) or 0
+            discount_percent_line = line.get('DiscountPercent', 0) or 0
+            line_total = line.get('LineTotal', 0) or 0
+            tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
+            tax_total = line.get('TaxTotal', 0) or 0
+            
+            # Apply sign multiplier to item amounts
+            price = price * sign_multiplier
+            price_after_vat = price_after_vat * sign_multiplier
+            line_total = line_total * sign_multiplier
+            tax_total = tax_total * sign_multiplier
+            
+            item_data = {
+                'line_no': line_no,
+                'item_code': item_code,
+                'item_description': item_description,
+                'quantity': quantity,
+                'price': price,
+                'price_after_vat': price_after_vat,
+                'discount_percent': discount_percent_line,
+                'line_total': line_total,
+                'tax_percentage': tax_percentage,
+                'tax_total': tax_total,
+                'upc_code': upc_code,
+                'item_id': item_obj.id if item_obj else None,  # For ForeignKey
+            }
+            
+            items.append(item_data)
+        
+        return {
+            'credit_memo_number': docnum,
+            'internal_number': doc_entry,
+            'posting_date': posting_date,
+            'doc_due_date': doc_due_date,
+            'customer_code': customer_code or '',
+            'customer_name': customer_name or '',
+            'customer_address': customer_address,
+            'salesman_name': salesman_name or '',
+            'salesman_code': salesman_code,
+            'bp_reference_no': bp_reference or '',
+            'doc_total': doc_total,
+            'doc_total_without_vat': doc_total_without_vat,
+            'vat_sum': vat_sum,
+            'discount_percent': discount_percent,
+            'cancel_status': cancel_status,
+            'document_status': document_status,
+            'vat_number': vat_number,
+            'comments': comments,
+            'rounding_diff_amount': rounding_diff_amount,
             'items': items,
         }

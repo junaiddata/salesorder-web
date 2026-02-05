@@ -103,6 +103,20 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/export-open/', sap_salesorder_views.export_sap_salesorder_open_items_pdf, name='export_sap_salesorder_open_items_pdf'),
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
     path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
+    
+    # SAP AR Invoice URLs
+    path('saparinvoices/sync-api/', sap_salesorder_views.sync_arinvoices_from_api, name='sync_arinvoices_api'),
+    path('saparinvoices/sync-api-receive/', sap_salesorder_views.sync_arinvoices_api_receive, name='sync_arinvoices_api_receive'),
+    path('saparinvoices/export-excel/', sap_salesorder_views.export_arinvoice_list_excel, name='export_arinvoice_list_excel'),
+    path('saparinvoices/', sap_salesorder_views.arinvoice_list, name='arinvoice_list'),
+    path('saparinvoices/<str:invoice_number>/', sap_salesorder_views.arinvoice_detail, name='arinvoice_detail'),
+    
+    # SAP AR Credit Memo URLs
+    path('saparcreditmemos/sync-api/', sap_salesorder_views.sync_arcreditmemos_from_api, name='sync_arcreditmemos_api'),
+    path('saparcreditmemos/sync-api-receive/', sap_salesorder_views.sync_arcreditmemos_api_receive, name='sync_arcreditmemos_api_receive'),
+    path('saparcreditmemos/', sap_salesorder_views.arcreditmemo_list, name='arcreditmemo_list'),
+    path('saparcreditmemos/<str:credit_memo_number>/', sap_salesorder_views.arcreditmemo_detail, name='arcreditmemo_detail'),
+    
     # Proforma Invoice (PI) URLs
     path('proformainvoices/', sap_salesorder_views.pi_list, name='pi_list'),
     path('proformainvoices/old/', sap_salesorder_views.old_pi_list, name='old_pi_list'),

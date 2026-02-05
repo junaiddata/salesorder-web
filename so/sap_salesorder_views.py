@@ -31,7 +31,7 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
@@ -4993,4 +4993,1441 @@ def edit_pi(request, pi_number):
         'pi': pi,
         'salesorder': salesorder,
         'items_with_data': items_with_data,
+    })
+
+# =====================
+# AR Invoice: API Sync
+# =====================
+@login_required
+def sync_arinvoices_from_api(request):
+    """Sync AR Invoices from SAP API"""
+    messages_list = []
+    sync_stats = {
+        'created': 0,
+        'updated': 0,
+        'total_invoices': 0,
+        'total_items': 0,
+        'api_calls': 0,
+        'errors': []
+    }
+    
+    if request.method == 'POST':
+        try:
+            client = SAPAPIClient()
+            days_back = int(request.POST.get('days_back', getattr(settings, 'SAP_SYNC_DAYS_BACK', 3)))
+            specific_date = request.POST.get('specific_date', '').strip()
+            docnum = request.POST.get('docnum', '').strip()
+            
+            # Fetch data from API
+            all_invoices = []
+            
+            if docnum:
+                # Single DocNum query - need to fetch by date range and filter
+                # For now, fetch last 30 days and filter
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=30)
+                invoices = client.fetch_arinvoices_by_date_range(
+                    start_date.strftime('%Y-%m-%d'),
+                    end_date.strftime('%Y-%m-%d')
+                )
+                all_invoices = [inv for inv in invoices if str(inv.get('DocNum', '')) == docnum]
+                sync_stats['api_calls'] = 1
+            elif specific_date:
+                # Single date query - use date as both from and to
+                invoices = client.fetch_arinvoices_by_date_range(specific_date, specific_date)
+                all_invoices.extend(invoices)
+                sync_stats['api_calls'] = 1
+            else:
+                # Default: fetch last N days
+                all_invoices = client.fetch_arinvoices_last_n_days(days=days_back)
+                sync_stats['api_calls'] = 1
+            
+            if not all_invoices:
+                messages.warning(request, "No AR invoices found.")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Map API responses to model format
+            mapped_invoices = []
+            for api_invoice in all_invoices:
+                try:
+                    mapped = client._map_arinvoice_api_response(api_invoice)
+                    mapped_invoices.append(mapped)
+                except Exception as e:
+                    logger.error(f"Error mapping invoice {api_invoice.get('DocNum')}: {e}")
+                    sync_stats['errors'].append(f"Error mapping invoice {api_invoice.get('DocNum')}: {str(e)}")
+            
+            if not mapped_invoices:
+                messages.error(request, "No invoices could be mapped successfully.")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Get list of invoice numbers from API response
+            api_invoice_numbers = set(mapped['invoice_number'] for mapped in mapped_invoices if mapped.get('invoice_number'))
+            
+            # Prepare data for bulk operations
+            invoice_numbers = [m['invoice_number'] for m in mapped_invoices if m.get('invoice_number')]
+            sync_stats['total_invoices'] = len(invoice_numbers)
+            
+            with transaction.atomic():
+                # Fetch existing invoices
+                try:
+                    existing_map = SAPARInvoice.objects.in_bulk(invoice_numbers, field_name="invoice_number")
+                except TypeError:
+                    existing_map = {o.invoice_number: o for o in SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers)}
+                
+                to_create = []
+                to_update = []
+                
+                def _dec2(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0.00")
+                        return Decimal(str(x)).quantize(Decimal("0.01"))
+                    except Exception:
+                        return Decimal("0.00")
+                
+                # Process each mapped invoice
+                for mapped in mapped_invoices:
+                    invoice_no = mapped.get('invoice_number')
+                    if not invoice_no:
+                        continue
+                    
+                    # Parse dates if strings
+                    posting_date = mapped.get('posting_date')
+                    if isinstance(posting_date, str):
+                        try:
+                            posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            posting_date = None
+                    elif posting_date and hasattr(posting_date, 'date'):
+                        posting_date = posting_date.date() if hasattr(posting_date, 'date') else posting_date
+                    
+                    doc_due_date = mapped.get('doc_due_date')
+                    if isinstance(doc_due_date, str):
+                        try:
+                            doc_due_date = datetime.strptime(doc_due_date, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            doc_due_date = None
+                    elif doc_due_date and hasattr(doc_due_date, 'date'):
+                        doc_due_date = doc_due_date.date() if hasattr(doc_due_date, 'date') else doc_due_date
+                    
+                    defaults = {
+                        "internal_number": mapped.get('internal_number'),
+                        "posting_date": posting_date,
+                        "doc_due_date": doc_due_date,
+                        "customer_code": mapped.get('customer_code', ''),
+                        "customer_name": mapped.get('customer_name', ''),
+                        "customer_address": mapped.get('customer_address', ''),
+                        "salesman_name": mapped.get('salesman_name', ''),
+                        "salesman_code": mapped.get('salesman_code'),
+                        "bp_reference_no": mapped.get('bp_reference_no', ''),
+                        "doc_total": _dec2(mapped.get('doc_total', 0)),
+                        "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
+                        "vat_sum": _dec2(mapped.get('vat_sum', 0)),
+                        "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                        "discount_percent": _dec2(mapped.get('discount_percent', 0)),
+                        "cancel_status": mapped.get('cancel_status', ''),
+                        "document_status": mapped.get('document_status', ''),
+                        "vat_number": mapped.get('vat_number', ''),
+                        "comments": mapped.get('comments', ''),
+                    }
+                    
+                    obj = existing_map.get(invoice_no)
+                    if obj is None:
+                        to_create.append(SAPARInvoice(invoice_number=invoice_no, **defaults))
+                        sync_stats['created'] += 1
+                    else:
+                        for k, v in defaults.items():
+                            setattr(obj, k, v)
+                        to_update.append(obj)
+                        sync_stats['updated'] += 1
+                
+                # Bulk create/update
+                if to_create:
+                    SAPARInvoice.objects.bulk_create(to_create, batch_size=5000)
+                
+                if to_update:
+                    update_fields = [
+                        "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
+                        "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
+                        "doc_total", "doc_total_without_vat", "vat_sum", "discount_percent",
+                        "cancel_status", "document_status", "vat_number", "comments"
+                    ]
+                    SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+                
+                # Re-fetch ids for FK mapping
+                invoice_id_map = dict(
+                    SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers).values_list("invoice_number", "id")
+                )
+                
+                # Delete existing items for these invoices
+                SAPARInvoiceItem.objects.filter(invoice__invoice_number__in=invoice_numbers).delete()
+                
+                # Build items list + bulk insert
+                items_to_create = []
+                
+                def _dec_any(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0")
+                        return Decimal(str(x))
+                    except Exception:
+                        return Decimal("0")
+                
+                for mapped in mapped_invoices:
+                    invoice_no = mapped.get('invoice_number')
+                    invoice_id = invoice_id_map.get(invoice_no)
+                    if not invoice_id:
+                        continue
+                    
+                    for item_data in mapped.get('items', []):
+                        item_id = item_data.get('item_id')  # From _ensure_item_exists
+                        items_to_create.append(
+                            SAPARInvoiceItem(
+                                invoice_id=invoice_id,
+                                item_id=item_id,  # ForeignKey to Items
+                                line_no=item_data.get('line_no', 1),
+                                item_code=item_data.get('item_code', ''),
+                                item_description=item_data.get('item_description', ''),
+                                quantity=_dec_any(item_data.get('quantity', 0)),
+                                price=_dec_any(item_data.get('price', 0)),
+                                price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
+                                discount_percent=_dec_any(item_data.get('discount_percent', 0)),
+                                line_total=_dec_any(item_data.get('line_total', 0)),
+                                tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
+                                tax_total=_dec_any(item_data.get('tax_total', 0)),
+                                upc_code=item_data.get('upc_code', ''),
+                            )
+                        )
+                        
+                        if len(items_to_create) >= 20000:
+                            SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+                            items_to_create = []
+                
+                if items_to_create:
+                    SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+                
+                sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_invoices)
+            
+            messages.success(request, f"Synced {sync_stats['total_invoices']} AR invoices successfully.")
+            
+        except Exception as e:
+            logger.exception("Error syncing AR invoices")
+            messages.error(request, f"Error syncing AR invoices: {str(e)}")
+            sync_stats['errors'].append(str(e))
+    
+    return render(request, 'salesorders/upload_salesorders.html', {
+        'messages': messages_list,
+        'sync_stats': sync_stats
+    })
+
+
+@csrf_exempt
+@require_POST
+def sync_arinvoices_api_receive(request):
+    """
+    Receive AR invoices data from PC script via HTTP API
+    This endpoint is called by the PC sync script
+    """
+    from django.http import JsonResponse
+    
+    try:
+        # Get data from request (JSON)
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            try:
+                data = json.loads(request.body)
+            except:
+                data = request.POST.dict()
+        
+        # Verify API key
+        api_key = data.get('api_key')
+        expected_key = getattr(settings, 'VPS_API_KEY', 'your-secret-api-key')
+        
+        if not api_key or api_key != expected_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key'
+            }, status=401)
+        
+        invoices = data.get('invoices', [])
+        api_invoice_numbers = data.get('api_invoice_numbers', [])
+        
+        if not invoices:
+            return JsonResponse({
+                'success': False,
+                'error': 'No invoices provided'
+            })
+        
+        # Process invoices
+        stats = {
+            'created': 0,
+            'updated': 0,
+            'total_items': 0
+        }
+        
+        invoice_numbers = [m['invoice_number'] for m in invoices if m.get('invoice_number')]
+        api_invoice_numbers_set = set(api_invoice_numbers)
+        
+        with transaction.atomic():
+            # Fetch existing invoices
+            try:
+                existing_map = {o.invoice_number: o for o in SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers)}
+            except Exception:
+                existing_map = {}
+            
+            to_create = []
+            to_update = []
+            
+            def _dec2(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0.00")
+                    return Decimal(str(x)).quantize(Decimal("0.01"))
+                except Exception:
+                    return Decimal("0.00")
+            
+            # Process each mapped invoice
+            for mapped in invoices:
+                invoice_no = mapped.get('invoice_number')
+                if not invoice_no:
+                    continue
+                
+                # Parse dates if strings
+                posting_date = mapped.get('posting_date')
+                if isinstance(posting_date, str):
+                    try:
+                        posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        posting_date = None
+                elif posting_date and hasattr(posting_date, 'date'):
+                    posting_date = posting_date.date() if hasattr(posting_date, 'date') else posting_date
+                
+                doc_due_date = mapped.get('doc_due_date')
+                if isinstance(doc_due_date, str):
+                    try:
+                        doc_due_date = datetime.strptime(doc_due_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        doc_due_date = None
+                elif doc_due_date and hasattr(doc_due_date, 'date'):
+                    doc_due_date = doc_due_date.date() if hasattr(doc_due_date, 'date') else doc_due_date
+                
+                defaults = {
+                    "internal_number": mapped.get('internal_number'),
+                    "posting_date": posting_date,
+                    "doc_due_date": doc_due_date,
+                    "customer_code": mapped.get('customer_code', ''),
+                    "customer_name": mapped.get('customer_name', ''),
+                    "customer_address": mapped.get('customer_address', ''),
+                    "salesman_name": mapped.get('salesman_name', ''),
+                    "salesman_code": mapped.get('salesman_code'),
+                    "bp_reference_no": mapped.get('bp_reference_no', ''),
+                    "doc_total": _dec2(mapped.get('doc_total', 0)),
+                    "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
+                    "vat_sum": _dec2(mapped.get('vat_sum', 0)),
+                    "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                    "discount_percent": _dec2(mapped.get('discount_percent', 0)),
+                    "cancel_status": mapped.get('cancel_status', ''),
+                    "document_status": mapped.get('document_status', ''),
+                    "vat_number": mapped.get('vat_number', ''),
+                    "comments": mapped.get('comments', ''),
+                }
+                
+                obj = existing_map.get(invoice_no)
+                if obj is None:
+                    to_create.append(SAPARInvoice(invoice_number=invoice_no, **defaults))
+                    stats['created'] += 1
+                else:
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    to_update.append(obj)
+                    stats['updated'] += 1
+            
+            # Bulk create/update
+            if to_create:
+                SAPARInvoice.objects.bulk_create(to_create, batch_size=5000)
+            
+            if to_update:
+                update_fields = [
+                    "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
+                    "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
+                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                    "cancel_status", "document_status", "vat_number", "comments"
+                ]
+                SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+            
+            # Re-fetch ids for FK mapping
+            invoice_id_map = dict(
+                SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers).values_list("invoice_number", "id")
+            )
+            
+            # Delete existing items for these invoices
+            SAPARInvoiceItem.objects.filter(invoice__invoice_number__in=invoice_numbers).delete()
+            
+            # Build items list + bulk insert
+            items_to_create = []
+            
+            def _dec_any(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0")
+                    return Decimal(str(x))
+                except Exception:
+                    return Decimal("0")
+            
+            for mapped in invoices:
+                invoice_no = mapped.get('invoice_number')
+                invoice_id = invoice_id_map.get(invoice_no)
+                if not invoice_id:
+                    continue
+                
+                for item_data in mapped.get('items', []):
+                    item_id = item_data.get('item_id')
+                    items_to_create.append(
+                        SAPARInvoiceItem(
+                            invoice_id=invoice_id,
+                            item_id=item_id,
+                            line_no=item_data.get('line_no', 1),
+                            item_code=item_data.get('item_code', ''),
+                            item_description=item_data.get('item_description', ''),
+                            quantity=_dec_any(item_data.get('quantity', 0)),
+                            price=_dec_any(item_data.get('price', 0)),
+                            price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
+                            discount_percent=_dec_any(item_data.get('discount_percent', 0)),
+                            line_total=_dec_any(item_data.get('line_total', 0)),
+                            tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
+                            tax_total=_dec_any(item_data.get('tax_total', 0)),
+                            upc_code=item_data.get('upc_code', ''),
+                        )
+                    )
+                    
+                    if len(items_to_create) >= 20000:
+                        SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+                        items_to_create = []
+            
+            if items_to_create:
+                SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+            
+            stats['total_items'] = sum(len(m.get('items', [])) for m in invoices)
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        logger.exception("Error receiving AR invoices")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }, status=500)
+
+
+# =====================
+# AR Credit Memo: API Sync
+# =====================
+@login_required
+def sync_arcreditmemos_from_api(request):
+    """Sync AR Credit Memos from SAP API"""
+    messages_list = []
+    sync_stats = {
+        'created': 0,
+        'updated': 0,
+        'total_creditmemos': 0,
+        'total_items': 0,
+        'api_calls': 0,
+        'errors': []
+    }
+    
+    if request.method == 'POST':
+        try:
+            client = SAPAPIClient()
+            days_back = int(request.POST.get('days_back', getattr(settings, 'SAP_SYNC_DAYS_BACK', 3)))
+            specific_date = request.POST.get('specific_date', '').strip()
+            docnum = request.POST.get('docnum', '').strip()
+            
+            # Fetch data from API
+            all_creditmemos = []
+            
+            if docnum:
+                # Single DocNum query
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=30)
+                creditmemos = client.fetch_arcreditmemos_by_date_range(
+                    start_date.strftime('%Y-%m-%d'),
+                    end_date.strftime('%Y-%m-%d')
+                )
+                all_creditmemos = [cm for cm in creditmemos if str(cm.get('DocNum', '')) == docnum]
+                sync_stats['api_calls'] = 1
+            elif specific_date:
+                # Single date query
+                creditmemos = client.fetch_arcreditmemos_by_date_range(specific_date, specific_date)
+                all_creditmemos.extend(creditmemos)
+                sync_stats['api_calls'] = 1
+            else:
+                # Default: fetch last N days
+                all_creditmemos = client.fetch_arcreditmemos_last_n_days(days=days_back)
+                sync_stats['api_calls'] = 1
+            
+            if not all_creditmemos:
+                messages.warning(request, "No AR credit memos found.")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Map API responses to model format
+            mapped_creditmemos = []
+            for api_creditmemo in all_creditmemos:
+                try:
+                    mapped = client._map_arcreditmemo_api_response(api_creditmemo)
+                    mapped_creditmemos.append(mapped)
+                except Exception as e:
+                    logger.error(f"Error mapping credit memo {api_creditmemo.get('DocNum')}: {e}")
+                    sync_stats['errors'].append(f"Error mapping credit memo {api_creditmemo.get('DocNum')}: {str(e)}")
+            
+            if not mapped_creditmemos:
+                messages.error(request, "No credit memos could be mapped successfully.")
+                return render(request, 'salesorders/upload_salesorders.html', {
+                    'messages': messages_list,
+                    'sync_stats': sync_stats
+                })
+            
+            # Get list of credit memo numbers from API response
+            api_creditmemo_numbers = set(mapped['credit_memo_number'] for mapped in mapped_creditmemos if mapped.get('credit_memo_number'))
+            
+            # Prepare data for bulk operations
+            creditmemo_numbers = [m['credit_memo_number'] for m in mapped_creditmemos if m.get('credit_memo_number')]
+            sync_stats['total_creditmemos'] = len(creditmemo_numbers)
+            
+            with transaction.atomic():
+                # Fetch existing credit memos
+                try:
+                    existing_map = SAPARCreditMemo.objects.in_bulk(creditmemo_numbers, field_name="credit_memo_number")
+                except TypeError:
+                    existing_map = {o.credit_memo_number: o for o in SAPARCreditMemo.objects.filter(credit_memo_number__in=creditmemo_numbers)}
+                
+                to_create = []
+                to_update = []
+                
+                def _dec2(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0.00")
+                        return Decimal(str(x)).quantize(Decimal("0.01"))
+                    except Exception:
+                        return Decimal("0.00")
+                
+                # Process each mapped credit memo
+                for mapped in mapped_creditmemos:
+                    creditmemo_no = mapped.get('credit_memo_number')
+                    if not creditmemo_no:
+                        continue
+                    
+                    # Parse dates if strings
+                    posting_date = mapped.get('posting_date')
+                    if isinstance(posting_date, str):
+                        try:
+                            posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            posting_date = None
+                    elif posting_date and hasattr(posting_date, 'date'):
+                        posting_date = posting_date.date() if hasattr(posting_date, 'date') else posting_date
+                    
+                    doc_due_date = mapped.get('doc_due_date')
+                    if isinstance(doc_due_date, str):
+                        try:
+                            doc_due_date = datetime.strptime(doc_due_date, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            doc_due_date = None
+                    elif doc_due_date and hasattr(doc_due_date, 'date'):
+                        doc_due_date = doc_due_date.date() if hasattr(doc_due_date, 'date') else doc_due_date
+                    
+                    defaults = {
+                        "internal_number": mapped.get('internal_number'),
+                        "posting_date": posting_date,
+                        "doc_due_date": doc_due_date,
+                        "customer_code": mapped.get('customer_code', ''),
+                        "customer_name": mapped.get('customer_name', ''),
+                        "customer_address": mapped.get('customer_address', ''),
+                        "salesman_name": mapped.get('salesman_name', ''),
+                        "salesman_code": mapped.get('salesman_code'),
+                        "bp_reference_no": mapped.get('bp_reference_no', ''),
+                        "doc_total": _dec2(mapped.get('doc_total', 0)),
+                        "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
+                        "vat_sum": _dec2(mapped.get('vat_sum', 0)),
+                        "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                        "discount_percent": _dec2(mapped.get('discount_percent', 0)),
+                        "cancel_status": mapped.get('cancel_status', ''),
+                        "document_status": mapped.get('document_status', ''),
+                        "vat_number": mapped.get('vat_number', ''),
+                        "comments": mapped.get('comments', ''),
+                    }
+                    
+                    obj = existing_map.get(creditmemo_no)
+                    if obj is None:
+                        to_create.append(SAPARCreditMemo(credit_memo_number=creditmemo_no, **defaults))
+                        sync_stats['created'] += 1
+                    else:
+                        for k, v in defaults.items():
+                            setattr(obj, k, v)
+                        to_update.append(obj)
+                        sync_stats['updated'] += 1
+                
+                # Bulk create/update
+                if to_create:
+                    SAPARCreditMemo.objects.bulk_create(to_create, batch_size=5000)
+                
+                if to_update:
+                    update_fields = [
+                        "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
+                        "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
+                        "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                        "cancel_status", "document_status", "vat_number", "comments"
+                    ]
+                    SAPARCreditMemo.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+                
+                # Re-fetch ids for FK mapping
+                creditmemo_id_map = dict(
+                    SAPARCreditMemo.objects.filter(credit_memo_number__in=creditmemo_numbers).values_list("credit_memo_number", "id")
+                )
+                
+                # Delete existing items for these credit memos
+                SAPARCreditMemoItem.objects.filter(credit_memo__credit_memo_number__in=creditmemo_numbers).delete()
+                
+                # Build items list + bulk insert
+                items_to_create = []
+                
+                def _dec_any(x) -> Decimal:
+                    try:
+                        if x is None or (isinstance(x, float) and pd.isna(x)):
+                            return Decimal("0")
+                        return Decimal(str(x))
+                    except Exception:
+                        return Decimal("0")
+                
+                for mapped in mapped_creditmemos:
+                    creditmemo_no = mapped.get('credit_memo_number')
+                    creditmemo_id = creditmemo_id_map.get(creditmemo_no)
+                    if not creditmemo_id:
+                        continue
+                    
+                    for item_data in mapped.get('items', []):
+                        item_id = item_data.get('item_id')
+                        items_to_create.append(
+                            SAPARCreditMemoItem(
+                                credit_memo_id=creditmemo_id,
+                                item_id=item_id,
+                                line_no=item_data.get('line_no', 1),
+                                item_code=item_data.get('item_code', ''),
+                                item_description=item_data.get('item_description', ''),
+                                quantity=_dec_any(item_data.get('quantity', 0)),
+                                price=_dec_any(item_data.get('price', 0)),
+                                price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
+                                discount_percent=_dec_any(item_data.get('discount_percent', 0)),
+                                line_total=_dec_any(item_data.get('line_total', 0)),
+                                tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
+                                tax_total=_dec_any(item_data.get('tax_total', 0)),
+                                upc_code=item_data.get('upc_code', ''),
+                            )
+                        )
+                        
+                        if len(items_to_create) >= 20000:
+                            SAPARCreditMemoItem.objects.bulk_create(items_to_create, batch_size=20000)
+                            items_to_create = []
+                
+                if items_to_create:
+                    SAPARCreditMemoItem.objects.bulk_create(items_to_create, batch_size=20000)
+                
+                sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_creditmemos)
+            
+            messages.success(request, f"Synced {sync_stats['total_creditmemos']} AR credit memos successfully.")
+            
+        except Exception as e:
+            logger.exception("Error syncing AR credit memos")
+            messages.error(request, f"Error syncing AR credit memos: {str(e)}")
+            sync_stats['errors'].append(str(e))
+    
+    return render(request, 'salesorders/upload_salesorders.html', {
+        'messages': messages_list,
+        'sync_stats': sync_stats
+    })
+
+
+@csrf_exempt
+@require_POST
+def sync_arcreditmemos_api_receive(request):
+    """
+    Receive AR credit memos data from PC script via HTTP API
+    This endpoint is called by the PC sync script
+    """
+    from django.http import JsonResponse
+    
+    try:
+        # Get data from request (JSON)
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            try:
+                data = json.loads(request.body)
+            except:
+                data = request.POST.dict()
+        
+        # Verify API key
+        api_key = data.get('api_key')
+        expected_key = getattr(settings, 'VPS_API_KEY', 'your-secret-api-key')
+        
+        if not api_key or api_key != expected_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key'
+            }, status=401)
+        
+        creditmemos = data.get('creditmemos', [])
+        api_creditmemo_numbers = data.get('api_creditmemo_numbers', [])
+        
+        if not creditmemos:
+            return JsonResponse({
+                'success': False,
+                'error': 'No credit memos provided'
+            })
+        
+        # Process credit memos
+        stats = {
+            'created': 0,
+            'updated': 0,
+            'total_items': 0
+        }
+        
+        creditmemo_numbers = [m['credit_memo_number'] for m in creditmemos if m.get('credit_memo_number')]
+        api_creditmemo_numbers_set = set(api_creditmemo_numbers)
+        
+        with transaction.atomic():
+            # Fetch existing credit memos
+            try:
+                existing_map = {o.credit_memo_number: o for o in SAPARCreditMemo.objects.filter(credit_memo_number__in=creditmemo_numbers)}
+            except Exception:
+                existing_map = {}
+            
+            to_create = []
+            to_update = []
+            
+            def _dec2(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0.00")
+                    return Decimal(str(x)).quantize(Decimal("0.01"))
+                except Exception:
+                    return Decimal("0.00")
+            
+            # Process each mapped credit memo
+            for mapped in creditmemos:
+                creditmemo_no = mapped.get('credit_memo_number')
+                if not creditmemo_no:
+                    continue
+                
+                # Parse dates if strings
+                posting_date = mapped.get('posting_date')
+                if isinstance(posting_date, str):
+                    try:
+                        posting_date = datetime.strptime(posting_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        posting_date = None
+                elif posting_date and hasattr(posting_date, 'date'):
+                    posting_date = posting_date.date() if hasattr(posting_date, 'date') else posting_date
+                
+                doc_due_date = mapped.get('doc_due_date')
+                if isinstance(doc_due_date, str):
+                    try:
+                        doc_due_date = datetime.strptime(doc_due_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        doc_due_date = None
+                elif doc_due_date and hasattr(doc_due_date, 'date'):
+                    doc_due_date = doc_due_date.date() if hasattr(doc_due_date, 'date') else doc_due_date
+                
+                defaults = {
+                    "internal_number": mapped.get('internal_number'),
+                    "posting_date": posting_date,
+                    "doc_due_date": doc_due_date,
+                    "customer_code": mapped.get('customer_code', ''),
+                    "customer_name": mapped.get('customer_name', ''),
+                    "customer_address": mapped.get('customer_address', ''),
+                    "salesman_name": mapped.get('salesman_name', ''),
+                    "salesman_code": mapped.get('salesman_code'),
+                    "bp_reference_no": mapped.get('bp_reference_no', ''),
+                    "doc_total": _dec2(mapped.get('doc_total', 0)),
+                    "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
+                    "vat_sum": _dec2(mapped.get('vat_sum', 0)),
+                    "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                    "discount_percent": _dec2(mapped.get('discount_percent', 0)),
+                    "cancel_status": mapped.get('cancel_status', ''),
+                    "document_status": mapped.get('document_status', ''),
+                    "vat_number": mapped.get('vat_number', ''),
+                    "comments": mapped.get('comments', ''),
+                }
+                
+                obj = existing_map.get(creditmemo_no)
+                if obj is None:
+                    to_create.append(SAPARCreditMemo(credit_memo_number=creditmemo_no, **defaults))
+                    stats['created'] += 1
+                else:
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    to_update.append(obj)
+                    stats['updated'] += 1
+            
+            # Bulk create/update
+            if to_create:
+                SAPARCreditMemo.objects.bulk_create(to_create, batch_size=5000)
+            
+            if to_update:
+                update_fields = [
+                    "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
+                    "customer_address", "salesman_name", "salesman_code", "bp_reference_no",
+                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                    "cancel_status", "document_status", "vat_number", "comments"
+                ]
+                SAPARCreditMemo.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+            
+            # Re-fetch ids for FK mapping
+            creditmemo_id_map = dict(
+                SAPARCreditMemo.objects.filter(credit_memo_number__in=creditmemo_numbers).values_list("credit_memo_number", "id")
+            )
+            
+            # Delete existing items for these credit memos
+            SAPARCreditMemoItem.objects.filter(credit_memo__credit_memo_number__in=creditmemo_numbers).delete()
+            
+            # Build items list + bulk insert
+            items_to_create = []
+            
+            def _dec_any(x) -> Decimal:
+                try:
+                    if x is None or (isinstance(x, float) and pd.isna(x)):
+                        return Decimal("0")
+                    return Decimal(str(x))
+                except Exception:
+                    return Decimal("0")
+            
+            for mapped in creditmemos:
+                creditmemo_no = mapped.get('credit_memo_number')
+                creditmemo_id = creditmemo_id_map.get(creditmemo_no)
+                if not creditmemo_id:
+                    continue
+                
+                for item_data in mapped.get('items', []):
+                    item_id = item_data.get('item_id')
+                    items_to_create.append(
+                        SAPARCreditMemoItem(
+                            credit_memo_id=creditmemo_id,
+                            item_id=item_id,
+                            line_no=item_data.get('line_no', 1),
+                            item_code=item_data.get('item_code', ''),
+                            item_description=item_data.get('item_description', ''),
+                            quantity=_dec_any(item_data.get('quantity', 0)),
+                            price=_dec_any(item_data.get('price', 0)),
+                            price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
+                            discount_percent=_dec_any(item_data.get('discount_percent', 0)),
+                            line_total=_dec_any(item_data.get('line_total', 0)),
+                            tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
+                            tax_total=_dec_any(item_data.get('tax_total', 0)),
+                            upc_code=item_data.get('upc_code', ''),
+                        )
+                    )
+                    
+                    if len(items_to_create) >= 20000:
+                        SAPARCreditMemoItem.objects.bulk_create(items_to_create, batch_size=20000)
+                        items_to_create = []
+            
+            if items_to_create:
+                SAPARCreditMemoItem.objects.bulk_create(items_to_create, batch_size=20000)
+            
+            stats['total_items'] = sum(len(m.get('items', [])) for m in creditmemos)
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        logger.exception("Error receiving AR credit memos")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }, status=500)
+
+# =====================
+# AR Invoice: List
+# =====================
+@login_required
+def arinvoice_list(request):
+    # Scope by logged-in user (similar to salesorder)
+    qs = SAPARInvoice.objects.all()
+    
+    # Apply salesman scope if user is not staff
+    if not (request.user.is_superuser or request.user.is_staff):
+        qs = qs.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Filters
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    
+    # Apply List Filter
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
+    
+    # Cancel status filter
+    if cancel_status_filter:
+        if cancel_status_filter == 'csNo':
+            qs = qs.filter(cancel_status='csNo')
+        elif cancel_status_filter == 'csYes':
+            qs = qs.filter(cancel_status='csYes')
+        elif cancel_status_filter == 'csCancellation':
+            qs = qs.filter(cancel_status='csCancellation')
+        elif cancel_status_filter == 'All':
+            pass  # Show all
+        else:
+            qs = qs.filter(cancel_status=cancel_status_filter)
+    
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(doc_total__gte=5001, doc_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(doc_total__gte=10001, doc_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(doc_total__gte=25001, doc_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(doc_total__gt=100000)
+    
+    if q:
+        if q.isdigit():
+            qs = qs.filter(invoice_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(invoice_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q) |
+                Q(customer_code__icontains=q)
+            )
+    
+    # Parse dates (YYYY-MM or YYYY-MM-DD)
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:  # YYYY-MM
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+    
+    # Calculate totals
+    grand_total_agg = qs.aggregate(
+        total=Coalesce(Sum('doc_total'), Value(0, output_field=DecimalField())),
+        total_without_vat=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
+        vat_total=Coalesce(Sum('vat_sum'), Value(0, output_field=DecimalField()))
+    )
+    total_value = grand_total_agg['total']
+    total_without_vat_value = grand_total_agg['total_without_vat']
+    vat_total_value = grand_total_agg['vat_total']
+    
+    qs = qs.order_by('-posting_date', '-invoice_number')
+    
+    # Pagination
+    try:
+        page_size = int(request.GET.get('page_size', 100))
+    except ValueError:
+        page_size = 20
+    page_size = max(5, min(page_size, 100))
+    paginator = Paginator(qs, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Distinct salesmen list
+    salesmen = (
+        SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+    
+    return render(request, 'salesorders/arinvoice_list.html', {
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+        'total_value': total_value,
+        'total_without_vat_value': total_without_vat_value,
+        'vat_total_value': vat_total_value,
+        'salesmen': salesmen,
+        'filters': {
+            'q': q,
+            'salesmen_filter': salesmen_filter,
+            'cancel_status': cancel_status_filter or 'All',
+            'start': start,
+            'end': end,
+            'page_size': page_size,
+            'total': total_range,
+        }
+    })
+
+
+@login_required
+def export_arinvoice_list_excel(request):
+    """
+    Exports the filtered list of AR invoices to an Excel file.
+    Respects all filters: q, salesman, start/end date, cancel_status, total range.
+    """
+    from django.http import HttpResponse
+    from io import BytesIO
+    
+    # 1. APPLY FILTERS (Exact copy from arinvoice_list)
+    qs = SAPARInvoice.objects.all()
+    
+    # Apply salesman scope if user is not staff
+    if not (request.user.is_superuser or request.user.is_staff):
+        qs = qs.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Filters
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    
+    # Apply List Filter
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
+    
+    # Cancel status filter
+    if cancel_status_filter:
+        if cancel_status_filter == 'csNo':
+            qs = qs.filter(cancel_status='csNo')
+        elif cancel_status_filter == 'csYes':
+            qs = qs.filter(cancel_status='csYes')
+        elif cancel_status_filter == 'csCancellation':
+            qs = qs.filter(cancel_status='csCancellation')
+        elif cancel_status_filter == 'All':
+            pass  # Show all
+        else:
+            qs = qs.filter(cancel_status=cancel_status_filter)
+    
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(doc_total__gte=5001, doc_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(doc_total__gte=10001, doc_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(doc_total__gte=25001, doc_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(doc_total__gt=100000)
+    
+    if q:
+        if q.isdigit():
+            qs = qs.filter(invoice_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(invoice_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q) |
+                Q(customer_code__icontains=q)
+            )
+    
+    # Parse dates (YYYY-MM or YYYY-MM-DD)
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:  # YYYY-MM
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+    
+    # Ordering
+    qs = qs.order_by('-posting_date', '-invoice_number')
+    
+    # 2. PREPARE DATA FOR EXCEL
+    data = []
+    for invoice in qs:
+        # Format cancel status for display
+        cancel_status_display = {
+            'csNo': 'Active',
+            'csYes': 'Cancelled',
+            'csCancellation': 'Cancellation'
+        }.get(invoice.cancel_status, invoice.cancel_status or '')
+        
+        data.append({
+            'Date': invoice.posting_date.strftime('%Y-%m-%d') if invoice.posting_date else '',
+            'Invoice Number': invoice.invoice_number,
+            'Customer': invoice.customer_name or '',
+            'Customer Code': invoice.customer_code or '',
+            'Salesman': invoice.salesman_name or '',
+            'BP Reference': invoice.bp_reference_no or '',
+            'Doc Total (with VAT)': float(invoice.doc_total) if invoice.doc_total else 0.0,
+            'Total (without VAT)': float(invoice.doc_total_without_vat) if invoice.doc_total_without_vat else 0.0,
+            'VAT Amount': float(invoice.vat_sum) if invoice.vat_sum else 0.0,
+            'Cancel Status': cancel_status_display,
+            'VAT Number': invoice.vat_number or '',
+            'Due Date': invoice.doc_due_date.strftime('%Y-%m-%d') if invoice.doc_due_date else '',
+        })
+    
+    # 3. CREATE EXCEL FILE
+    df = pd.DataFrame(data)
+    
+    # Create Excel writer
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='AR Invoices', index=False)
+        
+        # Get the worksheet
+        worksheet = writer.sheets['AR Invoices']
+        
+        # Format header row
+        from openpyxl.styles import Font, PatternFill, Alignment
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Format number columns (currency)
+        currency_columns = ['Doc Total (with VAT)', 'Total (without VAT)', 'VAT Amount']
+        for col_idx, col_name in enumerate(df.columns, 1):
+            if col_name in currency_columns:
+                for row_idx in range(2, len(df) + 2):
+                    cell = worksheet.cell(row=row_idx, column=col_idx)
+                    cell.number_format = '#,##0.00'
+        
+        # Auto-adjust column widths
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        # Set row height for header
+        worksheet.row_dimensions[1].height = 20
+    
+    # 4. PREPARE HTTP RESPONSE
+    output.seek(0)
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"AR_Invoices_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+
+@login_required
+def arinvoice_detail(request, invoice_number):
+    invoice = get_object_or_404(SAPARInvoice, invoice_number=invoice_number)
+    
+    # Enforce scope for non-staff users
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPARInvoice.objects.filter(
+            Q(pk=invoice.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("AR Invoice not found")
+    
+    # Get items
+    items = invoice.items.all().order_by('line_no', 'id')
+    
+    # Calculate totals
+    subtotal = invoice.doc_total_without_vat or Decimal("0.00")
+    vat_amount = invoice.vat_sum or Decimal("0.00")
+    grand_total = invoice.doc_total or Decimal("0.00")
+    discount_amount = Decimal("0.00")
+    if invoice.discount_percent and invoice.discount_percent > 0:
+        # Calculate discount from percentage
+        discount_amount = (subtotal * invoice.discount_percent / 100).quantize(Decimal("0.01"))
+        subtotal = subtotal - discount_amount
+    
+    # Cancel status label
+    cancel_status_label = {
+        'csNo': 'Not Cancelled',
+        'csYes': 'Cancelled',
+        'csCancellation': 'Cancellation Invoice'
+    }.get(invoice.cancel_status, invoice.cancel_status or '—')
+    
+    # Check for related cancellation invoice if this is cancelled
+    related_cancellation = None
+    if invoice.cancel_status == 'csYes':
+        # Try to find the cancellation invoice (csCancellation) with same customer and similar date
+        related_cancellation = SAPARInvoice.objects.filter(
+            customer_code=invoice.customer_code,
+            cancel_status='csCancellation',
+            posting_date__gte=invoice.posting_date if invoice.posting_date else None
+        ).first()
+    
+    return render(request, 'salesorders/arinvoice_detail.html', {
+        'invoice': invoice,
+        'items': items,
+        'subtotal': subtotal,
+        'discount_amount': discount_amount,
+        'vat_amount': vat_amount,
+        'grand_total': grand_total,
+        'cancel_status_label': cancel_status_label,
+        'related_cancellation': related_cancellation,
+        'rounding_diff_amount': invoice.rounding_diff_amount or Decimal("0.00"),
+    })
+
+
+# =====================
+# AR Credit Memo: List
+# =====================
+@login_required
+def arcreditmemo_list(request):
+    # Scope by logged-in user
+    qs = SAPARCreditMemo.objects.all()
+    
+    # Apply salesman scope if user is not staff
+    if not (request.user.is_superuser or request.user.is_staff):
+        qs = qs.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Filters
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    
+    # Apply List Filter
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
+    
+    # Cancel status filter
+    if cancel_status_filter:
+        if cancel_status_filter == 'csNo':
+            qs = qs.filter(cancel_status='csNo')
+        elif cancel_status_filter == 'csYes':
+            qs = qs.filter(cancel_status='csYes')
+        elif cancel_status_filter == 'csCancellation':
+            qs = qs.filter(cancel_status='csCancellation')
+        elif cancel_status_filter == 'All':
+            pass  # Show all
+        else:
+            qs = qs.filter(cancel_status=cancel_status_filter)
+    
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(doc_total__gte=5001, doc_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(doc_total__gte=10001, doc_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(doc_total__gte=25001, doc_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(doc_total__gt=100000)
+    
+    if q:
+        if q.isdigit():
+            qs = qs.filter(credit_memo_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(credit_memo_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q) |
+                Q(customer_code__icontains=q)
+            )
+    
+    # Parse dates
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:  # YYYY-MM
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+    
+    # Calculate totals
+    grand_total_agg = qs.aggregate(
+        total=Coalesce(Sum('doc_total'), Value(0, output_field=DecimalField())),
+        total_without_vat=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
+        vat_total=Coalesce(Sum('vat_sum'), Value(0, output_field=DecimalField()))
+    )
+    total_value = grand_total_agg['total']
+    total_without_vat_value = grand_total_agg['total_without_vat']
+    vat_total_value = grand_total_agg['vat_total']
+    
+    qs = qs.order_by('-posting_date', '-credit_memo_number')
+    
+    # Pagination
+    try:
+        page_size = int(request.GET.get('page_size', 100))
+    except ValueError:
+        page_size = 20
+    page_size = max(5, min(page_size, 100))
+    paginator = Paginator(qs, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Distinct salesmen list
+    salesmen = (
+        SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+    
+    return render(request, 'salesorders/arcreditmemo_list.html', {
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+        'total_value': total_value,
+        'total_without_vat_value': total_without_vat_value,
+        'vat_total_value': vat_total_value,
+        'salesmen': salesmen,
+        'filters': {
+            'q': q,
+            'salesmen_filter': salesmen_filter,
+            'cancel_status': cancel_status_filter or 'All',
+            'start': start,
+            'end': end,
+            'page_size': page_size,
+            'total': total_range,
+        }
+    })
+
+
+@login_required
+def arcreditmemo_detail(request, credit_memo_number):
+    creditmemo = get_object_or_404(SAPARCreditMemo, credit_memo_number=credit_memo_number)
+    
+    # Enforce scope for non-staff users
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPARCreditMemo.objects.filter(
+            Q(pk=creditmemo.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("AR Credit Memo not found")
+    
+    # Get items
+    items = creditmemo.items.all().order_by('line_no', 'id')
+    
+    # Calculate totals
+    subtotal = creditmemo.doc_total_without_vat or Decimal("0.00")
+    vat_amount = creditmemo.vat_sum or Decimal("0.00")
+    grand_total = creditmemo.doc_total or Decimal("0.00")
+    discount_amount = Decimal("0.00")
+    if creditmemo.discount_percent and creditmemo.discount_percent > 0:
+        # Calculate discount from percentage
+        discount_amount = (subtotal * creditmemo.discount_percent / 100).quantize(Decimal("0.01"))
+        subtotal = subtotal - discount_amount
+    
+    # Cancel status label
+    cancel_status_label = {
+        'csNo': 'Not Cancelled',
+        'csYes': 'Cancelled',
+        'csCancellation': 'Cancellation Credit Memo'
+    }.get(creditmemo.cancel_status, creditmemo.cancel_status or '—')
+    
+    # Check for related cancellation credit memo if this is cancelled
+    related_cancellation = None
+    if creditmemo.cancel_status == 'csYes':
+        # Try to find the cancellation credit memo (csCancellation) with same customer and similar date
+        related_cancellation = SAPARCreditMemo.objects.filter(
+            customer_code=creditmemo.customer_code,
+            cancel_status='csCancellation',
+            posting_date__gte=creditmemo.posting_date if creditmemo.posting_date else None
+        ).first()
+    
+    return render(request, 'salesorders/arcreditmemo_detail.html', {
+        'creditmemo': creditmemo,
+        'items': items,
+        'subtotal': subtotal,
+        'discount_amount': discount_amount,
+        'vat_amount': vat_amount,
+        'grand_total': grand_total,
+        'cancel_status_label': cancel_status_label,
+        'related_cancellation': related_cancellation,
+        'rounding_diff_amount': creditmemo.rounding_diff_amount or Decimal("0.00"),
     })
