@@ -857,17 +857,17 @@ class SAPAPIClient:
         bp_reference = api_invoice.get('NumAtCard', '') or ''
         doc_total = api_invoice.get('DocTotal', 0) or 0
         vat_sum = api_invoice.get('VatSum', 0) or 0
+        total_discount = api_invoice.get('TotalDiscount', 0) or 0
         discount_percent = api_invoice.get('DiscountPercent', 0) or 0
         cancel_status = api_invoice.get('CancelStatus', '') or ''
         document_status = api_invoice.get('DocumentStatus', '') or ''
         comments = str(api_invoice.get('Comments', '')).strip() if api_invoice.get('Comments') else ''
         rounding_diff_amount = api_invoice.get('RoundingDiffAmount', 0) or 0
         
-        # Calculate doc_total_without_vat
+        # Calculate doc_total_without_vat (Subtotal AFTER discount)
         # RoundingDiffAmount (if negative like -10.4) should be SUBTRACTED from doc_total_without_vat
         # Formula: doc_total_without_vat = DocTotal - VATSum - RoundingDiffAmount
         # Example: DocTotal - VATSum - (-10.4) = DocTotal - VATSum + 10.4 (gets actual subtotal)
-        # but NOT added to doc_total
         doc_total_without_vat = doc_total - vat_sum
         if rounding_diff_amount:
             doc_total_without_vat = doc_total_without_vat - rounding_diff_amount
@@ -880,8 +880,13 @@ class SAPAPIClient:
         doc_total = doc_total * sign_multiplier
         doc_total_without_vat = doc_total_without_vat * sign_multiplier
         vat_sum = vat_sum * sign_multiplier
+        total_discount = total_discount * sign_multiplier
         # Also apply sign to rounding_diff_amount for consistency
         rounding_diff_amount = rounding_diff_amount * sign_multiplier
+        
+        # Calculate subtotal_before_discount (Subtotal BEFORE discount)
+        # This is the subtotal before discount is applied (after sign multiplier)
+        subtotal_before_discount = doc_total_without_vat + total_discount
         
         # Map document lines
         document_lines = api_invoice.get('DocumentLines', [])
@@ -911,13 +916,20 @@ class SAPAPIClient:
             tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
             tax_total = line.get('TaxTotal', 0) or 0
             
-            # Calculate Gross Profit = LineTotal - cost_price
-            gross_profit = line_total - cost_price
+            # Calculate line_total_after_discount if header discount exists
+            # Discount is applied at header level, but we show line_total_after_discount for viewing
+            line_total_after_discount = line_total
+            if discount_percent and discount_percent > 0:
+                line_total_after_discount = line_total * (1 - discount_percent / 100)
+            
+            # Calculate Gross Profit = LineTotal after discount - cost_price
+            gross_profit = line_total_after_discount - cost_price
             
             # Apply sign multiplier to item amounts (for csCancellation)
             price = price * sign_multiplier
             price_after_vat = price_after_vat * sign_multiplier
             line_total = line_total * sign_multiplier
+            line_total_after_discount = line_total_after_discount * sign_multiplier
             cost_price = cost_price * sign_multiplier
             gross_profit = gross_profit * sign_multiplier
             tax_total = tax_total * sign_multiplier
@@ -931,6 +943,7 @@ class SAPAPIClient:
                 'price_after_vat': price_after_vat,
                 'discount_percent': discount_percent_line,
                 'line_total': line_total,
+                'line_total_after_discount': line_total_after_discount,
                 'cost_price': cost_price,
                 'gross_profit': gross_profit,
                 'tax_percentage': tax_percentage,
@@ -958,6 +971,7 @@ class SAPAPIClient:
             'bp_reference_no': bp_reference or '',
             'doc_total': doc_total,
             'doc_total_without_vat': doc_total_without_vat,
+            'subtotal_before_discount': subtotal_before_discount,
             'vat_sum': vat_sum,
             'total_gross_profit': total_gross_profit,
             'discount_percent': discount_percent,
@@ -1026,17 +1040,17 @@ class SAPAPIClient:
         bp_reference = api_creditmemo.get('NumAtCard', '') or ''
         doc_total = api_creditmemo.get('DocTotal', 0) or 0
         vat_sum = api_creditmemo.get('VatSum', 0) or 0
+        total_discount = api_creditmemo.get('TotalDiscount', 0) or 0
         discount_percent = api_creditmemo.get('DiscountPercent', 0) or 0
         cancel_status = api_creditmemo.get('CancelStatus', '') or ''
         document_status = api_creditmemo.get('DocumentStatus', '') or ''
         comments = str(api_creditmemo.get('Comments', '')).strip() if api_creditmemo.get('Comments') else ''
         rounding_diff_amount = api_creditmemo.get('RoundingDiffAmount', 0) or 0
         
-        # Calculate doc_total_without_vat
+        # Calculate doc_total_without_vat (Subtotal AFTER discount)
         # RoundingDiffAmount (if negative like -10.4) should be SUBTRACTED from doc_total_without_vat
         # Formula: doc_total_without_vat = DocTotal - VATSum - RoundingDiffAmount
         # Example: DocTotal - VATSum - (-10.4) = DocTotal - VATSum + 10.4 (gets actual subtotal)
-        # but NOT subtracted from doc_total
         doc_total_without_vat = doc_total - vat_sum
         if rounding_diff_amount:
             doc_total_without_vat = doc_total_without_vat - rounding_diff_amount
@@ -1051,6 +1065,13 @@ class SAPAPIClient:
         doc_total = doc_total * sign_multiplier
         doc_total_without_vat = doc_total_without_vat * sign_multiplier
         vat_sum = vat_sum * sign_multiplier
+        total_discount = total_discount * sign_multiplier
+        # Also apply sign to rounding_diff_amount for consistency
+        rounding_diff_amount = rounding_diff_amount * sign_multiplier
+        
+        # Calculate subtotal_before_discount (Subtotal BEFORE discount)
+        # This is the subtotal before discount is applied (after sign multiplier)
+        subtotal_before_discount = doc_total_without_vat + total_discount
         
         # Map document lines
         document_lines = api_creditmemo.get('DocumentLines', [])
@@ -1080,14 +1101,21 @@ class SAPAPIClient:
             tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
             tax_total = line.get('TaxTotal', 0) or 0
             
-            # Calculate Gross Profit = LineTotal - cost_price
-            gross_profit = line_total - cost_price
+            # Calculate line_total_after_discount if header discount exists
+            # Discount is applied at header level, but we show line_total_after_discount for viewing
+            line_total_after_discount = line_total
+            if discount_percent and discount_percent > 0:
+                line_total_after_discount = line_total * (1 - discount_percent / 100)
+            
+            # Calculate Gross Profit = LineTotal after discount - cost_price
+            gross_profit = line_total_after_discount - cost_price
             
             # Apply sign multiplier to item amounts
             quantity = quantity * sign_multiplier # Quantity also needs to be signed for credit memos
             price = price * sign_multiplier
             price_after_vat = price_after_vat * sign_multiplier
             line_total = line_total * sign_multiplier
+            line_total_after_discount = line_total_after_discount * sign_multiplier
             cost_price = cost_price * sign_multiplier
             gross_profit = gross_profit * sign_multiplier
             tax_total = tax_total * sign_multiplier
@@ -1101,6 +1129,7 @@ class SAPAPIClient:
                 'price_after_vat': price_after_vat,
                 'discount_percent': discount_percent_line,
                 'line_total': line_total,
+                'line_total_after_discount': line_total_after_discount,
                 'cost_price': cost_price,
                 'gross_profit': gross_profit,
                 'tax_percentage': tax_percentage,
@@ -1128,6 +1157,7 @@ class SAPAPIClient:
             'bp_reference_no': bp_reference or '',
             'doc_total': doc_total,
             'doc_total_without_vat': doc_total_without_vat,
+            'subtotal_before_discount': subtotal_before_discount,
             'vat_sum': vat_sum,
             'total_gross_profit': total_gross_profit,
             'discount_percent': discount_percent,

@@ -379,6 +379,16 @@
         <div class="card-header">Invoice Totals</div>
         <div class="card-body">
           <div class="totals-list">
+            {% if invoice.discount_percent and invoice.discount_percent > 0 %}
+            <div class="totals-row">
+              <div class="totals-label">Subtotal Before Discount</div>
+              <div class="totals-value">{{ subtotal_before_discount|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Discount ({{ invoice.discount_percent|floatformat:1 }}%)</div>
+              <div class="totals-value">-{{ discount_amount|floatformat:2 }}</div>
+            </div>
+            {% endif %}
             <div class="totals-row">
               <div class="totals-label">Subtotal (without VAT)</div>
               <div class="totals-value">{{ subtotal|floatformat:2 }}</div>
@@ -387,12 +397,6 @@
             <div class="totals-row">
               <div class="totals-label">Rounding {{ rounding_diff_amount|floatformat:2 }}</div>
               <div class="totals-value">—</div>
-            </div>
-            {% endif %}
-            {% if discount_amount > 0 %}
-            <div class="totals-row">
-              <div class="totals-label">Discount ({{ invoice.discount_percent|floatformat:1 }}%)</div>
-              <div class="totals-value">-{{ discount_amount|floatformat:2 }}</div>
             </div>
             {% endif %}
             <div class="totals-row">
@@ -439,6 +443,7 @@
                 <th class="num">Unit Price</th>
                 <th class="num">Price After VAT</th>
                 <th class="num">Line Total</th>
+                <th class="num">net Line Total</th>
                 <th class="num">Total Cost</th>
                 <th class="num">Gross Profit</th>
                 
@@ -455,6 +460,7 @@
                 <td class="num">{{ item.price|floatformat:2 }}</td>
                 <td class="num">{{ item.price_after_vat|floatformat:2 }}</td>
                 <td class="num">{{ item.line_total|floatformat:2 }}</td>
+                <td class="num">{% if item.line_total_after_discount is not None %}{{ item.line_total_after_discount|floatformat:2 }}{% else %}{{ item.line_total|floatformat:2 }}{% endif %}</td>
                 <td class="num">{% if item.cost_price is not None %}{{ item.cost_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="num">{% if item.gross_profit is not None %}{{ item.gross_profit|floatformat:2 }}{% else %}—{% endif %}</td>
               </tr>

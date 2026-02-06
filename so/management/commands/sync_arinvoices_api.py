@@ -334,6 +334,7 @@ class Command(BaseCommand):
                                 "bp_reference_no": mapped.get('bp_reference_no', ''),
                                 "doc_total": _dec2(mapped.get('doc_total', 0)),
                                 "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
+                                "subtotal_before_discount": _dec2(mapped.get('subtotal_before_discount', 0)),
                                 "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                                 "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
                                 "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
@@ -364,7 +365,7 @@ class Command(BaseCommand):
                             update_fields = [
                                 "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
                                 "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
-                                "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
+                                "doc_total", "doc_total_without_vat", "subtotal_before_discount", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                                 "cancel_status", "document_status", "vat_number", "comments"
                             ]
                             SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
@@ -410,6 +411,7 @@ class Command(BaseCommand):
                                         price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                                         discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                                         line_total=_dec_any(item_data.get('line_total', 0)),
+                                        line_total_after_discount=_dec_any(item_data.get('line_total_after_discount', 0)),
                                         cost_price=_dec_any(item_data.get('cost_price', 0)),
                                         gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                                         tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
