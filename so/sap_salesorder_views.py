@@ -5332,11 +5332,13 @@ def sync_arinvoices_api_receive(request):
                     "customer_address": mapped.get('customer_address', ''),
                     "salesman_name": mapped.get('salesman_name', ''),
                     "salesman_code": mapped.get('salesman_code'),
+                    "store": mapped.get('store', 'HO'),
                     "bp_reference_no": mapped.get('bp_reference_no', ''),
                     "doc_total": _dec2(mapped.get('doc_total', 0)),
                     "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
                     "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                     "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                    "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
                     "discount_percent": _dec2(mapped.get('discount_percent', 0)),
                     "cancel_status": mapped.get('cancel_status', ''),
                     "document_status": mapped.get('document_status', ''),
@@ -5823,6 +5825,7 @@ def sync_arcreditmemos_api_receive(request):
                     "doc_total_without_vat": _dec2(mapped.get('doc_total_without_vat', 0)),
                     "vat_sum": _dec2(mapped.get('vat_sum', 0)),
                     "rounding_diff_amount": _dec2(mapped.get('rounding_diff_amount', 0)),
+                    "total_gross_profit": _dec2(mapped.get('total_gross_profit', 0)),
                     "discount_percent": _dec2(mapped.get('discount_percent', 0)),
                     "cancel_status": mapped.get('cancel_status', ''),
                     "document_status": mapped.get('document_status', ''),
@@ -5848,7 +5851,7 @@ def sync_arcreditmemos_api_receive(request):
                 update_fields = [
                     "internal_number", "posting_date", "doc_due_date", "customer_code", "customer_name",
                     "customer_address", "salesman_name", "salesman_code", "store", "bp_reference_no",
-                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "discount_percent",
+                    "doc_total", "doc_total_without_vat", "vat_sum", "rounding_diff_amount", "total_gross_profit", "discount_percent",
                     "cancel_status", "document_status", "vat_number", "comments"
                 ]
                 SAPARCreditMemo.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
