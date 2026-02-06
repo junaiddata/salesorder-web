@@ -126,6 +126,55 @@
             text-align: center;
         }
 
+        /* Dropdown Menu Styles */
+        .sidebar-nav li.has-submenu {
+            position: relative;
+        }
+
+        .sidebar-nav li.has-submenu > a {
+            cursor: pointer;
+        }
+
+        .sidebar-nav li.has-submenu > a::after {
+            content: '\f107';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            margin-left: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-nav li.has-submenu.open > a::after {
+            transform: rotate(180deg);
+        }
+
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0.5rem 0 0 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .sidebar-nav li.has-submenu.open .submenu {
+            max-height: 500px;
+        }
+
+        .submenu li {
+            margin-bottom: 0.25rem;
+        }
+
+        .submenu a {
+            padding: 0.625rem 1rem 0.625rem 3rem;
+            font-size: 0.9rem;
+            color: var(--gray-400);
+        }
+
+        .submenu a:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: var(--gray-200);
+        }
+
         .live-badge-small {
             position: absolute;
             top: 4px;
@@ -690,6 +739,27 @@
                     Proforma Invoices
                     <span class="live-badge-small">LIVE</span>
                 </a>
+            </li>
+            <li class="has-submenu">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    Sales Invoices
+                    <span class="live-badge-small">LIVE</span>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{% url 'arinvoice_list' %}">
+                            <i class="fas fa-file-invoice"></i>
+                            AR Invoices
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'arcreditmemo_list' %}">
+                            <i class="fas fa-file-invoice"></i>
+                            Credit Memos
+                        </a>
+                    </li>
+                </ul>
             </li>
             <!-- <li>
                 <a href="{% url 'open_so_dashboard' %}">
