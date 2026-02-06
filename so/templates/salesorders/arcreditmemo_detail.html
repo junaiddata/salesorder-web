@@ -399,13 +399,14 @@
               <div class="totals-label">VAT</div>
               <div class="totals-value">{{ vat_amount|floatformat:2 }}</div>
             </div>
-            <div class="totals-row">
-              <div class="totals-label">Total Gross Profit</div>
-              <div class="totals-value">{{ total_gross_profit|floatformat:2 }}</div>
-            </div>
+
             <div class="totals-row grand">
               <div class="totals-label">Grand Total (with VAT)</div>
               <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Total GP</div>
+              <div class="totals-value">{{ total_gross_profit|floatformat:2 }}</div>
             </div>
           </div>
         </div>
@@ -432,16 +433,15 @@
               <tr>
                 <th>Line</th>
                 <th>Item Code</th>
+                <th>UPC Code</th>
                 <th>Description</th>
                 <th class="num">Quantity</th>
                 <th class="num">Unit Price</th>
                 <th class="num">Price After VAT</th>
-                <th class="num">Tax %</th>
-                <th class="num">Tax Total</th>
                 <th class="num">Line Total</th>
                 <th class="num">Cost Price</th>
                 <th class="num">Gross Profit</th>
-                <th>UPC Code</th>
+                
               </tr>
             </thead>
             <tbody>
@@ -449,16 +449,15 @@
               <tr>
                 <td>{{ item.line_no }}</td>
                 <td><strong>{{ item.item_code }}</strong></td>
+                <td>{{ item.upc_code|default:"—" }}</td>
                 <td>{{ item.item_description }}</td>
                 <td class="num">{{ item.quantity|floatformat:2 }}</td>
                 <td class="num">{{ item.price|floatformat:2 }}</td>
                 <td class="num">{{ item.price_after_vat|floatformat:2 }}</td>
-                <td class="num">{{ item.tax_percentage|floatformat:2 }}%</td>
-                <td class="num">{{ item.tax_total|floatformat:2 }}</td>
                 <td class="num">{{ item.line_total|floatformat:2 }}</td>
                 <td class="num">{% if item.cost_price is not None %}{{ item.cost_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="num">{% if item.gross_profit is not None %}{{ item.gross_profit|floatformat:2 }}{% else %}—{% endif %}</td>
-                <td>{{ item.upc_code|default:"—" }}</td>
+                
               </tr>
               {% empty %}
               <tr>
