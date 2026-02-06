@@ -5691,6 +5691,8 @@ def sync_arcreditmemos_from_api(request):
                                 price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
                                 discount_percent=_dec_any(item_data.get('discount_percent', 0)),
                                 line_total=_dec_any(item_data.get('line_total', 0)),
+                                cost_price=_dec_any(item_data.get('cost_price', 0)),
+                                gross_profit=_dec_any(item_data.get('gross_profit', 0)),
                                 tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
                                 tax_total=_dec_any(item_data.get('tax_total', 0)),
                                 upc_code=item_data.get('upc_code', ''),

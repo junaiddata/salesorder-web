@@ -565,6 +565,7 @@ class SAPARCreditMemo(models.Model):
     doc_total_without_vat = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="DocTotal - VatSum - RoundingDiffAmount (if negative like -10.4, subtracting it gives actual subtotal)")
     vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="VatSum from API")
     rounding_diff_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="RoundingDiffAmount from API (subtracted from doc_total_without_vat, not from doc_total)")
+    total_gross_profit = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Total Gross Profit = sum of all item gross_profit (calculated)")
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="DiscountPercent from API")
     cancel_status = models.CharField(max_length=50, blank=True, null=True, help_text="CancelStatus: csNo, csYes, csCancellation")
     document_status = models.CharField(max_length=50, blank=True, null=True, help_text="DocumentStatus from API")
