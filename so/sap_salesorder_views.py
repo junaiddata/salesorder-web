@@ -6243,6 +6243,7 @@ def export_arinvoice_list_excel(request):
             'Doc Total (with VAT)': float(invoice.doc_total) if invoice.doc_total else 0.0,
             'Total (without VAT)': float(invoice.doc_total_without_vat) if invoice.doc_total_without_vat else 0.0,
             'VAT Amount': float(invoice.vat_sum) if invoice.vat_sum else 0.0,
+            'Total GP': float(invoice.total_gross_profit) if invoice.total_gross_profit else 0.0,
             'Cancel Status': cancel_status_display,
             'VAT Number': invoice.vat_number or '',
             'Due Date': invoice.doc_due_date.strftime('%Y-%m-%d') if invoice.doc_due_date else '',
@@ -6270,7 +6271,7 @@ def export_arinvoice_list_excel(request):
             cell.alignment = Alignment(horizontal="center", vertical="center")
         
         # Format number columns (currency)
-        currency_columns = ['Doc Total (with VAT)', 'Total (without VAT)', 'VAT Amount']
+        currency_columns = ['Doc Total (with VAT)', 'Total (without VAT)', 'VAT Amount', 'Total GP']
         for col_idx, col_name in enumerate(df.columns, 1):
             if col_name in currency_columns:
                 for row_idx in range(2, len(df) + 2):
