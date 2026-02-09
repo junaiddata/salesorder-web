@@ -46,16 +46,16 @@ class Command(BaseCommand):
             # Sync AR Invoices
             self.stdout.write(self.style.WARNING('Syncing AR Invoices...'))
             call_command('sync_arinvoices_api', **invoice_args)
-            self.stdout.write(self.style.SUCCESS('✓ AR Invoices sync completed'))
+            self.stdout.write(self.style.SUCCESS('[OK] AR Invoices sync completed'))
             
             # Sync AR Credit Memos
             self.stdout.write(self.style.WARNING('Syncing AR Credit Memos...'))
             call_command('sync_arcreditmemos_api', **creditmemo_args)
-            self.stdout.write(self.style.SUCCESS('✓ AR Credit Memos sync completed'))
+            self.stdout.write(self.style.SUCCESS('[OK] AR Credit Memos sync completed'))
             
-            self.stdout.write(self.style.SUCCESS('\n✓ All sync operations completed successfully!'))
+            self.stdout.write(self.style.SUCCESS('\n[OK] All sync operations completed successfully!'))
             
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'\n✗ Error during sync: {str(e)}'))
+            self.stdout.write(self.style.ERROR(f'\n[ERROR] Error during sync: {str(e)}'))
             logger.error(f'Error syncing sales data: {str(e)}', exc_info=True)
             raise

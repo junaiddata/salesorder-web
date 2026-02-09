@@ -236,7 +236,7 @@ class Command(BaseCommand):
                 logger.warning(f'  {len(mapping_errors)} credit memos failed to map (out of {len(all_creditmemos)})')
             
             logger.info(f'  Successfully mapped {len(mapped_creditmemos)} credit memos')
-            self.stdout.write(self.style.SUCCESS(f'  ✓ Mapped {len(mapped_creditmemos)} credit memos'))
+            self.stdout.write(self.style.SUCCESS(f'  [OK] Mapped {len(mapped_creditmemos)} credit memos'))
             
             # Get list of credit memo numbers from API response
             api_creditmemo_numbers = [m['credit_memo_number'] for m in mapped_creditmemos if m.get('credit_memo_number')]
@@ -360,7 +360,7 @@ class Command(BaseCommand):
                         if to_create:
                             SAPARCreditMemo.objects.bulk_create(to_create, batch_size=5000)
                             logger.info(f'  Created {len(to_create)} credit memos')
-                            self.stdout.write(self.style.SUCCESS(f'  ✓ Created {len(to_create)} credit memos'))
+                            self.stdout.write(self.style.SUCCESS(f'  [OK] Created {len(to_create)} credit memos'))
                         
                         if to_update:
                             update_fields = [
@@ -371,7 +371,7 @@ class Command(BaseCommand):
                             ]
                             SAPARCreditMemo.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
                             logger.info(f'  Updated {len(to_update)} credit memos')
-                            self.stdout.write(self.style.SUCCESS(f'  ✓ Updated {len(to_update)} credit memos'))
+                            self.stdout.write(self.style.SUCCESS(f'  [OK] Updated {len(to_update)} credit memos'))
                         
                         # Re-fetch ids for FK mapping
                         creditmemo_id_map = dict(
@@ -430,15 +430,15 @@ class Command(BaseCommand):
                         
                         local_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_creditmemos)
                         
-                        logger.info(f'  ✓ Saved {local_stats["total_items"]} items')
-                        self.stdout.write(self.style.SUCCESS(f'  ✓ Saved {local_stats["total_items"]} items'))
-                        logger.info(f'  ✓ Local save completed: {local_stats["created"]} created, {local_stats["updated"]} updated')
-                        self.stdout.write(self.style.SUCCESS(f'  ✓ Local save completed: {local_stats["created"]} created, {local_stats["updated"]} updated'))
+                        logger.info(f'  [OK] Saved {local_stats["total_items"]} items')
+                        self.stdout.write(self.style.SUCCESS(f'  [OK] Saved {local_stats["total_items"]} items'))
+                        logger.info(f'  [OK] Local save completed: {local_stats["created"]} created, {local_stats["updated"]} updated')
+                        self.stdout.write(self.style.SUCCESS(f'  [OK] Local save completed: {local_stats["created"]} created, {local_stats["updated"]} updated'))
                         
                 except Exception as e:
-                    logger.error(f'  ✗ Error saving to local database: {e}')
+                    logger.error(f'  [ERROR] Error saving to local database: {e}')
                     logger.exception('Error saving to local database')
-                    self.stdout.write(self.style.ERROR(f'  ✗ Error saving to local database: {e}'))
+                    self.stdout.write(self.style.ERROR(f'  [ERROR] Error saving to local database: {e}'))
                     raise
             else:
                 # Step 3: Send to VPS via HTTP API (in batches to avoid request size limits)
@@ -495,12 +495,12 @@ class Command(BaseCommand):
                                 total_updated += batch_updated
                                 total_items += batch_items
                                 
-                                logger.info(f'    ✓ Batch {batch_idx + 1} completed (took {send_duration:.2f}s): {batch_created} created, {batch_updated} updated, {batch_items} items')
-                                self.stdout.write(self.style.SUCCESS(f'    ✓ Batch {batch_idx + 1} completed: {batch_created} created, {batch_updated} updated'))
+                                logger.info(f'    [OK] Batch {batch_idx + 1} completed (took {send_duration:.2f}s): {batch_created} created, {batch_updated} updated, {batch_items} items')
+                                self.stdout.write(self.style.SUCCESS(f'    [OK] Batch {batch_idx + 1} completed: {batch_created} created, {batch_updated} updated'))
                             else:
                                 error_msg = f"VPS returned error for batch {batch_idx + 1}: {error}"
-                                logger.error(f'    ✗ {error_msg}')
-                                self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: {error}'))
+                                logger.error(f'    [ERROR] {error_msg}')
+                                self.stdout.write(self.style.ERROR(f'    [ERROR] Batch {batch_idx + 1} failed: {error}'))
                                 failed_batches += 1
                                 
                         except requests.HTTPError as e:
@@ -512,29 +512,29 @@ class Command(BaseCommand):
                             except Exception:
                                 resp_text = ""
                             error_msg = f"Failed to send batch {batch_idx + 1} to VPS: HTTP {status_code}"
-                            logger.error(f'    ✗ {error_msg}')
+                            logger.error(f'    [ERROR] {error_msg}')
                             if resp_text:
                                 logger.error('    VPS response body (truncated):')
                                 logger.error(resp_text[:2000])
-                            self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: HTTP {status_code}'))
+                            self.stdout.write(self.style.ERROR(f'    [ERROR] Batch {batch_idx + 1} failed: HTTP {status_code}'))
                             if resp_text:
                                 self.stdout.write(self.style.ERROR(f'    Error: {resp_text[:500]}'))
                             failed_batches += 1
                             
                         except requests.RequestException as e:
                             error_msg = f"Failed to send batch {batch_idx + 1} to VPS: {str(e)}"
-                            logger.error(f'    ✗ {error_msg}')
+                            logger.error(f'    [ERROR] {error_msg}')
                             logger.exception(f'Error sending batch {batch_idx + 1} to VPS')
-                            self.stdout.write(self.style.ERROR(f'    ✗ Batch {batch_idx + 1} failed: {str(e)}'))
+                            self.stdout.write(self.style.ERROR(f'    [ERROR] Batch {batch_idx + 1} failed: {str(e)}'))
                             failed_batches += 1
                     
                     # Summary
                     if failed_batches == 0:
-                        logger.info(f'  ✓ Successfully synced all batches to VPS')
+                        logger.info(f'  [OK] Successfully synced all batches to VPS')
                         logger.info(f'    Total Created: {total_created}')
                         logger.info(f'    Total Updated: {total_updated}')
                         logger.info(f'    Total Items: {total_items}')
-                        self.stdout.write(self.style.SUCCESS(f'  ✓ Successfully synced all batches to VPS'))
+                        self.stdout.write(self.style.SUCCESS(f'  [OK] Successfully synced all batches to VPS'))
                         self.stdout.write(self.style.SUCCESS(f'    Total: {total_created} created, {total_updated} updated, {total_items} items'))
                     else:
                         logger.warning(f'  ⚠ Completed with {failed_batches} failed batches out of {total_batches}')
@@ -545,9 +545,9 @@ class Command(BaseCommand):
                         
                 except Exception as e:
                     error_msg = f"Unexpected error during batch sync: {str(e)}"
-                    logger.error(f'  ✗ {error_msg}')
+                    logger.error(f'  [ERROR] {error_msg}')
                     logger.exception('Unexpected error during batch sync')
-                    self.stdout.write(self.style.ERROR(f'  ✗ {error_msg}'))
+                    self.stdout.write(self.style.ERROR(f'  [ERROR] {error_msg}'))
                     return
             
             # Summary
@@ -595,6 +595,6 @@ class Command(BaseCommand):
             logger.exception('Full error traceback:')
             logger.info('')  # Empty line for readability
             
-            self.stdout.write(self.style.ERROR(f'\n✗ Error during sync: {e}'))
+            self.stdout.write(self.style.ERROR(f'\n[ERROR] Error during sync: {e}'))
             logger.exception('Error during sync')
             raise

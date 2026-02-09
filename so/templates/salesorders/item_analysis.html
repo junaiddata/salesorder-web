@@ -829,6 +829,14 @@
           </tbody>
         </table>
       </div>
+      
+      <!-- Pagination and Count -->
+      {% if page_obj.paginator.num_pages > 1 %}
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      {% endif %}
+      <div class="total-count" style="margin-top: 16px; text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
+        Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count|intcomma }}</strong> items
+      </div>
     </div>
   </div>
 
@@ -1040,6 +1048,25 @@
       clearBtn.addEventListener('click', function() {
         window.location.href = '{% url "item_analysis" %}';
       });
+
+      // Pagination handling - preserve all filters when navigating pages
+      const pagination = document.querySelector('.pagination');
+      if (pagination) {
+        pagination.addEventListener('click', function(e) {
+          const a = e.target.closest('a[data-page]');
+          if (!a) return;
+          e.preventDefault();
+          
+          // Get current URL parameters
+          const currentParams = new URLSearchParams(window.location.search);
+          
+          // Update page number
+          currentParams.set('page', a.getAttribute('data-page'));
+          
+          // Navigate with all filters preserved
+          window.location.href = '{% url "item_analysis" %}?' + currentParams.toString();
+        });
+      }
     });
   </script>
 </body>

@@ -7851,23 +7851,7 @@ def item_analysis(request):
     # Sort by total sales across all years (descending)
     items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
     
-    # Restructure data for easier template access - convert years_data to list of tuples
-    for item in items_list:
-        # Create a list with year data in order
-        item['year_list'] = []
-        for year in years:
-            if year in item['years_data']:
-                item['year_list'].append(item['years_data'][year])
-            else:
-                item['year_list'].append({
-                    'total_sales': Decimal('0'),
-                    'total_gp': Decimal('0'),
-                    'gp_percent': Decimal('0'),
-                    'avg_rate': Decimal('0'),
-                    'total_quantity': Decimal('0')
-                })
-    
-    # Calculate totals for each year
+    # Calculate totals for each year BEFORE pagination (from all items)
     year_totals = {}
     for year in years:
         year_totals[year] = {
@@ -7899,8 +7883,35 @@ def item_analysis(request):
     for year in years:
         totals_list.append(year_totals[year])
     
+    # Restructure data for easier template access - convert years_data to list of tuples
+    for item in items_list:
+        # Create a list with year data in order
+        item['year_list'] = []
+        for year in years:
+            if year in item['years_data']:
+                item['year_list'].append(item['years_data'][year])
+            else:
+                item['year_list'].append({
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'gp_percent': Decimal('0'),
+                    'avg_rate': Decimal('0'),
+                    'total_quantity': Decimal('0')
+                })
+    
+    # Paginate items - show 1000 items per page
+    page_size = 1000
+    paginator = Paginator(items_list, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Total count for display
+    total_count = len(items_list)
+    
     context = {
-        'items': items_list,
+        'items': page_obj,  # Pass paginated items
+        'page_obj': page_obj,  # Also pass as page_obj for pagination template
+        'total_count': total_count,  # Total count for display
         'years': years,
         'is_admin': is_admin,
         'current_year': current_year,
