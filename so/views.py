@@ -4444,16 +4444,28 @@ def process_finance_data(finance_data):
             existing_map = {c.customer_code: c for c in existing_customers}
             
             # Get all unique salesman names and map them
+            # Only include customers with valid mappings
             salesman_names = set()
             salesman_name_mapping = {}  # Maps SAP name to mapped name
+            skipped_count = 0
+            
             for record in finance_data:
                 sap_salesman_name = record.get('Sales Employee', '').strip()
                 if sap_salesman_name:
-                    # Map the SAP name to simplified name
-                    mapped_name = map_salesman_name(sap_salesman_name)
+                    # Map the SAP name to simplified name (strict mode - returns None if no mapping)
+                    mapped_name = map_salesman_name(sap_salesman_name, strict=True)
                     if mapped_name:
                         salesman_names.add(mapped_name)
                         salesman_name_mapping[sap_salesman_name] = mapped_name
+                    else:
+                        # No mapping found - will skip this customer
+                        skipped_count += 1
+                else:
+                    # Empty salesman name - will skip this customer
+                    skipped_count += 1
+            
+            if skipped_count > 0:
+                logger.info(f"Skipping {skipped_count} customers without valid salesman mapping")
             
             # Get or create salesmen in bulk (using mapped names)
             salesman_map = {}
@@ -4475,11 +4487,20 @@ def process_finance_data(finance_data):
                     sap_salesman_name = record.get('Sales Employee', '').strip()
                     
                     # Handle salesman - map SAP name to simplified name
+                    # Skip customers without valid mapping
                     salesman = None
                     if sap_salesman_name:
-                        mapped_name = map_salesman_name(sap_salesman_name)
+                        mapped_name = map_salesman_name(sap_salesman_name, strict=True)
                         if mapped_name:
                             salesman = salesman_map.get(mapped_name)
+                        else:
+                            # No mapping found - skip this customer
+                            stats['errors'].append(f"Customer {card_code}: No mapping for salesman '{sap_salesman_name}', skipping")
+                            continue
+                    else:
+                        # Empty salesman name - skip this customer
+                        stats['errors'].append(f"Customer {card_code}: Empty salesman name, skipping")
+                        continue
                     
                     # Map finance fields (reversed mapping)
                     credit_limit = safe_float(record.get('CreditLimit', 0))

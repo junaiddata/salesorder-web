@@ -83,7 +83,9 @@ def get_business_category(salesman_name):
         "A.DIP KADAR",
         "B.MR.JAFAR",
         "A.MR.RASHID -2",
-        "B.MR.JUNAID"
+        "B.MR.JUNAID",
+        "A. RAFIQ SHABBIR - RASHID",
+        "A. RAFIQ ABU - RASHID",
     ]
     
     # Trading names list (will be normalized for comparison)

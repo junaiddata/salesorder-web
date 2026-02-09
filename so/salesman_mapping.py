@@ -26,15 +26,16 @@ SALESMAN_MAPPING = {
 }
 
 
-def map_salesman_name(sap_name):
+def map_salesman_name(sap_name, strict=True):
     """
     Map SAP salesman name to simplified name
     
     Args:
         sap_name: Salesman name from SAP API (e.g., "A.MR.RASHID")
+        strict: If True, return None for unmapped names. If False, return original name.
     
     Returns:
-        Simplified name (e.g., "RASHID") or None if input is None/empty
+        Simplified name (e.g., "RASHID") or None if no mapping found (when strict=True)
     """
     if not sap_name:
         return None
@@ -50,5 +51,8 @@ def map_salesman_name(sap_name):
         if sap_name.startswith(sap_key) or sap_key in sap_name:
             return mapped_name
     
-    # Return original if no mapping found
-    return sap_name
+    # Return None if strict mode (for filtering), or original if not strict
+    if strict:
+        return None  # No mapping found, should be ignored
+    else:
+        return sap_name  # Return original for backward compatibility
