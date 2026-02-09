@@ -7468,7 +7468,17 @@ def sales_analysis_dashboard(request):
     elif period == 'year':
         top_invoices = top_invoices.filter(posting_date__year=current_year)
         top_creditmemos = top_creditmemos.filter(posting_date__year=current_year)
-    # 'all' or no period means use date range filters (already applied in apply_common_filters)
+    else:
+        # 'all' or no period means use year filter and date range filters
+        # Apply year filter if specified (not 'Total')
+        if year_filter and year_filter != 'Total':
+            try:
+                year_num = int(year_filter)
+                top_invoices = top_invoices.filter(posting_date__year=year_num)
+                top_creditmemos = top_creditmemos.filter(posting_date__year=year_num)
+            except (ValueError, TypeError):
+                pass
+        # Date range filters already applied in apply_common_filters
     
     # Aggregate by customer_code only (not name) to combine customers with same code but different names
     from django.db.models import Max
@@ -7607,7 +7617,17 @@ def sales_analysis_dashboard(request):
     elif period == 'year':
         top_items_invoices = top_items_invoices.filter(posting_date__year=current_year)
         top_items_creditmemos = top_items_creditmemos.filter(posting_date__year=current_year)
-    # 'all' or no period means use date range filters (already applied in apply_common_filters)
+    else:
+        # 'all' or no period means use year filter and date range filters
+        # Apply year filter if specified (not 'Total')
+        if year_filter and year_filter != 'Total':
+            try:
+                year_num = int(year_filter)
+                top_items_invoices = top_items_invoices.filter(posting_date__year=year_num)
+                top_items_creditmemos = top_items_creditmemos.filter(posting_date__year=year_num)
+            except (ValueError, TypeError):
+                pass
+        # Date range filters already applied in apply_common_filters
     
     # Aggregate invoice items by item_code only (not description) to combine items with same code but different names
     # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
