@@ -7497,30 +7497,32 @@ def sales_analysis_dashboard(request):
         latest_posting_date=Max('posting_date')
     ).order_by('-total_sales')
     
-    # Get latest customer names per customer_code (one query for all)
+    # Get latest customer names and salesman names per customer_code (one query for all)
     invoice_customer_codes = [item['customer_code'] for item in invoice_customers if item.get('customer_code')]
     creditmemo_customer_codes = [item['customer_code'] for item in creditmemo_customers if item.get('customer_code')]
     all_customer_codes = list(set(invoice_customer_codes + creditmemo_customer_codes))
     
     customer_name_map = {}
+    customer_salesman_map = {}
     if all_customer_codes:
-        # Get latest customer names from invoices
+        # Get latest customer names and salesman names from invoices
         latest_invoice_customers = SAPARInvoice.objects.filter(
             customer_code__in=all_customer_codes
         ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
-            'customer_code', 'customer_name', 'posting_date'
+            'customer_code', 'customer_name', 'salesman_name', 'posting_date'
         ).order_by('customer_code', '-posting_date', '-id')
         
         for cust in latest_invoice_customers:
             code = cust['customer_code']
             if code and code not in customer_name_map:
                 customer_name_map[code] = cust['customer_name'] or 'Unknown'
+                customer_salesman_map[code] = cust.get('salesman_name') or ''
         
-        # Get latest customer names from credit memos (update if newer)
+        # Get latest customer names and salesman names from credit memos (update if newer)
         latest_creditmemo_customers = SAPARCreditMemo.objects.filter(
             customer_code__in=all_customer_codes
         ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
-            'customer_code', 'customer_name', 'posting_date'
+            'customer_code', 'customer_name', 'salesman_name', 'posting_date'
         ).order_by('customer_code', '-posting_date', '-id')
         
         for cust in latest_creditmemo_customers:
@@ -7529,6 +7531,44 @@ def sales_analysis_dashboard(request):
                 # Update if this is a new customer or if we don't have a name yet
                 if code not in customer_name_map:
                     customer_name_map[code] = cust['customer_name'] or 'Unknown'
+                    customer_salesman_map[code] = cust.get('salesman_name') or ''
+                # Update salesman if this posting_date is newer (check if we have a date)
+                elif code in customer_salesman_map:
+                    # We'll update salesman based on latest posting_date in the aggregation below
+                    pass
+    
+    # Get latest salesman names per customer_code based on latest posting_date
+    # Get salesman from invoices with latest posting_date per customer (one query)
+    customer_salesman_final_map = {}
+    if all_customer_codes:
+        # Get latest salesman from invoices per customer_code
+        latest_invoice_salesmen = top_invoices.filter(
+            customer_code__in=all_customer_codes
+        ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+            'customer_code', 'salesman_name', 'posting_date'
+        ).order_by('customer_code', '-posting_date', '-id')
+        
+        for inv in latest_invoice_salesmen:
+            code = inv['customer_code']
+            if code and code not in customer_salesman_final_map:
+                customer_salesman_final_map[code] = inv.get('salesman_name') or ''
+        
+        # Get latest salesman from credit memos per customer_code (update if newer)
+        latest_creditmemo_salesmen = top_creditmemos.filter(
+            customer_code__in=all_customer_codes
+        ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+            'customer_code', 'salesman_name', 'posting_date'
+        ).order_by('customer_code', '-posting_date', '-id')
+        
+        for cm in latest_creditmemo_salesmen:
+            code = cm['customer_code']
+            if code and code not in customer_salesman_final_map:
+                customer_salesman_final_map[code] = cm.get('salesman_name') or ''
+        
+        # Fill in any missing salesman names from the initial map
+        for code in all_customer_codes:
+            if code not in customer_salesman_final_map:
+                customer_salesman_final_map[code] = customer_salesman_map.get(code, '')
     
     # Combine and aggregate customers by customer_code only
     customer_dict = {}
@@ -7537,6 +7577,7 @@ def sales_analysis_dashboard(request):
         if not code:
             continue
         name = customer_name_map.get(code, 'Unknown')
+        salesman = customer_salesman_final_map.get(code, '')
         latest_date = item.get('latest_posting_date')
         key = code  # Use customer_code only as key
         
@@ -7544,19 +7585,22 @@ def sales_analysis_dashboard(request):
             customer_dict[key] = {
                 'customer_code': code,
                 'customer_name': name,
+                'salesman_name': salesman,
                 'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'document_count': 0
             }
         else:
-            # Update name if this posting_date is newer
+            # Update name and salesman if this posting_date is newer
             if latest_date and customer_dict[key].get('latest_posting_date'):
                 if latest_date > customer_dict[key]['latest_posting_date']:
                     customer_dict[key]['customer_name'] = name
+                    customer_dict[key]['salesman_name'] = salesman
                     customer_dict[key]['latest_posting_date'] = latest_date
             elif latest_date:
                 customer_dict[key]['customer_name'] = name
+                customer_dict[key]['salesman_name'] = salesman
                 customer_dict[key]['latest_posting_date'] = latest_date
         
         customer_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')
@@ -7568,6 +7612,7 @@ def sales_analysis_dashboard(request):
         if not code:
             continue
         name = customer_name_map.get(code, 'Unknown')
+        salesman = customer_salesman_final_map.get(code, '')
         latest_date = item.get('latest_posting_date')
         key = code  # Use customer_code only as key
         
@@ -7575,19 +7620,22 @@ def sales_analysis_dashboard(request):
             customer_dict[key] = {
                 'customer_code': code,
                 'customer_name': name,
+                'salesman_name': salesman,
                 'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'document_count': 0
             }
         else:
-            # Update name if this posting_date is newer
+            # Update name and salesman if this posting_date is newer
             if latest_date and customer_dict[key].get('latest_posting_date'):
                 if latest_date > customer_dict[key]['latest_posting_date']:
                     customer_dict[key]['customer_name'] = name
+                    customer_dict[key]['salesman_name'] = salesman
                     customer_dict[key]['latest_posting_date'] = latest_date
             elif latest_date:
                 customer_dict[key]['customer_name'] = name
+                customer_dict[key]['salesman_name'] = salesman
                 customer_dict[key]['latest_posting_date'] = latest_date
         
         customer_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')

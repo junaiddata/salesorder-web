@@ -754,6 +754,7 @@
             <th class="rank">#</th>
             <th>Customer Code</th>
             <th>Customer Name</th>
+            <th>Salesman</th>
             <th>Total Sales</th>
             {% if is_admin %}<th>Total GP</th>{% endif %}
             <th>Documents</th>
@@ -765,13 +766,14 @@
             <td class="rank">{{ forloop.counter }}</td>
             <td>{{ customer.customer_code|default:"—" }}</td>
             <td>{{ customer.customer_name|default:"Unknown" }}</td>
+            <td>{{ customer.salesman_name|default:"—" }}</td>
             <td>{{ customer.total_sales|default:0|floatformat:2|intcomma }}</td>
             {% if is_admin %}<td>{{ customer.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
             <td>{{ customer.document_count }}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="{% if is_admin %}6{% else %}5{% endif %}" style="text-align: center; color: var(--text-muted); padding: 40px;">
+            <td colspan="{% if is_admin %}7{% else %}6{% endif %}" style="text-align: center; color: var(--text-muted); padding: 40px;">
               No customer data available
             </td>
           </tr>
