@@ -4395,6 +4395,7 @@ def process_finance_data(finance_data):
     Similar to sync_customer_finance_summary but accepts data directly instead of fetching
     """
     from so.models import Customer, Salesman
+    from so.salesman_mapping import map_salesman_name
     from django.db import transaction
     import logging
     
@@ -4442,18 +4443,23 @@ def process_finance_data(finance_data):
             existing_customers = Customer.objects.filter(customer_code__in=customer_codes)
             existing_map = {c.customer_code: c for c in existing_customers}
             
-            # Get all unique salesman names
+            # Get all unique salesman names and map them
             salesman_names = set()
+            salesman_name_mapping = {}  # Maps SAP name to mapped name
             for record in finance_data:
-                salesman_name = record.get('Sales Employee', '').strip()
-                if salesman_name and salesman_name != '-No Sales Employee-':
-                    salesman_names.add(salesman_name)
+                sap_salesman_name = record.get('Sales Employee', '').strip()
+                if sap_salesman_name:
+                    # Map the SAP name to simplified name
+                    mapped_name = map_salesman_name(sap_salesman_name)
+                    if mapped_name:
+                        salesman_names.add(mapped_name)
+                        salesman_name_mapping[sap_salesman_name] = mapped_name
             
-            # Get or create salesmen in bulk
+            # Get or create salesmen in bulk (using mapped names)
             salesman_map = {}
-            for salesman_name in salesman_names:
-                salesman, _ = Salesman.objects.get_or_create(salesman_name=salesman_name)
-                salesman_map[salesman_name] = salesman
+            for mapped_name in salesman_names:
+                salesman, _ = Salesman.objects.get_or_create(salesman_name=mapped_name)
+                salesman_map[mapped_name] = salesman
             
             to_create = []
             to_update = []
@@ -4466,12 +4472,14 @@ def process_finance_data(finance_data):
                         continue
                     
                     card_name = record.get('CardName', '').strip() or card_code
-                    salesman_name = record.get('Sales Employee', '').strip()
+                    sap_salesman_name = record.get('Sales Employee', '').strip()
                     
-                    # Handle salesman
+                    # Handle salesman - map SAP name to simplified name
                     salesman = None
-                    if salesman_name and salesman_name != '-No Sales Employee-':
-                        salesman = salesman_map.get(salesman_name)
+                    if sap_salesman_name:
+                        mapped_name = map_salesman_name(sap_salesman_name)
+                        if mapped_name:
+                            salesman = salesman_map.get(mapped_name)
                     
                     # Map finance fields (reversed mapping)
                     credit_limit = safe_float(record.get('CreditLimit', 0))
