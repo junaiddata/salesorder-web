@@ -7410,19 +7410,38 @@ def sales_analysis_dashboard(request):
     # 'all' or no period means use date range filters (already applied in apply_common_filters)
     
     # Aggregate invoice items by item_code and item_description
+    # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
+    from django.db.models import Case, When, F, Q
     invoice_items_agg = SAPARInvoiceItem.objects.filter(
         invoice__in=top_items_invoices
     ).values('item_code', 'item_description').annotate(
-        total_sales=Coalesce(Sum('line_total_after_discount'), Value(0, output_field=DecimalField())),
+        total_sales=Sum(
+            Case(
+                When(
+                    Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                    then=F('line_total_after_discount')
+                ),
+                default=F('line_total')
+            )
+        ),
         total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
         total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     
     # Aggregate credit memo items by item_code and item_description
+    # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
     creditmemo_items_agg = SAPARCreditMemoItem.objects.filter(
         credit_memo__in=top_items_creditmemos
     ).values('item_code', 'item_description').annotate(
-        total_sales=Coalesce(Sum('line_total_after_discount'), Value(0, output_field=DecimalField())),
+        total_sales=Sum(
+            Case(
+                When(
+                    Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                    then=F('line_total_after_discount')
+                ),
+                default=F('line_total')
+            )
+        ),
         total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
         total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
