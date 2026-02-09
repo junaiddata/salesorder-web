@@ -1475,13 +1475,35 @@ def home(request):
             year_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
         )
     
-    # Calculate Last 5 Days Sales (skip days with 0.00 sales, e.g., Sundays)
-    last_5_days = []
+    # Calculate This Week Total (from last Monday to today, or just today if today is Monday)
+    today_weekday = today.weekday()  # Monday is 0, Sunday is 6
+    if today_weekday == 0:  # Today is Monday
+        week_start = today
+    else:
+        # Calculate days back to last Monday
+        days_back = today_weekday
+        week_start = today - timedelta(days=days_back)
+    
+    week_invoices = invoice_qs.filter(posting_date__gte=week_start, posting_date__lte=today)
+    week_creditmemos = creditmemo_qs.filter(posting_date__gte=week_start, posting_date__lte=today)
+    week_sales = (
+        week_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+        week_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+    )
+    week_gp = Decimal('0')
+    if is_admin:
+        week_gp = (
+            week_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+            week_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+        )
+    
+    # Calculate Last 6 Days Sales (skip days with 0.00 sales, e.g., Sundays)
+    last_6_days = []
     days_checked = 0
     i = 1
     
-    # Keep checking days until we have 5 days with sales > 0
-    while days_checked < 20 and len(last_5_days) < 5:  # Max 20 days back to avoid infinite loop
+    # Keep checking days until we have 6 days with sales > 0
+    while days_checked < 25 and len(last_6_days) < 6:  # Max 25 days back to avoid infinite loop
         day_date = today - timedelta(days=i)
         
         # Apply store filter for this day's data
@@ -1519,7 +1541,7 @@ def home(request):
             month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
             formatted_date = f"{day_date.day}{day_suffix} {month_names[day_date.month - 1]}"
             
-            last_5_days.append({
+            last_6_days.append({
                 'date': day_date,
                 'formatted_date': formatted_date,
                 'sales': day_sales or Decimal('0'),
@@ -1535,9 +1557,11 @@ def home(request):
         'month_gp': month_gp or Decimal('0'),
         'year_sales': year_sales or Decimal('0'),
         'year_gp': year_gp or Decimal('0'),
+        'week_sales': week_sales or Decimal('0'),
+        'week_gp': week_gp or Decimal('0'),
         'is_admin': is_admin,
         'store_filter': store_filter,
-        'last_5_days': last_5_days,
+        'last_6_days': last_6_days,
     })
 
 def sales_home(request):
