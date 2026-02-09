@@ -4296,3 +4296,271 @@ def device_pending(request):
 
     # 4. If still not approved, show the pending page
     return render(request, 'so/device_pending.html')
+
+
+@login_required
+def sync_customer_finance_summary(request):
+    """
+    View endpoint to sync customer finance summary from FinanceSummary API
+    Returns JSON response with sync statistics
+    """
+    from so.management.commands.sync_customer_finance import sync_customer_finance_summary as sync_function
+    
+    try:
+        stats = sync_function()
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats,
+            'message': f'Sync completed: {stats["created"]} created, {stats["updated"]} updated'
+        })
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Error syncing customer finance summary")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_POST
+def sync_customer_finance_api_receive(request):
+    """
+    Receive customer finance summary data from PC script via HTTP API
+    This endpoint is called by the PC sync script
+    """
+    from so.management.commands.sync_customer_finance import sync_customer_finance_summary as sync_function
+    from django.conf import settings
+    import json
+    
+    try:
+        # Get data from request (JSON)
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            # Try to parse as JSON anyway
+            try:
+                data = json.loads(request.body)
+            except:
+                data = request.POST.dict()
+        
+        # Verify API key
+        api_key = data.get('api_key')
+        expected_key = getattr(settings, 'VPS_API_KEY', 'your-secret-api-key')
+        
+        if not api_key or api_key != expected_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key'
+            }, status=401)
+        
+        finance_data = data.get('finance_data', [])
+        
+        if not finance_data:
+            return JsonResponse({
+                'success': False,
+                'error': 'No finance data provided'
+            })
+        
+        # Process finance data using the sync function
+        # We need to modify the sync function to accept data directly
+        # For now, let's use the existing sync function which fetches from API
+        # We'll need to create a version that accepts data directly
+        
+        # Call sync function (it will fetch from API, but we can override this)
+        # Actually, we need to create a version that processes the provided data
+        stats = process_finance_data(finance_data)
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats,
+            'message': f'Synced {len(finance_data)} customer finance records successfully'
+        })
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Error receiving customer finance data")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def process_finance_data(finance_data):
+    """
+    Process customer finance data and sync to Customer model
+    Similar to sync_customer_finance_summary but accepts data directly instead of fetching
+    """
+    from so.models import Customer, Salesman
+    from django.db import transaction
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    stats = {
+        'created': 0,
+        'updated': 0,
+        'errors': []
+    }
+    
+    # Helper function to safely convert to float
+    def safe_float(value, default=0.0):
+        """Safely convert value to float"""
+        if value is None:
+            return default
+        try:
+            if isinstance(value, str) and value.strip() == '':
+                return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    # Helper function to safely convert to string
+    def safe_str(value, default='0', max_length=None):
+        """Safely convert value to string"""
+        if value is None:
+            return default
+        try:
+            result = str(value).strip()
+            if result == '' or result.lower() == 'null' or result == '-Null-':
+                return default
+            if max_length and len(result) > max_length:
+                return result[:max_length]
+            return result
+        except Exception:
+            return default
+    
+    try:
+        with transaction.atomic():
+            # Get all customer codes from API data
+            customer_codes = [record.get('CardCode') for record in finance_data if record.get('CardCode')]
+            
+            # Fetch existing customers in bulk
+            existing_customers = Customer.objects.filter(customer_code__in=customer_codes)
+            existing_map = {c.customer_code: c for c in existing_customers}
+            
+            # Get all unique salesman names
+            salesman_names = set()
+            for record in finance_data:
+                salesman_name = record.get('Sales Employee', '').strip()
+                if salesman_name and salesman_name != '-No Sales Employee-':
+                    salesman_names.add(salesman_name)
+            
+            # Get or create salesmen in bulk
+            salesman_map = {}
+            for salesman_name in salesman_names:
+                salesman, _ = Salesman.objects.get_or_create(salesman_name=salesman_name)
+                salesman_map[salesman_name] = salesman
+            
+            to_create = []
+            to_update = []
+            
+            for record in finance_data:
+                try:
+                    card_code = record.get('CardCode', '').strip()
+                    if not card_code:
+                        stats['errors'].append("Record missing CardCode, skipping")
+                        continue
+                    
+                    card_name = record.get('CardName', '').strip() or card_code
+                    salesman_name = record.get('Sales Employee', '').strip()
+                    
+                    # Handle salesman
+                    salesman = None
+                    if salesman_name and salesman_name != '-No Sales Employee-':
+                        salesman = salesman_map.get(salesman_name)
+                    
+                    # Map finance fields (reversed mapping)
+                    credit_limit = safe_float(record.get('CreditLimit', 0))
+                    credit_days = safe_str(record.get('CreditDays', '0'), default='0', max_length=30)
+                    # Reverse mapping: API "1" → month_pending_6, API "2" → month_pending_5, etc.
+                    month_pending_1 = safe_float(record.get('6', 0))  # API "6" → month_pending_1
+                    month_pending_2 = safe_float(record.get('5', 0))  # API "5" → month_pending_2
+                    month_pending_3 = safe_float(record.get('4', 0))  # API "4" → month_pending_3
+                    month_pending_4 = safe_float(record.get('3', 0))  # API "3" → month_pending_4
+                    month_pending_5 = safe_float(record.get('2', 0))  # API "2" → month_pending_5
+                    month_pending_6 = safe_float(record.get('1', 0))  # API "1" → month_pending_6
+                    old_months_pending = safe_float(record.get('6+', 0))
+                    total_outstanding = safe_float(record.get('BalanceDue', 0))
+                    pdc_received = safe_float(record.get('ChecksBal', 0))
+                    total_outstanding_with_pdc = total_outstanding + pdc_received
+                    
+                    # Check if customer exists
+                    customer = existing_map.get(card_code)
+                    
+                    if customer is None:
+                        # Create new customer
+                        customer = Customer(
+                            customer_code=card_code,
+                            customer_name=card_name,
+                            salesman=salesman,
+                            credit_limit=credit_limit,
+                            credit_days=credit_days,
+                            month_pending_1=month_pending_1,
+                            month_pending_2=month_pending_2,
+                            month_pending_3=month_pending_3,
+                            month_pending_4=month_pending_4,
+                            month_pending_5=month_pending_5,
+                            month_pending_6=month_pending_6,
+                            old_months_pending=old_months_pending,
+                            total_outstanding=total_outstanding,
+                            pdc_received=pdc_received,
+                            total_outstanding_with_pdc=total_outstanding_with_pdc
+                        )
+                        to_create.append(customer)
+                        stats['created'] += 1
+                    else:
+                        # Update existing customer
+                        customer.customer_name = card_name
+                        customer.salesman = salesman
+                        customer.credit_limit = credit_limit
+                        customer.credit_days = credit_days
+                        customer.month_pending_1 = month_pending_1
+                        customer.month_pending_2 = month_pending_2
+                        customer.month_pending_3 = month_pending_3
+                        customer.month_pending_4 = month_pending_4
+                        customer.month_pending_5 = month_pending_5
+                        customer.month_pending_6 = month_pending_6
+                        customer.old_months_pending = old_months_pending
+                        customer.total_outstanding = total_outstanding
+                        customer.pdc_received = pdc_received
+                        customer.total_outstanding_with_pdc = total_outstanding_with_pdc
+                        to_update.append(customer)
+                        stats['updated'] += 1
+                        
+                except Exception as e:
+                    error_msg = f"Error processing record {record.get('CardCode', 'UNKNOWN')}: {str(e)}"
+                    logger.error(error_msg)
+                    logger.exception(f"Error processing finance record")
+                    stats['errors'].append(error_msg)
+                    continue
+            
+            # Bulk create/update
+            if to_create:
+                Customer.objects.bulk_create(to_create, batch_size=1000)
+                logger.info(f"Created {len(to_create)} customers")
+            
+            if to_update:
+                update_fields = [
+                    'customer_name', 'salesman', 'credit_limit', 'credit_days',
+                    'month_pending_1', 'month_pending_2', 'month_pending_3',
+                    'month_pending_4', 'month_pending_5', 'month_pending_6',
+                    'old_months_pending', 'total_outstanding', 'pdc_received',
+                    'total_outstanding_with_pdc'
+                ]
+                Customer.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)
+                logger.info(f"Updated {len(to_update)} customers")
+            
+            logger.info(f"Sync completed: {stats['created']} created, {stats['updated']} updated, {len(stats['errors'])} errors")
+            
+    except Exception as e:
+        error_msg = f"Error during sync transaction: {str(e)}"
+        logger.error(error_msg)
+        logger.exception("Error during sync transaction")
+        stats['errors'].append(error_msg)
+        raise
+    
+    return stats

@@ -27,6 +27,8 @@ urlpatterns = [
     path('customers/', views.customer_list, name='customer_list'),
     path('customers/add/', views.add_customer, name='add_customer'),
     path('customers/delete/<int:customer_id>/', views.delete_customer, name='delete_customer'),
+    path('customers/sync-finance/', views.sync_customer_finance_summary, name='sync_customer_finance_summary'),
+    path('customers/sync-finance-api-receive/', views.sync_customer_finance_api_receive, name='sync_customer_finance_api_receive'),
 
     ################ ITEM MANAGEMENT ##################
     path('items/', views.item_list, name='item_list'),

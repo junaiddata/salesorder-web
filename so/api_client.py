@@ -1197,3 +1197,44 @@ class SAPAPIClient:
             'rounding_diff_amount': rounding_diff_amount,
             'items': items,
         }
+    
+    def fetch_finance_summary(self) -> List[Dict]:
+        """
+        Fetch customer finance summary data from FinanceSummary API endpoint
+        
+        Returns:
+            List of customer finance records from API
+        """
+        base_url = getattr(settings, 'SAP_FINANCE_SUMMARY_API_URL', 'http://192.168.1.103/IntegrationApi/api/FinanceSummary')
+        logger.info("Fetching customer finance summary from API...")
+        
+        try:
+            response = requests.get(
+                base_url,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # API returns data in format: {"Count": 4499, "Data": [...]}
+            if isinstance(data, dict):
+                finance_data = data.get('Data', [])
+                count = data.get('Count', len(finance_data))
+                logger.info(f"Fetched {len(finance_data)} customer finance records (Total: {count})")
+                return finance_data
+            elif isinstance(data, list):
+                logger.info(f"Fetched {len(data)} customer finance records")
+                return data
+            else:
+                logger.warning(f"Unexpected API response format: {type(data)}")
+                return []
+                
+        except requests.exceptions.Timeout:
+            logger.error(f"API request timeout after {self.timeout}s: {base_url}")
+            return []
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request error: {e}, url: {base_url}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error in finance summary API request: {e}, url: {base_url}")
+            return []

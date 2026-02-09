@@ -7826,10 +7826,12 @@ def item_analysis(request):
         year_creditmemos = creditmemo_qs.filter(posting_date__year=year)
         
         # Get invoice items for this year - EXCLUDE items without item_code
+        # Group by item_code only (not description) to combine items with same code but different names
         # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
+        from django.db.models import Max
         invoice_items = SAPARInvoiceItem.objects.filter(
             invoice__in=year_invoices
-        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'item_description', 'upc_code').annotate(
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
             total_sales=Sum(
                 Case(
                     When(
@@ -7841,14 +7843,18 @@ def item_analysis(request):
             ),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
             total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
-            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField()))
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            # Get latest description based on latest posting_date
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('invoice__posting_date')
         )
         
         # Get credit memo items for this year - EXCLUDE items without item_code
+        # Group by item_code only (not description) to combine items with same code but different names
         # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
         creditmemo_items = SAPARCreditMemoItem.objects.filter(
             credit_memo__in=year_creditmemos
-        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'item_description', 'upc_code').annotate(
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
             total_sales=Sum(
                 Case(
                     When(
@@ -7860,7 +7866,10 @@ def item_analysis(request):
             ),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
             total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
-            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField()))
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            # Get latest description based on latest posting_date
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('credit_memo__posting_date')
         )
         
         # Apply firm filter if provided (filter by item_code matching firm items)
@@ -7885,23 +7894,59 @@ def item_analysis(request):
                 Q(upc_code__icontains=search_query)
             )
         
+        # Convert querysets to lists to avoid multiple evaluations
+        invoice_items_list = list(invoice_items)
+        creditmemo_items_list = list(creditmemo_items)
+        
+        # Get latest descriptions per item_code for invoices (one query for all)
+        invoice_item_codes = [item['item_code'] for item in invoice_items_list if item.get('item_code')]
+        invoice_desc_map = {}
+        if invoice_item_codes:
+            latest_invoice_descs = SAPARInvoiceItem.objects.filter(
+                invoice__in=year_invoices,
+                item_code__in=invoice_item_codes
+            ).exclude(item_code__isnull=True).exclude(item_code='').values(
+                'item_code', 'item_description', 'invoice__posting_date'
+            ).order_by('item_code', '-invoice__posting_date', '-id')
+            
+            # Group by item_code and take the first (latest) description
+            for desc_item in latest_invoice_descs:
+                code = desc_item['item_code']
+                if code and code not in invoice_desc_map:
+                    invoice_desc_map[code] = desc_item['item_description'] or 'Unknown'
+        
         # Combine invoice and credit memo items
-        for item in invoice_items:
+        # Group by item_code only (not description) to combine items with same code but different names
+        for item in invoice_items_list:
             code = item['item_code'] or ''
-            desc = item['item_description'] or 'Unknown'
             upc = item.get('upc_code') or ''
+            latest_date = item.get('latest_posting_date')
+            desc = invoice_desc_map.get(code, 'Unknown')
             # Skip if no item code
             if not code:
                 continue
-            key = (code, desc)
+            
+            # Use item_code as key (not description) to combine items with same code
+            key = code
             
             if key not in item_data:
                 item_data[key] = {
                     'item_code': code,
                     'item_description': desc,
                     'upc_code': upc,
+                    'latest_posting_date': latest_date,
                     'years': {}
                 }
+            else:
+                # Update description if this posting_date is newer
+                if latest_date and item_data[key].get('latest_posting_date'):
+                    if latest_date > item_data[key]['latest_posting_date']:
+                        item_data[key]['item_description'] = desc
+                        item_data[key]['latest_posting_date'] = latest_date
+                elif latest_date:
+                    # If we don't have a date yet, use this one
+                    item_data[key]['item_description'] = desc
+                    item_data[key]['latest_posting_date'] = latest_date
             # Update UPC code if we have one and it's not already set
             if upc and not item_data[key].get('upc_code'):
                 item_data[key]['upc_code'] = upc
@@ -7923,22 +7968,53 @@ def item_analysis(request):
                 item_data[key]['years'][year]['rate_sum'] += (item['avg_rate'] or Decimal('0')) * (item['total_quantity'] or Decimal('1'))
                 item_data[key]['years'][year]['rate_count'] += 1
         
-        for item in creditmemo_items:
+        # Get latest descriptions per item_code for credit memos (one query for all)
+        creditmemo_item_codes = [item['item_code'] for item in creditmemo_items_list if item.get('item_code')]
+        creditmemo_desc_map = {}
+        if creditmemo_item_codes:
+            latest_creditmemo_descs = SAPARCreditMemoItem.objects.filter(
+                credit_memo__in=year_creditmemos,
+                item_code__in=creditmemo_item_codes
+            ).exclude(item_code__isnull=True).exclude(item_code='').values(
+                'item_code', 'item_description', 'credit_memo__posting_date'
+            ).order_by('item_code', '-credit_memo__posting_date', '-id')
+            
+            # Group by item_code and take the first (latest) description
+            for desc_item in latest_creditmemo_descs:
+                code = desc_item['item_code']
+                if code and code not in creditmemo_desc_map:
+                    creditmemo_desc_map[code] = desc_item['item_description'] or 'Unknown'
+        
+        for item in creditmemo_items_list:
             code = item['item_code'] or ''
-            desc = item['item_description'] or 'Unknown'
             upc = item.get('upc_code') or ''
+            latest_date = item.get('latest_posting_date')
+            desc = creditmemo_desc_map.get(code, 'Unknown')
             # Skip if no item code
             if not code:
                 continue
-            key = (code, desc)
+            
+            # Use item_code as key (not description) to combine items with same code
+            key = code
             
             if key not in item_data:
                 item_data[key] = {
                     'item_code': code,
                     'item_description': desc,
                     'upc_code': upc,
+                    'latest_posting_date': latest_date,
                     'years': {}
                 }
+            else:
+                # Update description if this posting_date is newer
+                if latest_date and item_data[key].get('latest_posting_date'):
+                    if latest_date > item_data[key]['latest_posting_date']:
+                        item_data[key]['item_description'] = desc
+                        item_data[key]['latest_posting_date'] = latest_date
+                elif latest_date:
+                    # If we don't have a date yet, use this one
+                    item_data[key]['item_description'] = desc
+                    item_data[key]['latest_posting_date'] = latest_date
             # Update UPC code if we have one and it's not already set
             if upc and not item_data[key].get('upc_code'):
                 item_data[key]['upc_code'] = upc
