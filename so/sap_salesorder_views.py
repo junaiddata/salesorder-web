@@ -45,10 +45,14 @@ def normalize_salesman_name(name):
     """Normalize salesman name for comparison (similar to PowerBI NormalizeName)"""
     if not name:
         return ""
-    # Convert to uppercase, strip, and normalize spaces
-    normalized = str(name).upper().strip()
-    # Replace multiple spaces with single space
     import re
+    # Convert to uppercase, strip
+    normalized = str(name).upper().strip()
+    # Normalize dots with spaces FIRST: "B. MR" -> "B.MR", "A. MR" -> "A.MR", etc.
+    # This handles cases where database has "B. MR" but list has "B.MR"
+    normalized = re.sub(r'\.\s+', '.', normalized)  # Remove space after dot: "B. MR" -> "B.MR"
+    normalized = re.sub(r'\s+\.', '.', normalized)  # Remove space before dot: "MR ." -> "MR."
+    # Replace multiple spaces with single space
     normalized = re.sub(r'\s+', ' ', normalized)
     return normalized
 
@@ -60,8 +64,8 @@ def get_business_category(salesman_name):
     
     nm = normalize_salesman_name(salesman_name)
     
-    # Project names list (normalized)
-    project_names = [
+    # Project names list (will be normalized for comparison)
+    project_names_raw = [
         "B.MR.NASHEER AHMAD",
         "D.RETAIL CUST DIP",
         "B.MR.MUZAIN",
@@ -82,8 +86,8 @@ def get_business_category(salesman_name):
         "B.MR.JUNAID"
     ]
     
-    # Trading names list (normalized)
-    trading_names = [
+    # Trading names list (will be normalized for comparison)
+    trading_names_raw = [
         "A.MR.RAFIQ",
         "D. ALABAMA",
         "A.MR.SIYAB",
@@ -91,6 +95,10 @@ def get_business_category(salesman_name):
         "A.MR.RASHID",
         "A.MR.RAFIQ AD"
     ]
+    
+    # Normalize all names in lists for comparison
+    project_names = [normalize_salesman_name(name) for name in project_names_raw]
+    trading_names = [normalize_salesman_name(name) for name in trading_names_raw]
     
     # Check categories
     if nm.startswith("E."):
