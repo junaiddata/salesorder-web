@@ -1418,13 +1418,17 @@ def home(request):
     store_filter = request.GET.get('store', 'HO').strip()
     
     # Get base querysets with salesman scope
-    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
-    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    invoice_qs_base = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs_base = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
     
-    # Apply store filter
-    if store_filter:
-        invoice_qs = invoice_qs.filter(store=store_filter)
-        creditmemo_qs = creditmemo_qs.filter(store=store_filter)
+    # Apply store filter (if not "Total", filter by store; if "Total", show all)
+    if store_filter and store_filter != 'Total':
+        invoice_qs = invoice_qs_base.filter(store=store_filter)
+        creditmemo_qs = creditmemo_qs_base.filter(store=store_filter)
+    else:
+        # "Total" means show all (HO + Others combined)
+        invoice_qs = invoice_qs_base
+        creditmemo_qs = creditmemo_qs_base
     
     # Check if user is admin
     is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
@@ -1471,6 +1475,59 @@ def home(request):
             year_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
         )
     
+    # Calculate Last 5 Days Sales (skip days with 0.00 sales, e.g., Sundays)
+    last_5_days = []
+    days_checked = 0
+    i = 1
+    
+    # Keep checking days until we have 5 days with sales > 0
+    while days_checked < 20 and len(last_5_days) < 5:  # Max 20 days back to avoid infinite loop
+        day_date = today - timedelta(days=i)
+        
+        # Apply store filter for this day's data
+        if store_filter and store_filter != 'Total':
+            day_invoices = invoice_qs_base.filter(posting_date=day_date, store=store_filter)
+            day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date, store=store_filter)
+        else:
+            day_invoices = invoice_qs_base.filter(posting_date=day_date)
+            day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date)
+        
+        day_sales = (
+            day_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+            day_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+        )
+        day_gp = Decimal('0')
+        if is_admin:
+            day_gp = (
+                day_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+                day_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+            )
+        
+        days_checked += 1
+        
+        # Skip days with 0.00 sales (e.g., Sundays)
+        if day_sales and day_sales > Decimal('0'):
+            # Format date (e.g., "8th Feb")
+            day_suffix = 'th'
+            if day_date.day in [1, 21, 31]:
+                day_suffix = 'st'
+            elif day_date.day in [2, 22]:
+                day_suffix = 'nd'
+            elif day_date.day in [3, 23]:
+                day_suffix = 'rd'
+            
+            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            formatted_date = f"{day_date.day}{day_suffix} {month_names[day_date.month - 1]}"
+            
+            last_5_days.append({
+                'date': day_date,
+                'formatted_date': formatted_date,
+                'sales': day_sales or Decimal('0'),
+                'gp': day_gp or Decimal('0'),
+            })
+        
+        i += 1
+    
     return render(request, 'so/home.html', {
         'today_sales': today_sales or Decimal('0'),
         'today_gp': today_gp or Decimal('0'),
@@ -1480,6 +1537,7 @@ def home(request):
         'year_gp': year_gp or Decimal('0'),
         'is_admin': is_admin,
         'store_filter': store_filter,
+        'last_5_days': last_5_days,
     })
 
 def sales_home(request):

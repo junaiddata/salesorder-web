@@ -889,6 +889,9 @@
                     <a href="?store=Others" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         Others
                     </a>
+                    <a href="?store=Total" class="store-tile-btn {% if store_filter == 'Total' %}active{% endif %}" style="display: inline-block; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                        Total
+                    </a>
                 </div>
             </div>
 
@@ -946,6 +949,31 @@
                         GP: AED {{year_gp|floatformat:2|intcomma}}
                     </div>
                     {% endif %}
+                </div>
+            </div>
+
+            <!-- Last 5 Days Sales -->
+            <div style="margin-top: 2rem; margin-bottom: 2rem;">
+                <div class="section-header">
+                    <h2 class="section-title">Last 5 Days</h2>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                    {% for day in last_5_days %}
+                    <div class="stat-card" style="padding: 1.25rem;">
+                        <div class="stat-header" style="margin-bottom: 0.75rem;">
+                            <div>
+                                <h3 class="stat-value" style="font-size: 1.5rem;">AED {{day.sales|floatformat:2|intcomma}}</h3>
+                                <p class="stat-label" style="font-size: 0.8rem; margin-top: 0.25rem;">{{day.formatted_date}}</p>
+                            </div>
+                        </div>
+                        {% if is_admin %}
+                        <div class="stat-change positive" style="margin-top: 0.5rem;">
+                            <i class="fas fa-chart-line"></i>
+                            GP: AED {{day.gp|floatformat:2|intcomma}}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
 
