@@ -42,7 +42,7 @@
     .container {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 24px 20px 60px;
+      padding: 16px 16px 40px;
     }
 
     /* Header */
@@ -51,12 +51,12 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
     .header-left h1 {
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 700;
       color: var(--text);
       letter-spacing: -0.02em;
@@ -64,7 +64,7 @@
 
     .header-left p {
       color: var(--text-secondary);
-      font-size: 0.938rem;
+      font-size: 0.875rem;
       margin-top: 2px;
     }
 
@@ -100,12 +100,121 @@
       color: var(--primary);
     }
 
+    /* Year Filter Tiles */
+    .year-filter-tiles {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .year-tile {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .year-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .year-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Category Filter Tiles */
+    .category-filter-tiles {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .category-tile {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .category-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .category-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Summary Box */
+    .summary-box {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+      color: white;
+    }
+
+    .summary-box h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 20px 0;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .summary-item {
+      text-align: center;
+    }
+
+    .summary-label {
+      font-size: 0.875rem;
+      opacity: 0.9;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .summary-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1.2;
+    }
+
     /* Metrics Cards */
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
     @media (min-width: 768px) {
@@ -118,7 +227,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 16px;
       box-shadow: var(--shadow);
       transition: all var(--transition);
     }
@@ -158,7 +267,7 @@
     .metric-icon.year { background: #fef3c7; color: var(--warning); }
 
     .metric-value {
-      font-size: 1.875rem;
+      font-size: 1.5rem;
       font-weight: 700;
       color: var(--text);
       margin-bottom: 4px;
@@ -174,7 +283,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 16px;
       margin-bottom: 24px;
       box-shadow: var(--shadow);
     }
@@ -333,8 +442,9 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 16px;
       box-shadow: var(--shadow);
+      margin-bottom: 16px;
     }
 
     .table-header {
@@ -425,8 +535,28 @@
       </div>
     </div>
 
+    <!-- Year Filter Tiles -->
+    <div class="year-filter-tiles">
+      <button type="button" class="year-tile {% if filters.year == '2026' or not filters.year %}active{% endif %}" data-year="2026">2026</button>
+      <button type="button" class="year-tile {% if filters.year == '2025' %}active{% endif %}" data-year="2025">2025</button>
+      <button type="button" class="year-tile {% if filters.year == '2024' %}active{% endif %}" data-year="2024">2024</button>
+      <button type="button" class="year-tile {% if filters.year == 'Total' %}active{% endif %}" data-year="Total">Total</button>
+      <input type="hidden" name="year" id="year-input" value="{{ filters.year|default:'2026' }}">
+    </div>
+
+    <!-- Category Filter Tiles -->
+    <div class="category-filter-tiles">
+      <button type="button" class="category-tile {% if filters.category == 'All' or not filters.category %}active{% endif %}" data-category="All">All Categories</button>
+      <button type="button" class="category-tile {% if filters.category == 'Project' %}active{% endif %}" data-category="Project">Project</button>
+      <button type="button" class="category-tile {% if filters.category == 'Trading' %}active{% endif %}" data-category="Trading">Trading</button>
+      <button type="button" class="category-tile {% if filters.category == 'Export' %}active{% endif %}" data-category="Export">Export</button>
+      <button type="button" class="category-tile {% if filters.category == 'Retail' %}active{% endif %}" data-category="Retail">Retail</button>
+      <button type="button" class="category-tile {% if filters.category == 'Others' %}active{% endif %}" data-category="Others">Others</button>
+      <input type="hidden" name="category" id="category-input" value="{{ filters.category|default:'All' }}">
+    </div>
+
     <!-- Top Filters Bar -->
-    <div class="filters-card" style="margin-bottom: 24px;">
+    <div class="filters-card" style="margin-bottom: 16px;">
       <form id="filters-form" method="GET" action="{% url 'sales_analysis_dashboard' %}">
         <div class="filters-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
           <div class="field">
@@ -512,6 +642,25 @@
           </div>
         </div>
       </form>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="summary-box">
+      <h2>Total Summary</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">Total Sales</div>
+          <div class="summary-value" id="total-sales">{{ total_sales|default:0|floatformat:2|intcomma }}</div>
+          <div class="summary-label" style="margin-top: 4px;">AED</div>
+        </div>
+        {% if is_admin %}
+        <div class="summary-item">
+          <div class="summary-label">Total GP</div>
+          <div class="summary-value" id="total-gp">{{ total_gp|default:0|floatformat:2|intcomma }}</div>
+          <div class="summary-label" style="margin-top: 4px;">AED</div>
+        </div>
+        {% endif %}
+      </div>
     </div>
 
     <!-- Metrics Cards -->
@@ -765,6 +914,18 @@
           }
         }
         
+        // Add year filter
+        const yearInput = document.getElementById('year-input');
+        if (yearInput && yearInput.value) {
+          params.set('year', yearInput.value);
+        }
+        
+        // Add category filter
+        const categoryInput = document.getElementById('category-input');
+        if (categoryInput && categoryInput.value) {
+          params.set('category', categoryInput.value);
+        }
+        
         // Add period filter (main period filter applies to all)
         const activePeriod = document.querySelector('.period-btn.active[data-period]');
         if (activePeriod) {
@@ -783,6 +944,32 @@
         
         // Update URL and reload page with filters
         window.location.href = '{% url "sales_analysis_dashboard" %}?' + params.toString();
+      });
+
+      // Year tile handlers
+      document.querySelectorAll('.year-tile').forEach(tile => {
+        tile.addEventListener('click', function() {
+          document.querySelectorAll('.year-tile').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          const yearInput = document.getElementById('year-input');
+          if (yearInput) {
+            yearInput.value = this.dataset.year;
+          }
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      });
+
+      // Category tile handlers
+      document.querySelectorAll('.category-tile').forEach(tile => {
+        tile.addEventListener('click', function() {
+          document.querySelectorAll('.category-tile').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          const categoryInput = document.getElementById('category-input');
+          if (categoryInput) {
+            categoryInput.value = this.dataset.category;
+          }
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
       });
 
       // Period button handlers - update form and submit (main period filter applies to all)

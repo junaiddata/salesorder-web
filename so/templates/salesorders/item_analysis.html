@@ -675,6 +675,32 @@
       </div>
     </div>
 
+    <!-- Category Filter Tiles -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Category:</label>
+        <button type="button" class="store-tile {% if filters.category == 'All' or not filters.category %}active{% endif %}" data-category="All">
+          All Categories
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Project' %}active{% endif %}" data-category="Project">
+          Project
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Trading' %}active{% endif %}" data-category="Trading">
+          Trading
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Export' %}active{% endif %}" data-category="Export">
+          Export
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Retail' %}active{% endif %}" data-category="Retail">
+          Retail
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Others' %}active{% endif %}" data-category="Others">
+          Others
+        </button>
+        <input type="hidden" name="category" id="category-input" value="{{ filters.category|default:'All' }}">
+      </div>
+    </div>
+
     <!-- Month Filter Tiles -->
     <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
       <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -993,7 +1019,7 @@
       });
 
       // Store filter tiles
-      const storeTiles = document.querySelectorAll('.store-tile');
+      const storeTiles = document.querySelectorAll('.store-tile[data-store]');
       const storeInput = document.getElementById('store-input');
       
       storeTiles.forEach(tile => {
@@ -1002,6 +1028,20 @@
           this.classList.add('active');
           if (storeInput) {
             storeInput.value = this.dataset.store || '';
+          }
+        });
+      });
+
+      // Category filter tiles
+      const categoryTiles = document.querySelectorAll('.store-tile[data-category]');
+      const categoryInput = document.getElementById('category-input');
+      
+      categoryTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          categoryTiles.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          if (categoryInput) {
+            categoryInput.value = this.dataset.category || 'All';
           }
         });
       });
@@ -1038,6 +1078,11 @@
             params.append('month', tile.dataset.month);
           }
         });
+        
+        // Add category filter
+        if (categoryInput && categoryInput.value) {
+          params.set('category', categoryInput.value);
+        }
         
         // Reload page with filters
         window.location.href = '{% url "item_analysis" %}?' + params.toString();

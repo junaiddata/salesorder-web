@@ -41,6 +41,87 @@ from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
 
 
+def normalize_salesman_name(name):
+    """Normalize salesman name for comparison (similar to PowerBI NormalizeName)"""
+    if not name:
+        return ""
+    # Convert to uppercase, strip, and normalize spaces
+    normalized = str(name).upper().strip()
+    # Replace multiple spaces with single space
+    import re
+    normalized = re.sub(r'\s+', ' ', normalized)
+    return normalized
+
+
+def get_business_category(salesman_name):
+    """Get business category based on salesman name"""
+    if not salesman_name:
+        return "Others"
+    
+    nm = normalize_salesman_name(salesman_name)
+    
+    # Project names list (normalized)
+    project_names = [
+        "B.MR.NASHEER AHMAD",
+        "D.RETAIL CUST DIP",
+        "B.MR.MUZAIN",
+        "A.MR.SIYAB CONT",
+        "B.MR.WASEEM",
+        "B.MR.RAFIQ ABU- PROJ",
+        "A.KRISHNAN",
+        "A.MR.RASHID CONT",
+        "B.MR.PARTHIBAN",
+        "A.DIP STEFFY",
+        "ANISH DIP",
+        "B.ANISH DIP",
+        "A.DIP ADIL",
+        "A.DIP MUZAMMIL",
+        "A.DIP KADAR",
+        "B.MR.JAFAR",
+        "A.MR.RASHID -2",
+        "B.MR.JUNAID"
+    ]
+    
+    # Trading names list (normalized)
+    trading_names = [
+        "A.MR.RAFIQ",
+        "D. ALABAMA",
+        "A.MR.SIYAB",
+        "A.MR.RAFIQ ABU-TRD",
+        "A.MR.RASHID",
+        "A.MR.RAFIQ AD"
+    ]
+    
+    # Check categories
+    if nm.startswith("E."):
+        return "Export"
+    elif nm.startswith("R."):
+        return "Retail"
+    elif nm in project_names:
+        return "Project"
+    elif nm in trading_names:
+        return "Trading"
+    else:
+        return "Others"
+
+
+def get_salesmen_by_category(category, queryset):
+    """Get salesman names filtered by business category"""
+    if category == "All":
+        return queryset.values_list('salesman_name', flat=True).distinct()
+    
+    # Get all unique salesman names from queryset
+    all_salesmen = queryset.exclude(salesman_name__isnull=True).exclude(salesman_name='').values_list('salesman_name', flat=True).distinct()
+    
+    # Filter by category
+    filtered_salesmen = []
+    for salesman in all_salesmen:
+        if get_business_category(salesman) == category:
+            filtered_salesmen.append(salesman)
+    
+    return filtered_salesmen
+
+
 # Map usernames -> the exact salesman_name values they are allowed to see.
 # Use lowercase keys for usernames.
 # This is the same map used for quotations
@@ -7157,11 +7238,22 @@ def sales_analysis_dashboard(request):
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     period = request.GET.get('period', '').strip()  # 'today', 'month', 'year', 'all'
+    year_filter = request.GET.get('year', '2026').strip()  # Year filter: '2024', '2025', '2026', or 'Total'
+    category_filter = request.GET.get('category', 'All').strip()  # Business category: 'Project', 'Trading', 'Export', 'Retail', 'Others', 'All'
     
     # Helper function to apply filters
     def apply_filters(qs):
         if store_filter:
             qs = qs.filter(store=store_filter)
+        
+        # Category filter (applies before salesman filter)
+        if category_filter and category_filter != 'All':
+            category_salesmen = get_salesmen_by_category(category_filter, qs)
+            if category_salesmen:
+                qs = qs.filter(salesman_name__in=category_salesmen)
+            else:
+                # No salesmen in this category, return empty queryset
+                qs = qs.none()
         
         if salesmen_filter:
             clean_salesmen = [s for s in salesmen_filter if s.strip()]
@@ -7191,17 +7283,28 @@ def sales_analysis_dashboard(request):
         start_date = parse_date(start)
         end_date = parse_date(end)
         
-        # Period filter overrides date range if specified
+        # Period filter first (if specified, it overrides year filter)
         if period == 'today':
             qs = qs.filter(posting_date=today)
         elif period == 'month':
             qs = qs.filter(posting_date__year=current_year, posting_date__month=current_month)
         elif period == 'year':
             qs = qs.filter(posting_date__year=current_year)
-        elif period == 'all':
-            pass  # No date filter
+        elif period == 'all' or not period:
+            # If period is 'all' or not specified, apply year filter if set
+            if year_filter and year_filter != 'Total':
+                try:
+                    year_num = int(year_filter)
+                    qs = qs.filter(posting_date__year=year_num)
+                except (ValueError, TypeError):
+                    pass
+            # Also apply date range if specified
+            if start_date:
+                qs = qs.filter(posting_date__gte=start_date)
+            if end_date:
+                qs = qs.filter(posting_date__lte=end_date)
         else:
-            # Use date range if period not specified
+            # Use date range if period not recognized (year filter already applied above)
             if start_date:
                 qs = qs.filter(posting_date__gte=start_date)
             if end_date:
@@ -7227,10 +7330,20 @@ def sales_analysis_dashboard(request):
     start_date = parse_date(start)
     end_date = parse_date(end)
     
-    # Helper function to apply common filters (store, salesman, month, date range) to a queryset
+    # Helper function to apply common filters (store, salesman, month, date range, category) to a queryset
     def apply_common_filters(qs):
         if store_filter:
             qs = qs.filter(store=store_filter)
+        
+        # Category filter (applies before salesman filter)
+        if category_filter and category_filter != 'All':
+            category_salesmen = get_salesmen_by_category(category_filter, qs)
+            if category_salesmen:
+                qs = qs.filter(salesman_name__in=category_salesmen)
+            else:
+                # No salesmen in this category, return empty queryset
+                qs = qs.none()
+        
         if salesmen_filter:
             clean_salesmen = [s for s in salesmen_filter if s.strip()]
             if clean_salesmen:
@@ -7314,6 +7427,26 @@ def sales_analysis_dashboard(request):
         total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
     )
     year_gp = year_gp_agg['total'] + year_gp_cm_agg['total']
+    
+    # Calculate Total Sales and GP (based on all filters applied)
+    total_invoices = apply_filters(invoice_qs)
+    total_creditmemos = apply_filters(creditmemo_qs)
+    
+    total_sales_agg = total_invoices.aggregate(
+        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
+    )
+    total_sales_cm_agg = total_creditmemos.aggregate(
+        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
+    )
+    total_sales = total_sales_agg['total'] + total_sales_cm_agg['total']
+    
+    total_gp_agg = total_invoices.aggregate(
+        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
+    )
+    total_gp_cm_agg = total_creditmemos.aggregate(
+        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
+    )
+    total_gp = total_gp_agg['total'] + total_gp_cm_agg['total']
     
     # Top 5 Customers calculation
     # Use the same filters as the main filters (store, salesman, month, date range)
@@ -7513,6 +7646,8 @@ def sales_analysis_dashboard(request):
         'month_gp': month_gp,
         'year_sales': year_sales,
         'year_gp': year_gp,
+        'total_sales': total_sales,
+        'total_gp': total_gp,
         'top_customers': top_customers,
         'top_items': top_items,
         'salesmen': all_salesmen,
@@ -7524,6 +7659,8 @@ def sales_analysis_dashboard(request):
             'start': start,
             'end': end,
             'period': period,
+            'year': year_filter,
+            'category': category_filter,
         },
         'current_year': current_year,
         'current_month': current_month,
@@ -7562,6 +7699,8 @@ def sales_analysis_dashboard(request):
                 'month_gp': float(month_gp),
                 'year_sales': float(year_sales),
                 'year_gp': float(year_gp),
+                'total_sales': float(total_sales),
+                'total_gp': float(total_gp),
             },
             'top_customers': top_customers_serialized,
             'top_items': top_items_serialized,
@@ -7593,10 +7732,22 @@ def item_analysis(request):
     month_filter = request.GET.getlist('month')  # Multi-select
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
+    category_filter = request.GET.get('category', 'All').strip()  # Business category filter
     
     # Get base querysets with salesman scope
     invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
     creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Apply category filter (applies before salesman filter)
+    if category_filter and category_filter != 'All':
+        category_salesmen = get_salesmen_by_category(category_filter, invoice_qs)
+        if category_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=category_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=category_salesmen)
+        else:
+            # No salesmen in this category, return empty querysets
+            invoice_qs = invoice_qs.none()
+            creditmemo_qs = creditmemo_qs.none()
     
     # Apply salesman filter
     if salesmen_filter:
@@ -7935,6 +8086,7 @@ def item_analysis(request):
             'month': month_filter,
             'start': start_date,
             'end': end_date,
+            'category': category_filter,
         },
     }
     
