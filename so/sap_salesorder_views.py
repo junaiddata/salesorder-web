@@ -7470,50 +7470,116 @@ def sales_analysis_dashboard(request):
         top_creditmemos = top_creditmemos.filter(posting_date__year=current_year)
     # 'all' or no period means use date range filters (already applied in apply_common_filters)
     
-    # Aggregate by customer for invoices
-    invoice_customers = top_invoices.values('customer_code', 'customer_name').annotate(
+    # Aggregate by customer_code only (not name) to combine customers with same code but different names
+    from django.db.models import Max
+    invoice_customers = top_invoices.values('customer_code').annotate(
         total_sales=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
         total_gp=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField())),
-        document_count=Count('id')
+        document_count=Count('id'),
+        latest_posting_date=Max('posting_date')
     ).order_by('-total_sales')
     
-    # Aggregate by customer for credit memos
-    creditmemo_customers = top_creditmemos.values('customer_code', 'customer_name').annotate(
+    # Aggregate by customer_code only (not name) to combine customers with same code but different names
+    creditmemo_customers = top_creditmemos.values('customer_code').annotate(
         total_sales=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
         total_gp=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField())),
-        document_count=Count('id')
+        document_count=Count('id'),
+        latest_posting_date=Max('posting_date')
     ).order_by('-total_sales')
     
-    # Combine and aggregate customers
+    # Get latest customer names per customer_code (one query for all)
+    invoice_customer_codes = [item['customer_code'] for item in invoice_customers if item.get('customer_code')]
+    creditmemo_customer_codes = [item['customer_code'] for item in creditmemo_customers if item.get('customer_code')]
+    all_customer_codes = list(set(invoice_customer_codes + creditmemo_customer_codes))
+    
+    customer_name_map = {}
+    if all_customer_codes:
+        # Get latest customer names from invoices
+        latest_invoice_customers = SAPARInvoice.objects.filter(
+            customer_code__in=all_customer_codes
+        ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+            'customer_code', 'customer_name', 'posting_date'
+        ).order_by('customer_code', '-posting_date', '-id')
+        
+        for cust in latest_invoice_customers:
+            code = cust['customer_code']
+            if code and code not in customer_name_map:
+                customer_name_map[code] = cust['customer_name'] or 'Unknown'
+        
+        # Get latest customer names from credit memos (update if newer)
+        latest_creditmemo_customers = SAPARCreditMemo.objects.filter(
+            customer_code__in=all_customer_codes
+        ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+            'customer_code', 'customer_name', 'posting_date'
+        ).order_by('customer_code', '-posting_date', '-id')
+        
+        for cust in latest_creditmemo_customers:
+            code = cust['customer_code']
+            if code:
+                # Update if this is a new customer or if we don't have a name yet
+                if code not in customer_name_map:
+                    customer_name_map[code] = cust['customer_name'] or 'Unknown'
+    
+    # Combine and aggregate customers by customer_code only
     customer_dict = {}
     for item in invoice_customers:
         code = item['customer_code'] or ''
-        name = item['customer_name'] or 'Unknown'
-        key = (code, name)
+        if not code:
+            continue
+        name = customer_name_map.get(code, 'Unknown')
+        latest_date = item.get('latest_posting_date')
+        key = code  # Use customer_code only as key
+        
         if key not in customer_dict:
             customer_dict[key] = {
                 'customer_code': code,
                 'customer_name': name,
+                'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'document_count': 0
             }
+        else:
+            # Update name if this posting_date is newer
+            if latest_date and customer_dict[key].get('latest_posting_date'):
+                if latest_date > customer_dict[key]['latest_posting_date']:
+                    customer_dict[key]['customer_name'] = name
+                    customer_dict[key]['latest_posting_date'] = latest_date
+            elif latest_date:
+                customer_dict[key]['customer_name'] = name
+                customer_dict[key]['latest_posting_date'] = latest_date
+        
         customer_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')
         customer_dict[key]['total_gp'] += item['total_gp'] or Decimal('0')
         customer_dict[key]['document_count'] += item['document_count']
     
     for item in creditmemo_customers:
         code = item['customer_code'] or ''
-        name = item['customer_name'] or 'Unknown'
-        key = (code, name)
+        if not code:
+            continue
+        name = customer_name_map.get(code, 'Unknown')
+        latest_date = item.get('latest_posting_date')
+        key = code  # Use customer_code only as key
+        
         if key not in customer_dict:
             customer_dict[key] = {
                 'customer_code': code,
                 'customer_name': name,
+                'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'document_count': 0
             }
+        else:
+            # Update name if this posting_date is newer
+            if latest_date and customer_dict[key].get('latest_posting_date'):
+                if latest_date > customer_dict[key]['latest_posting_date']:
+                    customer_dict[key]['customer_name'] = name
+                    customer_dict[key]['latest_posting_date'] = latest_date
+            elif latest_date:
+                customer_dict[key]['customer_name'] = name
+                customer_dict[key]['latest_posting_date'] = latest_date
+        
         customer_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')
         customer_dict[key]['total_gp'] += item['total_gp'] or Decimal('0')
         customer_dict[key]['document_count'] += item['document_count']
@@ -7543,12 +7609,12 @@ def sales_analysis_dashboard(request):
         top_items_creditmemos = top_items_creditmemos.filter(posting_date__year=current_year)
     # 'all' or no period means use date range filters (already applied in apply_common_filters)
     
-    # Aggregate invoice items by item_code and item_description
+    # Aggregate invoice items by item_code only (not description) to combine items with same code but different names
     # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
-    from django.db.models import Case, When, F, Q
+    from django.db.models import Case, When, F, Q, Max
     invoice_items_agg = SAPARInvoiceItem.objects.filter(
         invoice__in=top_items_invoices
-    ).values('item_code', 'item_description').annotate(
+    ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code').annotate(
         total_sales=Sum(
             Case(
                 When(
@@ -7559,14 +7625,15 @@ def sales_analysis_dashboard(request):
             )
         ),
         total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
-        total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+        total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+        latest_posting_date=Max('invoice__posting_date')
     )
     
-    # Aggregate credit memo items by item_code and item_description
+    # Aggregate credit memo items by item_code only (not description) to combine items with same code but different names
     # Use line_total_after_discount if available and not zero, otherwise fall back to line_total
     creditmemo_items_agg = SAPARCreditMemoItem.objects.filter(
         credit_memo__in=top_items_creditmemos
-    ).values('item_code', 'item_description').annotate(
+    ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code').annotate(
         total_sales=Sum(
             Case(
                 When(
@@ -7577,39 +7644,103 @@ def sales_analysis_dashboard(request):
             )
         ),
         total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
-        total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+        total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+        latest_posting_date=Max('credit_memo__posting_date')
     )
     
-    # Combine and aggregate items
+    # Get latest item descriptions per item_code (one query for all)
+    invoice_item_codes = [item['item_code'] for item in invoice_items_agg if item.get('item_code')]
+    creditmemo_item_codes = [item['item_code'] for item in creditmemo_items_agg if item.get('item_code')]
+    all_item_codes = list(set(invoice_item_codes + creditmemo_item_codes))
+    
+    item_desc_map = {}
+    if all_item_codes:
+        # Get latest descriptions from invoice items
+        latest_invoice_items = SAPARInvoiceItem.objects.filter(
+            invoice__in=top_items_invoices,
+            item_code__in=all_item_codes
+        ).exclude(item_code__isnull=True).exclude(item_code='').values(
+            'item_code', 'item_description', 'invoice__posting_date'
+        ).order_by('item_code', '-invoice__posting_date', '-id')
+        
+        for item in latest_invoice_items:
+            code = item['item_code']
+            if code and code not in item_desc_map:
+                item_desc_map[code] = item['item_description'] or 'Unknown'
+        
+        # Get latest descriptions from credit memo items (update if newer)
+        latest_creditmemo_items = SAPARCreditMemoItem.objects.filter(
+            credit_memo__in=top_items_creditmemos,
+            item_code__in=all_item_codes
+        ).exclude(item_code__isnull=True).exclude(item_code='').values(
+            'item_code', 'item_description', 'credit_memo__posting_date'
+        ).order_by('item_code', '-credit_memo__posting_date', '-id')
+        
+        for item in latest_creditmemo_items:
+            code = item['item_code']
+            if code and code not in item_desc_map:
+                item_desc_map[code] = item['item_description'] or 'Unknown'
+    
+    # Combine and aggregate items by item_code only
     item_dict = {}
     for item in invoice_items_agg:
         code = item['item_code'] or ''
-        desc = item['item_description'] or 'Unknown'
-        key = (code, desc)
+        if not code:
+            continue
+        desc = item_desc_map.get(code, 'Unknown')
+        latest_date = item.get('latest_posting_date')
+        key = code  # Use item_code only as key
+        
         if key not in item_dict:
             item_dict[key] = {
                 'item_code': code,
                 'item_description': desc,
+                'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'total_quantity': Decimal('0')
             }
+        else:
+            # Update description if this posting_date is newer
+            if latest_date and item_dict[key].get('latest_posting_date'):
+                if latest_date > item_dict[key]['latest_posting_date']:
+                    item_dict[key]['item_description'] = desc
+                    item_dict[key]['latest_posting_date'] = latest_date
+            elif latest_date:
+                item_dict[key]['item_description'] = desc
+                item_dict[key]['latest_posting_date'] = latest_date
+        
         item_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')
         item_dict[key]['total_gp'] += item['total_gp'] or Decimal('0')
         item_dict[key]['total_quantity'] += item['total_quantity'] or Decimal('0')
     
     for item in creditmemo_items_agg:
         code = item['item_code'] or ''
-        desc = item['item_description'] or 'Unknown'
-        key = (code, desc)
+        if not code:
+            continue
+        desc = item_desc_map.get(code, 'Unknown')
+        latest_date = item.get('latest_posting_date')
+        key = code  # Use item_code only as key
+        
         if key not in item_dict:
             item_dict[key] = {
                 'item_code': code,
                 'item_description': desc,
+                'latest_posting_date': latest_date,
                 'total_sales': Decimal('0'),
                 'total_gp': Decimal('0'),
                 'total_quantity': Decimal('0')
             }
+        else:
+            # Update description if this posting_date is newer
+            if latest_date and item_dict[key].get('latest_posting_date'):
+                if latest_date > item_dict[key]['latest_posting_date']:
+                    item_dict[key]['item_description'] = desc
+                    item_dict[key]['latest_posting_date'] = latest_date
+            elif latest_date:
+                item_dict[key]['item_description'] = desc
+                item_dict[key]['latest_posting_date'] = latest_date
+        
         item_dict[key]['total_sales'] += item['total_sales'] or Decimal('0')
         item_dict[key]['total_gp'] += item['total_gp'] or Decimal('0')
         item_dict[key]['total_quantity'] += item['total_quantity'] or Decimal('0')
