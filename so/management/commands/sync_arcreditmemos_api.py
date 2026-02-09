@@ -13,6 +13,7 @@ Usage:
     python manage.py sync_arcreditmemos_api
     python manage.py sync_arcreditmemos_api --days-back 7
     python manage.py sync_arcreditmemos_api --date 2026-01-21
+    python manage.py sync_arinvoices_api --from-date 2025-12-01 --to-date 2025-12-31
     python manage.py sync_arcreditmemos_api --local-only  # Only save to local DB (for testing)
 """
 

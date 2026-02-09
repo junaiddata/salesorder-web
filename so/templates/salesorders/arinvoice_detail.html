@@ -408,10 +408,12 @@
               <div class="totals-label">Grand Total (with VAT)</div>
               <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
             </div>
+            {% if user.is_staff or user.is_superuser %}
             <div class="totals-row">
               <div class="totals-label">Total GP</div>
               <div class="totals-value">{{ total_gross_profit|floatformat:2 }}</div>
             </div>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -444,9 +446,10 @@
                 <th class="num">Price After VAT</th>
                 <th class="num">Line Total</th>
                 <th class="num">net Line Total</th>
+                {% if user.is_staff or user.is_superuser %}
                 <th class="num">Total Cost</th>
                 <th class="num">Gross Profit</th>
-                
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -461,12 +464,14 @@
                 <td class="num">{{ item.price_after_vat|floatformat:2 }}</td>
                 <td class="num">{{ item.line_total|floatformat:2 }}</td>
                 <td class="num">{% if item.line_total_after_discount is not None %}{{ item.line_total_after_discount|floatformat:2 }}{% else %}{{ item.line_total|floatformat:2 }}{% endif %}</td>
+                {% if user.is_staff or user.is_superuser %}
                 <td class="num">{% if item.cost_price is not None %}{{ item.cost_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="num">{% if item.gross_profit is not None %}{{ item.gross_profit|floatformat:2 }}{% else %}—{% endif %}</td>
+                {% endif %}
               </tr>
               {% empty %}
               <tr>
-                <td colspan="12" class="empty-state">No line items found</td>
+                <td colspan="{% if user.is_staff or user.is_superuser %}12{% else %}10{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>

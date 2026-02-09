@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Invoices</title>
+  <title>Combined Sales Invoices</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -288,7 +288,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 800px;
+      min-width: 900px;
     }
 
     thead th {
@@ -361,6 +361,16 @@
     .badge-closed {
       background: var(--bg);
       color: var(--text-secondary);
+    }
+
+    .badge-invoice {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .badge-creditmemo {
+      background: #fef3c7;
+      color: #92400e;
     }
 
     /* Footer / Pagination */
@@ -442,11 +452,11 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <h1>AR Invoices</h1>
-        <p>View and manage your SAP AR invoices</p>
+        <h1>Combined Sales Invoices</h1>
+        <p>View AR Invoices and Credit Memos together</p>
       </div>
       <div class="header-actions">
-        <a class="btn btn-primary" href="{% url 'export_arinvoice_list_excel' %}?{{ request.GET.urlencode }}" id="btn-export-excel">
+        <a class="btn btn-primary" href="{% url 'export_combined_sales_invoices_excel' %}?{{ request.GET.urlencode }}" id="btn-export-excel">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Export Excel
         </a>
@@ -463,7 +473,7 @@
       <form id="filters" class="filters-grid" method="get">
         <div class="field">
           <label>Search</label>
-          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Invoice No, Customer, Salesman...">
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Doc No, Customer, Salesman...">
         </div>
 
         <div class="field">
@@ -513,6 +523,15 @@
         </div>
 
         <div class="field">
+          <label>Document Type</label>
+          <select class="select" name="document_type">
+            <option value="All" {% if filters.document_type == 'All' or not filters.document_type %}selected{% endif %}>All (Invoices & Credit Memos)</option>
+            <option value="Invoice" {% if filters.document_type == 'Invoice' %}selected{% endif %}>Invoices Only</option>
+            <option value="Credit Memo" {% if filters.document_type == 'Credit Memo' %}selected{% endif %}>Credit Memos Only</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label>Amount Range</label>
           <select class="select" name="total">
             <option value="">All</option>
@@ -535,19 +554,39 @@
         </div>
       </form>
 
+      <!-- Summary Metrics Cards -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Today Sales</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{{ today_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Today GP</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{% if is_admin %}{{ today_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Current Month Sales</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{{ month_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Current Month GP</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{% if is_admin %}{{ month_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Current Year Sales</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{{ year_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Current Year GP</div>
+          <div style="font-size: 1.5rem; font-weight: 700; color: var(--text);">{% if is_admin %}{{ year_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
+
       <div class="stats-bar">
-        <!-- <div class="stat-item">
-          <span class="stat-label">Total Value (with VAT):</span>
-          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
-        </div> -->
         <div class="stat-item">
           <span class="stat-label">Total (without VAT):</span>
           <span class="stat-value">{{ total_without_vat_value|default:0|floatformat:2 }}</span>
         </div>
-        <!-- <div class="stat-item">
-          <span class="stat-label">Total VAT:</span>
-          <span class="stat-value highlight">{{ vat_total_value|default:0|floatformat:2 }}</span>
-        </div> -->
         {% if user.is_staff or user.is_superuser %}
         <div class="stat-item">
           <span class="stat-label">Total GP:</span>
@@ -563,74 +602,88 @@
         <table>
           <thead>
             <tr>
+              <th>Type</th>
               <th>Date</th>
-              <th>Invoice Number</th>
+              <th>Document Number</th>
               <th>Customer</th>
               <th>Salesman</th>
               <th>BP Reference</th>
               <th style="text-align:right">Total (with VAT)</th>
               <th style="text-align:right">Total (without VAT)</th>
+              {% if user.is_staff or user.is_superuser %}
+              <th style="text-align:right">Total GP</th>
+              {% endif %}
               <th>Cancel Status</th>
             </tr>
           </thead>
           <tbody>
-            {% include 'salesorders/_arinvoice_rows.html' with page_obj=page_obj %}
+            {% include 'salesorders/_combined_sales_invoices_rows.html' with page_obj=page_obj %}
           </tbody>
         </table>
       </div>
 
+      <!-- Footer -->
       <div class="table-footer">
-        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
-        {% if total_count is not None %}
-          <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> invoices</div>
+        <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> documents</div>
+        <!-- Debug: Check document types -->
+        {% if debug_invoice_count is not None %}
+          <div style="font-size: 0.75rem; color: #666; margin-top: 8px; padding: 8px; background: #f0f0f0; border-radius: 4px;">
+            Debug Info: Invoices={{ debug_invoice_count }}, Credit Memos={{ debug_creditmemo_count }}, Total={{ total_count }}
+            <br>
+            Page items breakdown: 
+            {% for doc in page_obj %}
+              {% if doc.document_type == 'Invoice' %}<span style="color: blue;">I</span>{% else %}<span style="color: orange;">C</span>{% endif %}
+            {% endfor %}
+          </div>
         {% endif %}
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
       </div>
     </div>
   </div>
 
-<script>
-  // Multi-Select
-  document.addEventListener("DOMContentLoaded", function() {
-    const wrapper = document.getElementById('salesman-wrapper');
-    const trigger = document.getElementById('salesman-trigger');
-    const options = document.getElementById('salesman-options');
-    const textSpan = document.getElementById('salesman-text');
-    const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
+  <script>
+    // Multi-select functionality
+    const salesmanTrigger = document.getElementById('salesman-trigger');
+    const salesmanOptions = document.getElementById('salesman-options');
+    const salesmanText = document.getElementById('salesman-text');
+    const salesmanCheckboxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
 
-    trigger.addEventListener('click', e => {
-      e.stopPropagation();
-      options.classList.toggle('active');
-    });
+    if (salesmanTrigger) {
+      salesmanTrigger.addEventListener('click', () => {
+        salesmanOptions.classList.toggle('active');
+      });
 
-    options.addEventListener('click', e => e.stopPropagation());
+      // Update text when checkboxes change
+      salesmanCheckboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
+          if (checked.length === 0) {
+            salesmanText.textContent = 'All Salesmen';
+          } else if (checked.length === 1) {
+            salesmanText.textContent = checked[0].nextSibling.textContent.trim();
+          } else {
+            salesmanText.textContent = `${checked.length} selected`;
+          }
+        });
+      });
 
-    function updateLabel() {
-      const checked = Array.from(getCheckboxes()).filter(c => c.checked);
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!salesmanTrigger.contains(e.target) && !salesmanOptions.contains(e.target)) {
+          salesmanOptions.classList.remove('active');
+        }
+      });
+
+      // Initialize text
+      const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
       if (checked.length === 0) {
-        textSpan.textContent = "All Salesmen";
-        textSpan.style.opacity = "0.6";
+        salesmanText.textContent = 'All Salesmen';
       } else if (checked.length === 1) {
-        textSpan.textContent = checked[0].value;
-        textSpan.style.opacity = "1";
+        salesmanText.textContent = checked[0].nextSibling.textContent.trim();
       } else {
-        textSpan.textContent = `${checked.length} Selected`;
-        textSpan.style.opacity = "1";
+        salesmanText.textContent = `${checked.length} selected`;
       }
     }
-
-    updateLabel();
-
-    getCheckboxes().forEach(box => {
-      box.addEventListener('change', function() {
-        updateLabel();
-        document.getElementById('filters').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-      });
-    });
-
-    document.addEventListener('click', e => {
-      if (!wrapper.contains(e.target)) options.classList.remove('active');
-    });
-  });
-</script>
+  </script>
 </body>
 </html>

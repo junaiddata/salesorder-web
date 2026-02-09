@@ -1404,41 +1404,129 @@ def logout_view(request):
 @role_required('Admin')
 @login_required
 def home(request):
-    if request.user.username.lower() == 'alabamaadmin':
-        total_orders = SalesOrder.objects.filter(division='ALABAMA').count()
-    elif request.user.username.lower() not in ['so','manager']:
-        total_orders = SalesOrder.objects.filter(division='JUNAID').count()
-    else:
-        total_orders = SalesOrder.objects.count()
+    from so.sap_salesorder_views import salesman_scope_q_salesorder
+    from so.models import SAPARInvoice, SAPARCreditMemo
+    from django.db.models import Sum, Q
+    from django.db.models.functions import Coalesce
+    from decimal import Decimal
+    
     today = date.today()
-    total_orders_today = SalesOrder.objects.filter(
-        order_date__year=today.year,
-        order_date__month=today.month,
-        order_date__day=today.day
-    ).count()
-    total_customers = Customer.objects.count()
-    yesterday = today - timedelta(days=1)
-    orders_yesterday = SalesOrder.objects.filter(
-        order_date__year=yesterday.year,
-        order_date__month=yesterday.month,
-        order_date__day=yesterday.day
-    ).count()
-    if orders_yesterday > 0:
-        order_increase_pct = ((total_orders_today - orders_yesterday) / orders_yesterday) * 100
-    else:
-        order_increase_pct = 0
-    # Redirect salesman to sales_home.html, others to home.html
+    current_year = today.year
+    current_month = today.month
+    
+    # Get store filter (default to HO)
+    store_filter = request.GET.get('store', 'HO').strip()
+    
+    # Get base querysets with salesman scope
+    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Apply store filter
+    if store_filter:
+        invoice_qs = invoice_qs.filter(store=store_filter)
+        creditmemo_qs = creditmemo_qs.filter(store=store_filter)
+    
+    # Check if user is admin
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+    
+    # Calculate Today's Sales and GP
+    today_invoices = invoice_qs.filter(posting_date=today)
+    today_creditmemos = creditmemo_qs.filter(posting_date=today)
+    today_sales = (
+        today_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+        today_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+    )
+    today_gp = Decimal('0')
+    if is_admin:
+        today_gp = (
+            today_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+            today_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+        )
+    
+    # Calculate This Month's Sales and GP
+    month_invoices = invoice_qs.filter(posting_date__year=current_year, posting_date__month=current_month)
+    month_creditmemos = creditmemo_qs.filter(posting_date__year=current_year, posting_date__month=current_month)
+    month_sales = (
+        month_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+        month_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+    )
+    month_gp = Decimal('0')
+    if is_admin:
+        month_gp = (
+            month_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+            month_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+        )
+    
+    # Calculate This Year's Sales and GP
+    year_invoices = invoice_qs.filter(posting_date__year=current_year)
+    year_creditmemos = creditmemo_qs.filter(posting_date__year=current_year)
+    year_sales = (
+        year_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+        year_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+    )
+    year_gp = Decimal('0')
+    if is_admin:
+        year_gp = (
+            year_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+            year_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+        )
     
     return render(request, 'so/home.html', {
-        'total_orders': total_orders,
-        'total_orders_today': total_orders_today,
-        'total_customers': total_customers,
-        'order_increase_pct': order_increase_pct
+        'today_sales': today_sales or Decimal('0'),
+        'today_gp': today_gp or Decimal('0'),
+        'month_sales': month_sales or Decimal('0'),
+        'month_gp': month_gp or Decimal('0'),
+        'year_sales': year_sales or Decimal('0'),
+        'year_gp': year_gp or Decimal('0'),
+        'is_admin': is_admin,
+        'store_filter': store_filter,
     })
 
 def sales_home(request):
     if request.user.is_authenticated:
-        return render(request, 'so/sales_home.html')
+        from so.sap_salesorder_views import salesman_scope_q_salesorder
+        from so.models import SAPARInvoice, SAPARCreditMemo
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+        from decimal import Decimal
+        
+        today = date.today()
+        current_year = today.year
+        current_month = today.month
+        
+        # Get base querysets with salesman scope
+        invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+        creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+        
+        # Calculate Today's Sales
+        today_invoices = invoice_qs.filter(posting_date=today)
+        today_creditmemos = creditmemo_qs.filter(posting_date=today)
+        today_sales = (
+            today_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+            today_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+        )
+        
+        # Calculate This Month's Sales
+        month_invoices = invoice_qs.filter(posting_date__year=current_year, posting_date__month=current_month)
+        month_creditmemos = creditmemo_qs.filter(posting_date__year=current_year, posting_date__month=current_month)
+        month_sales = (
+            month_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+            month_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+        )
+        
+        # Calculate This Year's Sales
+        year_invoices = invoice_qs.filter(posting_date__year=current_year)
+        year_creditmemos = creditmemo_qs.filter(posting_date__year=current_year)
+        year_sales = (
+            year_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+            year_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
+        )
+        
+        return render(request, 'so/sales_home.html', {
+            'today_sales': today_sales or Decimal('0'),
+            'month_sales': month_sales or Decimal('0'),
+            'year_sales': year_sales or Decimal('0'),
+        })
     else:
         return redirect('login')
 

@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -678,6 +679,21 @@
             background-color: rgba(244, 63, 94, 0.2);
             color: #e11d48;
         }
+
+        /* Store Tile Buttons */
+        .store-tile-btn:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-light);
+            color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        .store-tile-btn.active {
+            border-color: var(--primary-color);
+            background: var(--primary-color);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
     </style>
 </head>
 <body>
@@ -748,6 +764,18 @@
                 </a>
                 <ul class="submenu">
                     <li>
+                        <a href="{% url 'item_analysis' %}">
+                            <i class="fas fa-chart-bar"></i>
+                            Item Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'sales_analysis_dashboard' %}">
+                            <i class="fas fa-chart-line"></i>
+                            Sales Analysis
+                        </a>
+                    </li>
+                    <li>
                         <a href="{% url 'arinvoice_list' %}">
                             <i class="fas fa-file-invoice"></i>
                             AR Invoices
@@ -757,6 +785,12 @@
                         <a href="{% url 'arcreditmemo_list' %}">
                             <i class="fas fa-file-invoice"></i>
                             Credit Memos
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'combined_sales_invoices_list' %}">
+                            <i class="fas fa-file-invoice"></i>
+                            Combined Report
                         </a>
                     </li>
                 </ul>
@@ -845,90 +879,101 @@
 
         <!-- Dashboard Content -->
         <div class="dashboard-content">
-            <!-- Stats Cards -->
+            <!-- Store Filter Tiles -->
+            <div style="margin-bottom: 2rem;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--white); padding: 1rem 1.5rem; border-radius: 12px; box-shadow: var(--shadow-sm);">
+                    <label style="font-size: 0.875rem; font-weight: 600; color: var(--gray-700); margin-right: 8px;">Store:</label>
+                    <a href="?store=HO" class="store-tile-btn {% if store_filter == 'HO' or not store_filter %}active{% endif %}" style="display: inline-block; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                        HO
+                    </a>
+                    <a href="?store=Others" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                        Others
+                    </a>
+                </div>
+            </div>
+
+            <!-- Sales Analysis Stats Cards -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-header">
                         <div>
-                            <h3 class="stat-value">{{total_orders}}</h3>
-                            <p class="stat-label">Total Orders</p>
+                            <h3 class="stat-value">AED {{today_sales|floatformat:2|intcomma}}</h3>
+                            <p class="stat-label">Today's Sales</p>
                         </div>
                         <div class="stat-icon primary">
-                            <i class="fas fa-dollar-sign"></i>
+                            <i class="fas fa-calendar-day"></i>
                         </div>
                     </div>
+                    {% if is_admin %}
                     <div class="stat-change positive">
-                        <i class="fas fa-arrow-up"></i>
-                        
+                        <i class="fas fa-chart-line"></i>
+                        GP: AED {{today_gp|floatformat:2|intcomma}}
                     </div>
+                    {% endif %}
                 </div>
 
                 <div class="stat-card">
                     <div class="stat-header">
                         <div>
-                            <h3 class="stat-value">{{total_orders_today}}</h3>
-                            <p class="stat-label">Total Orders Today</p>
+                            <h3 class="stat-value">AED {{month_sales|floatformat:2|intcomma}}</h3>
+                            <p class="stat-label">This Month Sales</p>
                         </div>
                         <div class="stat-icon success">
-                            <i class="fas fa-shopping-cart"></i>
+                            <i class="fas fa-calendar-alt"></i>
                         </div>
                     </div>
+                    {% if is_admin %}
                     <div class="stat-change positive">
-                        <i class="fas fa-arrow-up"></i>
-                        
+                        <i class="fas fa-chart-line"></i>
+                        GP: AED {{month_gp|floatformat:2|intcomma}}
                     </div>
+                    {% endif %}
                 </div>
-
-                <!-- <div class="stat-card">
-                    <div class="stat-header">
-                        <div>
-                            <h3 class="stat-value">{{total_customers}}</h3>
-                            <p class="stat-label">Active Customers</p>
-                        </div>
-                        <div class="stat-icon warning">
-                            <i class="fas fa-users"></i>
-                        </div>
-                    </div>
-                    <div class="stat-change negative">
-                        <i class="fas fa-arrow-down"></i>
-                        
-                    </div>
-                </div> -->
 
                 <div class="stat-card">
                     <div class="stat-header">
                         <div>
-                            <h3 class="stat-value">{{order_increase_pct|floatformat:2}}%</h3>
-                            <p class="stat-label">Order Increase % than yesterday</p>
+                            <h3 class="stat-value">AED {{year_sales|floatformat:2|intcomma}}</h3>
+                            <p class="stat-label">This Year Sales</p>
                         </div>
                         <div class="stat-icon info">
-                            <i class="fas fa-check-circle"></i>
+                            <i class="fas fa-calendar"></i>
                         </div>
                     </div>
+                    {% if is_admin %}
                     <div class="stat-change positive">
-                        <i class="fas fa-arrow-up"></i>
-                        
+                        <i class="fas fa-chart-line"></i>
+                        GP: AED {{year_gp|floatformat:2|intcomma}}
                     </div>
+                    {% endif %}
                 </div>
             </div>
-            <!-- <a href="#" class="stat-card" role="button" aria-label="Order increase details">
-                <div class="stat-header">
-                    <div>
-                        <h3 class="stat-value">Project LPOs</h3>
-                       
-                    </div>
-                    <div class="stat-icon info"></div>
-                        <i class="fas fa-check-circle"></i>
-                    </div>
+
+            <!-- Analysis Actions -->
+            <div class="quick-actions" style="margin-top: 2rem;">
+                <div class="section-header">
+                    <h2 class="section-title">Sales Analysis</h2>
                 </div>
-                <div class="stat-change positive">
-                    <i class="fas fa-arrow-up"></i>
+                <div class="actions-grid">
+                    <a href="{% url 'item_analysis' %}" class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <h3 class="action-title">Item Analysis</h3>
+                    </a>
+                    {% if user.is_staff or user.is_superuser or user.role.role == 'Admin' %}
+                    <a href="{% url 'sales_analysis_dashboard' %}" class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h3 class="action-title">Detailed Sales Analysis</h3>
+                    </a>
+                    {% endif %}
                 </div>
-           
-            </a> -->
+            </div>
 
             <!-- Quick Actions -->
-            <div class="quick-actions">
+            <div class="quick-actions" style="margin-top: 2rem;">
                 <div class="section-header">
                     <h2 class="section-title">Quick Actions</h2>
                 </div>

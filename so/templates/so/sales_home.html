@@ -159,6 +159,45 @@
             color: white;
         }
 
+        /* Stats Cards */
+        .stats-section {
+            margin-bottom: 30px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1976d2;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (min-width: 768px) {
             .dashboard-container {
                 max-width: 600px;
@@ -197,10 +236,29 @@
     </style>
 </head>
 <body>
+{% load humanize %}
     <div class="dashboard-container">
         <div class="header-section">
             <img src="https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp" alt="Logo" class="logo">
             <h1 class="dashboard-title">Sales Dashboard</h1>
+        </div>
+
+        <!-- Sales Stats -->
+        <div class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">AED {{today_sales|floatformat:2|intcomma}}</div>
+                    <div class="stat-label">Today's Sales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">AED {{month_sales|floatformat:2|intcomma}}</div>
+                    <div class="stat-label">This Month Sales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">AED {{year_sales|floatformat:2|intcomma}}</div>
+                    <div class="stat-label">This Year Sales</div>
+                </div>
+            </div>
         </div>
 
         <div class="actions-grid">
@@ -256,7 +314,7 @@
                 <div class="action-title">Proforma Invoices</div>
                 <div class="action-description">Browse all Proforma Invoices</div>
             </a>
-            <a href="/saparinvoices/" class="action-button view-quotation">
+            <!-- <a href="/saparinvoices/" class="action-button view-quotation">
                 <span class="live-badge-small">LIVE</span>
                 <div class="action-icon">
                     <i class="fas fa-file-invoice-dollar"></i>
@@ -271,6 +329,22 @@
                 </div>
                 <div class="action-title">Credit Memos</div>
                 <div class="action-description">Browse AR Credit Memos</div>
+            </a> -->
+            <a href="/saparinvoices/combined/" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
+                <div class="action-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="action-title">Sales</div>
+                <div class="action-description">Combined Sales Report</div>
+            </a>
+            <a href="{% url 'item_analysis' %}" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
+                <div class="action-icon">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <div class="action-title">Item Analysis</div>
+                <div class="action-description">Item Performance Analysis</div>
             </a>
             <!-- <a href="/dashboard/open-so/" class="action-button view-quotation">
                 <div class="action-icon">

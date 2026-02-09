@@ -1,0 +1,1046 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Item Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    /* Table Card */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      position: relative;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    th.sticky-col {
+      position: sticky;
+      left: 0;
+      background: var(--bg);
+      z-index: 11;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    td {
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: var(--text);
+      position: relative;
+    }
+
+    td.text-right {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    td.sticky-col {
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      z-index: 9;
+      font-weight: 500;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+      padding: 8px 12px;
+    }
+
+    tbody tr:hover td.sticky-col {
+      background: var(--bg);
+    }
+    
+    td.sticky-col:nth-child(2) {
+      left: 150px;
+    }
+
+    .item-code {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+      line-height: 1.4;
+    }
+    
+    .item-upc {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+
+    .item-description {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      line-height: 1.3;
+      max-width: 200px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .year-group {
+      background: rgba(59, 130, 246, 0.05);
+    }
+    
+    /* Add vertical separator after each year group */
+    /* For admin: 2 sticky cols + (Sales, GP, GP%, Qty, Avg Rate) * 3 years */
+    /* Last column of each year: 2 + 5 = 7, 2 + 10 = 12, 2 + 15 = 17 */
+    {% if is_admin %}
+    /* Vertical line after 2024 (column 7 - last column of 2024) */
+    thead th:nth-child(7),
+    tbody td:nth-child(7) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Vertical line after 2025 (column 12 - last column of 2025) */
+    thead th:nth-child(12),
+    tbody td:nth-child(12) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Vertical line before 2024 (column 3 - first column of 2024) */
+    thead th:nth-child(3),
+    tbody td:nth-child(3) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Vertical line before 2025 (column 8 - first column of 2025) */
+    thead th:nth-child(8),
+    tbody td:nth-child(8) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Vertical line before 2026 (column 13 - first column of 2026) */
+    thead th:nth-child(13),
+    tbody td:nth-child(13) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Totals row - apply borders to match regular rows */
+    /* Totals row: 2 sticky + 5 cols per year (Sales, GP, GP%, Qty, Avg Rate) */
+    /* After 2024 Avg Rate (column 7: 2 sticky + 5) */
+    tbody tr.totals-row td:nth-child(7) {
+      border-right: 3px solid var(--primary);
+    }
+    /* After 2025 Avg Rate (column 12: 2 sticky + 10) */
+    tbody tr.totals-row td:nth-child(12) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Before 2024 Sales (column 3: 2 sticky + 1) */
+    tbody tr.totals-row td:nth-child(3) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Before 2025 Sales (column 8: 2 sticky + 6) */
+    tbody tr.totals-row td:nth-child(8) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Before 2026 Sales (column 13: 2 sticky + 11) */
+    tbody tr.totals-row td:nth-child(13) {
+      border-left: 3px solid var(--primary);
+    }
+    {% else %}
+    /* For non-admin: 2 sticky cols + (Sales, Qty, Avg Rate) * 3 years */
+    /* Last column of each year: 2 + 3 = 5, 2 + 6 = 8, 2 + 9 = 11 */
+    /* Vertical line after 2024 (column 5) */
+    thead th:nth-child(5),
+    tbody td:nth-child(5) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Vertical line after 2025 (column 8) */
+    thead th:nth-child(8),
+    tbody td:nth-child(8) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Vertical line before 2024 (column 3) */
+    thead th:nth-child(3),
+    tbody td:nth-child(3) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Vertical line before 2025 (column 6) */
+    thead th:nth-child(6),
+    tbody td:nth-child(6) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Vertical line before 2026 (column 9) */
+    thead th:nth-child(9),
+    tbody td:nth-child(9) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Totals row: 2 sticky + 3 cols per year (Sales, Qty, Avg Rate) */
+    /* After 2024 Avg Rate (column 5: 2 sticky + 3) */
+    tbody tr.totals-row td:nth-child(5) {
+      border-right: 3px solid var(--primary);
+    }
+    /* After 2025 Avg Rate (column 8: 2 sticky + 6) */
+    tbody tr.totals-row td:nth-child(8) {
+      border-right: 3px solid var(--primary);
+    }
+    /* Before 2024 Sales (column 3: 2 sticky + 1) */
+    tbody tr.totals-row td:nth-child(3) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Before 2025 Sales (column 6: 2 sticky + 4) */
+    tbody tr.totals-row td:nth-child(6) {
+      border-left: 3px solid var(--primary);
+    }
+    /* Before 2026 Sales (column 9: 2 sticky + 7) */
+    tbody tr.totals-row td:nth-child(9) {
+      border-left: 3px solid var(--primary);
+    }
+    {% endif %}
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .totals-row {
+      background: var(--primary-light);
+      border-top: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      font-weight: 700;
+    }
+
+    .totals-row td {
+      background: var(--primary-light);
+      font-weight: 700;
+    }
+
+    .totals-row:hover {
+      background: var(--primary-light);
+    }
+
+    /* Filters */
+    .filters-card {
+      margin-bottom: 20px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    /* Multi-select dropdown */
+    .multi-select {
+      position: relative;
+      width: 100%;
+    }
+
+    .select-box {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      transition: all var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--primary);
+    }
+
+    .select-box::after {
+      content: '\f107';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      margin-top: 4px;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: block;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    /* Search box in dropdown */
+    .search-box-container {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.813rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .search-box:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    .options-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .option-label.hidden {
+      display: none;
+    }
+
+    /* Store Filter Tiles */
+    .store-tile {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all var(--transition);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .store-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .store-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    /* Month Filter Tiles */
+    .month-tile {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-size: 0.813rem;
+      font-weight: 500;
+      transition: all var(--transition);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .month-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .month-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px 12px 40px;
+      }
+      
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .table-wrapper {
+        font-size: 0.813rem;
+      }
+      
+      th, td {
+        padding: 8px 12px;
+      }
+    }
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-text {
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading Item Analysis...</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Item Analysis</h1>
+        <p>Comprehensive item performance analysis by year</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <!-- Store Filter Tiles -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Store:</label>
+        <button type="button" class="store-tile {% if not filters.store %}active{% endif %}" data-store="">
+          All Stores
+        </button>
+        <button type="button" class="store-tile {% if filters.store == 'HO' %}active{% endif %}" data-store="HO">
+          HO
+        </button>
+        <button type="button" class="store-tile {% if filters.store == 'Others' %}active{% endif %}" data-store="Others">
+          Others
+        </button>
+      </div>
+    </div>
+
+    <!-- Month Filter Tiles -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Month:</label>
+        <button type="button" class="month-tile {% if '1' in filters.month %}active{% endif %}" data-month="1">Jan</button>
+        <button type="button" class="month-tile {% if '2' in filters.month %}active{% endif %}" data-month="2">Feb</button>
+        <button type="button" class="month-tile {% if '3' in filters.month %}active{% endif %}" data-month="3">Mar</button>
+        <button type="button" class="month-tile {% if '4' in filters.month %}active{% endif %}" data-month="4">Apr</button>
+        <button type="button" class="month-tile {% if '5' in filters.month %}active{% endif %}" data-month="5">May</button>
+        <button type="button" class="month-tile {% if '6' in filters.month %}active{% endif %}" data-month="6">Jun</button>
+        <button type="button" class="month-tile {% if '7' in filters.month %}active{% endif %}" data-month="7">Jul</button>
+        <button type="button" class="month-tile {% if '8' in filters.month %}active{% endif %}" data-month="8">Aug</button>
+        <button type="button" class="month-tile {% if '9' in filters.month %}active{% endif %}" data-month="9">Sep</button>
+        <button type="button" class="month-tile {% if '10' in filters.month %}active{% endif %}" data-month="10">Oct</button>
+        <button type="button" class="month-tile {% if '11' in filters.month %}active{% endif %}" data-month="11">Nov</button>
+        <button type="button" class="month-tile {% if '12' in filters.month %}active{% endif %}" data-month="12">Dec</button>
+      </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'item_analysis' %}" id="filters-form">
+        <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" id="search-input" value="{{ filters.q }}" placeholder="Item Code, Description, or UPC" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen..." autocomplete="off">
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                    <label class="option-label" data-value="{{ salesman }}">
+                      <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                      <span class="option-text">{{ salesman }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Firm</label>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger">
+                <span id="firm-text">All Firms</span>
+              </div>
+              <div class="options-container" id="firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="firm-search" class="search-box" placeholder="Search firms..." autocomplete="off">
+                </div>
+                <div class="options-list" id="firm-options-list">
+                  {% for firm in firms %}
+                    <label class="option-label" data-value="{{ firm }}">
+                      <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm %}checked{% endif %}>
+                      <span class="option-text">{{ firm }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" id="start-date" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" id="end-date" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field" style="display: flex; gap: 8px; align-self:end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
+            <button class="btn btn-primary" type="button" id="apply-filters">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Table Card -->
+    <div class="table-card">
+      <div class="table-header">
+        <h3 class="table-title">Item Performance Matrix</h3>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th class="sticky-col" style="min-width: 150px;">Item Code</th>
+              <th class="sticky-col" style="min-width: 200px; left: 150px;">Item Description</th>
+              {% for year in years %}
+              <th colspan="{% if is_admin %}5{% else %}3{% endif %}" class="year-group text-right" style="text-align: center;">{{ year }}</th>
+              {% endfor %}
+            </tr>
+            <tr>
+              <th class="sticky-col" style="left: 0;"></th>
+              <th class="sticky-col" style="left: 150px;"></th>
+              {% for year in years %}
+              <th class="text-right">Sales</th>
+              {% if is_admin %}<th class="text-right">GP</th>{% endif %}
+              {% if is_admin %}<th class="text-right">GP%</th>{% endif %}
+              <th class="text-right">Qty</th>
+              <th class="text-right">Avg Rate</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Totals Row -->
+            <tr class="totals-row">
+              <td class="sticky-col" style="left: 0; font-weight: 700; background: var(--primary-light);">TOTAL</td>
+              <td class="sticky-col" style="left: 150px; font-weight: 700; background: var(--primary-light);"></td>
+              {% for totals in totals_list %}
+                <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
+                {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+                {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp_percent|default:0|floatformat:2 }}%</td>{% endif %}
+                <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_quantity|default:0|floatformat:0|intcomma }}</td>
+                <td class="text-right totals-cell totals-last-col" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_avg_rate|default:0|floatformat:2|intcomma }}</td>
+              {% endfor %}
+            </tr>
+            {% for item in items %}
+            <tr>
+              <td class="sticky-col" style="left: 0;">
+                <div class="item-code">{{ item.item_code|default:"—" }}</div>
+                {% if item.upc_code %}
+                <div class="item-upc">UPC: {{ item.upc_code }}</div>
+                {% endif %}
+              </td>
+              <td class="sticky-col item-description" style="left: 150px;">{{ item.item_description|default:"Unknown" }}</td>
+              {% for year_data in item.year_list %}
+                <td class="text-right">{{ year_data.total_sales|default:0|floatformat:2|intcomma }}</td>
+                {% if is_admin %}<td class="text-right">{{ year_data.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+                {% if is_admin %}<td class="text-right">{{ year_data.gp_percent|default:0|floatformat:2 }}%</td>{% endif %}
+                <td class="text-right">{{ year_data.total_quantity|default:0|floatformat:0|intcomma }}</td>
+                <td class="text-right">{{ year_data.avg_rate|default:0|floatformat:2|intcomma }}</td>
+              {% endfor %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="{% widthratio years|length 1 4 %}" class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No item data available</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Hide loading overlay when page is fully loaded
+    window.addEventListener('load', function() {
+      const loadingOverlay = document.getElementById('loading-overlay');
+      if (loadingOverlay) {
+        setTimeout(() => {
+          loadingOverlay.classList.add('hidden');
+          // Remove from DOM after animation
+          setTimeout(() => {
+            loadingOverlay.remove();
+          }, 300);
+        }, 300);
+      }
+    });
+
+    // Multi-Select for Salesman
+    document.addEventListener("DOMContentLoaded", function() {
+      const salesmanWrapper = document.getElementById('salesman-wrapper');
+      const salesmanTrigger = document.getElementById('salesman-trigger');
+      const salesmanOptions = document.getElementById('salesman-options');
+      const salesmanOptionsList = document.getElementById('salesman-options-list');
+      const salesmanText = document.getElementById('salesman-text');
+      const salesmanSearch = document.getElementById('salesman-search');
+      const getSalesmanCheckboxes = () => salesmanOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getSalesmanLabels = () => salesmanOptionsList.querySelectorAll('.option-label');
+
+      salesmanTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        salesmanOptions.classList.toggle('active');
+        if (salesmanOptions.classList.contains('active')) {
+          // Focus search box when dropdown opens
+          setTimeout(() => salesmanSearch.focus(), 100);
+        } else {
+          // Clear search when dropdown closes
+          salesmanSearch.value = '';
+          getSalesmanLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      salesmanOptions.addEventListener('click', e => e.stopPropagation());
+
+      // Search functionality for Salesman
+      salesmanSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getSalesmanLabels();
+        
+        labels.forEach(label => {
+          const text = label.querySelector('.option-text').textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            label.classList.remove('hidden');
+          } else {
+            label.classList.add('hidden');
+          }
+        });
+      });
+
+      salesmanSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateSalesmanLabel() {
+        const checked = Array.from(getSalesmanCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          salesmanText.textContent = "All Salesmen";
+          salesmanText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          salesmanText.textContent = checked[0].value;
+          salesmanText.style.opacity = "1";
+        } else {
+          salesmanText.textContent = `${checked.length} Selected`;
+          salesmanText.style.opacity = "1";
+        }
+      }
+
+      updateSalesmanLabel();
+
+      getSalesmanCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateSalesmanLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!salesmanWrapper.contains(e.target)) salesmanOptions.classList.remove('active');
+      });
+
+      // Multi-Select for Firm
+      const firmWrapper = document.getElementById('firm-wrapper');
+      const firmTrigger = document.getElementById('firm-trigger');
+      const firmOptions = document.getElementById('firm-options');
+      const firmOptionsList = document.getElementById('firm-options-list');
+      const firmText = document.getElementById('firm-text');
+      const firmSearch = document.getElementById('firm-search');
+      const getFirmCheckboxes = () => firmOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getFirmLabels = () => firmOptionsList.querySelectorAll('.option-label');
+
+      firmTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        firmOptions.classList.toggle('active');
+        if (firmOptions.classList.contains('active')) {
+          // Focus search box when dropdown opens
+          setTimeout(() => firmSearch.focus(), 100);
+        } else {
+          // Clear search when dropdown closes
+          firmSearch.value = '';
+          getFirmLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      firmOptions.addEventListener('click', e => e.stopPropagation());
+
+      // Search functionality for Firm
+      firmSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getFirmLabels();
+        
+        labels.forEach(label => {
+          const text = label.querySelector('.option-text').textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            label.classList.remove('hidden');
+          } else {
+            label.classList.add('hidden');
+          }
+        });
+      });
+
+      firmSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateFirmLabel() {
+        const checked = Array.from(getFirmCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          firmText.textContent = "All Firms";
+          firmText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          firmText.textContent = checked[0].value;
+          firmText.style.opacity = "1";
+        } else {
+          firmText.textContent = `${checked.length} Selected`;
+          firmText.style.opacity = "1";
+        }
+      }
+
+      updateFirmLabel();
+
+      getFirmCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateFirmLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!firmWrapper.contains(e.target)) firmOptions.classList.remove('active');
+      });
+
+      // Store filter tiles
+      const storeTiles = document.querySelectorAll('.store-tile');
+      const storeInput = document.getElementById('store-input');
+      
+      storeTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          storeTiles.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          if (storeInput) {
+            storeInput.value = this.dataset.store || '';
+          }
+        });
+      });
+
+      // Month filter tiles (multi-select - no page refresh, just toggle)
+      const monthTiles = document.querySelectorAll('.month-tile');
+      
+      monthTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          this.classList.toggle('active');
+        });
+      });
+
+      // Apply filters button
+      const applyBtn = document.getElementById('apply-filters');
+      const filtersForm = document.getElementById('filters-form');
+      
+      applyBtn.addEventListener('click', function() {
+        const formData = new FormData(filtersForm);
+        const params = new URLSearchParams();
+        
+        // Add all form fields
+        for (const [key, value] of formData.entries()) {
+          if (key === 'salesman' || key === 'firm' || key === 'month') {
+            params.append(key, value);
+          } else if (value) {
+            params.set(key, value);
+          }
+        }
+        
+        // Add selected months from tiles
+        monthTiles.forEach(tile => {
+          if (tile.classList.contains('active')) {
+            params.append('month', tile.dataset.month);
+          }
+        });
+        
+        // Reload page with filters
+        window.location.href = '{% url "item_analysis" %}?' + params.toString();
+      });
+
+      // Clear filters button
+      const clearBtn = document.getElementById('clear-filters');
+      clearBtn.addEventListener('click', function() {
+        window.location.href = '{% url "item_analysis" %}';
+      });
+    });
+  </script>
+</body>
+</html>

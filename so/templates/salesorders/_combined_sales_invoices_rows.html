@@ -1,0 +1,45 @@
+{% for doc in page_obj %}
+<tr>
+  <td>
+    {% if doc.document_type == 'Invoice' %}
+      <span class="badge badge-invoice">Invoice</span>
+    {% else %}
+      <span class="badge badge-creditmemo">Credit Memo</span>
+    {% endif %}
+  </td>
+  <td>{{ doc.posting_date|date:"M d, Y"|default:"-" }}</td>
+  <td>
+    {% if doc.document_type == 'Invoice' %}
+      <a class="so-link" href="{% url 'arinvoice_detail' doc.invoice_number %}">{{ doc.invoice_number }}</a>
+    {% else %}
+      <a class="so-link" href="{% url 'arcreditmemo_detail' doc.credit_memo_number %}">{{ doc.credit_memo_number }}</a>
+    {% endif %}
+  </td>
+  <td>{{ doc.customer_name }}</td>
+  <td class="text-muted">{{ doc.salesman_name|default:"—" }}</td>
+  <td class="text-muted">{{ doc.bp_reference_no|default:"—" }}</td>
+  <td class="num">{{ doc.doc_total|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ doc.doc_total_without_vat|default_if_none:"0"|floatformat:2 }}</td>
+  {% if user.is_staff or user.is_superuser %}
+  <td class="num">{{ doc.total_gross_profit|default_if_none:"0"|floatformat:2 }}</td>
+  {% endif %}
+  <td>
+    {% if doc.cancel_status == 'csNo' %}
+      <span class="badge badge-open">Active</span>
+    {% elif doc.cancel_status == 'csYes' %}
+      <span class="badge badge-closed" style="background: #fee2e2; color: #dc2626;">Cancelled</span>
+    {% elif doc.cancel_status == 'csCancellation' %}
+      <span class="badge badge-closed" style="background: #fef3c7; color: #d97706;">Cancellation</span>
+    {% else %}
+      <span class="badge badge-closed">{{ doc.cancel_status|default:"—" }}</span>
+    {% endif %}
+  </td>
+</tr>
+{% empty %}
+<tr>
+  <td colspan="{% if user.is_staff or user.is_superuser %}10{% else %}9{% endif %}" class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 8px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    No documents found
+  </td>
+</tr>
+{% endfor %}

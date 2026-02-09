@@ -800,6 +800,35 @@ class SAPAPIClient:
                 logger.error(f"Error creating Items record for {item_code}: {e}")
                 return None
     
+    def _clamp_percentage(self, value: Any, field_name: str = 'percentage') -> float:
+        """
+        Clamp percentage value to valid range for DecimalField(max_digits=5, decimal_places=2)
+        Valid range: -999.99 to 999.99
+        
+        Args:
+            value: The percentage value to clamp
+            field_name: Name of the field (for logging)
+        
+        Returns:
+            Clamped value within -999.99 to 999.99
+        """
+        try:
+            if value is None:
+                return 0.0
+            num_value = float(value)
+            # Clamp to valid range for max_digits=5, decimal_places=2
+            # Max absolute value is 999.99 (10^3 - 0.01)
+            clamped = max(-999.99, min(999.99, num_value))
+            if abs(num_value - clamped) > 0.01:  # Only log if there was a significant change
+                logger.warning(
+                    f"Clamped {field_name} value from {num_value} to {clamped} "
+                    f"(exceeds DecimalField(max_digits=5, decimal_places=2) range)"
+                )
+            return clamped
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid {field_name} value: {value}, using 0.0")
+            return 0.0
+    
     def _map_arinvoice_api_response(self, api_invoice: Dict) -> Dict:
         """
         Map API response to Django model format for AR Invoice
@@ -858,7 +887,7 @@ class SAPAPIClient:
         doc_total = api_invoice.get('DocTotal', 0) or 0
         vat_sum = api_invoice.get('VatSum', 0) or 0
         total_discount = api_invoice.get('TotalDiscount', 0) or 0
-        discount_percent = api_invoice.get('DiscountPercent', 0) or 0
+        discount_percent = self._clamp_percentage(api_invoice.get('DiscountPercent', 0) or 0, 'discount_percent')
         cancel_status = api_invoice.get('CancelStatus', '') or ''
         document_status = api_invoice.get('DocumentStatus', '') or ''
         comments = str(api_invoice.get('Comments', '')).strip() if api_invoice.get('Comments') else ''
@@ -910,10 +939,10 @@ class SAPAPIClient:
             quantity = line.get('Quantity', 0) or 0
             price = line.get('Price', 0) or 0
             price_after_vat = line.get('PriceAfterVAT', 0) or 0
-            discount_percent_line = line.get('DiscountPercent', 0) or 0
+            discount_percent_line = self._clamp_percentage(line.get('DiscountPercent', 0) or 0, 'discount_percent_line')
             line_total = line.get('LineTotal', 0) or 0
             cost_price = line.get('GrossProfitTotalBasePrice', 0) or 0  # Total cost price for this line
-            tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
+            tax_percentage = self._clamp_percentage(line.get('TaxPercentagePerRow', 0) or 0, 'tax_percentage')
             tax_total = line.get('TaxTotal', 0) or 0
             
             # Calculate line_total_after_discount if header discount exists
@@ -1041,7 +1070,7 @@ class SAPAPIClient:
         doc_total = api_creditmemo.get('DocTotal', 0) or 0
         vat_sum = api_creditmemo.get('VatSum', 0) or 0
         total_discount = api_creditmemo.get('TotalDiscount', 0) or 0
-        discount_percent = api_creditmemo.get('DiscountPercent', 0) or 0
+        discount_percent = self._clamp_percentage(api_creditmemo.get('DiscountPercent', 0) or 0, 'discount_percent')
         cancel_status = api_creditmemo.get('CancelStatus', '') or ''
         document_status = api_creditmemo.get('DocumentStatus', '') or ''
         comments = str(api_creditmemo.get('Comments', '')).strip() if api_creditmemo.get('Comments') else ''
@@ -1095,10 +1124,10 @@ class SAPAPIClient:
             quantity = line.get('Quantity', 0) or 0
             price = line.get('Price', 0) or 0
             price_after_vat = line.get('PriceAfterVAT', 0) or 0
-            discount_percent_line = line.get('DiscountPercent', 0) or 0
+            discount_percent_line = self._clamp_percentage(line.get('DiscountPercent', 0) or 0, 'discount_percent_line')
             line_total = line.get('LineTotal', 0) or 0
             cost_price = line.get('GrossProfitTotalBasePrice', 0) or 0  # Total cost price for this line
-            tax_percentage = line.get('TaxPercentagePerRow', 0) or 0
+            tax_percentage = self._clamp_percentage(line.get('TaxPercentagePerRow', 0) or 0, 'tax_percentage')
             tax_total = line.get('TaxTotal', 0) or 0
             
             # Calculate line_total_after_discount if header discount exists

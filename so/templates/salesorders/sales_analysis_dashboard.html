@@ -1,0 +1,837 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sales Analysis Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    /* Metrics Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+      .metrics-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      transition: all var(--transition);
+    }
+
+    .metric-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .metric-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .metric-label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .metric-icon.today { background: #dbeafe; color: var(--primary); }
+    .metric-icon.month { background: #ecfdf5; color: var(--success); }
+    .metric-icon.year { background: #fef3c7; color: var(--warning); }
+
+    .metric-value {
+      font-size: 1.875rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .metric-subvalue {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Filters Panel */
+    .filters-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .filters-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .filters-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .field select,
+    .field input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .field select:focus,
+    .field input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Multi-select */
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--text-muted);
+    }
+
+    .select-box::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    .period-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .period-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 0.813rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .period-btn:hover {
+      background: var(--bg);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .period-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    /* Top Customers Table */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .table-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .top-customers-period {
+      display: flex;
+      gap: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+    }
+
+    th {
+      padding: 12px;
+      text-align: left;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    .rank {
+      font-weight: 700;
+      color: var(--primary);
+      width: 40px;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .filters-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Sales Analysis Dashboard</h1>
+        <p>Real-time sales metrics and insights</p>
+      </div>
+    </div>
+
+    <!-- Top Filters Bar -->
+    <div class="filters-card" style="margin-bottom: 24px;">
+      <form id="filters-form" method="GET" action="{% url 'sales_analysis_dashboard' %}">
+        <div class="filters-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                {% for salesman in salesmen %}
+                  <label class="option-label">
+                    <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesmen_filter %}checked{% endif %}>
+                    {{ salesman }}
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Month</label>
+            <div class="multi-select" id="month-wrapper">
+              <div class="select-box" id="month-trigger">
+                <span id="month-text">All Months</span>
+              </div>
+              <div class="options-container" id="month-options">
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="1" {% if '1' in filters.month %}checked{% endif %}>January
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="2" {% if '2' in filters.month %}checked{% endif %}>February
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="3" {% if '3' in filters.month %}checked{% endif %}>March
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="4" {% if '4' in filters.month %}checked{% endif %}>April
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="5" {% if '5' in filters.month %}checked{% endif %}>May
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="6" {% if '6' in filters.month %}checked{% endif %}>June
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="7" {% if '7' in filters.month %}checked{% endif %}>July
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="8" {% if '8' in filters.month %}checked{% endif %}>August
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="9" {% if '9' in filters.month %}checked{% endif %}>September
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="10" {% if '10' in filters.month %}checked{% endif %}>October
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="11" {% if '11' in filters.month %}checked{% endif %}>November
+                </label>
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="12" {% if '12' in filters.month %}checked{% endif %}>December
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Store</label>
+            <select id="store-filter" name="store" class="select" style="width: 100%;">
+              <option value="">All Stores</option>
+              <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
+              <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" id="start-date" name="start" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" id="end-date" name="end" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field" style="align-self:end;">
+            <button class="btn btn-primary" type="submit">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="metrics-grid">
+      <!-- Today -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Today Sales</span>
+          <div class="metric-icon today">
+            <i class="fas fa-calendar-day"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="today-sales">{{ today_sales|default:0|floatformat:2|intcomma }}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Today GP</span>
+          <div class="metric-icon today">
+            <i class="fas fa-chart-line"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="today-gp">{% if is_admin %}{{ today_gp|default:0|floatformat:2|intcomma }}{% else %}—{% endif %}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+
+      <!-- Current Month -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Current Month Sales</span>
+          <div class="metric-icon month">
+            <i class="fas fa-calendar-alt"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="month-sales">{{ month_sales|default:0|floatformat:2|intcomma }}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Current Month GP</span>
+          <div class="metric-icon month">
+            <i class="fas fa-chart-line"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="month-gp">{% if is_admin %}{{ month_gp|default:0|floatformat:2|intcomma }}{% else %}—{% endif %}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+
+      <!-- Current Year -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Current Year Sales</span>
+          <div class="metric-icon year">
+            <i class="fas fa-calendar"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="year-sales">{{ year_sales|default:0|floatformat:2|intcomma }}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+      
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-label">Current Year GP</span>
+          <div class="metric-icon year">
+            <i class="fas fa-chart-line"></i>
+          </div>
+        </div>
+        <div class="metric-value" id="year-gp">{% if is_admin %}{{ year_gp|default:0|floatformat:2|intcomma }}{% else %}—{% endif %}</div>
+        <div class="metric-subvalue">AED</div>
+      </div>
+    </div>
+
+    <!-- Top 5 Customers -->
+    <div class="table-card">
+      <div class="table-header">
+        <h3 class="table-title">Top 5 Customers</h3>
+        <div class="top-customers-period">
+          <button type="button" class="period-btn {% if filters.top_customers_period == 'today' %}active{% endif %}" data-top-period="today">Today</button>
+          <button type="button" class="period-btn {% if filters.top_customers_period == 'month' %}active{% endif %}" data-top-period="month">Month</button>
+          <button type="button" class="period-btn {% if filters.top_customers_period == 'year' %}active{% endif %}" data-top-period="year">Year</button>
+          <button type="button" class="period-btn {% if filters.top_customers_period == 'all' or not filters.top_customers_period %}active{% endif %}" data-top-period="all">All Time</button>
+        </div>
+      </div>
+      <div class="loading" id="loading">Loading...</div>
+      <table id="top-customers-table">
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Customer Code</th>
+            <th>Customer Name</th>
+            <th>Total Sales</th>
+            {% if is_admin %}<th>Total GP</th>{% endif %}
+            <th>Documents</th>
+          </tr>
+        </thead>
+        <tbody id="top-customers-body">
+          {% for customer in top_customers %}
+          <tr>
+            <td class="rank">{{ forloop.counter }}</td>
+            <td>{{ customer.customer_code|default:"—" }}</td>
+            <td>{{ customer.customer_name|default:"Unknown" }}</td>
+            <td>{{ customer.total_sales|default:0|floatformat:2|intcomma }}</td>
+            {% if is_admin %}<td>{{ customer.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+            <td>{{ customer.document_count }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="{% if is_admin %}6{% else %}5{% endif %}" style="text-align: center; color: var(--text-muted); padding: 40px;">
+              No customer data available
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Top 5 Items -->
+    <div class="table-card">
+      <div class="table-header">
+        <h3 class="table-title">Top 5 Items</h3>
+        <div class="top-items-period">
+          <button type="button" class="period-btn {% if filters.top_items_period == 'today' %}active{% endif %}" data-top-items-period="today">Today</button>
+          <button type="button" class="period-btn {% if filters.top_items_period == 'month' %}active{% endif %}" data-top-items-period="month">Month</button>
+          <button type="button" class="period-btn {% if filters.top_items_period == 'year' %}active{% endif %}" data-top-items-period="year">Year</button>
+          <button type="button" class="period-btn {% if filters.top_items_period == 'all' or not filters.top_items_period %}active{% endif %}" data-top-items-period="all">All Time</button>
+        </div>
+      </div>
+      <div class="loading" id="loading-items" style="display: none;">Loading...</div>
+      <table id="top-items-table">
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Item Code</th>
+            <th>Item Description</th>
+            <th>Total Sales</th>
+            {% if is_admin %}<th>Total GP</th>{% endif %}
+            <th>Total Quantity</th>
+          </tr>
+        </thead>
+        <tbody id="top-items-body">
+          {% for item in top_items %}
+          <tr>
+            <td class="rank">{{ forloop.counter }}</td>
+            <td>{{ item.item_code|default:"—" }}</td>
+            <td>{{ item.item_description|default:"Unknown" }}</td>
+            <td>{{ item.total_sales|default:0|floatformat:2|intcomma }}</td>
+            {% if is_admin %}<td>{{ item.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+            <td>{{ item.total_quantity|default:0|floatformat:2|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="{% if is_admin %}6{% else %}5{% endif %}" style="text-align: center; color: var(--text-muted); padding: 40px;">
+              No item data available
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    // Multi-Select for Salesman
+    document.addEventListener("DOMContentLoaded", function() {
+      const salesmanWrapper = document.getElementById('salesman-wrapper');
+      const salesmanTrigger = document.getElementById('salesman-trigger');
+      const salesmanOptions = document.getElementById('salesman-options');
+      const salesmanText = document.getElementById('salesman-text');
+      const getSalesmanCheckboxes = () => salesmanOptions.querySelectorAll('input[type="checkbox"]');
+
+      salesmanTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        salesmanOptions.classList.toggle('active');
+      });
+
+      salesmanOptions.addEventListener('click', e => e.stopPropagation());
+
+      function updateSalesmanLabel() {
+        const checked = Array.from(getSalesmanCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          salesmanText.textContent = "All Salesmen";
+          salesmanText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          salesmanText.textContent = checked[0].value;
+          salesmanText.style.opacity = "1";
+        } else {
+          salesmanText.textContent = `${checked.length} Selected`;
+          salesmanText.style.opacity = "1";
+        }
+      }
+
+      updateSalesmanLabel();
+
+      getSalesmanCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateSalesmanLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!salesmanWrapper.contains(e.target)) salesmanOptions.classList.remove('active');
+      });
+
+      // Multi-Select for Month
+      const monthWrapper = document.getElementById('month-wrapper');
+      const monthTrigger = document.getElementById('month-trigger');
+      const monthOptions = document.getElementById('month-options');
+      const monthText = document.getElementById('month-text');
+      const getMonthCheckboxes = () => monthOptions.querySelectorAll('input[type="checkbox"]');
+
+      monthTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        monthOptions.classList.toggle('active');
+      });
+
+      monthOptions.addEventListener('click', e => e.stopPropagation());
+
+      function updateMonthLabel() {
+        const checked = Array.from(getMonthCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          monthText.textContent = "All Months";
+          monthText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          monthText.textContent = monthNames[parseInt(checked[0].value)];
+          monthText.style.opacity = "1";
+        } else {
+          monthText.textContent = `${checked.length} Selected`;
+          monthText.style.opacity = "1";
+        }
+      }
+
+      updateMonthLabel();
+
+      getMonthCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateMonthLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!monthWrapper.contains(e.target)) monthOptions.classList.remove('active');
+      });
+
+      // Form submission handler
+      const filtersForm = document.getElementById('filters-form');
+      filtersForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form data
+        const formData = new FormData(filtersForm);
+        const params = new URLSearchParams();
+        
+        // Add all form fields
+        for (const [key, value] of formData.entries()) {
+          if (key === 'salesman' || key === 'month') {
+            params.append(key, value);
+          } else {
+            params.set(key, value);
+          }
+        }
+        
+        // Add period filters
+        const activePeriod = document.querySelector('.period-btn.active[data-period]');
+        if (activePeriod) {
+          params.set('period', activePeriod.dataset.period);
+        }
+        
+        const activeTopPeriod = document.querySelector('.period-btn.active[data-top-period]');
+        if (activeTopPeriod) {
+          params.set('top_customers_period', activeTopPeriod.dataset.topPeriod);
+        }
+        
+        const activeTopItemsPeriod = document.querySelector('.period-btn.active[data-top-items-period]');
+        if (activeTopItemsPeriod) {
+          params.set('top_items_period', activeTopItemsPeriod.dataset.topItemsPeriod);
+        }
+        
+        // Add date filters
+        const startDate = document.getElementById('start-date');
+        const endDate = document.getElementById('end-date');
+        if (startDate && startDate.value) {
+          params.set('start', startDate.value);
+        }
+        if (endDate && endDate.value) {
+          params.set('end', endDate.value);
+        }
+        
+        // Update URL and reload page with filters
+        window.location.href = '{% url "sales_analysis_dashboard" %}?' + params.toString();
+      });
+
+      // Period button handlers - update form and submit
+      document.querySelectorAll('.period-btn[data-period]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.period-btn[data-period]').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      });
+
+      document.querySelectorAll('.period-btn[data-top-period]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.period-btn[data-top-period]').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      });
+
+      document.querySelectorAll('.period-btn[data-top-items-period]').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.period-btn[data-top-items-period]').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      });
+
+      // Store filter change handler
+      const storeFilter = document.getElementById('store-filter');
+      if (storeFilter) {
+        storeFilter.addEventListener('change', function() {
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      }
+
+      // Date change handlers
+      const startDate = document.getElementById('start-date');
+      const endDate = document.getElementById('end-date');
+      if (startDate) {
+        startDate.addEventListener('change', function() {
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      }
+      if (endDate) {
+        endDate.addEventListener('change', function() {
+          filtersForm.dispatchEvent(new Event('submit'));
+        });
+      }
+
+      // Helper function to format numbers with commas and 2 decimal places
+      function formatNumber(num) {
+        if (num === null || num === undefined || isNaN(num)) {
+          return '0.00';
+        }
+        return parseFloat(num).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+      }
+    });
+  </script>
+</body>
+</html>
