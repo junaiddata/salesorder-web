@@ -7316,28 +7316,25 @@ def sales_analysis_dashboard(request):
     year_gp = year_gp_agg['total'] + year_gp_cm_agg['total']
     
     # Top 5 Customers calculation
-    # Use filtered querysets for top customers
-    top_customers_period = request.GET.get('top_customers_period', 'all').strip()  # 'today', 'month', 'year', 'all'
-    
-    # Get base querysets for top customers
+    # Use the same filters as the main filters (store, salesman, month, date range)
     top_invoices = invoice_qs
     top_creditmemos = creditmemo_qs
     
-    # Apply common filters (store, salesman, month)
+    # Apply common filters (store, salesman, month, date range)
     top_invoices = apply_common_filters(top_invoices)
     top_creditmemos = apply_common_filters(top_creditmemos)
     
-    # Apply period filter for top customers
-    if top_customers_period == 'today':
+    # Apply period filter if specified (same as main period filter)
+    if period == 'today':
         top_invoices = top_invoices.filter(posting_date=today)
         top_creditmemos = top_creditmemos.filter(posting_date=today)
-    elif top_customers_period == 'month':
+    elif period == 'month':
         top_invoices = top_invoices.filter(posting_date__year=current_year, posting_date__month=current_month)
         top_creditmemos = top_creditmemos.filter(posting_date__year=current_year, posting_date__month=current_month)
-    elif top_customers_period == 'year':
+    elif period == 'year':
         top_invoices = top_invoices.filter(posting_date__year=current_year)
         top_creditmemos = top_creditmemos.filter(posting_date__year=current_year)
-    # 'all' means no date filter
+    # 'all' or no period means use date range filters (already applied in apply_common_filters)
     
     # Aggregate by customer for invoices
     invoice_customers = top_invoices.values('customer_code', 'customer_name').annotate(
@@ -7391,31 +7388,26 @@ def sales_analysis_dashboard(request):
     top_customers = sorted(customer_dict.values(), key=lambda x: x['total_sales'], reverse=True)[:5]
     
     # Top 5 Items calculation
-    top_items_period = request.GET.get('top_items_period', 'all').strip()  # 'today', 'month', 'year', 'all'
-    
-    # Get base querysets for top items (through items)
+    # Use the same filters as the main filters (store, salesman, month, date range)
     from so.models import SAPARInvoiceItem, SAPARCreditMemoItem
     
     # Get base querysets for top items (apply common filters first)
-    top_items_invoices_base = invoice_qs
-    top_items_creditmemos_base = creditmemo_qs
-    top_items_invoices_base = apply_common_filters(top_items_invoices_base)
-    top_items_creditmemos_base = apply_common_filters(top_items_creditmemos_base)
+    top_items_invoices = invoice_qs
+    top_items_creditmemos = creditmemo_qs
+    top_items_invoices = apply_common_filters(top_items_invoices)
+    top_items_creditmemos = apply_common_filters(top_items_creditmemos)
     
-    # Apply period filter for top items
-    if top_items_period == 'today':
-        top_items_invoices = top_items_invoices_base.filter(posting_date=today)
-        top_items_creditmemos = top_items_creditmemos_base.filter(posting_date=today)
-    elif top_items_period == 'month':
-        top_items_invoices = top_items_invoices_base.filter(posting_date__year=current_year, posting_date__month=current_month)
-        top_items_creditmemos = top_items_creditmemos_base.filter(posting_date__year=current_year, posting_date__month=current_month)
-    elif top_items_period == 'year':
-        top_items_invoices = top_items_invoices_base.filter(posting_date__year=current_year)
-        top_items_creditmemos = top_items_creditmemos_base.filter(posting_date__year=current_year)
-    else:
-        # 'all' means use the filtered querysets (already filtered by apply_common_filters including date range)
-        top_items_invoices = top_items_invoices_base
-        top_items_creditmemos = top_items_creditmemos_base
+    # Apply period filter if specified (same as main period filter)
+    if period == 'today':
+        top_items_invoices = top_items_invoices.filter(posting_date=today)
+        top_items_creditmemos = top_items_creditmemos.filter(posting_date=today)
+    elif period == 'month':
+        top_items_invoices = top_items_invoices.filter(posting_date__year=current_year, posting_date__month=current_month)
+        top_items_creditmemos = top_items_creditmemos.filter(posting_date__year=current_year, posting_date__month=current_month)
+    elif period == 'year':
+        top_items_invoices = top_items_invoices.filter(posting_date__year=current_year)
+        top_items_creditmemos = top_items_creditmemos.filter(posting_date__year=current_year)
+    # 'all' or no period means use date range filters (already applied in apply_common_filters)
     
     # Aggregate invoice items by item_code and item_description
     invoice_items_agg = SAPARInvoiceItem.objects.filter(
@@ -7513,8 +7505,6 @@ def sales_analysis_dashboard(request):
             'start': start,
             'end': end,
             'period': period,
-            'top_customers_period': top_customers_period,
-            'top_items_period': top_items_period,
         },
         'current_year': current_year,
         'current_month': current_month,

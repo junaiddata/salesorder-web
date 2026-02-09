@@ -797,8 +797,8 @@
                 <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
                 {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
                 {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp_percent|default:0|floatformat:2 }}%</td>{% endif %}
-                <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_quantity|default:0|floatformat:0|intcomma }}</td>
-                <td class="text-right totals-cell totals-last-col" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_avg_rate|default:0|floatformat:2|intcomma }}</td>
+                <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">-</td>
+                <td class="text-right totals-cell totals-last-col" style="font-weight: 700; background: var(--primary-light);">-</td>
               {% endfor %}
             </tr>
             {% for item in items %}

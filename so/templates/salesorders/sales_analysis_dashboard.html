@@ -68,6 +68,38 @@
       margin-top: 2px;
     }
 
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
     /* Metrics Cards */
     .metrics-grid {
       display: grid;
@@ -318,11 +350,6 @@
       color: var(--text);
     }
 
-    .top-customers-period {
-      display: flex;
-      gap: 8px;
-    }
-
     table {
       width: 100%;
       border-collapse: collapse;
@@ -389,6 +416,12 @@
       <div class="header-left">
         <h1>Sales Analysis Dashboard</h1>
         <p>Real-time sales metrics and insights</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
       </div>
     </div>
 
@@ -557,12 +590,6 @@
     <div class="table-card">
       <div class="table-header">
         <h3 class="table-title">Top 5 Customers</h3>
-        <div class="top-customers-period">
-          <button type="button" class="period-btn {% if filters.top_customers_period == 'today' %}active{% endif %}" data-top-period="today">Today</button>
-          <button type="button" class="period-btn {% if filters.top_customers_period == 'month' %}active{% endif %}" data-top-period="month">Month</button>
-          <button type="button" class="period-btn {% if filters.top_customers_period == 'year' %}active{% endif %}" data-top-period="year">Year</button>
-          <button type="button" class="period-btn {% if filters.top_customers_period == 'all' or not filters.top_customers_period %}active{% endif %}" data-top-period="all">All Time</button>
-        </div>
       </div>
       <div class="loading" id="loading">Loading...</div>
       <table id="top-customers-table">
@@ -601,12 +628,6 @@
     <div class="table-card">
       <div class="table-header">
         <h3 class="table-title">Top 5 Items</h3>
-        <div class="top-items-period">
-          <button type="button" class="period-btn {% if filters.top_items_period == 'today' %}active{% endif %}" data-top-items-period="today">Today</button>
-          <button type="button" class="period-btn {% if filters.top_items_period == 'month' %}active{% endif %}" data-top-items-period="month">Month</button>
-          <button type="button" class="period-btn {% if filters.top_items_period == 'year' %}active{% endif %}" data-top-items-period="year">Year</button>
-          <button type="button" class="period-btn {% if filters.top_items_period == 'all' or not filters.top_items_period %}active{% endif %}" data-top-items-period="all">All Time</button>
-        </div>
       </div>
       <div class="loading" id="loading-items" style="display: none;">Loading...</div>
       <table id="top-items-table">
@@ -744,20 +765,10 @@
           }
         }
         
-        // Add period filters
+        // Add period filter (main period filter applies to all)
         const activePeriod = document.querySelector('.period-btn.active[data-period]');
         if (activePeriod) {
           params.set('period', activePeriod.dataset.period);
-        }
-        
-        const activeTopPeriod = document.querySelector('.period-btn.active[data-top-period]');
-        if (activeTopPeriod) {
-          params.set('top_customers_period', activeTopPeriod.dataset.topPeriod);
-        }
-        
-        const activeTopItemsPeriod = document.querySelector('.period-btn.active[data-top-items-period]');
-        if (activeTopItemsPeriod) {
-          params.set('top_items_period', activeTopItemsPeriod.dataset.topItemsPeriod);
         }
         
         // Add date filters
@@ -774,26 +785,10 @@
         window.location.href = '{% url "sales_analysis_dashboard" %}?' + params.toString();
       });
 
-      // Period button handlers - update form and submit
+      // Period button handlers - update form and submit (main period filter applies to all)
       document.querySelectorAll('.period-btn[data-period]').forEach(btn => {
         btn.addEventListener('click', function() {
           document.querySelectorAll('.period-btn[data-period]').forEach(b => b.classList.remove('active'));
-          this.classList.add('active');
-          filtersForm.dispatchEvent(new Event('submit'));
-        });
-      });
-
-      document.querySelectorAll('.period-btn[data-top-period]').forEach(btn => {
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.period-btn[data-top-period]').forEach(b => b.classList.remove('active'));
-          this.classList.add('active');
-          filtersForm.dispatchEvent(new Event('submit'));
-        });
-      });
-
-      document.querySelectorAll('.period-btn[data-top-items-period]').forEach(btn => {
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.period-btn[data-top-items-period]').forEach(b => b.classList.remove('active'));
           this.classList.add('active');
           filtersForm.dispatchEvent(new Event('submit'));
         });
