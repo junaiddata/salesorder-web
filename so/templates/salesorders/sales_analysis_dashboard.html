@@ -528,10 +528,17 @@
         <p>Real-time sales metrics and insights</p>
       </div>
       <div class="header-right">
-        <a href="{% url 'home' %}" class="btn btn-secondary">
-          <i class="fas fa-arrow-left"></i>
-          Back
-        </a>
+        {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+          <a href="{% url 'home' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            Back
+          </a>
+        {% else %}
+          <a href="{% url 'sales_home' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            Back
+          </a>
+        {% endif %}
       </div>
     </div>
 

@@ -7226,8 +7226,9 @@ def sales_analysis_dashboard(request):
     invoice_qs = SAPARInvoice.objects.all()
     creditmemo_qs = SAPARCreditMemo.objects.all()
     
-    # Apply salesman scope if user is not staff
-    if not (request.user.is_superuser or request.user.is_staff):
+    # Apply salesman scope if user is not admin/staff
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+    if not is_admin:
         invoice_qs = invoice_qs.filter(salesman_scope_q_salesorder(request.user))
         creditmemo_qs = creditmemo_qs.filter(salesman_scope_q_salesorder(request.user))
     
@@ -7635,8 +7636,7 @@ def sales_analysis_dashboard(request):
     )
     all_salesmen = sorted(set(list(invoice_salesmen) + list(creditmemo_salesmen)))
     
-    # Check if user is admin
-    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+    # is_admin already defined above
     
     # Prepare context
     context = {

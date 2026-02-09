@@ -19,6 +19,7 @@ class DeviceRestrictionMiddleware:
             'localhost',
             '127.0.0.1',
             '192.168.0.43',
+            '192.168.0.45',
         ]
         
         # Check hostname/port or IP address

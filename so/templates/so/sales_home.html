@@ -192,6 +192,36 @@
             font-weight: 500;
         }
 
+        .stats-button {
+            width: 100%;
+            background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 16px 24px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .stats-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(25, 118, 210, 0.4);
+            color: white;
+            text-decoration: none;
+        }
+
+        .stats-button i {
+            font-size: 18px;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: 1fr;
@@ -259,6 +289,10 @@
                     <div class="stat-label">This Year Sales</div>
                 </div>
             </div>
+            <a href="{% url 'sales_analysis_dashboard' %}" class="stats-button">
+                <i class="fas fa-chart-pie"></i>
+                <span>View Stats & Analysis</span>
+            </a>
         </div>
 
         <div class="actions-grid">
