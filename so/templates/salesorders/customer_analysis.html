@@ -631,6 +631,10 @@
           <i class="fas fa-chart-bar"></i>
           Item Analysis
         </a>
+        <a href="{% url 'export_customer_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
+          <i class="fas fa-file-pdf"></i>
+          Export PDF
+        </a>
         <a href="{% url 'home' %}" class="btn btn-secondary">
           <i class="fas fa-arrow-left"></i>
           Back
@@ -702,6 +706,39 @@
     <!-- Filters Card -->
     <div class="card filters-card">
       <form method="GET" action="{% url 'customer_analysis' %}" id="filters-form">
+        
+        <!-- Item Filter Container (inside form) -->
+        <div style="margin-bottom: 16px; padding: 10px 14px; background: var(--surface-secondary, #f8f9fa); border-radius: var(--radius-sm, 6px);">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label style="font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px;">Item Filter:</label>
+            <div class="multi-select" id="item-wrapper" style="width: 100%;">
+              <div class="select-box" id="item-trigger">
+                <span id="item-text">All Items</span>
+              </div>
+              <div class="options-container" id="item-options" style="max-height: 400px; overflow-y: auto;">
+                <div class="search-box-container">
+                  <input type="text" id="item-search" class="search-box" placeholder="Search by Item Code, Name, or UPC..." autocomplete="off">
+                </div>
+                <div class="options-list" id="item-options-list" style="max-height: 350px; overflow-y: auto;">
+                  {% for item in items %}
+                    <label class="option-label" data-value="{{ item.code }}" data-description="{{ item.description|default:''|lower }}" data-upc="{{ item.upc|default:''|lower }}">
+                      <input type="checkbox" name="item" value="{{ item.code }}" {% if item.code in filters.item %}checked{% endif %}>
+                      <span class="option-text">
+                        <strong>{{ item.code }}</strong>
+                        {% if item.description %}
+                        <span style="color: var(--text-muted); font-size: 0.75rem;"> - {{ item.description }}</span>
+                        {% endif %}
+                        {% if item.upc %}
+                        <span style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 2px;">UPC: {{ item.upc }}</span>
+                        {% endif %}
+                      </span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
         <div class="filters-grid">
           <div class="field">
@@ -751,35 +788,6 @@
             </div>
           </div>
           <div class="field">
-            <label>Item</label>
-            <div class="multi-select" id="item-wrapper">
-              <div class="select-box" id="item-trigger">
-                <span id="item-text">All Items</span>
-              </div>
-              <div class="options-container" id="item-options">
-                <div class="search-box-container">
-                  <input type="text" id="item-search" class="search-box" placeholder="Search by Item Code, Name, or UPC..." autocomplete="off">
-                </div>
-                <div class="options-list" id="item-options-list">
-                  {% for item in items %}
-                    <label class="option-label" data-value="{{ item.code }}" data-description="{{ item.description|default:''|lower }}" data-upc="{{ item.upc|default:''|lower }}">
-                      <input type="checkbox" name="item" value="{{ item.code }}" {% if item.code in filters.item %}checked{% endif %}>
-                      <span class="option-text">
-                        <strong>{{ item.code }}</strong>
-                        {% if item.description %}
-                        <span style="color: var(--text-muted); font-size: 0.75rem;"> - {{ item.description }}</span>
-                        {% endif %}
-                        {% if item.upc %}
-                        <span style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 2px;">UPC: {{ item.upc }}</span>
-                        {% endif %}
-                      </span>
-                    </label>
-                  {% endfor %}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="field">
             <label>Start Date</label>
             <input type="date" name="start" id="start-date" value="{{ filters.start }}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.813rem; font-family: inherit;">
           </div>
@@ -798,7 +806,14 @@
     <!-- Table Card -->
     <div class="table-card">
       <div class="table-header">
-        <h3 class="table-title">Customer Performance Matrix</h3>
+        <div>
+          <h3 class="table-title">Customer Performance Matrix</h3>
+          <div id="filter-display-container">
+            {% if filters.salesman or filters.firm or filters.item %}
+            {% include 'salesorders/_customer_analysis_filter_display.html' with filters=filters items=items %}
+            {% endif %}
+          </div>
+        </div>
       </div>
       <div class="table-wrapper">
         <table>
@@ -1025,10 +1040,37 @@
       const getItemCheckboxes = () => itemOptionsList.querySelectorAll('input[type="checkbox"]');
       const getItemLabels = () => itemOptionsList.querySelectorAll('.option-label');
 
+      // Function to sort items - selected items first
+      function sortItemLabels() {
+        const labels = Array.from(getItemLabels());
+        const container = itemOptionsList;
+        
+        // Separate selected and unselected
+        const selected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && checkbox.checked;
+        });
+        const unselected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && !checkbox.checked;
+        });
+        
+        // Clear container
+        container.innerHTML = '';
+        
+        // Add selected items first
+        selected.forEach(label => container.appendChild(label));
+        
+        // Add unselected items after
+        unselected.forEach(label => container.appendChild(label));
+      }
+
       itemTrigger.addEventListener('click', e => {
         e.stopPropagation();
         itemOptions.classList.toggle('active');
         if (itemOptions.classList.contains('active')) {
+          // Sort items when opening - selected first
+          sortItemLabels();
           setTimeout(() => itemSearch.focus(), 100);
         } else {
           itemSearch.value = '';
@@ -1042,20 +1084,48 @@
         const searchTerm = this.value.toLowerCase().trim();
         const labels = getItemLabels();
         
-        labels.forEach(label => {
-          const code = label.getAttribute('data-value') || '';
-          const description = label.getAttribute('data-description') || '';
-          const upc = label.getAttribute('data-upc') || '';
+        if (searchTerm === '') {
+          // If search is cleared, show all and sort (selected first)
+          labels.forEach(label => label.classList.remove('hidden'));
+          sortItemLabels();
+        } else {
+          // Filter and sort: selected matching items first, then unselected matching items
+          const selectedMatching = [];
+          const unselectedMatching = [];
+          const hidden = [];
           
-          // Search in code, description, or UPC
-          if (code.toLowerCase().includes(searchTerm) || 
-              description.includes(searchTerm) || 
-              upc.includes(searchTerm)) {
-            label.classList.remove('hidden');
-          } else {
-            label.classList.add('hidden');
-          }
-        });
+          labels.forEach(label => {
+            const code = label.getAttribute('data-value') || '';
+            const description = label.getAttribute('data-description') || '';
+            const upc = label.getAttribute('data-upc') || '';
+            const checkbox = label.querySelector('input[type="checkbox"]');
+            const isChecked = checkbox && checkbox.checked;
+            
+            // Check if matches search
+            const matches = code.toLowerCase().includes(searchTerm) || 
+                           description.includes(searchTerm) || 
+                           upc.includes(searchTerm);
+            
+            if (matches) {
+              if (isChecked) {
+                selectedMatching.push(label);
+              } else {
+                unselectedMatching.push(label);
+              }
+              label.classList.remove('hidden');
+            } else {
+              hidden.push(label);
+              label.classList.add('hidden');
+            }
+          });
+          
+          // Reorder: selected matching first, then unselected matching
+          const container = itemOptionsList;
+          container.innerHTML = '';
+          selectedMatching.forEach(label => container.appendChild(label));
+          unselectedMatching.forEach(label => container.appendChild(label));
+          hidden.forEach(label => container.appendChild(label));
+        }
       });
 
       itemSearch.addEventListener('click', e => e.stopPropagation());
@@ -1071,6 +1141,11 @@
         } else {
           itemText.textContent = `${checked.length} Selected`;
           itemText.style.opacity = "1";
+        }
+        
+        // Re-sort items when selection changes (selected first)
+        if (itemOptions.classList.contains('active')) {
+          sortItemLabels();
         }
       }
 
@@ -1131,6 +1206,9 @@
         const formData = new FormData(filtersForm);
         const params = new URLSearchParams();
         
+        // Debug: Log form data
+        console.log('Form Data:', Array.from(formData.entries()));
+        
         // Add all form fields
         for (const [key, value] of formData.entries()) {
           if (key === 'salesman' || key === 'firm' || key === 'item' || key === 'month') {
@@ -1139,6 +1217,9 @@
             params.set(key, value);
           }
         }
+        
+        // Debug: Log params
+        console.log('URL Params:', params.toString());
         
         // Add selected months from tiles
         monthTiles.forEach(tile => {
@@ -1184,6 +1265,12 @@
             const totalCountEl = document.querySelector('.total-count');
             if (totalCountEl) {
               totalCountEl.innerHTML = `Showing <strong>${data.customers_count}</strong> of <strong>${data.total_count.toLocaleString()}</strong> customers`;
+            }
+            
+            // Update filter display
+            const filterDisplayContainer = document.getElementById('filter-display-container');
+            if (filterDisplayContainer && data.filter_display_html !== undefined) {
+              filterDisplayContainer.innerHTML = data.filter_display_html || '';
             }
             
             // Update URL without reload
@@ -1257,6 +1344,12 @@
               const totalCountEl = document.querySelector('.total-count');
               if (totalCountEl) {
                 totalCountEl.innerHTML = `Showing <strong>${data.customers_count}</strong> of <strong>${data.total_count.toLocaleString()}</strong> customers`;
+              }
+              
+              // Update filter display
+              const filterDisplayContainer = document.getElementById('filter-display-container');
+              if (filterDisplayContainer && data.filter_display_html !== undefined) {
+                filterDisplayContainer.innerHTML = data.filter_display_html || '';
               }
               
               // Update URL without reload

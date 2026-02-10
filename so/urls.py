@@ -114,7 +114,9 @@ urlpatterns += [
     # Combined Sales Invoices URLs (must come before detail route)
     path('saparinvoices/analysis/', sap_salesorder_views.sales_analysis_dashboard, name='sales_analysis_dashboard'),
     path('saparinvoices/item-analysis/', sap_salesorder_views.item_analysis, name='item_analysis'),
+    path('saparinvoices/item-analysis/export-pdf/', sap_salesorder_views.export_item_analysis_pdf, name='export_item_analysis_pdf'),
     path('saparinvoices/customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),
+    path('saparinvoices/customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
     path('saparinvoices/combined/export-excel/', sap_salesorder_views.export_combined_sales_invoices_excel, name='export_combined_sales_invoices_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),
     path('saparinvoices/', sap_salesorder_views.arinvoice_list, name='arinvoice_list'),

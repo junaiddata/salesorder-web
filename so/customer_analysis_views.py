@@ -4,7 +4,7 @@ Separate views file for Customer Analysis functionality
 """
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Q, Sum, Value, DecimalField, Max, Count
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
@@ -12,6 +12,16 @@ from django.template.loader import render_to_string
 from datetime import datetime
 from decimal import Decimal
 import logging
+from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+import requests
+import os
+from django.conf import settings
 
 # Import models
 from .models import SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items
@@ -545,10 +555,24 @@ def customer_analysis(request):
                 except Exception as e:
                     logger.warning(f"Could not render pagination: {e}")
             
+            # Render filter display HTML
+            filter_display_html = ''
+            if salesmen_filter or firm_filter or item_filter:
+                filter_display_html = render_to_string('salesorders/_customer_analysis_filter_display.html', {
+                    'filters': {
+                        'salesman': salesmen_filter,
+                        'firm': firm_filter,
+                        'item': item_filter,
+                    },
+                    'firms': all_firms,
+                    'items': all_items,
+                }, request=request)
+            
             return JsonResponse({
                 'success': True,
                 'table_html': table_html,
                 'pagination_html': pagination_html,
+                'filter_display_html': filter_display_html,
                 'total_count': total_count,
                 'page_number': page_obj.number,
                 'num_pages': paginator.num_pages,
@@ -588,3 +612,460 @@ def customer_analysis(request):
     }
     
     return render(request, 'salesorders/customer_analysis.html', context)
+
+
+@login_required
+def export_customer_analysis_pdf(request):
+    """
+    Export Customer Analysis to PDF with all current filters applied
+    Reuses the same logic as customer_analysis view
+    """
+    # Import PDF libraries
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    import requests
+    
+    # Call the main customer_analysis view logic to get the data
+    # We'll duplicate the key parts here for PDF generation
+    
+    current_year = datetime.now().year
+    years = [2026, 2025, 2024]
+    
+    # Get all filters (same as customer_analysis)
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    item_filter = request.GET.getlist('item')
+    store_filter = request.GET.get('store', '').strip()
+    month_filter = request.GET.getlist('month')
+    start_date = request.GET.get('start', '').strip()
+    end_date = request.GET.get('end', '').strip()
+    category_filter = request.GET.get('category', 'All').strip()
+    
+    # Get base querysets
+    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Apply filters (simplified - same logic as customer_analysis)
+    if category_filter and category_filter != 'All':
+        category_salesmen = get_salesmen_by_category(category_filter, invoice_qs)
+        if category_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=category_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=category_salesmen)
+        else:
+            invoice_qs = invoice_qs.none()
+            creditmemo_qs = creditmemo_qs.none()
+    
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
+    
+    if store_filter:
+        invoice_qs = invoice_qs.filter(store=store_filter)
+        creditmemo_qs = creditmemo_qs.filter(store=store_filter)
+    
+    if month_filter:
+        try:
+            month_nums = [int(m) for m in month_filter if m.strip()]
+            if month_nums:
+                invoice_qs = invoice_qs.filter(posting_date__month__in=month_nums)
+                creditmemo_qs = creditmemo_qs.filter(posting_date__month__in=month_nums)
+        except (ValueError, TypeError):
+            pass
+    
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    
+    start_date_parsed = parse_date(start_date)
+    end_date_parsed = parse_date(end_date)
+    
+    if start_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__gte=start_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__gte=start_date_parsed)
+    
+    if end_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__lte=end_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__lte=end_date_parsed)
+    
+    # Apply firm and item filters (simplified)
+    if firm_filter:
+        clean_firms = [f for f in firm_filter if f.strip()]
+        if clean_firms:
+            firm_item_codes = Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            if firm_item_codes:
+                firm_customer_codes_inv = SAPARInvoiceItem.objects.filter(
+                    invoice__in=invoice_qs,
+                    item_code__in=firm_item_codes
+                ).values_list('invoice__customer_code', flat=True).distinct()
+                firm_customer_codes_cm = SAPARCreditMemoItem.objects.filter(
+                    credit_memo__in=creditmemo_qs,
+                    item_code__in=firm_item_codes
+                ).values_list('credit_memo__customer_code', flat=True).distinct()
+                all_firm_customer_codes = list(set(list(firm_customer_codes_inv) + list(firm_customer_codes_cm)))
+                if all_firm_customer_codes:
+                    invoice_qs = invoice_qs.filter(customer_code__in=all_firm_customer_codes)
+                    creditmemo_qs = creditmemo_qs.filter(customer_code__in=all_firm_customer_codes)
+                else:
+                    invoice_qs = invoice_qs.none()
+                    creditmemo_qs = creditmemo_qs.none()
+    
+    if item_filter:
+        clean_items = [i for i in item_filter if i.strip()]
+        if clean_items:
+            item_customer_codes_inv = SAPARInvoiceItem.objects.filter(
+                invoice__in=invoice_qs,
+                item_code__in=clean_items
+            ).values_list('invoice__customer_code', flat=True).distinct()
+            item_customer_codes_cm = SAPARCreditMemoItem.objects.filter(
+                credit_memo__in=creditmemo_qs,
+                item_code__in=clean_items
+            ).values_list('credit_memo__customer_code', flat=True).distinct()
+            all_item_customer_codes = list(set(list(item_customer_codes_inv) + list(item_customer_codes_cm)))
+            if all_item_customer_codes:
+                invoice_qs = invoice_qs.filter(customer_code__in=all_item_customer_codes)
+                creditmemo_qs = creditmemo_qs.filter(customer_code__in=all_item_customer_codes)
+            else:
+                invoice_qs = invoice_qs.none()
+                creditmemo_qs = creditmemo_qs.none()
+    
+    # Build customer data (simplified version)
+    customer_data = {}
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+    
+    for year in years:
+        year_invoices = invoice_qs.filter(posting_date__year=year)
+        year_creditmemos = creditmemo_qs.filter(posting_date__year=year)
+        
+        invoice_customers = year_invoices.values('customer_code').annotate(
+            total_sales=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
+            total_gp=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField())),
+            latest_posting_date=Max('posting_date')
+        )
+        
+        creditmemo_customers = year_creditmemos.values('customer_code').annotate(
+            total_sales=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
+            total_gp=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField())),
+            latest_posting_date=Max('posting_date')
+        )
+        
+        if search_query:
+            search_customer_codes = SAPARInvoice.objects.filter(
+                Q(customer_code__icontains=search_query) | Q(customer_name__icontains=search_query)
+            ).values_list('customer_code', flat=True).distinct()
+            search_customer_codes_cm = SAPARCreditMemo.objects.filter(
+                Q(customer_code__icontains=search_query) | Q(customer_name__icontains=search_query)
+            ).values_list('customer_code', flat=True).distinct()
+            all_search_codes = list(set(list(search_customer_codes) + list(search_customer_codes_cm)))
+            if all_search_codes:
+                invoice_customers = invoice_customers.filter(customer_code__in=all_search_codes)
+                creditmemo_customers = creditmemo_customers.filter(customer_code__in=all_search_codes)
+            else:
+                invoice_customers = invoice_customers.none()
+                creditmemo_customers = creditmemo_customers.none()
+        
+        invoice_customers_list = list(invoice_customers)
+        creditmemo_customers_list = list(creditmemo_customers)
+        
+        invoice_customer_codes = [item['customer_code'] for item in invoice_customers_list if item.get('customer_code')]
+        creditmemo_customer_codes = [item['customer_code'] for item in creditmemo_customers_list if item.get('customer_code')]
+        all_customer_codes = list(set(invoice_customer_codes + creditmemo_customer_codes))
+        
+        customer_name_map = {}
+        customer_salesman_map = {}
+        if all_customer_codes:
+            latest_invoice_customers = SAPARInvoice.objects.filter(
+                customer_code__in=all_customer_codes
+            ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+                'customer_code', 'customer_name', 'salesman_name', 'posting_date'
+            ).order_by('customer_code', '-posting_date', '-id')
+            
+            for cust in latest_invoice_customers:
+                code = cust['customer_code']
+                if code and code not in customer_name_map:
+                    customer_name_map[code] = cust['customer_name'] or 'Unknown'
+                    customer_salesman_map[code] = cust.get('salesman_name') or ''
+            
+            latest_creditmemo_customers = SAPARCreditMemo.objects.filter(
+                customer_code__in=all_customer_codes
+            ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+                'customer_code', 'customer_name', 'salesman_name', 'posting_date'
+            ).order_by('customer_code', '-posting_date', '-id')
+            
+            for cust in latest_creditmemo_customers:
+                code = cust['customer_code']
+                if code and code not in customer_name_map:
+                    customer_name_map[code] = cust['customer_name'] or 'Unknown'
+                    customer_salesman_map[code] = cust.get('salesman_name') or ''
+        
+        customer_salesman_final_map = {}
+        if all_customer_codes:
+            latest_invoice_salesmen = year_invoices.filter(
+                customer_code__in=all_customer_codes
+            ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+                'customer_code', 'salesman_name', 'posting_date'
+            ).order_by('customer_code', '-posting_date', '-id')
+            
+            for inv in latest_invoice_salesmen:
+                code = inv['customer_code']
+                if code and code not in customer_salesman_final_map:
+                    customer_salesman_final_map[code] = inv.get('salesman_name') or ''
+            
+            latest_creditmemo_salesmen = year_creditmemos.filter(
+                customer_code__in=all_customer_codes
+            ).exclude(customer_code__isnull=True).exclude(customer_code='').values(
+                'customer_code', 'salesman_name', 'posting_date'
+            ).order_by('customer_code', '-posting_date', '-id')
+            
+            for cm in latest_creditmemo_salesmen:
+                code = cm['customer_code']
+                if code and code not in customer_salesman_final_map:
+                    customer_salesman_final_map[code] = cm.get('salesman_name') or ''
+            
+            for code in all_customer_codes:
+                if code not in customer_salesman_final_map:
+                    customer_salesman_final_map[code] = customer_salesman_map.get(code, '')
+        
+        for item in invoice_customers_list:
+            code = item['customer_code'] or ''
+            if not code:
+                continue
+            name = customer_name_map.get(code, 'Unknown')
+            salesman = customer_salesman_final_map.get(code, '')
+            latest_date = item.get('latest_posting_date')
+            key = code
+            
+            if key not in customer_data:
+                customer_data[key] = {
+                    'customer_code': code,
+                    'customer_name': name,
+                    'salesman_name': salesman,
+                    'latest_posting_date': latest_date,
+                    'years': {}
+                }
+            
+            if year not in customer_data[key]['years']:
+                customer_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                }
+            
+            customer_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
+            customer_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
+        
+        for item in creditmemo_customers_list:
+            code = item['customer_code'] or ''
+            if not code:
+                continue
+            name = customer_name_map.get(code, 'Unknown')
+            salesman = customer_salesman_final_map.get(code, '')
+            latest_date = item.get('latest_posting_date')
+            key = code
+            
+            if key not in customer_data:
+                customer_data[key] = {
+                    'customer_code': code,
+                    'customer_name': name,
+                    'salesman_name': salesman,
+                    'latest_posting_date': latest_date,
+                    'years': {}
+                }
+            
+            if year not in customer_data[key]['years']:
+                customer_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                }
+            
+            customer_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
+            customer_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
+    
+    # Convert to sorted list
+    customers_list = sorted(
+        customer_data.values(),
+        key=lambda x: sum(y.get('total_sales', Decimal('0')) for y in x['years'].values()),
+        reverse=True
+    )
+    
+    # Create PDF
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Customer_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.5*inch
+    )
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Logo
+    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    try:
+        logo = Image(logo_url, width=2*inch, height=0.7*inch)
+        elements.append(logo)
+        elements.append(Spacer(1, 0.2*inch))
+    except Exception:
+        pass
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("Customer Performance Analysis", title_style))
+    elements.append(Spacer(1, 0.1*inch))
+    
+    # Filter info
+    filter_info = []
+    if store_filter:
+        filter_info.append(f"Store: {store_filter}")
+    if category_filter != 'All':
+        filter_info.append(f"Category: {category_filter}")
+    if salesmen_filter:
+        filter_info.append(f"Salesmen: {', '.join(salesmen_filter)}")
+    if firm_filter:
+        filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
+    if month_filter:
+        filter_info.append(f"Months: {', '.join(month_filter)}")
+    if start_date or end_date:
+        filter_info.append(f"Date Range: {start_date or 'Start'} to {end_date or 'End'}")
+    if search_query:
+        filter_info.append(f"Search: {search_query}")
+    
+    if filter_info:
+        filter_style = ParagraphStyle(
+            'FilterStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_LEFT
+        )
+        elements.append(Paragraph("Filters: " + " | ".join(filter_info), filter_style))
+        elements.append(Spacer(1, 0.15*inch))
+    
+    # Table headers with Paragraph for proper rendering
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.whitesmoke,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    header_data = [[
+        Paragraph('Customer Name', header_style),
+        Paragraph('Salesman', header_style)
+    ]]
+    for year in years:
+        if is_admin:
+            header_data[0].extend([
+                Paragraph(f'{year} Sales', header_style),
+                Paragraph(f'{year} GP', header_style),
+                Paragraph(f'{year} GP%', header_style)
+            ])
+        else:
+            header_data[0].append(Paragraph(f'{year} Sales', header_style))
+    
+    # Table data with wrapped text
+    table_data = [header_data[0]]
+    
+    # Create a style for wrapping text
+    wrap_style = ParagraphStyle(
+        'WrapStyle',
+        parent=styles['Normal'],
+        fontSize=7,
+        leading=9,
+        alignment=TA_LEFT
+    )
+    
+    for customer in customers_list:
+        # Use Paragraph for text wrapping
+        customer_name_para = Paragraph(customer['customer_name'], wrap_style)
+        salesman_name_para = Paragraph(customer['salesman_name'], wrap_style)
+        
+        row = [customer_name_para, salesman_name_para]
+        
+        for year in years:
+            year_data = customer['years'].get(year, {})
+            sales = year_data.get('total_sales', Decimal('0'))
+            gp = year_data.get('total_gp', Decimal('0'))
+            
+            row.append(Paragraph(f"{sales:,.2f}", wrap_style))
+            if is_admin:
+                row.append(Paragraph(f"{gp:,.2f}", wrap_style))
+                gp_percent = (gp / sales * 100) if sales > 0 else Decimal('0')
+                row.append(Paragraph(f"{gp_percent:.2f}%", wrap_style))
+        
+        table_data.append(row)
+    
+    # Create table with adjusted column widths to fit landscape A4
+    # Landscape A4: 11.69 x 8.27 inches, minus margins (0.5*2 = 1 inch each side) = 10.69 inches available
+    col_widths = [2.2*inch, 1.2*inch]  # Customer Name, Salesman
+    for year in years:
+        col_widths.append(0.85*inch)  # Sales
+        if is_admin:
+            col_widths.append(0.75*inch)  # GP
+            col_widths.append(0.65*inch)  # GP%
+    
+    # Adjust if total width exceeds available space
+    total_width = sum(col_widths)
+    available_width = 10.69*inch
+    if total_width > available_width:
+        scale_factor = available_width / total_width
+        col_widths = [w * scale_factor for w in col_widths]
+    
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    # Table style with smaller fonts and proper wrapping
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ])
+    
+    table.setStyle(table_style)
+    elements.append(table)
+    
+    # Build PDF
+    doc.build(elements)
+    pdf_value = buffer.getvalue()
+    buffer.close()
+    response.write(pdf_value)
+    
+    return response

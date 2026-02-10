@@ -8353,6 +8353,63 @@ def item_analysis(request):
     # Total count for display
     total_count = len(items_list)
     
+    # Check if this is an AJAX request
+    is_ajax = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+        request.GET.get('ajax') == '1'
+    )
+    
+    if is_ajax:
+        # Return JSON response for AJAX requests
+        try:
+            from django.template.loader import render_to_string
+            # Render table rows (including totals row)
+            table_html = render_to_string('salesorders/_item_analysis_table.html', {
+                'items': page_obj,
+                'years': years,
+                'is_admin': is_admin,
+                'totals_list': totals_list,
+            }, request=request)
+            
+            # Render pagination HTML if needed
+            pagination_html = ''
+            if paginator.num_pages > 1:
+                try:
+                    pagination_html = render_to_string('salesorders/_pagination.html', {
+                        'page_obj': page_obj,
+                    }, request=request)
+                except Exception as e:
+                    logger.warning(f"Could not render pagination: {e}")
+            
+            # Render filter display HTML
+            filter_display_html = ''
+            if salesmen_filter or firm_filter:
+                filter_display_html = render_to_string('salesorders/_item_analysis_filter_display.html', {
+                    'filters': {
+                        'salesman': salesmen_filter,
+                        'firm': firm_filter,
+                    },
+                }, request=request)
+            
+            return JsonResponse({
+                'success': True,
+                'table_html': table_html,
+                'pagination_html': pagination_html,
+                'filter_display_html': filter_display_html,
+                'total_count': total_count,
+                'page_number': page_obj.number,
+                'num_pages': paginator.num_pages,
+                'has_previous': page_obj.has_previous(),
+                'has_next': page_obj.has_next(),
+                'items_count': len(page_obj),
+            })
+        except Exception as e:
+            logger.error(f"Error rendering AJAX response: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+    
     context = {
         'items': page_obj,  # Pass paginated items
         'page_obj': page_obj,  # Also pass as page_obj for pagination template
@@ -8376,3 +8433,457 @@ def item_analysis(request):
     }
     
     return render(request, 'salesorders/item_analysis.html', context)
+
+
+@login_required
+def export_item_analysis_pdf(request):
+    """
+    Export Item Analysis to PDF with all current filters applied
+    Reuses the same logic as item_analysis view
+    """
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    from django.http import HttpResponse
+    from so.models import SAPARInvoiceItem, SAPARCreditMemoItem, Items
+    from django.db.models import Avg, Case, When, F, Q, Max
+    
+    # Get current year
+    current_year = datetime.now().year
+    years = [2026, 2025, 2024]
+    
+    # Get filters (same as item_analysis)
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    store_filter = request.GET.get('store', '').strip()
+    month_filter = request.GET.getlist('month')
+    start_date = request.GET.get('start', '').strip()
+    end_date = request.GET.get('end', '').strip()
+    category_filter = request.GET.get('category', 'All').strip()
+    
+    # Get base querysets
+    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Apply filters (same logic as item_analysis)
+    if category_filter and category_filter != 'All':
+        category_salesmen = get_salesmen_by_category(category_filter, invoice_qs)
+        if category_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=category_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=category_salesmen)
+        else:
+            invoice_qs = invoice_qs.none()
+            creditmemo_qs = creditmemo_qs.none()
+    
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
+    
+    if store_filter:
+        invoice_qs = invoice_qs.filter(store=store_filter)
+        creditmemo_qs = creditmemo_qs.filter(store=store_filter)
+    
+    if month_filter:
+        try:
+            month_nums = [int(m) for m in month_filter if m.strip()]
+            if month_nums:
+                invoice_qs = invoice_qs.filter(posting_date__month__in=month_nums)
+                creditmemo_qs = creditmemo_qs.filter(posting_date__month__in=month_nums)
+        except (ValueError, TypeError):
+            pass
+    
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    
+    start_date_parsed = parse_date(start_date)
+    end_date_parsed = parse_date(end_date)
+    
+    if start_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__gte=start_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__gte=start_date_parsed)
+    
+    if end_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__lte=end_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__lte=end_date_parsed)
+    
+    if firm_filter:
+        clean_firms = [f for f in firm_filter if f.strip()]
+        if clean_firms:
+            firm_item_codes = Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            if firm_item_codes:
+                invoice_qs = invoice_qs.filter(items__item_code__in=firm_item_codes).distinct()
+                creditmemo_qs = creditmemo_qs.filter(items__item_code__in=firm_item_codes).distinct()
+            else:
+                invoice_qs = invoice_qs.none()
+                creditmemo_qs = creditmemo_qs.none()
+    
+    # Build item data (simplified version)
+    item_data = {}
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+    
+    for year in years:
+        year_invoices = invoice_qs.filter(posting_date__year=year)
+        year_creditmemos = creditmemo_qs.filter(posting_date__year=year)
+        
+        invoice_items = SAPARInvoiceItem.objects.filter(
+            invoice__in=year_invoices
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
+            total_sales=Sum(
+                Case(
+                    When(
+                        Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                        then=F('line_total_after_discount')
+                    ),
+                    default=F('line_total')
+                )
+            ),
+            total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+            total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('invoice__posting_date')
+        )
+        
+        creditmemo_items = SAPARCreditMemoItem.objects.filter(
+            credit_memo__in=year_creditmemos
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
+            total_sales=Sum(
+                Case(
+                    When(
+                        Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                        then=F('line_total_after_discount')
+                    ),
+                    default=F('line_total')
+                )
+            ),
+            total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+            total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('credit_memo__posting_date')
+        )
+        
+        if search_query:
+            search_item_codes = Items.objects.filter(
+                Q(item_code__icontains=search_query) | 
+                Q(item_description__icontains=search_query) |
+                Q(upc_code__icontains=search_query)
+            ).values_list('item_code', flat=True)
+            
+            if search_item_codes:
+                invoice_items = invoice_items.filter(item_code__in=search_item_codes)
+                creditmemo_items = creditmemo_items.filter(item_code__in=search_item_codes)
+            else:
+                invoice_items = invoice_items.none()
+                creditmemo_items = creditmemo_items.none()
+        
+        invoice_items_list = list(invoice_items)
+        creditmemo_items_list = list(creditmemo_items)
+        
+        invoice_item_codes = [item['item_code'] for item in invoice_items_list if item.get('item_code')]
+        creditmemo_item_codes = [item['item_code'] for item in creditmemo_items_list if item.get('item_code')]
+        all_item_codes = list(set(invoice_item_codes + creditmemo_item_codes))
+        
+        item_desc_map = {}
+        item_upc_map = {}
+        if all_item_codes:
+            latest_invoice_items = SAPARInvoiceItem.objects.filter(
+                item_code__in=all_item_codes
+            ).exclude(item_code__isnull=True).exclude(item_code='').values(
+                'item_code', 'item_description', 'upc_code', 'invoice__posting_date'
+            ).order_by('item_code', '-invoice__posting_date', '-id')
+            
+            for item in latest_invoice_items:
+                code = item['item_code']
+                if code and code not in item_desc_map:
+                    item_desc_map[code] = item.get('item_description') or 'Unknown'
+                    item_upc_map[code] = item.get('upc_code') or ''
+        
+        for item in invoice_items_list:
+            code = item['item_code'] or ''
+            if not code:
+                continue
+            desc = item_desc_map.get(code, item.get('latest_description', 'Unknown'))
+            upc = item_upc_map.get(code, item.get('upc_code', ''))
+            latest_date = item.get('latest_posting_date')
+            key = code
+            
+            if key not in item_data:
+                item_data[key] = {
+                    'item_code': code,
+                    'item_description': desc,
+                    'upc_code': upc,
+                    'latest_posting_date': latest_date,
+                    'years': {}
+                }
+            else:
+                if latest_date and item_data[key].get('latest_posting_date'):
+                    if latest_date > item_data[key]['latest_posting_date']:
+                        item_data[key]['item_description'] = desc
+                        item_data[key]['upc_code'] = upc
+                        item_data[key]['latest_posting_date'] = latest_date
+                elif latest_date:
+                    item_data[key]['item_description'] = desc
+                    item_data[key]['upc_code'] = upc
+                    item_data[key]['latest_posting_date'] = latest_date
+            
+            if year not in item_data[key]['years']:
+                item_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'total_quantity': Decimal('0'),
+                    'avg_rate': Decimal('0'),
+                }
+            
+            item_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
+            item_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
+            item_data[key]['years'][year]['total_quantity'] += item.get('total_quantity', Decimal('0'))
+            if item.get('avg_rate'):
+                item_data[key]['years'][year]['avg_rate'] = item.get('avg_rate', Decimal('0'))
+        
+        for item in creditmemo_items_list:
+            code = item['item_code'] or ''
+            if not code:
+                continue
+            desc = item_desc_map.get(code, item.get('latest_description', 'Unknown'))
+            upc = item_upc_map.get(code, item.get('upc_code', ''))
+            latest_date = item.get('latest_posting_date')
+            key = code
+            
+            if key not in item_data:
+                item_data[key] = {
+                    'item_code': code,
+                    'item_description': desc,
+                    'upc_code': upc,
+                    'latest_posting_date': latest_date,
+                    'years': {}
+                }
+            else:
+                if latest_date and item_data[key].get('latest_posting_date'):
+                    if latest_date > item_data[key]['latest_posting_date']:
+                        item_data[key]['item_description'] = desc
+                        item_data[key]['upc_code'] = upc
+                        item_data[key]['latest_posting_date'] = latest_date
+                elif latest_date:
+                    item_data[key]['item_description'] = desc
+                    item_data[key]['upc_code'] = upc
+                    item_data[key]['latest_posting_date'] = latest_date
+            
+            if year not in item_data[key]['years']:
+                item_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'total_quantity': Decimal('0'),
+                    'avg_rate': Decimal('0'),
+                }
+            
+            item_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
+            item_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
+            item_data[key]['years'][year]['total_quantity'] += item.get('total_quantity', Decimal('0'))
+            if item.get('avg_rate'):
+                item_data[key]['years'][year]['avg_rate'] = item.get('avg_rate', Decimal('0'))
+    
+    # Convert to sorted list
+    items_list = sorted(
+        item_data.values(),
+        key=lambda x: sum(y.get('total_sales', Decimal('0')) for y in x['years'].values()),
+        reverse=True
+    )
+    
+    # Create PDF
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Item_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=0.5*inch,
+        leftMargin=0.5*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.5*inch
+    )
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Logo
+    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    try:
+        logo = Image(logo_url, width=2*inch, height=0.7*inch)
+        elements.append(logo)
+        elements.append(Spacer(1, 0.2*inch))
+    except Exception:
+        pass
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("Item Performance Analysis", title_style))
+    elements.append(Spacer(1, 0.1*inch))
+    
+    # Filter info
+    filter_info = []
+    if store_filter:
+        filter_info.append(f"Store: {store_filter}")
+    if category_filter != 'All':
+        filter_info.append(f"Category: {category_filter}")
+    if salesmen_filter:
+        filter_info.append(f"Salesmen: {', '.join(salesmen_filter)}")
+    if firm_filter:
+        filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
+    if month_filter:
+        filter_info.append(f"Months: {', '.join(month_filter)}")
+    if start_date or end_date:
+        filter_info.append(f"Date Range: {start_date or 'Start'} to {end_date or 'End'}")
+    if search_query:
+        filter_info.append(f"Search: {search_query}")
+    
+    if filter_info:
+        filter_style = ParagraphStyle(
+            'FilterStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_LEFT
+        )
+        elements.append(Paragraph("Filters: " + " | ".join(filter_info), filter_style))
+        elements.append(Spacer(1, 0.15*inch))
+    
+    # Table headers with Paragraph for proper rendering
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.whitesmoke,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    header_data = [[
+        Paragraph('Item Code', header_style),
+        Paragraph('Description', header_style),
+        Paragraph('UPC', header_style)
+    ]]
+    for year in years:
+        if is_admin:
+            header_data[0].extend([
+                Paragraph(f'{year} Sales', header_style),
+                Paragraph(f'{year} GP', header_style),
+                Paragraph(f'{year} GP%', header_style),
+                Paragraph(f'{year} Qty', header_style),
+                Paragraph(f'{year} Avg Rate', header_style)
+            ])
+        else:
+            header_data[0].extend([
+                Paragraph(f'{year} Sales', header_style),
+                Paragraph(f'{year} Qty', header_style),
+                Paragraph(f'{year} Avg Rate', header_style)
+            ])
+    
+    # Table data with wrapped text
+    table_data = [header_data[0]]
+    
+    # Create a style for wrapping text
+    wrap_style = ParagraphStyle(
+        'WrapStyle',
+        parent=styles['Normal'],
+        fontSize=6.5,
+        leading=8,
+        alignment=TA_LEFT
+    )
+    
+    for item in items_list:
+        # Use Paragraph for text wrapping
+        item_code_para = Paragraph(item['item_code'], wrap_style)
+        item_desc_para = Paragraph(item['item_description'] or '', wrap_style)
+        item_upc_para = Paragraph(item['upc_code'] or '', wrap_style)
+        
+        row = [item_code_para, item_desc_para, item_upc_para]
+        
+        for year in years:
+            year_data = item['years'].get(year, {})
+            sales = year_data.get('total_sales', Decimal('0'))
+            gp = year_data.get('total_gp', Decimal('0'))
+            qty = year_data.get('total_quantity', Decimal('0'))
+            avg_rate = year_data.get('avg_rate', Decimal('0'))
+            
+            row.append(Paragraph(f"{sales:,.2f}", wrap_style))
+            if is_admin:
+                row.append(Paragraph(f"{gp:,.2f}", wrap_style))
+                gp_percent = (gp / sales * 100) if sales > 0 else Decimal('0')
+                row.append(Paragraph(f"{gp_percent:.2f}%", wrap_style))
+            row.append(Paragraph(f"{qty:,.0f}", wrap_style))
+            row.append(Paragraph(f"{avg_rate:,.2f}", wrap_style))
+        
+        table_data.append(row)
+    
+    # Create table with adjusted column widths to fit landscape A4
+    # Landscape A4: 11.69 x 8.27 inches, minus margins (0.5*2 = 1 inch each side) = 10.69 inches available
+    col_widths = [0.75*inch, 1.5*inch, 0.7*inch]  # Item Code, Description, UPC
+    for year in years:
+        col_widths.append(0.75*inch)  # Sales
+        if is_admin:
+            col_widths.append(0.65*inch)  # GP
+            col_widths.append(0.6*inch)  # GP%
+        col_widths.append(0.6*inch)  # Qty
+        col_widths.append(0.7*inch)  # Avg Rate
+    
+    # Adjust if total width exceeds available space
+    total_width = sum(col_widths)
+    available_width = 10.69*inch
+    if total_width > available_width:
+        scale_factor = available_width / total_width
+        col_widths = [w * scale_factor for w in col_widths]
+    
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    # Table style with smaller fonts and proper wrapping
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ])
+    
+    table.setStyle(table_style)
+    elements.append(table)
+    
+    # Build PDF
+    doc.build(elements)
+    pdf_value = buffer.getvalue()
+    buffer.close()
+    response.write(pdf_value)
+    
+    return response

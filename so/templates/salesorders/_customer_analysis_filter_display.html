@@ -1,0 +1,26 @@
+{% if filters.salesman or filters.firm or filters.item %}
+<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; font-weight: 400;">
+  {% if filters.salesman %}
+    <span style="color: var(--text-secondary);">Salesmen: </span>
+    {% for salesman in filters.salesman %}
+      <span style="background: var(--primary-light); color: var(--primary); padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ salesman }}</span>
+    {% endfor %}
+  {% endif %}
+  {% if filters.firm %}
+    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman %}12px{% else %}0{% endif %};">Firms: </span>
+    {% for firm in filters.firm %}
+      <span style="background: var(--primary-light); color: var(--primary); padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ firm }}</span>
+    {% endfor %}
+  {% endif %}
+  {% if filters.item %}
+    <span style="color: var(--text-secondary); margin-left: {% if filters.firm or filters.salesman %}12px{% else %}0{% endif %};">Items: </span>
+    {% for item_code in filters.item %}
+      {% for item in items %}
+        {% if item.code == item_code %}
+          <span style="background: var(--primary-light); color: var(--primary); padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ item.description|default:item.code }}</span>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+</div>
+{% endif %}

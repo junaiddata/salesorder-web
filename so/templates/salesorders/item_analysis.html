@@ -656,6 +656,10 @@
           <i class="fas fa-users"></i>
           Customer Analysis
         </a>
+        <a href="{% url 'export_item_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
+          <i class="fas fa-file-pdf"></i>
+          Export PDF
+        </a>
         <a href="{% url 'home' %}" class="btn btn-secondary">
           <i class="fas fa-arrow-left"></i>
           Back
@@ -794,7 +798,14 @@
     <!-- Table Card -->
     <div class="table-card">
       <div class="table-header">
-        <h3 class="table-title">Item Performance Matrix</h3>
+        <div>
+          <h3 class="table-title">Item Performance Matrix</h3>
+          <div id="filter-display-container">
+            {% if filters.salesman or filters.firm %}
+            {% include 'salesorders/_item_analysis_filter_display.html' with filters=filters %}
+            {% endif %}
+          </div>
+        </div>
       </div>
       <div class="table-wrapper">
         <table>
@@ -964,11 +975,37 @@
       const getFirmCheckboxes = () => firmOptionsList.querySelectorAll('input[type="checkbox"]');
       const getFirmLabels = () => firmOptionsList.querySelectorAll('.option-label');
 
+      // Function to sort firm labels - selected firms first
+      function sortFirmLabels() {
+        const labels = Array.from(getFirmLabels());
+        const container = firmOptionsList;
+        
+        // Separate selected and unselected
+        const selected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && checkbox.checked;
+        });
+        const unselected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && !checkbox.checked;
+        });
+        
+        // Clear container
+        container.innerHTML = '';
+        
+        // Add selected firms first
+        selected.forEach(label => container.appendChild(label));
+        
+        // Add unselected firms after
+        unselected.forEach(label => container.appendChild(label));
+      }
+
       firmTrigger.addEventListener('click', e => {
         e.stopPropagation();
         firmOptions.classList.toggle('active');
         if (firmOptions.classList.contains('active')) {
-          // Focus search box when dropdown opens
+          // Sort firms when opening - selected first
+          sortFirmLabels();
           setTimeout(() => firmSearch.focus(), 100);
         } else {
           // Clear search when dropdown closes
@@ -984,14 +1021,44 @@
         const searchTerm = this.value.toLowerCase().trim();
         const labels = getFirmLabels();
         
-        labels.forEach(label => {
-          const text = label.querySelector('.option-text').textContent.toLowerCase();
-          if (text.includes(searchTerm)) {
-            label.classList.remove('hidden');
-          } else {
-            label.classList.add('hidden');
-          }
-        });
+        if (searchTerm === '') {
+          // If search is cleared, show all and sort (selected first)
+          labels.forEach(label => label.classList.remove('hidden'));
+          sortFirmLabels();
+        } else {
+          // Filter and sort: selected matching firms first, then unselected matching firms
+          const selectedMatching = [];
+          const unselectedMatching = [];
+          const hidden = [];
+          
+          labels.forEach(label => {
+            const text = label.querySelector('.option-text').textContent.toLowerCase();
+            const checkbox = label.querySelector('input[type="checkbox"]');
+            const isChecked = checkbox && checkbox.checked;
+            
+            // Check if matches search
+            const matches = text.includes(searchTerm);
+            
+            if (matches) {
+              if (isChecked) {
+                selectedMatching.push(label);
+              } else {
+                unselectedMatching.push(label);
+              }
+              label.classList.remove('hidden');
+            } else {
+              hidden.push(label);
+              label.classList.add('hidden');
+            }
+          });
+          
+          // Reorder: selected matching first, then unselected matching
+          const container = firmOptionsList;
+          container.innerHTML = '';
+          selectedMatching.forEach(label => container.appendChild(label));
+          unselectedMatching.forEach(label => container.appendChild(label));
+          hidden.forEach(label => container.appendChild(label));
+        }
       });
 
       firmSearch.addEventListener('click', e => e.stopPropagation());
@@ -1007,6 +1074,11 @@
         } else {
           firmText.textContent = `${checked.length} Selected`;
           firmText.style.opacity = "1";
+        }
+        
+        // Re-sort firms when selection changes (selected first)
+        if (firmOptions.classList.contains('active')) {
+          sortFirmLabels();
         }
       }
 
@@ -1088,8 +1160,45 @@
           params.set('category', categoryInput.value);
         }
         
-        // Reload page with filters
-        window.location.href = '{% url "item_analysis" %}?' + params.toString();
+        // Make AJAX request
+        fetch('{% url "item_analysis" %}?' + params.toString() + '&ajax=1', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update table
+            const tableWrapper = document.querySelector('.table-wrapper');
+            if (tableWrapper && data.table_html) {
+              const tbody = tableWrapper.querySelector('tbody');
+              if (tbody && data.table_html) {
+                tbody.outerHTML = data.table_html;
+              }
+            }
+            
+            // Update pagination
+            const paginationContainer = document.querySelector('.pagination');
+            if (paginationContainer) {
+              paginationContainer.outerHTML = data.pagination_html || '';
+            }
+            
+            // Update filter display
+            if (filterDisplayContainer && data.filter_display_html !== undefined) {
+              filterDisplayContainer.innerHTML = data.filter_display_html || '';
+            }
+            
+            // Update URL without reload
+            window.history.pushState({}, '', '{% url "item_analysis" %}?' + params.toString());
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Fallback to page reload on error
+          window.location.href = '{% url "item_analysis" %}?' + params.toString();
+        });
       });
 
       // Clear filters button
@@ -1098,24 +1207,62 @@
         window.location.href = '{% url "item_analysis" %}';
       });
 
-      // Pagination handling - preserve all filters when navigating pages
-      const pagination = document.querySelector('.pagination');
-      if (pagination) {
-        pagination.addEventListener('click', function(e) {
-          const a = e.target.closest('a[data-page]');
-          if (!a) return;
-          e.preventDefault();
-          
-          // Get current URL parameters
-          const currentParams = new URLSearchParams(window.location.search);
-          
-          // Update page number
-          currentParams.set('page', a.getAttribute('data-page'));
-          
-          // Navigate with all filters preserved
+      // Pagination handling - preserve all filters when navigating pages (AJAX)
+      document.addEventListener('click', function(e) {
+        const pagination = document.querySelector('.pagination');
+        if (!pagination) return;
+        
+        const a = e.target.closest('a[data-page]');
+        if (!a || !pagination.contains(a)) return;
+        
+        e.preventDefault();
+        
+        // Get current URL parameters
+        const currentParams = new URLSearchParams(window.location.search);
+        
+        // Update page number
+        currentParams.set('page', a.getAttribute('data-page'));
+        
+        // Make AJAX request
+        fetch('{% url "item_analysis" %}?' + currentParams.toString() + '&ajax=1', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update table
+            const tableWrapper = document.querySelector('.table-wrapper');
+            if (tableWrapper && data.table_html) {
+              const tbody = tableWrapper.querySelector('tbody');
+              if (tbody) {
+                tbody.outerHTML = data.table_html;
+              }
+            }
+            
+            // Update pagination
+            const paginationContainer = document.querySelector('.pagination');
+            if (paginationContainer) {
+              paginationContainer.outerHTML = data.pagination_html || '';
+            }
+            
+            // Update filter display
+            if (filterDisplayContainer && data.filter_display_html !== undefined) {
+              filterDisplayContainer.innerHTML = data.filter_display_html || '';
+            }
+            
+            // Update URL without reload
+            window.history.pushState({}, '', '{% url "item_analysis" %}?' + currentParams.toString());
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Fallback to page reload on error
           window.location.href = '{% url "item_analysis" %}?' + currentParams.toString();
         });
-      }
+      });
     });
   </script>
 </body>
