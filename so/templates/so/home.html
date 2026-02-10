@@ -456,6 +456,81 @@
             margin: 0;
         }
 
+        /* Calendar Widget Styles */
+        .calendar-widget {
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+        }
+
+        @media (max-width: 1200px) {
+            .calendar-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .calendar-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .calendar-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .calendar-day {
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            padding: 0.5rem 0.3rem;
+            text-align: center;
+            transition: all 0.2s ease;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .calendar-day:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .calendar-day-today {
+            border-color: var(--primary-color) !important;
+            background: #e0e7ff !important;
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2) !important;
+        }
+
+        .calendar-day-no-sales {
+            background: var(--gray-100) !important;
+            border-color: var(--gray-200) !important;
+            opacity: 0.6;
+        }
+
+        .calendar-day-no-sales .calendar-day-label {
+            color: var(--gray-400) !important;
+        }
+
+        .calendar-day-no-sales .calendar-day-sales {
+            color: var(--gray-400) !important;
+        }
+
+        .calendar-day-no-sales .calendar-day-gp {
+            color: var(--gray-400) !important;
+        }
+
         .actions-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -976,28 +1051,23 @@
                 </div>
             </div>
 
-            <!-- Last 6 Days Sales -->
+            <!-- This Month Calendar Widget -->
             <div style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="section-header">
-                    <h2 class="section-title">Last 6 Days</h2>
+                    <h2 class="section-title">This Month (Day 1 - {{today.day}})</h2>
                 </div>
-                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem;">
-                    {% for day in last_6_days %}
-                    <div class="stat-card" style="padding: 0.9rem 1rem;">
-                        <div class="stat-header" style="margin-bottom: 0.5rem;">
-                            <div>
-                                <h3 class="stat-value" style="font-size: 1rem;">{{day.sales|floatformat:2|intcomma}}</h3>
-                                <p class="stat-label" style="font-size: 0.7rem; margin-top: 0.2rem;">{{day.formatted_date}}</p>
-                            </div>
+                <div class="calendar-widget">
+                    <div class="calendar-grid">
+                        {% for day in month_days %}
+                        <div class="calendar-day {% if day.day == today.day %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
+                            <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{day.formatted_date}}</div>
+                            <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{day.sales|floatformat:0|intcomma}}</div>
+                            {% if is_admin %}
+                            <div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{day.gp|floatformat:0|intcomma}}</div>
+                            {% endif %}
                         </div>
-                        {% if is_admin %}
-                        <div class="stat-change positive" style="margin-top: 0.4rem; font-size: 0.65rem;">
-                            <i class="fas fa-chart-line"></i>
-                            GP: {{day.gp|floatformat:2|intcomma}}
-                        </div>
-                        {% endif %}
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
             </div>
 

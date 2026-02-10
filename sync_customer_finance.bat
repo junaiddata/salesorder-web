@@ -19,9 +19,13 @@ echo. >> "%LOG_FILE%"
 REM Activate virtual environment if you have one
 REM call venv\Scripts\activate
 
+REM Set environment variable for unbuffered output
+set PYTHONUNBUFFERED=1
+
 REM Run the Python scheduler script using pythonw (runs in background, no console window)
 REM The Python script has its own loop, so this will run continuously
-pythonw sync_customer_finance_cron.py >> "%LOG_FILE%" 2>&1
+REM Use -u flag for unbuffered output to ensure logs are written immediately
+pythonw -u sync_customer_finance_cron.py >> "%LOG_FILE%" 2>&1
 
 REM This line should never be reached unless the Python script exits
 echo [%date% %time%] Customer finance sync scheduler stopped unexpectedly. >> "%LOG_FILE%"

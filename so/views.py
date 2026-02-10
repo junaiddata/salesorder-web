@@ -1497,14 +1497,16 @@ def home(request):
             week_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
         )
     
-    # Calculate Last 6 Days Sales (skip days with 0.00 sales, e.g., Sundays)
-    last_6_days = []
-    days_checked = 0
-    i = 1
+    # Calculate This Month's Days (from 1st to today)
+    month_days = []
+    today_day = today.day
     
-    # Keep checking days until we have 6 days with sales > 0
-    while days_checked < 25 and len(last_6_days) < 6:  # Max 25 days back to avoid infinite loop
-        day_date = today - timedelta(days=i)
+    # Month names for formatting
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    # Get all days from 1st to today
+    for day_num in range(1, today_day + 1):
+        day_date = date(current_year, current_month, day_num)
         
         # Apply store filter for this day's data
         if store_filter and store_filter != 'Total':
@@ -1525,30 +1527,15 @@ def home(request):
                 day_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
             )
         
-        days_checked += 1
-        
-        # Skip days with 0.00 sales (e.g., Sundays)
-        if day_sales and day_sales > Decimal('0'):
-            # Format date (e.g., "8th Feb")
-            day_suffix = 'th'
-            if day_date.day in [1, 21, 31]:
-                day_suffix = 'st'
-            elif day_date.day in [2, 22]:
-                day_suffix = 'nd'
-            elif day_date.day in [3, 23]:
-                day_suffix = 'rd'
-            
-            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            formatted_date = f"{day_date.day}{day_suffix} {month_names[day_date.month - 1]}"
-            
-            last_6_days.append({
-                'date': day_date,
-                'formatted_date': formatted_date,
-                'sales': day_sales or Decimal('0'),
-                'gp': day_gp or Decimal('0'),
-            })
-        
-        i += 1
+        # Add all days (including zero sales days)
+        month_days.append({
+            'day': day_num,
+            'date': day_date,
+            'formatted_date': f"{month_names[current_month - 1]} {day_num}",
+            'sales': day_sales or Decimal('0'),
+            'gp': day_gp or Decimal('0'),
+            'has_sales': bool(day_sales and day_sales > Decimal('0')),
+        })
     
     return render(request, 'so/home.html', {
         'today_sales': today_sales or Decimal('0'),
@@ -1561,7 +1548,10 @@ def home(request):
         'week_gp': week_gp or Decimal('0'),
         'is_admin': is_admin,
         'store_filter': store_filter,
-        'last_6_days': last_6_days,
+        'month_days': month_days,
+        'current_month': current_month,
+        'current_year': current_year,
+        'today': today,
     })
 
 def sales_home(request):

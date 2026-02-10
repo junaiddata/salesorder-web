@@ -24,10 +24,11 @@ def run_sync():
     
     def log_message(msg):
         """Write message to both console and log file"""
-        print(msg)
+        print(msg, flush=True)  # Force flush for pythonw
         try:
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(msg + '\n')
+                f.flush()  # Force flush to file
         except Exception:
             pass  # If log write fails, continue anyway
     
@@ -41,6 +42,8 @@ def run_sync():
     
     try:
         log_message(f"[{datetime.now()}] Starting sync of Customer Finance Summary...")
+        log_message(f"[{datetime.now()}] Python command: {python_cmd}")
+        log_message(f"[{datetime.now()}] Working directory: {PROJECT_DIR}")
         
         # Use the PC script which syncs to VPS
         pc_script = os.path.join(PROJECT_DIR, "sync_customer_finance_pc.py")
@@ -50,29 +53,35 @@ def run_sync():
             log_message(error_msg)
             return False
         
+        log_message(f"[{datetime.now()}] Running PC script: {pc_script}")
+        log_message(f"[{datetime.now()}] Command: {python_cmd} sync_customer_finance_pc.py --once")
+        
         result = subprocess.run(
             [python_cmd, "sync_customer_finance_pc.py", "--once"],
             cwd=PROJECT_DIR,
             capture_output=True,
             text=True,
-            timeout=600  # 10 minute timeout
+            timeout=600,  # 10 minute timeout
+            env=dict(os.environ, PYTHONUNBUFFERED='1')  # Force unbuffered output
         )
+        
+        log_message(f"[{datetime.now()}] Subprocess completed with return code: {result.returncode}")
         
         if result.returncode == 0:
             log_message(f"[{datetime.now()}] [OK] Sync completed successfully")
             if result.stdout:
-                # Write all output to log file
+                # Write all output to log file immediately
                 try:
                     with open(log_file, 'a', encoding='utf-8') as f:
                         f.write(result.stdout)
+                        f.flush()  # Force flush
                 except Exception:
                     pass
-                # Print only important lines to console
+                # Also log important lines
                 for line in result.stdout.split('\n'):
-                    if line.strip() and ('[OK]' in line or '[ERROR]' in line or 'Error' in line or 'Success' in line or 'Sync' in line or 'created' in line.lower() or 'updated' in line.lower()):
-                        # Replace Unicode characters with ASCII-safe alternatives
-                        safe_line = line.encode('ascii', 'replace').decode('ascii')
-                        print(f"  {safe_line}")
+                    if line.strip():
+                        # Log all lines, not just filtered ones
+                        log_message(f"  {line.strip()}")
             return True
         else:
             error_msg = f"[{datetime.now()}] [ERROR] Sync failed with return code {result.returncode}"
@@ -94,23 +103,25 @@ def run_sync():
 
 def main():
     """Main loop"""
-    print(f"Starting customer finance sync scheduler (every {SYNC_INTERVAL // 60} minutes)...")
-    print(f"Project directory: {PROJECT_DIR}")
-    print(f"manage.py location: {os.path.join(PROJECT_DIR, 'manage.py')}")
-    print("Press Ctrl+C to stop\n")
-    
     log_file = os.path.join(PROJECT_DIR, "logs", "sync_customer_finance.log")
     logs_dir = os.path.join(PROJECT_DIR, "logs")
     os.makedirs(logs_dir, exist_ok=True)
     
     def log_message(msg):
         """Write message to both console and log file"""
-        print(msg)
+        print(msg, flush=True)  # Force flush for pythonw
         try:
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(msg + '\n')
+                f.flush()  # Force flush to file
         except Exception:
             pass
+    
+    log_message(f"Starting customer finance sync scheduler (every {SYNC_INTERVAL // 60} minutes)...")
+    log_message(f"Project directory: {PROJECT_DIR}")
+    log_message(f"manage.py location: {os.path.join(PROJECT_DIR, 'manage.py')}")
+    log_message("Press Ctrl+C to stop")
+    log_message("")  # Empty line
     
     try:
         while True:
