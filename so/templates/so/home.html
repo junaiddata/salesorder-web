@@ -1054,7 +1054,8 @@
             <!-- This Month Calendar Widget -->
             <div style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="section-header">
-                    <h2 class="section-title">This Month (Day 1 - {{today.day}})</h2>
+                    <!-- I want to show the month name in the section title it is not stored anywhere. Use inbuilt month name function like today.month  -->
+                    <h2 class="section-title"> {{ today|date:"F" }} Calendar</h2>
                 </div>
                 <div class="calendar-widget">
                     <div class="calendar-grid">
