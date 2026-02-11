@@ -62,7 +62,8 @@ class Customer(models.Model):
     month_pending_4 = models.FloatField(default=0.0)
     month_pending_5 = models.FloatField(default=0.0)
     month_pending_6 = models.FloatField(default=0.0)
-    old_months_pending = models.FloatField(default=0.0)
+    old_months_pending = models.FloatField(default=0.0, help_text="180+ days pending (6+ months)")
+    very_old_months_pending = models.FloatField(default=0.0, help_text="360+ days pending (6++ months)")
     credit_limit = models.FloatField(default=0.0)
     credit_days = models.CharField(default='0',max_length=30)
     total_outstanding = models.FloatField(default=0.0)
@@ -324,6 +325,10 @@ class SAPQuotation(models.Model):
     brand = models.CharField(max_length=255, blank=True, null=True)
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="VatSum from API")
+    total_discount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="TotalDiscount from API (header level)")
+    rounding_diff_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="RoundingDiffAmount from API")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, default=0.00, help_text="DiscountPercent from API (header level, optional)")
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
@@ -613,6 +618,8 @@ class SAPARCreditMemoItem(models.Model):
             models.Index(fields=['credit_memo', 'line_no']),
             models.Index(fields=['item_code']),
             models.Index(fields=['item']),
+            # Composite index for customer aggregation queries (item_code + customer_code via credit_memo)
+            models.Index(fields=['item_code', 'credit_memo']),
         ]
 
     def __str__(self):

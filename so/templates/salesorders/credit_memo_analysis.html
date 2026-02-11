@@ -1,0 +1,826 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Credit Memo Analysis - Itemwise Returns</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .store-tile, .month-tile {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .store-tile:hover, .month-tile:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .store-tile.active, .month-tile.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .filters-card {
+      padding: 20px 24px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    /* Multi-select dropdown styles */
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+    }
+
+    .select-box:hover {
+      border-color: var(--primary);
+    }
+
+    .options-container {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 1000;
+      max-height: 300px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .search-box-container {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+    }
+
+    .options-list {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .table-card {
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      background: var(--bg);
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    tbody td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    .item-row {
+      cursor: pointer;
+    }
+
+    .item-row:hover {
+      background: var(--bg);
+    }
+
+    .expand-icon {
+      display: inline-block;
+      width: 20px;
+      text-align: center;
+      transition: transform var(--transition);
+    }
+
+    .item-row.expanded .expand-icon {
+      transform: rotate(90deg);
+    }
+
+    .customer-details {
+      display: none;
+      background: var(--bg);
+    }
+
+    .item-row.expanded + .customer-details {
+      display: table-row;
+    }
+
+    .customer-details td {
+      padding: 16px 16px 16px 60px;
+      background: var(--bg);
+    }
+
+    .customer-info {
+      margin-bottom: 12px;
+    }
+
+    .customer-name {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .customer-meta {
+      font-size: 0.813rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .remarks-list {
+      margin-top: 8px;
+    }
+
+    .remark-item {
+      padding: 8px 12px;
+      background: var(--surface);
+      border-left: 3px solid var(--primary);
+      margin-bottom: 6px;
+      border-radius: 4px;
+      font-size: 0.813rem;
+    }
+
+    .remark-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .badge-danger {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      padding: 20px;
+    }
+
+    .pagination a {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+
+    .pagination a:hover {
+      background: var(--bg);
+    }
+
+    .pagination .current {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Credit Memo Analysis</h1>
+        <p>Itemwise returns analysis - Identify items returned most frequently</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'item_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-box"></i>
+          Item Analysis
+        </a>
+        <a href="{% url 'customer_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-users"></i>
+          Customer Analysis
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <!-- Store Filter Tiles -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Store:</label>
+        <button type="button" class="store-tile {% if not filters.store %}active{% endif %}" data-store="">
+          All Stores
+        </button>
+        <button type="button" class="store-tile {% if filters.store == 'HO' %}active{% endif %}" data-store="HO">
+          HO
+        </button>
+        <button type="button" class="store-tile {% if filters.store == 'Others' %}active{% endif %}" data-store="Others">
+          Others
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Filter Tiles -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Category:</label>
+        <button type="button" class="store-tile {% if filters.category == 'All' or not filters.category %}active{% endif %}" data-category="All">
+          All Categories
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Project' %}active{% endif %}" data-category="Project">
+          Project
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Trading' %}active{% endif %}" data-category="Trading">
+          Trading
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Export' %}active{% endif %}" data-category="Export">
+          Export
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Retail' %}active{% endif %}" data-category="Retail">
+          Retail
+        </button>
+        <button type="button" class="store-tile {% if filters.category == 'Others' %}active{% endif %}" data-category="Others">
+          Others
+        </button>
+        <input type="hidden" name="category" id="category-input" value="{{ filters.category|default:'All' }}">
+      </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'credit_memo_analysis' %}" id="filters-form">
+        <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" id="search-input" value="{{ filters.q }}" placeholder="Item Code, Description, or UPC" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen..." autocomplete="off">
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                    <label class="option-label" data-value="{{ salesman }}">
+                      <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                      <span class="option-text">{{ salesman }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" id="start-date" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" id="end-date" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field" style="display: flex; gap: 8px; align-self:end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
+            <button class="btn btn-primary" type="button" id="apply-filters">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Table Card -->
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <h3 class="table-title">Itemwise Credit Memo Analysis</h3>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 4px;">
+            Showing {{ total_count }} items • Click on any row to see customer details
+          </p>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 4px;">Grand Total Value</div>
+          <div style="font-size: 1.25rem; font-weight: 700; color: var(--danger);">
+            {{ grand_total_value|floatformat:2|intcomma }}
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+            Qty: {{ grand_total_quantity|intcomma }} • {{ grand_total_credit_memos }} Credit Memos • {{ grand_total_customers }} Customers
+          </div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;"></th>
+              <th>Item Code</th>
+              <th>Item Description</th>
+              <th>UPC</th>
+              <th class="text-right">Total Qty Returned</th>
+              <th class="text-center">Credit Memos</th>
+              <th class="text-center">Customers</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% include 'salesorders/_credit_memo_analysis_table.html' with items=items %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% if page_obj.paginator.num_pages > 1 %}
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Expand/collapse item rows
+      document.querySelectorAll('.item-row').forEach(row => {
+        row.addEventListener('click', function() {
+          this.classList.toggle('expanded');
+        });
+      });
+
+      // Store filter tiles
+      const storeTiles = document.querySelectorAll('.store-tile[data-store]');
+      const storeInput = document.getElementById('store-input');
+      
+      storeTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          storeTiles.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          if (storeInput) {
+            storeInput.value = this.dataset.store || '';
+          }
+        });
+      });
+
+      // Category filter tiles
+      const categoryTiles = document.querySelectorAll('.store-tile[data-category]');
+      const categoryInput = document.getElementById('category-input');
+      
+      categoryTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          categoryTiles.forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          if (categoryInput) {
+            categoryInput.value = this.dataset.category || 'All';
+          }
+        });
+      });
+
+      // Multi-select for Salesman
+      const salesmanWrapper = document.getElementById('salesman-wrapper');
+      const salesmanTrigger = document.getElementById('salesman-trigger');
+      const salesmanOptions = document.getElementById('salesman-options');
+      const salesmanOptionsList = document.getElementById('salesman-options-list');
+      const salesmanText = document.getElementById('salesman-text');
+      const salesmanSearch = document.getElementById('salesman-search');
+      const getSalesmanCheckboxes = () => salesmanOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getSalesmanLabels = () => salesmanOptionsList.querySelectorAll('.option-label');
+
+      salesmanTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        salesmanOptions.classList.toggle('active');
+        if (salesmanOptions.classList.contains('active')) {
+          setTimeout(() => salesmanSearch.focus(), 100);
+        } else {
+          salesmanSearch.value = '';
+          getSalesmanLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      salesmanOptions.addEventListener('click', e => e.stopPropagation());
+
+      salesmanSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getSalesmanLabels();
+        
+        labels.forEach(label => {
+          const text = label.querySelector('.option-text').textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            label.classList.remove('hidden');
+          } else {
+            label.classList.add('hidden');
+          }
+        });
+      });
+
+      salesmanSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateSalesmanLabel() {
+        const checked = Array.from(getSalesmanCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          salesmanText.textContent = "All Salesmen";
+          salesmanText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          salesmanText.textContent = checked[0].value;
+          salesmanText.style.opacity = "1";
+        } else {
+          salesmanText.textContent = `${checked.length} Selected`;
+          salesmanText.style.opacity = "1";
+        }
+      }
+
+      updateSalesmanLabel();
+
+      getSalesmanCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateSalesmanLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!salesmanWrapper.contains(e.target)) salesmanOptions.classList.remove('active');
+      });
+
+      // Apply filters button - AJAX version
+      const applyBtn = document.getElementById('apply-filters');
+      const filtersForm = document.getElementById('filters-form');
+      
+      applyBtn.addEventListener('click', function() {
+        const formData = new FormData(filtersForm);
+        const params = new URLSearchParams();
+        
+        for (const [key, value] of formData.entries()) {
+          if (key === 'salesman') {
+            params.append(key, value);
+          } else if (value) {
+            params.set(key, value);
+          }
+        }
+        
+        if (categoryInput && categoryInput.value) {
+          params.set('category', categoryInput.value);
+        }
+        
+        // Make AJAX request
+        fetch('{% url "credit_memo_analysis" %}?' + params.toString() + '&ajax=1', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update table
+            const tableWrapper = document.querySelector('.table-wrapper');
+            if (tableWrapper && data.table_html) {
+              const tbody = tableWrapper.querySelector('tbody');
+              if (tbody && data.table_html) {
+                tbody.outerHTML = data.table_html;
+              }
+            }
+            
+            // Update pagination
+            const paginationContainer = document.querySelector('.pagination');
+            if (paginationContainer && data.pagination_html) {
+              paginationContainer.outerHTML = data.pagination_html;
+            } else if (data.pagination_html) {
+              // Insert pagination if it doesn't exist
+              const tableCard = document.querySelector('.table-card');
+              if (tableCard) {
+                const newPagination = document.createElement('div');
+                newPagination.className = 'pagination';
+                newPagination.innerHTML = data.pagination_html;
+                tableCard.appendChild(newPagination);
+              }
+            } else {
+              // Remove pagination if not needed
+              const paginationContainer = document.querySelector('.pagination');
+              if (paginationContainer) {
+                paginationContainer.remove();
+              }
+            }
+            
+            // Update grand total
+            if (data.grand_total_value !== undefined) {
+              const grandTotalContainer = document.querySelector('.table-header div:last-child');
+              if (grandTotalContainer) {
+                grandTotalContainer.innerHTML = `
+                  <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 4px;">Grand Total Value</div>
+                  <div style="font-size: 1.25rem; font-weight: 700; color: var(--danger);">
+                    ${parseFloat(data.grand_total_value).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                    Qty: ${parseInt(data.grand_total_quantity).toLocaleString('en-US')} • ${data.grand_total_credit_memos} Credit Memos • ${data.grand_total_customers} Customers
+                  </div>
+                `;
+              }
+            }
+            
+            // Update URL without reload
+            window.history.pushState({}, '', '{% url "credit_memo_analysis" %}?' + params.toString());
+            
+            // Re-attach expand/collapse handlers
+            document.querySelectorAll('.item-row').forEach(row => {
+              row.addEventListener('click', function() {
+                this.classList.toggle('expanded');
+              });
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Fallback to page reload on error
+          window.location.href = '{% url "credit_memo_analysis" %}?' + params.toString();
+        });
+      });
+
+      // Clear filters button
+      const clearBtn = document.getElementById('clear-filters');
+      clearBtn.addEventListener('click', function() {
+        window.location.href = '{% url "credit_memo_analysis" %}';
+      });
+
+      // Pagination handling - preserve all filters when navigating pages (AJAX)
+      document.addEventListener('click', function(e) {
+        const pagination = document.querySelector('.pagination');
+        if (!pagination) return;
+        
+        const a = e.target.closest('a[data-page]');
+        if (!a || !pagination.contains(a)) return;
+        
+        e.preventDefault();
+        
+        // Get current URL parameters
+        const currentParams = new URLSearchParams(window.location.search);
+        
+        // Update page number
+        currentParams.set('page', a.getAttribute('data-page'));
+        
+        // Make AJAX request
+        fetch('{% url "credit_memo_analysis" %}?' + currentParams.toString() + '&ajax=1', {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update table
+            const tableWrapper = document.querySelector('.table-wrapper');
+            if (tableWrapper && data.table_html) {
+              const tbody = tableWrapper.querySelector('tbody');
+              if (tbody && data.table_html) {
+                tbody.outerHTML = data.table_html;
+              }
+            }
+            
+            // Update pagination
+            const paginationContainer = document.querySelector('.pagination');
+            if (paginationContainer && data.pagination_html) {
+              paginationContainer.outerHTML = data.pagination_html;
+            } else if (!data.pagination_html) {
+              // Remove pagination if not needed
+              if (paginationContainer) {
+                paginationContainer.remove();
+              }
+            }
+            
+            // Update URL without reload
+            window.history.pushState({}, '', '{% url "credit_memo_analysis" %}?' + currentParams.toString());
+            
+            // Re-attach expand/collapse handlers
+            document.querySelectorAll('.item-row').forEach(row => {
+              row.addEventListener('click', function() {
+                this.classList.toggle('expanded');
+              });
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Fallback to page reload on error
+          window.location.href = '{% url "credit_memo_analysis" %}?' + currentParams.toString();
+        });
+      });
+    });
+  </script>
+</body>
+</html>

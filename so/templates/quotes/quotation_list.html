@@ -358,8 +358,8 @@
       <label>Status</label>
       <select class="select" name="status">
         <option value="">All</option>
-        <option value="OPEN" {% if filters.status == 'OPEN' %}selected{% endif %}>Open</option>
-        <option value="CLOSED" {% if filters.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+        <option value="OPEN" {% if filters.status == 'OPEN' or filters.status == 'O' or filters.status == 'Open' %}selected{% endif %}>Open</option>
+        <option value="CLOSED" {% if filters.status == 'CLOSED' or filters.status == 'C' or filters.status == 'Closed' %}selected{% endif %}>Closed</option>
       </select>
     </div>
 

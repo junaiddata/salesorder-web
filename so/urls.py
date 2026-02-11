@@ -3,7 +3,9 @@ from . import views
 from so.views import *
 from . import views_quotation
 from . import sap_salesorder_views
+from . import finance_statement_views
 from . import customer_analysis_views
+from . import credit_memo_analysis_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -30,6 +32,12 @@ urlpatterns = [
     path('customers/delete/<int:customer_id>/', views.delete_customer, name='delete_customer'),
     path('customers/sync-finance/', views.sync_customer_finance_summary, name='sync_customer_finance_summary'),
     path('customers/sync-finance-api-receive/', views.sync_customer_finance_api_receive, name='sync_customer_finance_api_receive'),
+    
+    ############### FINANCE STATEMENT ##################
+    path('finance-statement/', finance_statement_views.finance_statement_list, name='finance_statement_list'),
+    path('finance-statement/<int:customer_id>/', finance_statement_views.finance_statement_detail, name='finance_statement_detail'),
+    path('finance-statement/export/', finance_statement_views.export_finance_statement_list_excel, name='export_finance_statement_list_excel'),
+    path('finance-statement/<int:customer_id>/export/', finance_statement_views.export_finance_statement_detail_excel, name='export_finance_statement_detail_excel'),
 
     ################ ITEM MANAGEMENT ##################
     path('items/', views.item_list, name='item_list'),
@@ -82,8 +90,12 @@ urlpatterns = [
 ]
 
 # Quotation URLs (order matters: ajax BEFORE detail)
+from . import sap_quotation_views
+
 urlpatterns += [
     path('sapquotations/upload/', views.upload_quotations, name='upload_quotations'),
+    path('sapquotations/sync-api/', sap_quotation_views.sync_quotations_from_api, name='sync_quotations_api'),
+    path('sapquotations/sync-api-receive/', sap_quotation_views.sync_quotations_api_receive, name='sync_quotations_api_receive'),
     path('sapquotations/', views.quotation_list, name='quotation_list'),
     path('sapquotations/ajax/', views.quotation_search, name='quotation_search'),
     path('sapquotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
@@ -117,6 +129,7 @@ urlpatterns += [
     path('saparinvoices/item-analysis/export-pdf/', sap_salesorder_views.export_item_analysis_pdf, name='export_item_analysis_pdf'),
     path('saparinvoices/customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),
     path('saparinvoices/customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
+    path('saparinvoices/credit-memo-analysis/', credit_memo_analysis_views.itemwise_credit_memo_analysis, name='credit_memo_analysis'),
     path('saparinvoices/combined/export-excel/', sap_salesorder_views.export_combined_sales_invoices_excel, name='export_combined_sales_invoices_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),
     path('saparinvoices/', sap_salesorder_views.arinvoice_list, name='arinvoice_list'),

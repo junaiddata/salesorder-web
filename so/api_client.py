@@ -1198,6 +1198,235 @@ class SAPAPIClient:
             'items': items,
         }
     
+    def fetch_open_quotations_last_pages(self, last_pages: int = 15) -> List[Dict]:
+        """
+        Fetch open quotations, but only fetch the last N pages (skip earlier pages)
+        
+        Args:
+            last_pages: Number of last pages to fetch (default: 15)
+        
+        Returns:
+            List of open quotations from the last N pages
+        """
+        base_url = getattr(settings, 'SAP_QUOTATION_API_URL', 'http://192.168.1.103/IntegrationApi/api/SalesQuotations')
+        payload = {"DocumentStatus": "bost_Open"}
+        records_per_page = 20
+        
+        logger.info(f"Fetching last {last_pages} pages of open quotations...")
+        
+        # Fetch first page to get total count
+        first_page = self._make_request_with_url(payload, base_url, page_number=1)
+        if first_page is None:
+            return []
+        
+        total_count = first_page.get('count', 0)
+        if total_count == 0:
+            logger.info("No open quotations found")
+            return []
+        
+        # Calculate total pages and which pages to fetch
+        total_pages = (total_count + records_per_page - 1) // records_per_page  # Ceiling division
+        start_page = max(1, total_pages - last_pages + 1)
+        
+        logger.info(f"Total records: {total_count}, total pages: {total_pages}, fetching pages {start_page} to {total_pages}")
+        
+        all_quotations = []
+        
+        # Fetch the last N pages
+        for page_num in range(start_page, total_pages + 1):
+            logger.info(f"  Fetching page {page_num}/{total_pages}...")
+            page_result = self._make_request_with_url(payload, base_url, page_number=page_num)
+            if page_result is None:
+                logger.warning(f"  Failed to fetch page {page_num}, continuing...")
+                continue
+            
+            page_quotations = page_result.get('value', [])
+            all_quotations.extend(page_quotations)
+            logger.info(f"  ✓ Fetched page {page_num}/{total_pages}: {len(page_quotations)} quotations")
+        
+        logger.info(f"Fetched {len(all_quotations)} open quotations from last {last_pages} pages")
+        return all_quotations
+    
+    def fetch_quotations_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
+        """
+        Fetch quotations for a date range (with pagination)
+        
+        Args:
+            from_date: Start date in YYYY-MM-DD format
+            to_date: End date in YYYY-MM-DD format
+        
+        Returns:
+            List of quotations for that date range from all pages
+        """
+        payload = {"FromDate": from_date, "ToDate": to_date}
+        base_url = getattr(settings, 'SAP_QUOTATION_API_URL', 'http://192.168.1.103/IntegrationApi/api/SalesQuotations')
+        logger.info(f"Fetching quotations for date range: {from_date} to {to_date} (with pagination)...")
+        all_quotations = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_quotations)} quotations for {from_date} to {to_date} (all pages)")
+        return all_quotations
+    
+    def fetch_quotations_last_n_days(self, days: int = 3) -> List[Dict]:
+        """
+        Fetch quotations for the last N days (one call per day range)
+        
+        Args:
+            days: Number of days to go back (default: 3)
+        
+        Returns:
+            Combined list of all quotations from the last N days (deduplicated by DocNum)
+        """
+        all_quotations = []
+        seen_docnums = set()
+        
+        # Calculate date range: from (today - days) to today
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days-1)  # Include today + last N-1 days
+        
+        from_date_str = start_date.strftime('%Y-%m-%d')
+        to_date_str = end_date.strftime('%Y-%m-%d')
+        
+        logger.info(f"Fetching quotations for last {days} days: {from_date_str} to {to_date_str}")
+        quotations = self.fetch_quotations_by_date_range(from_date_str, to_date_str)
+        
+        # Deduplicate by DocNum
+        for quotation in quotations:
+            docnum = quotation.get('DocNum')
+            if docnum and docnum not in seen_docnums:
+                all_quotations.append(quotation)
+                seen_docnums.add(docnum)
+        
+        logger.info(f"Total unique quotations from last {days} days: {len(all_quotations)}")
+        return all_quotations
+    
+    def sync_all_quotations(self, days_back: int = 3) -> List[Dict]:
+        """
+        Main sync method: Fetch open quotations (last 15 pages) + new quotations from last N days
+        
+        Args:
+            days_back: Number of days to fetch for new quotations (default: 3, i.e., today + last 2 days = 3 days total)
+        
+        Returns:
+            Combined and deduplicated list of all quotations
+        """
+        all_quotations = []
+        seen_docnums = set()
+        
+        # Step 1: Fetch open quotations (last 15 pages only)
+        logger.info("Step 1: Fetching open quotations (last 15 pages)...")
+        open_quotations = self.fetch_open_quotations_last_pages(last_pages=15)
+        for quotation in open_quotations:
+            docnum = quotation.get('DocNum')
+            if docnum:
+                all_quotations.append(quotation)
+                seen_docnums.add(docnum)
+        
+        # Step 2: Fetch new quotations from last N days
+        logger.info(f"Step 2: Fetching new quotations from last {days_back} days...")
+        new_quotations = self.fetch_quotations_last_n_days(days_back)
+        for quotation in new_quotations:
+            docnum = quotation.get('DocNum')
+            if docnum and docnum not in seen_docnums:
+                all_quotations.append(quotation)
+                seen_docnums.add(docnum)
+        
+        logger.info(f"Total unique quotations after sync: {len(all_quotations)}")
+        return all_quotations
+    
+    def _map_quotation_api_response_to_model(self, api_quotation: Dict) -> Dict:
+        """
+        Map API response to Django model format for Quotation
+        
+        Args:
+            api_quotation: Single quotation from API response
+        
+        Returns:
+            Dictionary with mapped fields for SAPQuotation and SAPQuotationItem
+        """
+        # Extract header fields
+        docnum = str(api_quotation.get('DocNum', ''))
+        doc_entry = str(api_quotation.get('DocEntry', '')) if api_quotation.get('DocEntry') else None
+        
+        # Date parsing
+        doc_date_str = api_quotation.get('DocDate', '')
+        posting_date = None
+        if doc_date_str:
+            try:
+                posting_date = datetime.strptime(doc_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    posting_date = datetime.strptime(doc_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse DocDate: {doc_date_str}")
+        
+        # Business Partner
+        bp = api_quotation.get('BusinessPartner', {})
+        customer_code = bp.get('CardCode', '') or api_quotation.get('CardCode', '')
+        customer_name = bp.get('CardName', '') or api_quotation.get('CardName', '')
+        
+        # Sales Person
+        sales_person = api_quotation.get('SalesPerson', {})
+        salesman_name = sales_person.get('SalesEmployeeName', '') or ''
+        
+        # Other header fields
+        bp_reference = api_quotation.get('NumAtCard', '') or ''
+        bill_to = str(api_quotation.get('Address', '')).strip() if api_quotation.get('Address') else ''
+        comments = str(api_quotation.get('Comments', '')).strip() if api_quotation.get('Comments') else ''
+        
+        # Financial fields
+        doc_total = api_quotation.get('DocTotal', 0) or 0
+        vat_sum = api_quotation.get('VatSum', 0) or 0
+        total_discount = api_quotation.get('TotalDiscount', 0) or 0
+        rounding_diff_amount = api_quotation.get('RoundingDiffAmount', 0) or 0
+        discount_percent = self._clamp_percentage(api_quotation.get('DiscountPercent', 0) or 0, 'discount_percent')
+        
+        # Calculate document_total as Subtotal without VAT
+        # Formula: document_total = DocTotal - VatSum - RoundingDiffAmount - TotalDiscount
+        document_total = doc_total - vat_sum - rounding_diff_amount - total_discount
+        
+        # Document Status mapping - unified to OPEN/CLOSED
+        doc_status = api_quotation.get('DocumentStatus', '')
+        status = "OPEN" if doc_status == "bost_Open" else "CLOSED"
+        
+        # Map document lines
+        document_lines = api_quotation.get('DocumentLines', [])
+        items = []
+        
+        for idx, line in enumerate(document_lines):
+            item_code = str(line.get('ItemCode', '')) if line.get('ItemCode') else ''
+            item_description = line.get('ItemDescription', '') or ''
+            quantity = line.get('Quantity', 0) or 0
+            price = line.get('Price', 0) or 0
+            line_total = line.get('LineTotal', 0) or 0
+            
+            item_data = {
+                'item_no': item_code,
+                'description': item_description,
+                'quantity': quantity,
+                'price': price,
+                'row_total': line_total,
+            }
+            
+            items.append(item_data)
+        
+        return {
+            'q_number': docnum,
+            'internal_number': doc_entry,
+            'posting_date': posting_date,
+            'customer_code': customer_code or '',
+            'customer_name': customer_name or '',
+            'salesman_name': salesman_name or '',
+            'bp_reference_no': bp_reference or '',
+            'document_total': document_total,  # Subtotal without VAT
+            'vat_sum': vat_sum,
+            'total_discount': total_discount,
+            'rounding_diff_amount': rounding_diff_amount,
+            'discount_percent': discount_percent,  # Optional, but store it
+            'status': status,
+            'bill_to': bill_to,
+            'remarks': comments,
+            'items': items,
+        }
+    
     def fetch_finance_summary(self) -> List[Dict]:
         """
         Fetch customer finance summary data from FinanceSummary API endpoint

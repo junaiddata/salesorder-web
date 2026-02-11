@@ -7,7 +7,15 @@
   <td data-label="Customer">{{ q.customer_name }}</td>
   <td data-label="Salesman"><span class="muted">{{ q.salesman_name }}</span></td>
   <td class="num" data-label="Total">{{ q.document_total|floatformat:2 }}</td>
-  <td data-label="Status">{{ q.status|default:"—" }}</td>
+  <td data-label="Status">
+    {% if q.status|upper == 'OPEN' or q.status|upper == 'O' %}
+      <span style="color: var(--ok); font-weight: 600;">OPEN</span>
+    {% elif q.status|upper == 'CLOSED' or q.status|upper == 'C' %}
+      <span style="color: var(--muted); font-weight: 600;">CLOSED</span>
+    {% else %}
+      {{ q.status|default:"—" }}
+    {% endif %}
+  </td>
 </tr>
 {% empty %}
 <tr>

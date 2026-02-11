@@ -178,6 +178,41 @@
         {% endif %}
       </div>
 
+      <!-- API Sync Section -->
+      <div class="section" style="background: linear-gradient(135deg, #eef2ff, #f0f9ff); border-left: 4px solid var(--brand);">
+        <h3 style="margin: 0 0 8px; font-size: 1.1rem; color: var(--accent); display: flex; align-items: center; gap: 8px;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Sync from API (Live Data)
+        </h3>
+        <p style="font-size: 0.875rem; color: var(--muted); margin-bottom: 16px;">
+          Fetch open quotations (last 15 pages) and new quotations from the last 3 days directly from SAP API.
+        </p>
+        <form method="post" action="{% url 'sync_quotations_api' %}" style="display: inline-block;">
+          {% csrf_token %}
+          <input type="hidden" name="days_back" value="3">
+          <button type="submit" class="btn" style="background: linear-gradient(135deg, var(--ok), #059669);">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Sync from API
+          </button>
+        </form>
+        {% if sync_stats %}
+          <div style="margin-top: 12px; padding: 12px; background: var(--panel); border-radius: 12px; font-size: 0.813rem; border: 1px solid var(--border);">
+            <strong>Last Sync:</strong> {{ sync_stats.total_quotations }} quotations 
+            ({{ sync_stats.created }} created, {{ sync_stats.updated }} updated, {{ sync_stats.closed }} closed)
+            {% if sync_stats.total_items %}<br><strong>Total Items:</strong> {{ sync_stats.total_items }}{% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div style="text-align: center; margin: 16px 0; color: var(--muted); font-size: 0.875rem;">
+        <span style="display: inline-block; padding: 0 16px; background: var(--panel); position: relative; z-index: 1;">OR</span>
+        <hr style="margin: -12px 0 0 0; border: none; border-top: 1px solid var(--border);">
+      </div>
+
       <form method="post" enctype="multipart/form-data" class="upload" id="upload-form">
         {% csrf_token %}
 

@@ -2843,7 +2843,7 @@ def total_outstanding_sum(request):
 
 from django.http import JsonResponse
 from django.db.models import Q
-from so.models import Items
+from so.models import Items, SAPQuotation, SAPQuotationItem
 
 
 from django.http import JsonResponse
@@ -2899,13 +2899,23 @@ SALES_USER_MAP = {
 
 def salesman_scope_q(user: "User") -> Q:
     """Return a Q filter limiting SAPQuotation by salesman_name for non-staff users."""
-    if user.is_superuser or user.role.role == "Admin":
-        return Q()  # no restriction
+    # Optimized: check role without triggering extra query if already loaded
+    try:
+        if user.is_superuser or (hasattr(user, 'role') and user.role.role == "Admin"):
+            return Q()  # no restriction
+    except AttributeError:
+        # Role not loaded, check via query (fallback)
+        from so.models import Role
+        try:
+            role = Role.objects.get(user=user)
+            if role.role == "Admin":
+                return Q()
+        except Role.DoesNotExist:
+            pass
 
     uname = (user.username or "").strip().lower()
     names = SALES_USER_MAP.get(uname)
     if names:
-        q = Q(pk__isnull=False) & Q()  # start with something truthy
         q = Q()  # cleaner: start empty
         for n in names:
             q |= Q(salesman_name__iexact=n)
@@ -3096,9 +3106,16 @@ def quotation_list(request):
 
 
 
-    # ✅ Status filter
+    # ✅ Status filter - normalize to OPEN/CLOSED
     if status:
-        qs = qs.filter(status__iexact=status)
+        # Normalize status values for filtering
+        status_normalized = status.upper()
+        if status_normalized in ['O', 'OPEN']:
+            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
+        elif status_normalized in ['C', 'CLOSED']:
+            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
@@ -3233,7 +3250,14 @@ def export_quotation_list_pdf(request):
     if salesman:
         qs = qs.filter(salesman_name__iexact=salesman)
     if status:
-        qs = qs.filter(status__iexact=status)
+        # Normalize status values for filtering
+        status_normalized = status.upper()
+        if status_normalized in ['O', 'OPEN']:
+            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
+        elif status_normalized in ['C', 'CLOSED']:
+            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # Apply Dates
     def parse_date(s):
@@ -3380,36 +3404,40 @@ def get_stock_costs():
 def quotation_detail(request, q_number):
     quotation = get_object_or_404(SAPQuotation, q_number=q_number)
 
-    # Enforce scope for non-staff users
+    # Enforce scope for non-staff users - optimized: check quotation directly instead of extra query
     if not (request.user.is_superuser or request.user.is_staff):
-        allowed = SAPQuotation.objects.filter(
-            Q(pk=quotation.pk) & salesman_scope_q(request.user)
-        ).exists()
-        if not allowed:
+        # Check if quotation matches user's salesman scope
+        scope_q = salesman_scope_q(request.user)
+        # Apply scope filter directly to the quotation object
+        if not SAPQuotation.objects.filter(pk=quotation.pk).filter(scope_q).exists():
             raise Http404("Quotation not found")
 
-    # Get items
-    items = quotation.items.all().order_by('id')
+    # Get items - optimized query (convert to list to avoid multiple DB hits)
+    items = list(quotation.items.all().order_by('id'))
 
-    # --- NEW CALCULATION LOGIC ---
-    stock_map = get_stock_costs()
+    # --- OPTIMIZED COST CALCULATION - Use local Items model instead of external API ---
     total_estimated_cost = 0.0
-
-    # We iterate over items to calculate cost based on the API map
-    for item in items:
-        # Match item.item_no with the API's item_code
-        item_code = str(item.item_no).strip()
+    
+    # Only calculate cost if user is Admin (for performance)
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        # Get all unique item codes from quotation items
+        item_codes = [str(item.item_no).strip() for item in items if item.item_no]
         
-        # Get unit cost from map, default to 0.0 if not found
-        unit_cost = stock_map.get(item_code, 0.0)
-        
-        # Calculate row cost (Unit Cost * Quantity)
-        # Convert Decimal quantity to float for calculation
-        qty = float(item.quantity)
-        total_estimated_cost += (unit_cost * qty)
-
-    # Calculate Profit/Margin (Optional, but usually helpful)
-    # Convert document_total to float for math
+        if item_codes:
+            # Bulk fetch costs from Items model (single query instead of N queries)
+            cost_map = dict(
+                Items.objects.filter(item_code__in=item_codes)
+                .values_list('item_code', 'item_cost')
+            )
+            
+            # Calculate total cost in single pass
+            for item in items:
+                item_code = str(item.item_no).strip() if item.item_no else ''
+                unit_cost = cost_map.get(item_code, 0.0)
+                qty = float(item.quantity)
+                total_estimated_cost += (unit_cost * qty)
+    
+    # Calculate Profit/Margin
     doc_total = float(quotation.document_total or 0)
     total_profit = doc_total - total_estimated_cost
 
@@ -3470,7 +3498,14 @@ def quotation_search(request):
 
 
     if status:
-        qs = qs.filter(status__iexact=status)
+        # Normalize status values for filtering
+        status_normalized = status.upper()
+        if status_normalized in ['O', 'OPEN']:
+            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
+        elif status_normalized in ['C', 'CLOSED']:
+            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
+        else:
+            qs = qs.filter(status__iexact=status)
 
     # --- ✅ REMARKS FILTER ---
     if remarks_filter == "YES":
@@ -4526,7 +4561,8 @@ def process_finance_data(finance_data):
                     month_pending_4 = safe_float(record.get('3', 0))  # API "3" → month_pending_4
                     month_pending_5 = safe_float(record.get('2', 0))  # API "2" → month_pending_5
                     month_pending_6 = safe_float(record.get('1', 0))  # API "1" → month_pending_6
-                    old_months_pending = safe_float(record.get('6+', 0))
+                    old_months_pending = safe_float(record.get('6+', 0))  # 180+ days (6+ months)
+                    very_old_months_pending = safe_float(record.get('6++', 0))  # 360+ days (6++ months)
                     total_outstanding = safe_float(record.get('BalanceDue', 0))
                     pdc_received = safe_float(record.get('ChecksBal', 0))
                     total_outstanding_with_pdc = total_outstanding + pdc_received
@@ -4549,6 +4585,7 @@ def process_finance_data(finance_data):
                             month_pending_5=month_pending_5,
                             month_pending_6=month_pending_6,
                             old_months_pending=old_months_pending,
+                            very_old_months_pending=very_old_months_pending,
                             total_outstanding=total_outstanding,
                             pdc_received=pdc_received,
                             total_outstanding_with_pdc=total_outstanding_with_pdc
@@ -4568,6 +4605,7 @@ def process_finance_data(finance_data):
                         customer.month_pending_5 = month_pending_5
                         customer.month_pending_6 = month_pending_6
                         customer.old_months_pending = old_months_pending
+                        customer.very_old_months_pending = very_old_months_pending
                         customer.total_outstanding = total_outstanding
                         customer.pdc_received = pdc_received
                         customer.total_outstanding_with_pdc = total_outstanding_with_pdc
@@ -4591,7 +4629,7 @@ def process_finance_data(finance_data):
                     'customer_name', 'salesman', 'credit_limit', 'credit_days',
                     'month_pending_1', 'month_pending_2', 'month_pending_3',
                     'month_pending_4', 'month_pending_5', 'month_pending_6',
-                    'old_months_pending', 'total_outstanding', 'pdc_received',
+                    'old_months_pending', 'very_old_months_pending', 'total_outstanding', 'pdc_received',
                     'total_outstanding_with_pdc'
                 ]
                 Customer.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)

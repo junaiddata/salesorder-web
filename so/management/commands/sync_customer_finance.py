@@ -140,7 +140,8 @@ def sync_customer_finance_summary():
                     month_pending_4 = safe_float(record.get('3', 0))  # API "3" → month_pending_4
                     month_pending_5 = safe_float(record.get('2', 0))  # API "2" → month_pending_5
                     month_pending_6 = safe_float(record.get('1', 0))  # API "1" → month_pending_6
-                    old_months_pending = safe_float(record.get('6+', 0))
+                    old_months_pending = safe_float(record.get('6+', 0))  # 180+ days (6+ months)
+                    very_old_months_pending = safe_float(record.get('6++', 0))  # 360+ days (6++ months)
                     total_outstanding = safe_float(record.get('BalanceDue', 0))
                     pdc_received = safe_float(record.get('ChecksBal', 0))
                     total_outstanding_with_pdc = total_outstanding + pdc_received
@@ -163,6 +164,7 @@ def sync_customer_finance_summary():
                             month_pending_5=month_pending_5,
                             month_pending_6=month_pending_6,
                             old_months_pending=old_months_pending,
+                            very_old_months_pending=very_old_months_pending,
                             total_outstanding=total_outstanding,
                             pdc_received=pdc_received,
                             total_outstanding_with_pdc=total_outstanding_with_pdc
@@ -182,6 +184,7 @@ def sync_customer_finance_summary():
                         customer.month_pending_5 = month_pending_5
                         customer.month_pending_6 = month_pending_6
                         customer.old_months_pending = old_months_pending
+                        customer.very_old_months_pending = very_old_months_pending
                         customer.total_outstanding = total_outstanding
                         customer.pdc_received = pdc_received
                         customer.total_outstanding_with_pdc = total_outstanding_with_pdc
@@ -205,7 +208,7 @@ def sync_customer_finance_summary():
                     'customer_name', 'salesman', 'credit_limit', 'credit_days',
                     'month_pending_1', 'month_pending_2', 'month_pending_3',
                     'month_pending_4', 'month_pending_5', 'month_pending_6',
-                    'old_months_pending', 'total_outstanding', 'pdc_received',
+                    'old_months_pending', 'very_old_months_pending', 'total_outstanding', 'pdc_received',
                     'total_outstanding_with_pdc'
                 ]
                 Customer.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)

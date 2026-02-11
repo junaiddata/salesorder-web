@@ -158,6 +158,7 @@ WHATSAPP_PHONE_NUMBER_ID = '623707730818076'
 
 # SAP API Configuration
 SAP_API_BASE_URL = "http://192.168.1.103/IntegrationApi/api/SalesOrder"
+SAP_QUOTATION_API_URL = "http://192.168.1.103/IntegrationApi/api/SalesQuotations"
 SAP_API_TIMEOUT = 30
 SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders from last 3 days (today + 3 days = 4 days total)
 

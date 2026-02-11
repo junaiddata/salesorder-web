@@ -1,0 +1,739 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finance Statement - Customer Finance Summary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --danger: #ef4444;
+      --danger-light: #fef2f2;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.625rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn svg {
+      flex-shrink: 0;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    .btn-link {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 6px 14px;
+      font-weight: 600;
+      font-size: 0.813rem;
+    }
+
+    .btn-link:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* Filters */
+    .filters-card {
+      margin-bottom: 24px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 20px;
+    }
+
+     @media (min-width: 768px) {
+       .filters-grid {
+         grid-template-columns: 2fr 1.5fr 1.5fr auto;
+         align-items: end;
+       }
+     }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .input:focus, .select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .select {
+      cursor: pointer;
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    @media (min-width: 768px) {
+      .stats-bar {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .stat-value {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* Table */
+    .table-card {
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 950px;
+      table-layout: fixed;
+    }
+
+    thead {
+      background: var(--bg);
+      border-bottom: 2px solid var(--border);
+    }
+
+    th {
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    th.text-center {
+      text-align: center;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border-light);
+      transition: background-color var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr.totals-row {
+      background: var(--primary-light);
+      border-top: 2px solid var(--primary);
+      border-bottom: none;
+    }
+
+    tbody tr.totals-row:hover {
+      background: var(--primary-light);
+    }
+
+    tbody tr.totals-row td {
+      padding: 16px 12px;
+    }
+
+    td {
+      padding: 12px;
+      color: var(--text);
+      font-size: 0.875rem;
+      vertical-align: middle;
+    }
+
+    td.text-right {
+      text-align: right;
+    }
+
+    td.text-center {
+      text-align: center;
+    }
+
+    /* Column Specific Styles */
+    .customer-code {
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 0.813rem;
+      white-space: nowrap;
+    }
+
+    .customer-name {
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.4;
+      word-wrap: break-word;
+      word-break: break-word;
+    }
+
+    .salesman-name {
+      color: var(--text-secondary);
+      font-size: 0.813rem;
+      line-height: 1.4;
+      word-wrap: break-word;
+      word-break: break-word;
+    }
+
+    .amount {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .amount-positive {
+      color: var(--text);
+    }
+
+    .amount-danger {
+      color: var(--danger);
+    }
+
+    .amount-muted {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .terms-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    /* Table Footer */
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-light);
+      background: var(--bg);
+    }
+
+    .pagination {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .pagination a, 
+    .pagination span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 12px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .pagination a:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .pagination .active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .pagination .disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .pagination .page-info {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 0 8px;
+      min-width: auto;
+    }
+
+    .total-count {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .total-count strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 64px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state svg {
+      width: 56px;
+      height: 56px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+      color: var(--text-muted);
+    }
+
+    .empty-state p {
+      font-size: 0.938rem;
+      font-weight: 500;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .container {
+        padding: 16px 12px 32px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .header-actions {
+        width: 100%;
+      }
+
+      .header-actions .btn {
+        flex: 1;
+      }
+
+      .filters-grid {
+        padding: 16px;
+      }
+
+      .stats-bar {
+        padding: 12px 16px;
+        gap: 8px;
+      }
+
+      .stat-item {
+        padding: 10px 12px;
+      }
+
+      .stat-value {
+        font-size: 1rem;
+      }
+
+      .table-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+
+      .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .total-count {
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>Finance Statement</h1>
+        <p>Customer Finance Summary & Outstanding Balances</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-primary" href="{% url 'export_finance_statement_list_excel' %}?{{ request.GET.urlencode }}">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Export Excel
+        </a>
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            Home
+          </a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            Home
+          </a>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+      <form id="filters" class="filters-grid" method="get">
+        <div class="field">
+          <label for="search">Search</label>
+          <input class="input" type="text" id="search" name="q" value="{{ filters.q }}" placeholder="Customer code or name...">
+        </div>
+
+        <div class="field">
+          <label for="salesman">Salesman</label>
+          <select class="select" id="salesman" name="salesman">
+            <option value="">All Salesmen</option>
+            {% for salesman in salesmen %}
+              <option value="{{ salesman.id }}" {% if filters.salesman == salesman.id|stringformat:"s" %}selected{% endif %}>
+                {{ salesman.salesman_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="store">Store</label>
+          <select class="select" id="store" name="store">
+            <option value="">All Stores</option>
+            <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
+            <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <button class="btn btn-primary" type="submit" style="width: 100%;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            Apply Filters
+          </button>
+        </div>
+      </form>
+
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">Outstanding</span>
+          <span class="stat-value">{{ totals.total_outstanding|floatformat:0|intcomma }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">PDC Amount</span>
+          <span class="stat-value">{{ totals.total_pdc|floatformat:0|intcomma }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total Balance</span>
+          <span class="stat-value">{{ totals.total_with_pdc|floatformat:0|intcomma }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Customers</span>
+          <span class="stat-value">{{ total_count }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <colgroup>
+            <col style="width: 90px;">
+            <col style="width: 280px;">
+            <col style="width: 150px;">
+            <col style="width: 110px;">
+            <col style="width: 100px;">
+            <col style="width: 110px;">
+            <col style="width: 100px;">
+            <col style="width: 80px;">
+            <col style="width: 80px;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Customer Name</th>
+              <th>Salesman</th>
+              <th class="text-right">Balance</th>
+              <th class="text-right">PDC</th>
+              <th class="text-right">Total</th>
+              <th class="text-right">Limit</th>
+              <th class="text-center">Terms</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for customer in page_obj %}
+            <tr>
+              <td>
+                <span class="customer-code">{{ customer.customer_code }}</span>
+              </td>
+              <td>
+                <span class="customer-name">{{ customer.customer_name }}</span>
+              </td>
+              <td>
+                <span class="salesman-name">{{ customer.salesman.salesman_name|default:"—" }}</span>
+              </td>
+              <td class="text-right">
+                <span class="amount">{{ customer.total_outstanding|floatformat:0|intcomma }}</span>
+              </td>
+              <td class="text-right">
+                <span class="amount amount-muted">{{ customer.pdc_received|floatformat:0|intcomma }}</span>
+              </td>
+              <td class="text-right">
+                <span class="amount {% if customer.total_outstanding_with_pdc > customer.credit_limit and customer.credit_limit > 0 %}amount-danger{% endif %}">
+                  {{ customer.total_outstanding_with_pdc|floatformat:0|intcomma }}
+                </span>
+              </td>
+              <td class="text-right">
+                <span class="amount amount-muted">{{ customer.credit_limit|floatformat:0|intcomma }}</span>
+              </td>
+              <td class="text-center">
+                <span class="terms-badge">{{ customer.credit_days|default:"—" }}</span>
+              </td>
+              <td class="text-center">
+                <a href="{% url 'finance_statement_detail' customer.id %}" class="btn btn-link">View</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9">
+                <div class="empty-state">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <p>No customers found with outstanding balances</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+            
+            {% if page_obj %}
+            <tr class="totals-row">
+              <td colspan="3"><strong>TOTAL</strong></td>
+              <td class="text-right"><span class="amount">{{ totals.total_outstanding|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_pdc|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_with_pdc|floatformat:0|intcomma }}</span></td>
+              <td colspan="3"></td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        <div class="pagination">
+          {% if page_obj.has_previous %}
+            <a href="?page=1{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="First Page">&laquo;</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Prev</a>
+          {% else %}
+            <span class="disabled">&laquo;</span>
+            <span class="disabled">Prev</span>
+          {% endif %}
+
+          <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+              <a href="?page={{ page_obj.next_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Next</a>
+              <a href="?page={{ page_obj.paginator.num_pages }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="Last Page">&raquo;</a>
+          {% else %}
+            <span class="disabled">Next</span>
+            <span class="disabled">&raquo;</span>
+          {% endif %}
+        </div>
+        <div class="total-count">
+          {% if page_obj %}
+            Showing <strong>{{ page_obj.start_index }}</strong> – <strong>{{ page_obj.end_index }}</strong> of <strong>{{ total_count }}</strong> customers
+          {% else %}
+            <strong>0</strong> customers found
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,93 @@
+{% load humanize %}
+{% if items %}
+  {% for item in items %}
+  <tr class="item-row">
+    <td>
+      <span class="expand-icon">▶</span>
+    </td>
+    <td>
+      <div class="item-code">{{ item.item_code|default:"—" }}</div>
+      {% if item.upc_code %}
+      <div class="item-upc">UPC: {{ item.upc_code }}</div>
+      {% endif %}
+    </td>
+    <td>{{ item.item_description|default:"Unknown" }}</td>
+    <td>{{ item.upc_code|default:"—" }}</td>
+    <td class="text-right">
+      <span class="badge badge-danger">{{ item.total_quantity|intcomma }}</span>
+    </td>
+    <td class="text-center">{{ item.credit_memo_count }}</td>
+    <td class="text-center">{{ item.customer_count }}</td>
+  </tr>
+  <tr class="customer-details">
+    <td colspan="7">
+      <div style="padding: 16px;">
+        <h4 style="font-size: 0.938rem; font-weight: 600; margin-bottom: 16px; color: var(--text);">
+          Customer Details ({{ item.customers|length }} customer{{ item.customers|length|pluralize }})
+        </h4>
+        {% for customer in item.customers %}
+          <div class="customer-info" style="margin-bottom: 20px; padding: 12px; background: var(--surface); border-radius: var(--radius-sm); border-left: 3px solid var(--primary);">
+            <div class="customer-name">{{ customer.customer_name }}</div>
+            {% if customer.customer_code %}
+            <div class="customer-meta">Code: {{ customer.customer_code }}</div>
+            {% endif %}
+            <div class="customer-meta">
+              Quantity Returned: <strong>{{ customer.total_quantity|intcomma }}</strong> • 
+              Credit Memos: <strong>{{ customer.credit_memo_count }}</strong>
+              {% if customer.credit_memo_numbers %}
+                <div style="margin-top: 4px; font-size: 0.813rem; color: var(--text-secondary);">
+                  Credit Memo Numbers: <strong>{{ customer.credit_memo_numbers|join:", " }}</strong>
+                </div>
+              {% endif %}
+            </div>
+            {% if customer.remarks %}
+            <div class="remarks-list" style="margin-top: 12px;">
+              <div style="font-size: 0.813rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Remarks:</div>
+              {% for remark in customer.remarks %}
+                <div class="remark-item">
+                  <div>{{ remark.remark }}</div>
+                  <div class="remark-meta">
+                    Credit Memo: {{ remark.credit_memo_number }}
+                    {% if remark.posting_date %}
+                      • Date: {{ remark.posting_date|date:"d M Y" }}
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div style="font-size: 0.813rem; color: var(--text-muted); margin-top: 8px; font-style: italic;">
+              No remarks available
+            </div>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div style="padding: 12px; color: var(--text-muted); font-style: italic;">
+            No customer details available
+          </div>
+        {% endfor %}
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  
+  <!-- Page Total Row -->
+  {% if page_grand_total %}
+  <tr style="background: var(--primary-light); font-weight: 700;">
+    <td colspan="4" style="text-align: right; padding: 12px 16px;">
+      Page Total:
+    </td>
+    <td class="text-right" style="padding: 12px 16px;">
+      <span class="badge badge-danger">{{ page_grand_total|intcomma }}</span>
+    </td>
+    <td colspan="2"></td>
+  </tr>
+  {% endif %}
+{% else %}
+  <tr>
+    <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
+      <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
+      <p>No credit memo data available</p>
+    </td>
+  </tr>
+{% endif %}

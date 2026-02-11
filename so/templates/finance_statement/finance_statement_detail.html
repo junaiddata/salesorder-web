@@ -1,0 +1,466 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finance Statement - {{ customer.customer_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 150ms ease;
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: #fafbfc;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      background: #fafbfc;
+    }
+
+    .card-header h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .info-label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .info-value {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .info-value.large {
+      font-size: 1.5rem;
+    }
+
+    .info-value.warning {
+      color: var(--warning);
+    }
+
+    .info-value.danger {
+      color: var(--danger);
+    }
+
+    .info-value.success {
+      color: var(--success);
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+    }
+
+    .alert-warning {
+      background: #fffbeb;
+      border: 1px solid var(--warning);
+      color: #92400e;
+    }
+
+    .alert-danger {
+      background: #fef2f2;
+      border: 1px solid var(--danger);
+      color: #991b1b;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: #fafbfc;
+      border-bottom: 2px solid var(--border);
+    }
+
+    th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 0.813rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:hover {
+      background: #fafbfc;
+    }
+
+    td {
+      padding: 12px;
+    }
+
+    td.text-right {
+      text-align: right;
+      font-weight: 500;
+    }
+
+    .amount-positive {
+      color: var(--text);
+    }
+
+    .amount-warning {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    .amount-danger {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      transition: width 300ms ease;
+    }
+
+    .progress-fill.warning {
+      background: var(--warning);
+    }
+
+    .progress-fill.danger {
+      background: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>{{ customer.customer_name }}</h1>
+        <p>Finance Statement Details</p>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <a href="{% url 'export_finance_statement_detail_excel' customer.id %}" class="btn btn-primary">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Export Excel
+        </a>
+        <a href="{% url 'finance_statement_list' %}" class="btn btn-secondary">← Back to List</a>
+      </div>
+    </header>
+
+    <!-- Credit Limit Warning -->
+    {% if has_over_limit %}
+    <div class="alert alert-danger">
+      <strong>⚠️ Credit Limit Exceeded!</strong> Total outstanding ({{ total_with_pdc|floatformat:2|intcomma }} AED) exceeds credit limit ({{ credit_limit|floatformat:2|intcomma }} AED)
+    </div>
+    {% endif %}
+
+    <!-- Customer Information -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Customer Information</h2>
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Customer Code</span>
+            <span class="info-value">{{ customer.customer_code }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Customer Name</span>
+            <span class="info-value">{{ customer.customer_name }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Salesman</span>
+            <span class="info-value">{{ customer.salesman.salesman_name|default:"—" }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Credit Limit</span>
+            <span class="info-value large">{{ credit_limit|floatformat:2|intcomma }} AED</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Payment Terms</span>
+            <span class="info-value">{{ credit_days|default:"—" }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Credit Utilization</span>
+            <span class="info-value {% if credit_utilization > 100 %}danger{% elif credit_utilization > 80 %}warning{% else %}success{% endif %}">
+              {{ credit_utilization|floatformat:1 }}%
+            </span>
+            <div class="progress-bar">
+              <div class="progress-fill {% if credit_utilization > 100 %}danger{% elif credit_utilization > 80 %}warning{% endif %}" 
+                   style="width: {% if credit_utilization > 100 %}100{% else %}{{ credit_utilization }}{% endif %}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Outstanding Summary -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Outstanding Summary</h2>
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Balance Due</span>
+            <span class="info-value large">{{ total_outstanding|floatformat:2|intcomma }} AED</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">PDC Received</span>
+            <span class="info-value large">{{ pdc_received|floatformat:2|intcomma }} AED</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Total Outstanding (with PDC)</span>
+            <span class="info-value large {% if has_over_limit %}danger{% endif %}">
+              {{ total_with_pdc|floatformat:2|intcomma }} AED
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Pending Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Monthly Pending Breakdown (Last 6 Months)</h2>
+      </div>
+      <div class="card-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="text-right">Pending Amount (AED)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for month in monthly_data %}
+            <tr>
+              <td><strong>{{ month.month_label }} ({{ month.month }})</strong></td>
+              <td class="text-right {% if month.amount > 0 %}amount-warning{% endif %}">
+                {{ month.amount|floatformat:2|intcomma }}
+              </td>
+            </tr>
+            {% endfor %}
+            <tr style="background: #fafbfc; font-weight: 600;">
+              <td><strong>Subtotal (6 Months)</strong></td>
+              <td class="text-right"><strong>{{ total_monthly|floatformat:2|intcomma }} AED</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Aged Pending -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Aged Pending</h2>
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">180+ Days Pending (6+ months)</span>
+            <span class="info-value large {% if old_months_pending > 0 %}amount-danger{% endif %}">
+              {{ old_months_pending|floatformat:2|intcomma }} AED
+            </span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">360+ Days Pending (6++ months)</span>
+            <span class="info-value large {% if very_old_months_pending > 0 %}amount-danger{% endif %}">
+              {{ very_old_months_pending|floatformat:2|intcomma }} AED
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total Summary -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Total Summary</h2>
+      </div>
+      <div class="card-body">
+        <table>
+          <tbody>
+            <tr>
+              <td><strong>Last 6 Months Total</strong></td>
+              <td class="text-right"><strong>{{ total_monthly|floatformat:2|intcomma }} AED</strong></td>
+            </tr>
+            <tr>
+              <td><strong>180+ Days Pending (6+ months)</strong></td>
+              <td class="text-right {% if old_months_pending > 0 %}amount-danger{% endif %}">
+                <strong>{{ old_months_pending|floatformat:2|intcomma }} AED</strong>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>360+ Days Pending (6++ months)</strong></td>
+              <td class="text-right {% if very_old_months_pending > 0 %}amount-danger{% endif %}">
+                <strong>{{ very_old_months_pending|floatformat:2|intcomma }} AED</strong>
+              </td>
+            </tr>
+            <tr style="border-top: 2px solid var(--border);">
+              <td><strong>Total Outstanding</strong></td>
+              <td class="text-right">
+                <strong style="font-size: 1.25rem;">{{ total_outstanding|floatformat:2|intcomma }} AED</strong>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>PDC Received</strong></td>
+              <td class="text-right"><strong>{{ pdc_received|floatformat:2|intcomma }} AED</strong></td>
+            </tr>
+            <tr style="border-top: 2px solid var(--primary); background: var(--primary-light);">
+              <td><strong>Total Outstanding (with PDC)</strong></td>
+              <td class="text-right">
+                <strong style="font-size: 1.5rem; {% if has_over_limit %}color: var(--danger);{% endif %}">
+                  {{ total_with_pdc|floatformat:2|intcomma }} AED
+                </strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
