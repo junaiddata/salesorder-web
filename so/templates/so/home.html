@@ -874,6 +874,12 @@
                             Combined Report
                         </a>
                     </li>
+                    <li>
+                        <a href="{% url 'credit_memo_analysis' %}">
+                            <i class="fas fa-chart-pie"></i>
+                            Credit Notes Analysis
+                        </a>
+                    </li>
                 </ul>
             </li>
             <!-- <li>
@@ -900,12 +906,12 @@
                     Customers
                 </a>
             </li>
-            <!-- <li>
+            <li>
                 <a href="{% url 'finance_statement_list' %}">
                     <i class="fas fa-file-invoice-dollar"></i>
                     Finance Statement
                 </a>
-            </li> -->
+            </li>
             {% if user.username != 'alabamaadmin' %}
             <li>
                 <a href="/items/">
