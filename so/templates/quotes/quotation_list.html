@@ -4,421 +4,555 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Quotations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root{
-      --bg: #d9e0e4;          /* slate-900 */
-      --bg-soft: #a0a0a0;     /* gray-900 */
-      --panel: #00050f;       /* gray-900 */
-      --panel-2: #0b1220;     /* deep layer */
-      --text: #02050c;        /* gray-200 */
-      --muted: #000000;       /* gray-400 */
-      --brand: #6366f1;       /* indigo-500 */
-      --brand-2:#8b5cf6;      /* violet-500 */
-      --accent:#1d0a7a;       /* cyan-400 */
-      --ok:#10b981;           /* emerald-500 */
-      --warn:#f59e0b;         /* amber-500 */
-      --border: rgba(255,255,255,.08);
-      --shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
-      --radius: 16px;
+    :root {
+      --bg: #f8fafc;
+      --bg-pattern: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #fafbfc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
     }
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
-      background:
-        radial-gradient(1200px 500px at -10% -10%, rgba(99,102,241,.18), transparent 40%),
-        radial-gradient(900px 400px at 110% 10%, rgba(139,92,246,.18), transparent 45%),
-        radial-gradient(1000px 500px at 50% 120%, rgba(34,211,238,.12), transparent 50%),
-        var(--bg);
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
       color: var(--text);
-      line-height:1.45;
+      line-height: 1.5;
+      min-height: 100vh;
     }
 
-    .wrap{
-      max-width: 1200px;
-      margin: 32px auto;
-      padding: 0 16px 56px;
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
     }
 
-    .page-head{
-      display:flex; align-items:flex-end; justify-content:space-between;
-      gap:16px; flex-wrap:wrap; margin-bottom:16px;
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
     }
-    .title{
-      font-size: clamp(22px, 3vw, 30px);
+
+    .header-left h1 {
+      font-size: 1.75rem;
       font-weight: 700;
-      letter-spacing:.3px;
-      display:flex; align-items:center; gap:10px;
-    }
-    .title .pill{
-      font-size: .8rem; font-weight:600; color: var(--accent);
-      padding:4px 10px; border:1px solid var(--border); border-radius:999px;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0));
+      color: var(--text);
+      letter-spacing: -0.02em;
     }
 
-    .actions{display:flex; gap:10px; flex-wrap:wrap}
-    .btn{
-      appearance:none; border:none; cursor:pointer;
-      padding:10px 14px; border-radius:12px; color:#060404;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
       box-shadow: var(--shadow);
-      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-      text-decoration:none; display:inline-flex; align-items:center; gap:8px; font-weight:600;
     }
-    .btn.secondary{
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      color: var(--text); border:1px solid var(--border);
-    }
-    .btn:hover{ transform: translateY(-1px); filter:saturate(1.05)}
-    .btn:active{ transform: translateY(0)}
 
-    .panel{
-      border:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(255,255,255,.02));
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+      transform: translateY(-1px);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow:visible;
     }
 
-    /* Filter bar */
-    .filters{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap:12px;
-      padding:16px;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      border-bottom:1px solid var(--border);
+    /* Filters */
+    .filters-card {
+      margin-bottom: 20px;
     }
-    @media(min-width:720px){
-      .filters{
-        grid-template-columns: minmax(220px, 2fr) 1.3fr 1fr 1fr .8fr auto;
-        align-items:end;
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    @media (min-width: 1024px) {
+      .filters-grid {
+        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
       }
     }
 
-    .field label{
-      display:block; font-size:.85rem; color: var(--muted); margin-bottom:6px;
-    }
-    .input, .select{
-      width:100%; color:var(--text);
-      padding:10px 12px; border-radius:12px;
-      border:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-      outline:none;
-    }
-    .input:focus, .select:focus{
-      border-color: rgba(99,102,241,.5);
-      box-shadow: 0 0 0 4px rgba(99,102,241,.15);
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
     }
 
-    .hint{color:var(--muted); margin:12px 16px 0}
-
-    /* Table wrapper for horizontal scroll on narrow screens */
-    .table-wrap{
-      width:100%; overflow:auto; -webkit-overflow-scrolling:touch;
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
     }
 
-    table{
-      width:100%;
+    .input:focus, .select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.875rem;
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+    }
+
+    .stat-value {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-value.highlight {
+      color: var(--success);
+    }
+
+    /* Multi-select */
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--text-muted);
+    }
+
+    .select-box::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    /* Table */
+    .table-card {
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
       border-collapse: collapse;
-      min-width:720px;
-      background: transparent;
-    }
-    thead th{
-      position: sticky; top:0; z-index:1;
-      background: linear-gradient(180deg, rgba(17,24,39,.9), rgba(17,24,39,.8));
-      backdrop-filter: blur(4px);
-      font-size:.9rem; text-align:left; color: #cbd5e1; /* slate-300 */
-      border-bottom:1px solid var(--border);
-      padding:12px 10px;
-    }
-    tbody td{
-      border-bottom:1px solid var(--border);
-      padding:12px 10px;
-    }
-    tbody tr{
-      transition: background .15s ease, transform .05s ease;
-    }
-    tbody tr:hover{
-      background: rgba(99,102,241,.06);
+      min-width: 800px;
     }
 
-    td.num{ text-align:right; font-variant-numeric: tabular-nums; }
-    .muted{ color: var(--muted); }
-
-    /* Row click affordance on the Q No */
-    a.q-link{
-      color: #000000; text-decoration: none; font-weight: 700;
-    }
-    a.q-link:hover{ text-decoration: underline; color: #fff; }
-
-    /* Footer / pagination */
-    .footer{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:10px; padding:12px 16px; color: var(--muted);
-      border-top:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
-      flex-wrap:wrap;
-    }
-    .pagination{
-      display:flex; gap:6px; flex-wrap:wrap;
-    }
-    .pagination a, .pagination span{
-      display:inline-flex; align-items:center; justify-content:center;
-      min-width:36px; height:36px; padding:0 10px;
-      border-radius:10px; border:1px solid var(--border);
-      text-decoration:none; color: var(--text);
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
-      font-weight:600;
-    }
-    .pagination a:hover{ border-color: rgba(99,102,241,.5) }
-    .pagination .active{
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      border-color: transparent;
+    thead th {
+      padding: 14px 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 2px solid var(--border);
+      text-align: left;
     }
 
-    /* “Total” counter */
-    .total{
-      font-weight:600; color:#000000;
+    thead th:last-child {
+      text-align: right;
     }
 
-    /* Small “legend” chips below title */
-    .chips{
-      display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--muted);
-      font-size:.85rem; margin-top:6px;
+    tbody td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.875rem;
     }
-    .chip{
-      border:1px solid var(--border);
-      padding:4px 8px; border-radius:999px;
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+
+    tbody tr {
+      transition: background var(--transition);
     }
-/* --- Custom Multi-Select Styles --- */
-.multi-select {
-  position: relative;
-  width: 100%;
-}
 
-.select-box {
-  cursor: pointer;
-  position: relative;
-  width: 100%;
-  color: var(--text);
-  /* Match the exact height/padding of your other inputs */
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  /* Match the exact gradient of your other inputs */
-  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  user-select: none;
-}
+    tbody tr:hover {
+      background: var(--surface-hover);
+    }
 
-.select-box:hover {
-  border-color: rgba(99,102,241,.5);
-}
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
 
-.select-box::after {
-  content: '▼';
-  font-size: 0.7rem;
-  opacity: 0.6;
-}
+    .q-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color var(--transition);
+    }
 
-/* The Dropdown List */
-.options-container {
-  display: none; 
-  position: absolute;
-  /* Push it down slightly to clear the input */
-  top: 105%; 
-  left: 0;
-  right: 0;
-  
-  /* ✅ VISUALS: Solid Dark Background + Blur for readability */
-  background: #0b1220; 
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5); /* Strong shadow to show depth */
-  
-  /* ✅ LAYOUT: High Z-Index to float above everything */
-  z-index: 9999; 
-  
-  /* ✅ HEIGHT: Tall enough for many names */
-  max-height: 300px; 
-  overflow-y: auto;
-  padding: 8px 0;
-}
+    .q-link:hover {
+      color: var(--primary-dark);
+      text-decoration: underline;
+    }
 
-.options-container.active {
-  display: block;
-}
+    .text-muted {
+      color: var(--text-muted);
+    }
 
-/* Individual Options */
-.field .option-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  
-  /* Force White Text */
-  color: #e2e8f0 !important; 
-  background: transparent;
-  margin-bottom: 0; 
-  
-  transition: all 0.1s ease;
-  font-size: 0.9rem;
-}
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
 
-/* Hover State */
-.field .option-label:hover {
-  /* White tint on hover */
-  background: rgba(255, 255, 255, 0.1); 
-  color: #ffffff !important; 
-}
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      font-size: 0.813rem;
+      font-weight: 600;
+      border-radius: 20px;
+    }
 
-.option-label input[type="checkbox"] {
-  accent-color: var(--brand); 
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  margin: 0;
-}
+    .badge-open {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .badge-closed {
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+
+    /* Footer / Pagination */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+      flex-wrap: wrap;
+    }
+
+    .pagination {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pagination a, .pagination span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--text);
+      background: var(--surface);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all var(--transition);
+    }
+
+    .pagination a:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .pagination .active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .total {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.875rem;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="page-head">
-      <div>
-        <div class="title">Quotations <span class="pill"></span></div>
-        <div class="chips">
-          <span class="chip">Filter by date, salesman, or keyword</span>
-          <span class="chip">Click a Q No to view items</span>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Quotations</h1>
+        <p>Manage and track your quotations</p>
+      </div>
+      <div class="header-actions">
+        {% if user.role.role == 'Admin' %}
+          <a class="btn btn-primary" href="{% url 'upload_quotations' %}">
+            <i class="fas fa-plus"></i> Upload New
+          </a>
+        {% endif %}
+        <button type="button" id="btn-export-pdf" class="btn btn-danger">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">
+            <i class="fas fa-home"></i> Home
+          </a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">
+            <i class="fas fa-home"></i> Home
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card filters-card">
+      <form id="filters" class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Q No / Customer / Salesman">
+        </div>
+
+        <div class="field">
+          <label>Salesman</label>
+          <div class="multi-select" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger">
+              <span id="salesman-text">Select Salesman...</span>
+            </div>
+            <div class="options-container" id="salesman-options">
+              {% for s in salesmen %}
+                <label class="option-label">
+                  <input type="checkbox" name="salesman" value="{{ s }}" 
+                    {% if s in filters.salesman %}checked{% endif %}>
+                  {{ s }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Start Date</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+
+        <div class="field">
+          <label>End Date</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+
+        <div class="field">
+          <label>Status</label>
+          <select class="select" name="status">
+            <option value="">All</option>
+            <option value="OPEN" {% if filters.status == 'OPEN' or filters.status == 'O' or filters.status == 'Open' %}selected{% endif %}>Open</option>
+            <option value="CLOSED" {% if filters.status == 'CLOSED' or filters.status == 'C' or filters.status == 'Closed' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Total Amount</label>
+          <select class="select" name="total">
+            <option value="">All</option>
+            <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 to 5,000</option>
+            <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5,001 to 10,000</option>
+            <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10,001 to 25,000</option>
+            <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25,001 to 50,000</option>
+            <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50,001 to 100,000</option>
+            <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100,000 and above</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Remarks</label>
+          <select class="select" name="remarks">
+            <option value="">All</option>
+            <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
+            <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">Total Value:</span>
+          <span class="stat-value highlight" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">2025:</span>
+          <span class="stat-value">{{ total_2025|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">2026:</span>
+          <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2 }}</span>
         </div>
       </div>
-      <div class="actions">
-        {% if user.role.role == 'Admin' %}
-          <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
-        {% endif %}
-<button type="button" id="btn-export-pdf" class="btn btn-danger">
-        <i class="fa fa-file-pdf-o"></i> Export PDF
-    </button>
-
-        {% if user.role.role == 'Salesman' %}
-          <a class="btn secondary" href="{% url 'sales_home' %}">Home</a>
-        {% else %}
-          <a class="btn secondary" href="{% url 'home' %}">Home</a>
-        {% endif %}
-      </div>
     </div>
 
-<div class="panel">
-  <form id="filters" class="filters" method="get">
-
-    <div class="field">
-      <label>Search</label>
-      <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Q No / Customer / Salesman">
-    </div>
-
-    <div class="field">
-  <label>Salesman</label>
-  
-  <div class="multi-select" id="salesman-wrapper">
-    <!-- The visible box that looks like a select input -->
-    <div class="select-box" id="salesman-trigger">
-      <span id="salesman-text">Select Salesman...</span>
-    </div>
-
-    <!-- The hidden dropdown with checkboxes -->
-    <div class="options-container" id="salesman-options">
-      {% for s in salesmen %}
-        <label class="option-label">
-          <input type="checkbox" name="salesman" value="{{ s }}" 
-            {% if s in filters.salesman %}checked{% endif %}>
-          {{ s }}
-        </label>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-    <div class="field">
-      <label>Start</label>
-      <input class="input" type="date" name="start" value="{{ filters.start }}">
-    </div>
-
-    <div class="field">
-      <label>End</label>
-      <input class="input" type="date" name="end" value="{{ filters.end }}">
-    </div>
-
-    <div class="field">
-      <label>Status</label>
-      <select class="select" name="status">
-        <option value="">All</option>
-        <option value="OPEN" {% if filters.status == 'OPEN' or filters.status == 'O' or filters.status == 'Open' %}selected{% endif %}>Open</option>
-        <option value="CLOSED" {% if filters.status == 'CLOSED' or filters.status == 'C' or filters.status == 'Closed' %}selected{% endif %}>Closed</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label>Page Size</label>
-      <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}">
-    </div>
-
-    <!-- ✅ NEW TOTAL RANGE DROPDOWN -->
-    <div class="field">
-      <label>Total Amount</label>
-      <select class="select" name="total">
-        <option value="">All</option>
-        <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 to 5,000</option>
-        <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5,001 to 10,000</option>
-        <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10,001 to 25,000</option>
-        <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25,001 to 50,000</option>
-        <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50,001 to 100,000</option>
-        <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100,000 and above</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Remarks</label>
-      <select class="select" name="remarks">
-        <option value="">All</option>
-        <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
-        <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label>&nbsp;</label>
-      <button class="btn" type="submit">Apply</button>
-    </div>
-    <div class="totals">
-<div style="margin-top: 10px; font-size: 1.1em;">
-    <!-- Grand Total -->
-    <span style="margin-right: 20px;">
-        Total Value: 
-        <strong id="total-value">{{ total_value|default:0|floatformat:2 }}</strong>
-    </span>
-
-    <!-- 2025 Total -->
-    <span style="margin-right: 20px; color: #6c757d;"> <!-- Gray Color -->
-        2025: 
-        <strong>{{ total_2025|default:0|floatformat:2 }}</strong>
-    </span>
-
-    <!-- 2026 Total -->
-    <span style="color: #28a745;"> <!-- Green Color -->
-        2026: 
-        <strong>{{ total_2026|default:0|floatformat:2 }}</strong>
-    </span>
-</div>
-</div>
-  </form>
-</div>
-      <!-- <p class="hint">Tip: Type at least 2 characters to live-search.</p> -->
-
+    <div class="card table-card">
       <div class="table-wrap">
         <table aria-label="Quotations">
           <thead>
@@ -427,7 +561,7 @@
               <th>Q No</th>
               <th>Customer</th>
               <th>Salesman</th>
-              <th style="text-align:right">Total</th>
+              <th>Total</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -447,7 +581,7 @@
   </div>
 
 <script>
-  // 1. AJAX Search Logic (Existing)
+  // AJAX Search Logic
   (function() {
     const form = document.getElementById('filters');
     const body = document.getElementById('quotations-body');
@@ -467,23 +601,19 @@
       return usp.toString();
     }
 
-function collectParams(overrides={}) {
+    function collectParams(overrides={}) {
       const data = new FormData(form);
-      
-      // Use URLSearchParams to handle multiple checkboxes with same name
       const params = new URLSearchParams();
       for (const [key, value] of data.entries()) {
         params.append(key, value);
       }
-
-      // Add overrides
       for (const k in overrides) {
-        // Remove existing page param if overriding, then append
         if(k === 'page') params.delete('page');
         params.append(k, overrides[k]);
       }
       return params;
     }
+
     function load(params) {
       const url = '{% url "quotation_search" %}?'+qs(params);
       fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
@@ -493,7 +623,6 @@ function collectParams(overrides={}) {
           pagination.innerHTML = data.pagination_html + '\n' +
             `<div class="total">Total: ${data.count} quotations</div>`;
 
-          // Update total value at top
           if (data.total_value !== undefined) {
             const totalSpan = document.getElementById('total-value');
             if (totalSpan) {
@@ -520,7 +649,7 @@ function collectParams(overrides={}) {
       }
     }, 300));
 
-    form.querySelectorAll('select, input[type="date"], input[name="page_size"]').forEach(el => {
+    form.querySelectorAll('select, input[type="date"]').forEach(el => {
       el.addEventListener('change', function() {
         load(collectParams({ page: 1 }));
       });
@@ -535,93 +664,71 @@ function collectParams(overrides={}) {
     });
   })();
 
-  // 2. EXPORT PDF LOGIC (Fixed)
+  // Export PDF Logic
   document.addEventListener("DOMContentLoaded", function() {
     const exportBtn = document.getElementById('btn-export-pdf');
-    
     if(exportBtn){
-        exportBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-
-            // Select the form that contains the filters
-            const form = document.getElementById('filters');
-            
-            // Automatically grab all inputs (q, salesman, date, etc.) from the form
-            const formData = new FormData(form);
-            
-            // Convert to URL parameters string
-            const params = new URLSearchParams(formData);
-
-            // Redirect to the Export URL with the parameters
-            const exportUrl = "{% url 'export_quotation_list_pdf' %}?" + params.toString();
-            
-            // Debugging (Optional: check console to see if params are correct)
-            console.log("Exporting with params:", params.toString());
-
-            window.location.href = exportUrl;
-        });
+      exportBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const form = document.getElementById('filters');
+        const formData = new FormData(form);
+        const params = new URLSearchParams(formData);
+        const exportUrl = "{% url 'export_quotation_list_pdf' %}?" + params.toString();
+        window.location.href = exportUrl;
+      });
     }
   });
 
-/* --- Custom Multi-Select Logic --- */
-document.addEventListener("DOMContentLoaded", function() {
-  const wrapper = document.getElementById('salesman-wrapper');
-  const trigger = document.getElementById('salesman-trigger');
-  const options = document.getElementById('salesman-options');
-  const textSpan = document.getElementById('salesman-text');
-  
-  // Helper to get fresh list of checkboxes
-  const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
-
-  // 1. Toggle Dropdown visibility
-  trigger.addEventListener('click', function(e) {
-    e.stopPropagation(); 
-    options.classList.toggle('active');
-  });
-
-  // 2. Prevent closing when clicking INSIDE the dropdown (Important!)
-  options.addEventListener('click', function(e) {
-    e.stopPropagation();
-  });
-
-  // 3. Update Label Text based on selection
-  function updateLabel() {
-    const checkboxes = getCheckboxes();
-    const checked = Array.from(checkboxes).filter(c => c.checked);
+  // Multi-Select Logic
+  document.addEventListener("DOMContentLoaded", function() {
+    const wrapper = document.getElementById('salesman-wrapper');
+    const trigger = document.getElementById('salesman-trigger');
+    const options = document.getElementById('salesman-options');
+    const textSpan = document.getElementById('salesman-text');
     
-    if (checked.length === 0) {
-      textSpan.textContent = "All Salesmen";
-      textSpan.style.opacity = "0.7";
-    } else if (checked.length === 1) {
-      textSpan.textContent = checked[0].value; // Show name if only 1 selected
-      textSpan.style.opacity = "1";
-    } else {
-      textSpan.textContent = `${checked.length} Selected`;
-      textSpan.style.opacity = "1";
+    const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
+
+    trigger.addEventListener('click', function(e) {
+      e.stopPropagation(); 
+      options.classList.toggle('active');
+    });
+
+    options.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+
+    function updateLabel() {
+      const checkboxes = getCheckboxes();
+      const checked = Array.from(checkboxes).filter(c => c.checked);
+      
+      if (checked.length === 0) {
+        textSpan.textContent = "All Salesmen";
+        textSpan.style.opacity = "0.7";
+      } else if (checked.length === 1) {
+        textSpan.textContent = checked[0].value;
+        textSpan.style.opacity = "1";
+      } else {
+        textSpan.textContent = `${checked.length} Selected`;
+        textSpan.style.opacity = "1";
+      }
     }
-  }
 
-  // Initialize label on load
-  updateLabel();
+    updateLabel();
 
-  // 4. Listen for changes to update text AND trigger AJAX Search
-  getCheckboxes().forEach(box => {
-    box.addEventListener('change', function() {
-      updateLabel();
-      // Trigger the existing search form submit logic
-      const form = document.getElementById('filters');
-      // Dispatch submit so the existing AJAX listener handles it
-      form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); 
+    getCheckboxes().forEach(box => {
+      box.addEventListener('change', function() {
+        updateLabel();
+        const form = document.getElementById('filters');
+        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); 
+      });
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!wrapper.contains(e.target)) {
+        options.classList.remove('active');
+      }
     });
   });
-
-  // 5. Close dropdown when clicking OUTSIDE
-  document.addEventListener('click', function(e) {
-    if (!wrapper.contains(e.target)) {
-      options.classList.remove('active');
-    }
-  });
-});
 </script>
 </body>
 </html>

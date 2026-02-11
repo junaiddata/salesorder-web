@@ -1,24 +1,27 @@
 {% for q in page_obj %}
-<tr class="row">
-  <td data-label="Posting Date">{{ q.posting_date|default:"-" }}</td>
-  <td data-label="Q No">
+<tr>
+  <td>{{ q.posting_date|date:"M d, Y"|default:"-" }}</td>
+  <td>
     <a class="q-link" href="{% url 'quotation_detail' q.q_number %}">{{ q.q_number }}</a>
   </td>
-  <td data-label="Customer">{{ q.customer_name }}</td>
-  <td data-label="Salesman"><span class="muted">{{ q.salesman_name }}</span></td>
-  <td class="num" data-label="Total">{{ q.document_total|floatformat:2 }}</td>
-  <td data-label="Status">
+  <td>{{ q.customer_name }}</td>
+  <td class="text-muted">{{ q.salesman_name|default:"—" }}</td>
+  <td class="num">{{ q.document_total|default_if_none:"0"|floatformat:2 }}</td>
+  <td>
     {% if q.status|upper == 'OPEN' or q.status|upper == 'O' %}
-      <span style="color: var(--ok); font-weight: 600;">OPEN</span>
+      <span class="badge badge-open">Open</span>
     {% elif q.status|upper == 'CLOSED' or q.status|upper == 'C' %}
-      <span style="color: var(--muted); font-weight: 600;">CLOSED</span>
+      <span class="badge badge-closed">Closed</span>
     {% else %}
-      {{ q.status|default:"—" }}
+      <span class="badge badge-closed">{{ q.status|default:"—" }}</span>
     {% endif %}
   </td>
 </tr>
 {% empty %}
 <tr>
-  <td colspan="5" class="muted" style="text-align:center;padding:16px;">No quotations found.</td>
+  <td colspan="6" class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 8px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    No quotations found
+  </td>
 </tr>
 {% endfor %}

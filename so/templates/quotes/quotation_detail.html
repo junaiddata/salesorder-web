@@ -4,280 +4,593 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Quotation {{ quotation.q_number }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root{
-      /* Light palette based on your reference */
-      --bg: #d9e0e4;          /* page background */
-      --bg-soft: #eef2f6;     /* soft section bg */
-      --panel: #ffffff;       /* cards/panels */
-      --panel-2: #f8fafc;     /* subtle card bg */
-      --text: #02050c;        /* main text */
-      --muted: #3f4752;       /* secondary text */
-      --brand: #6366f1;       /* indigo-500 */
-      --brand-2:#8b5cf6;      /* violet-500 */
-      --accent:#000000;       /* deep accent */
-      --ok:#10b981;           /* emerald-500 */
-      --warn:#f59e0b;         /* amber-500 */
-      --border: rgba(2,5,12,.12); /* subtle border */
-      --shadow: 0 6px 20px rgba(2,5,12,.08);
-      --radius: 16px;
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
     }
 
-    *{ box-sizing: border-box }
-    html,body{ height:100% }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans";
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
       color: var(--text);
-      background:
-        radial-gradient(900px 300px at -10% -10%, rgba(99,102,241,.08), transparent 40%),
-        radial-gradient(700px 280px at 110% 10%, rgba(139,92,246,.08), transparent 45%),
-        var(--bg);
       line-height: 1.5;
+      min-height: 100vh;
     }
 
-    .wrap{
-      max-width: 1100px;
-      margin: 28px auto 60px;
-      padding: 0 16px;
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
     }
 
-    .page-head{
-      display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap;
-      margin-bottom: 14px;
-    }
-    .title{
-      font-weight: 800;
-      font-size: clamp(22px, 3.2vw, 32px);
-      letter-spacing:.2px;
-      color: var(--accent);
-    }
-    .subtitle{
-      color: var(--muted); margin-top: 4px;
+    /* Header */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
     }
 
-    .actions{ display:flex; gap:10px; flex-wrap:wrap }
-    .btn{
-      appearance:none; border:none; cursor:pointer;
-      padding:10px 14px; border-radius: 12px;
-      text-decoration:none; font-weight: 700;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      color:#fff; box-shadow: var(--shadow);
-      transition: transform .15s ease, filter .15s ease;
-      display:inline-flex; align-items:center; gap:8px;
-    }
-    .btn.secondary{
-      background: linear-gradient(180deg, #fff, #f8fafc);
-      color: var(--accent);
-      border:1px solid var(--border);
-    }
-    .btn:hover{ transform: translateY(-1px); filter: saturate(1.05) }
-    .btn:active{ transform: translateY(0) }
-
-    .grid{
-      display:grid; gap:16px; margin-top: 12px;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 860px){
-      .grid{ grid-template-columns: 1.1fr 1fr; }
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .card{
-      background: var(--panel);
-      border:1px solid var(--border);
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      font-family: inherit;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      font-size: 0.813rem;
+      font-weight: 600;
+      border-radius: 20px;
+    }
+
+    .badge-open {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .badge-closed {
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow:hidden;
+      margin-bottom: 20px;
     }
 
-    .card .hd{
-      padding:12px 16px;
-      background: linear-gradient(180deg, #fff, var(--panel-2));
-      border-bottom:1px solid var(--border);
-      font-weight: 700; color: var(--accent);
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-light);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
     }
-    .card .bd{ padding: 14px 16px; }
 
-    .kv{
-      display:grid; grid-template-columns: 1fr; gap:10px;
+    .card-body {
+      padding: 20px;
     }
-    @media (min-width: 560px){
-      .kv{ grid-template-columns: 1fr 1fr; }
-    }
-    .kv .row{
-      display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center;
-      padding:8px 0; border-bottom: 1px dashed rgba(2,5,12,.08);
-    }
-    .kv .row:last-child{ border-bottom:0 }
-    .kv .k{ color: var(--muted); font-weight:600 }
-    .kv .v{ font-weight:600 }
 
-    /* Totals highlight */
-    .stat{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:8px; margin-top: 10px;
-      padding:12px 14px; border-radius: 12px;
-      background: linear-gradient(180deg, #fbfbff, #f2f5ff);
-      border:1px solid rgba(99,102,241,.25);
-      color: var(--accent);
+    /* Info Grid */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-label {
+      font-size: 0.813rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .info-value {
+      font-size: 0.938rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .stat-card {
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-alt);
+      border: 1px solid var(--border-light);
+    }
+
+    .stat-card.highlight {
+      background: var(--primary-light);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+
+    .stat-card.success {
+      background: var(--success-light);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    .stat-card.danger {
+      background: #fef2f2;
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .stat-card-label {
+      font-size: 0.813rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .stat-card-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-card.highlight .stat-card-value {
+      color: var(--primary);
+    }
+
+    .stat-card.success .stat-card-value {
+      color: var(--success);
+    }
+
+    .stat-card.danger .stat-card-value {
+      color: #dc2626;
+    }
+
+    /* Totals list */
+    .totals-list {
+      display: grid;
+      gap: 10px;
+    }
+    .totals-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    .totals-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .totals-value {
+      font-size: 1rem;
+      color: var(--text);
       font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .totals-row.grand {
+      background: var(--primary-light);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    .totals-row.grand .totals-value {
+      color: var(--primary);
+    }
+
+    /* Remarks */
+    .remarks-textarea {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      resize: vertical;
+      min-height: 100px;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .remarks-textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .remarks-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .empty-remarks {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 0.875rem;
+      margin-bottom: 12px;
     }
 
     /* Table */
-    .table-wrap{ width:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
-    table{
-      width:100%; min-width: 720px; border-collapse: collapse; background: #fff;
-      border:1px solid var(--border); border-radius: 12px; overflow:hidden;
-    }
-    thead th{
-      position: sticky; top:0; z-index:1;
-      background: linear-gradient(180deg, #fff, #f7f9fc);
-      border-bottom:1px solid var(--border);
-      text-align:left; font-size:.92rem; color: var(--muted);
-      padding:12px 10px;
-    }
-    tbody td{
-      border-bottom:1px solid var(--border);
-      padding:12px 10px;
-    }
-    tbody tr:hover{ background: #f8fbff }
-    td.num{ text-align:right; font-variant-numeric: tabular-nums; }
-
-    .backbar{
-      display:flex; gap:10px; flex-wrap:wrap; margin-top: 8px;
+    .table-wrap {
+      overflow-x: auto;
     }
 
-    .pill{
-      display:inline-block; padding:4px 10px; border-radius:999px;
-      background:#eef2ff; color:#3730a3; border:1px solid rgba(55,48,163,.2);
-      font-weight:700; font-size:.82rem;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1000px;
+    }
+
+    thead th {
+      padding: 12px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--surface-alt);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 12px 14px;
+      font-size: 0.875rem;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text);
+    }
+
+    tbody tr:hover {
+      background: var(--surface-alt);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    th.num {
+      text-align: right;
+    }
+
+    /* Footer Actions */
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-secondary);
+    }
+
+    /* Two column layout */
+    @media (min-width: 768px) {
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      font-weight: 600;
+      font-size: 0.813rem;
+      margin-left: 8px;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <div class="title">Quotation {{ quotation.q_number }}</div>
-        <div class="subtitle">Details & items</div>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>
+          {{ quotation.q_number }}
+          {% if quotation.status|upper == 'OPEN' or quotation.status|upper == 'O' %}
+            <span class="badge badge-open">Open</span>
+          {% else %}
+            <span class="badge badge-closed">Closed</span>
+          {% endif %}
+        </h1>
+        <p>{{ quotation.customer_name }}</p>
       </div>
-      <div class="actions">
+      <div class="header-actions">
         {% if from_old_pi %}
-          <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
+          <a class="btn btn-secondary" href="{% url 'old_pi_list' %}">
+            <i class="fas fa-arrow-left"></i> Back to Old PIs
+          </a>
         {% else %}
-          {% if from_old_pi %}
-        <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
-      {% else %}
-        <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
-      {% endif %}
+          <a class="btn btn-secondary" href="{% url 'quotation_list' %}">
+            <i class="fas fa-arrow-left"></i> Back to Quotations
+          </a>
         {% endif %}
+        <a class="btn btn-primary" href="{% url 'export_sap_quotation_pdf' quotation.q_number %}">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </a>
         {% if user.is_staff or user.is_superuser %}
-          <a class="btn" href="{% url 'upload_quotations' %}">Upload New</a>
+          <a class="btn btn-secondary" href="{% url 'upload_quotations' %}">Upload New</a>
         {% endif %}
       </div>
     </header>
 
-<section>
-  <article class="card">
-    <div class="hd">Quotation Information</div>
-    <div class="bd">
-      <div class="kv">
-        <div class="row">
-          <div class="k">Customer</div>
-          <div class="v">
-            {{ quotation.customer_name }}
-            {% if quotation.customer_code %}
-              <span class="pill">{{ quotation.customer_code }}</span>
+    <div class="two-col">
+      <!-- Quotation Information -->
+      <div class="card">
+        <div class="card-header">Quotation Information</div>
+        <div class="card-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Customer</span>
+              <span class="info-value">
+                {{ quotation.customer_name }}
+                {% if quotation.customer_code %}
+                  <span class="pill">{{ quotation.customer_code }}</span>
+                {% endif %}
+              </span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Salesman</span>
+              <span class="info-value">{{ quotation.salesman_name|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Posting Date</span>
+              <span class="info-value">{{ quotation.posting_date|date:"M d, Y"|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">BP Reference No</span>
+              <span class="info-value">{{ quotation.bp_reference_no|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Q No</span>
+              <span class="info-value">{{ quotation.q_number }}</span>
+            </div>
+            {% if quotation.bill_to %}
+            <div class="info-item" style="grid-column: 1 / -1;">
+              <span class="info-label">Bill To</span>
+              <span class="info-value" style="white-space: pre-line; font-size: 0.875rem;">{{ quotation.bill_to }}</span>
+            </div>
+            {% endif %}
+            {% if quotation.vat_sum or quotation.total_discount or quotation.discount_percent or quotation.rounding_diff_amount %}
+            <div class="info-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+              <span class="info-label" style="margin-bottom: 8px; display: block;">Additional Details</span>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+                {% if quotation.vat_sum %}
+                <div>
+                  <span class="info-label" style="font-size: 0.75rem;">VAT Sum</span>
+                  <div class="info-value" style="font-size: 0.875rem;">{{ quotation.vat_sum|floatformat:2 }}</div>
+                </div>
+                {% endif %}
+                {% if quotation.total_discount %}
+                <div>
+                  <span class="info-label" style="font-size: 0.75rem;">Total Discount</span>
+                  <div class="info-value" style="font-size: 0.875rem;">{{ quotation.total_discount|floatformat:2 }}</div>
+                </div>
+                {% endif %}
+                {% if quotation.discount_percent %}
+                <div>
+                  <span class="info-label" style="font-size: 0.75rem;">Discount %</span>
+                  <div class="info-value" style="font-size: 0.875rem;">{{ quotation.discount_percent|floatformat:2 }}%</div>
+                </div>
+                {% endif %}
+                {% if quotation.rounding_diff_amount %}
+                <div>
+                  <span class="info-label" style="font-size: 0.75rem;">Rounding Diff</span>
+                  <div class="info-value" style="font-size: 0.875rem;">{{ quotation.rounding_diff_amount|floatformat:2 }}</div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card highlight">
+              <div class="stat-card-label">Total</div>
+              <div class="stat-card-value">{{ quotation.document_total|floatformat:2 }}</div>
+            </div>
+            {% if user.role.role == 'Admin' %}
+            <div class="stat-card danger">
+              <div class="stat-card-label">Est. Cost</div>
+              <div class="stat-card-value">{{ total_cost|floatformat:2 }}</div>
+            </div>
+            <div class="stat-card success">
+              <div class="stat-card-label">Est. Margin</div>
+              <div class="stat-card-value">{{ total_profit|floatformat:2 }}</div>
+            </div>
             {% endif %}
           </div>
         </div>
-        <div class="row">
-          <div class="k">Salesman</div>
-          <div class="v">{{ quotation.salesman_name }}</div>
-        </div>
-        <div class="row">
-          <div class="k">Posting Date</div>
-          <div class="v">{{ quotation.posting_date|default:"-" }}</div>
-        </div>
-        <div class="row">
-          <div class="k">BP Ref No</div>
-          <div class="v">{{ quotation.bp_reference_no|default:"—" }}</div>
-        </div>
-        <div class="row">
-          <div class="k">Q No</div>
-          <div class="v">{{ quotation.q_number }}</div>
-        </div>
+      </div>
 
-        <!-- 🆕 Added Bill To section -->
-        <div class="row">
-          <div class="k">Bill To</div>
-          <div class="v" style="font-size: 13px; color: #555; white-space: pre-line;">
-            {{ quotation.bill_to|default:"Not specified" }}
+      <!-- Stats Summary Card -->
+      <div class="card" style="align-self: start;">
+        <div class="card-header">Summary</div>
+        <div class="card-body">
+          <div class="totals-list">
+            <div class="totals-row">
+              <div class="totals-label">Subtotal (without VAT)</div>
+              <div class="totals-value">{{ quotation.document_total|floatformat:2 }}</div>
+            </div>
+            {% if quotation.vat_sum %}
+            <div class="totals-row">
+              <div class="totals-label">VAT</div>
+              <div class="totals-value">{{ quotation.vat_sum|floatformat:2 }}</div>
+            </div>
+            {% endif %}
+            {% if quotation.total_discount %}
+            <div class="totals-row">
+              <div class="totals-label">Discount</div>
+              <div class="totals-value">-{{ quotation.total_discount|floatformat:2 }}</div>
+            </div>
+            {% endif %}
+            {% if quotation.rounding_diff_amount %}
+            <div class="totals-row">
+              <div class="totals-label">Rounding</div>
+              <div class="totals-value">{{ quotation.rounding_diff_amount|floatformat:2 }}</div>
+            </div>
+            {% endif %}
           </div>
         </div>
       </div>
-
-      <div class="stat">
-        <span>Total</span>
-        <span>{{ quotation.document_total|floatformat:2 }}</span>
-      </div>
-
-      <!-- NEW: Cost & Profit Section (Visible to Staff/Superuser) -->
-
-      <div style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-        {% if user.role.role == 'Admin' %}
-        <!-- Total Cost Card -->
-        <div style="background:#fff0f0; border:1px solid #fecaca; color:#991b1b; padding:10px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:0.9rem; font-weight:700;">Est. Cost</span>
-          <span style="font-weight:800;">{{ total_cost|floatformat:2 }}</span>
-        </div>
-
-        <!-- Total Profit Card -->
-        <div style="background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; padding:10px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:0.9rem; font-weight:700;">Est. Margin</span>
-          <span style="font-weight:800;">{{ total_profit|floatformat:2 }}</span>
-        </div>
-        {% endif %}
-      </div>
-
     </div>
-  </article>
-</section>
+
     <!-- Remarks -->
-<!-- Remarks -->
-<section class="card" style="margin-top:16px;">
-  <div class="hd">Remarks</div>
-  <div class="bd">
-    <form method="post" action="{% url 'quotation_update_remarks' quotation.q_number %}">
-      {% csrf_token %}
-      {% if not quotation.remarks %}
-        <div style="color:var(--muted); margin-bottom:6px; font-style:italic;">
-          No remarks yet — you can add one below.
-        </div>
-      {% endif %}
-      <textarea name="remarks" rows="4"
-                style="width:100%; padding:10px; border:1px solid var(--border); border-radius:12px;"
-                placeholder="Add internal remarks…">{{ quotation.remarks|default_if_none:"" }}</textarea>
-      <div style="margin-top:10px; display:flex; gap:10px;">
-        <button class="btn" type="submit">Save Remarks</button>
-        <a class="btn secondary" href="{% url 'quotation_detail' quotation.q_number %}">Cancel</a>
+    <div class="card">
+      <div class="card-header">Remarks</div>
+      <div class="card-body">
+        <form method="post" action="{% url 'quotation_update_remarks' quotation.q_number %}">
+          {% csrf_token %}
+          {% if not quotation.remarks %}
+            <div class="empty-remarks">
+              No remarks yet — you can add one below.
+            </div>
+          {% endif %}
+          <textarea name="remarks" class="remarks-textarea" rows="4" placeholder="Add internal remarks…">{{ quotation.remarks|default_if_none:"" }}</textarea>
+          <div class="remarks-actions">
+            <button class="btn btn-primary" type="submit">Save Remarks</button>
+            <a class="btn btn-secondary" href="{% url 'quotation_detail' quotation.q_number %}">Cancel</a>
+          </div>
+        </form>
       </div>
-    </form>
-  </div>
-</section>
+    </div>
+
     <!-- Items -->
-    <section class="card" style="margin-top:16px;">
-      <div class="hd">Items</div>
-      <div class="bd">
+    <div class="card">
+      <div class="card-header">Items</div>
+      <div class="card-body">
         <div class="table-wrap">
           <table aria-label="Quotation Items">
             <thead>
               <tr>
                 <th>Item No</th>
                 <th>Description</th>
-                <th style="text-align:right">Qty</th>
-                <th style="text-align:right">Price</th>
-                <th style="text-align:right">Row Total</th>
+                <th class="num">Qty</th>
+                <th class="num">Price</th>
+                <th class="num">Row Total</th>
               </tr>
             </thead>
             <tbody>
@@ -290,24 +603,30 @@
                 <td class="num">{{ it.row_total|floatformat:2 }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="5" style="text-align:center; color:var(--muted); padding:16px;">No items</td></tr>
+              <tr>
+                <td colspan="5" class="empty-state">No items</td>
+              </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       </div>
-    </section>
-
-    <div class="backbar">
-      {% if from_old_pi %}
-        <a class="btn secondary" href="{% url 'old_pi_list' %}">Back to Old PIs</a>
-      {% else %}
-        <a class="btn secondary" href="{% url 'quotation_list' %}">Back to Quotations</a>
-      {% endif %}
-      <a class="btn" href="{% url 'export_sap_quotation_pdf' quotation.q_number %}">Export PDF</a>
     </div>
-    
 
+    <div class="footer-actions">
+      {% if from_old_pi %}
+        <a class="btn btn-secondary" href="{% url 'old_pi_list' %}">
+          <i class="fas fa-arrow-left"></i> Back to Old PIs
+        </a>
+      {% else %}
+        <a class="btn btn-secondary" href="{% url 'quotation_list' %}">
+          <i class="fas fa-arrow-left"></i> Back to Quotations
+        </a>
+      {% endif %}
+      <a class="btn btn-primary" href="{% url 'export_sap_quotation_pdf' quotation.q_number %}">
+        <i class="fas fa-file-pdf"></i> Export PDF
+      </a>
+    </div>
   </div>
 </body>
 </html>

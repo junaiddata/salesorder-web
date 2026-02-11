@@ -10,7 +10,7 @@ WORKFLOW:
 3. VPS updates its database
 
 Usage:
-    python sync_quotations_pc.py           # Runs every 7 minutes (background service)
+    python sync_quotations_pc.py           # Runs every 10 minutes (background service)
     python sync_quotations_pc.py --once    # Single run (for testing)
     python sync_quotations_pc.py --days-back 8  # Run once with custom days
 """
@@ -41,7 +41,7 @@ VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  
 VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')  # Must match VPS
 
 # Sync interval in minutes
-SYNC_INTERVAL_MINUTES = 7
+SYNC_INTERVAL_MINUTES = 10
 
 # Default days back to fetch
 DEFAULT_DAYS_BACK = getattr(settings, 'SAP_SYNC_DAYS_BACK', 3)
@@ -51,17 +51,33 @@ LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "sync_quotations.log")
 
+# Track if logging failed to avoid spam
+_logging_failed = False
+
 
 def log_message(message: str, also_print: bool = True, level: str = "INFO"):
     """Write message to log file and optionally print to console."""
+    global _logging_failed
+    
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] [{level}] {message}\n"
     
-    try:
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
-    except Exception as e:
-        print(f"Logging error: {e}")
+    # Only try to log if we haven't failed before
+    if not _logging_failed:
+        try:
+            with open(LOG_FILE, 'a', encoding='utf-8', errors='replace') as f:
+                f.write(log_entry)
+        except (PermissionError, OSError, IOError) as e:
+            # Mark logging as failed and show error once
+            _logging_failed = True
+            if also_print:
+                try:
+                    print(f"Warning: Cannot write to log file {LOG_FILE}. Logging to console only.", flush=True)
+                except:
+                    pass
+        except Exception:
+            # Other errors - silently fail
+            _logging_failed = True
     
     if also_print:
         print(message, flush=True)
@@ -121,7 +137,7 @@ def sync_quotations(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
             log_message("  No quotations found.", level="WARNING")
             return {"success": True, "stats": {"total": 0}, "error": None}
         
-        log_message(f"  ✓ Fetched {len(all_quotations)} quotations")
+        log_message(f"  [OK] Fetched {len(all_quotations)} quotations")
         
         # Step 2: Map API responses
         log_message("[STEP 2] Mapping API responses...")
@@ -143,7 +159,7 @@ def sync_quotations(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
         if mapping_errors:
             log_message(f"  {len(mapping_errors)} quotations failed to map", level="WARNING")
         
-        log_message(f"  ✓ Mapped {len(mapped_quotations)} quotations")
+        log_message(f"  [OK] Mapped {len(mapped_quotations)} quotations")
         
         # Get quotation numbers for closing logic
         api_q_numbers = [m['q_number'] for m in mapped_quotations if m.get('q_number')]
@@ -184,7 +200,7 @@ def sync_quotations(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
             closed = stats.get("closed", 0)
             total_items = stats.get("total_items", 0)
             
-            log_message(f"  ✓ Successfully synced to VPS (took {send_duration:.2f}s)")
+            log_message(f"  [OK] Successfully synced to VPS (took {send_duration:.2f}s)")
             log_message(f"    Created: {created}")
             log_message(f"    Updated: {updated}")
             log_message(f"    Closed: {closed}")
@@ -216,7 +232,7 @@ def sync_quotations(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
                 "error": None
             }
         else:
-            log_message(f"  ✗ VPS sync failed: {error}", level="ERROR")
+            log_message(f"  [ERROR] VPS sync failed: {error}", level="ERROR")
             return {"success": False, "stats": {}, "error": error}
             
     except requests.HTTPError as e:
@@ -229,14 +245,14 @@ def sync_quotations(days_back: int = DEFAULT_DAYS_BACK) -> Dict[str, Any]:
             resp_text = ""
         
         error_msg = f"Failed to send to VPS: HTTP {status_code}"
-        log_message(f"  ✗ {error_msg}", level="ERROR")
+        log_message(f"  [ERROR] {error_msg}", level="ERROR")
         if resp_text:
             log_message(f"  VPS response (truncated): {resp_text[:1000]}", level="ERROR")
         return {"success": False, "stats": {}, "error": error_msg}
         
     except requests.RequestException as e:
         error_msg = f"Failed to send to VPS: {str(e)}"
-        log_message(f"  ✗ {error_msg}", level="ERROR")
+        log_message(f"  [ERROR] {error_msg}", level="ERROR")
         return {"success": False, "stats": {}, "error": error_msg}
         
     except Exception as e:
@@ -278,10 +294,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python sync_quotations_pc.py               # Runs every 7 minutes (service mode)
+  python sync_quotations_pc.py               # Runs every 10 minutes (service mode)
   python sync_quotations_pc.py --once        # Single run
   python sync_quotations_pc.py --days-back 8 # Run once with 8 days
-  python sync_quotations_pc.py --days-back 8 --service  # Run every 7 min with 8 days
+  python sync_quotations_pc.py --days-back 8 --service  # Run every 10 min with 8 days
         """
     )
     parser.add_argument(
@@ -327,10 +343,10 @@ Examples:
         result = sync_quotations(days_back=args.days_back)
         
         if result.get("success"):
-            log_message("\n✓ Sync completed successfully!")
+            log_message("\n[OK] Sync completed successfully!")
             return 0
         else:
-            log_message(f"\n✗ Sync failed: {result.get('error')}", level="ERROR")
+            log_message(f"\n[ERROR] Sync failed: {result.get('error')}", level="ERROR")
             return 1
     else:
         # Background service mode
