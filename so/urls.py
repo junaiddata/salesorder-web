@@ -86,6 +86,7 @@ urlpatterns = [
     path('quotations/<int:quotation_id>/details/', views_quotation.view_quotation_details, name='view_quotation_details'),
     path('quotations/<int:quotation_id>/edit/', views_quotation.edit_quotation, name='edit_quotation'),
     path('quotations/<int:quotation_id>/export/', views_quotation.export_quotation_to_pdf, name='export_quotation_to_pdf'),
+    path('quotations/<int:quotation_id>/convert-to-so/', views_quotation.convert_quotation_to_sales_order, name='convert_quotation_to_sales_order'),
 
 ]
 

@@ -268,6 +268,8 @@ class Quotation(models.Model):
     remarks = models.TextField(blank=True, null=True)
     customer_display_name = models.CharField(max_length=255, blank=True, null=True, 
         help_text="Optional display name for walk-in/CASH customers")
+    converted_to_sales_order = models.ForeignKey('SalesOrder', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='source_quotation', help_text="Sales order created from this quotation")
 
     def __str__(self):
         display_name = self.customer_display_name or self.customer.customer_name

@@ -14,7 +14,15 @@ REM Ensure logs directory exists
 if not exist "logs" mkdir logs
 
 echo [%date% %time%] Starting quotation sync scheduler (sync_quotations_pc.py)... >> "%LOG_FILE%"
+echo [%date% %time%] Working directory: %CD% >> "%LOG_FILE%"
+echo [%date% %time%] Python executable: pythonw >> "%LOG_FILE%"
 echo. >> "%LOG_FILE%"
+
+REM Check if Python script exists
+if not exist "sync_quotations_pc.py" (
+    echo [%date% %time%] ERROR: sync_quotations_pc.py not found in %CD% >> "%LOG_FILE%"
+    exit /b 1
+)
 
 REM Activate virtual environment if you have one
 REM call venv\Scripts\activate
@@ -25,8 +33,14 @@ set PYTHONUNBUFFERED=1
 REM Run the Python scheduler script using pythonw (runs in background, no console window)
 REM The Python script has its own loop, so this will run continuously
 REM Use -u flag for unbuffered output to ensure logs are written immediately
-pythonw -u sync_quotations_pc.py >> "%LOG_FILE%" 2>&1
+REM Note: pythonw doesn't show console and returns immediately, so errors go to log file
+REM Run pythonw directly - it will detach and run in background
+pythonw.exe -u sync_quotations_pc.py >> "%LOG_FILE%" 2>&1
 
-REM This line should never be reached unless the Python script exits
-echo [%date% %time%] Quotation sync scheduler stopped unexpectedly. >> "%LOG_FILE%"
+REM Log that we started the process
+echo [%date% %time%] Pythonw command executed. Process should be running in background. >> "%LOG_FILE%"
+echo [%date% %time%] Check the log file for sync activity. >> "%LOG_FILE%"
 echo. >> "%LOG_FILE%"
+
+REM Exit batch file - pythonw process continues independently
+exit /b 0

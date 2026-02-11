@@ -277,12 +277,16 @@ SCHEDULED_DAYS_BACK = DEFAULT_DAYS_BACK
 def run_scheduled_sync():
     """Wrapper function for scheduled execution."""
     try:
+        log_message(f"[SCHEDULED RUN] Starting sync at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", also_print=False)
         result = sync_quotations(days_back=SCHEDULED_DAYS_BACK)
         if not result.get("success"):
             log_message(f"Scheduled sync completed with error: {result.get('error')}", level="WARNING")
+        else:
+            log_message(f"[SCHEDULED RUN] Sync completed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", also_print=False)
     except Exception as e:
         log_message(f"Error in scheduled sync: {e}", level="ERROR")
         log_message(traceback.format_exc(), level="ERROR")
+        # Don't re-raise - let the loop continue
 
 
 def main():
@@ -368,16 +372,50 @@ Examples:
         log_message("\nRunning initial sync...")
         run_scheduled_sync()
         
-        # Keep running
-        try:
-            while True:
-                schedule.run_pending()
-                time.sleep(60)  # Check every minute
-        except KeyboardInterrupt:
-            log_message("\n" + "=" * 70)
-            log_message("Service stopped by user")
-            log_message("=" * 70)
-            return 0
+        # Keep running - wrap in outer loop to handle unexpected errors
+        heartbeat_counter = 0
+        while True:
+            try:
+                next_run_time = None
+                wait_minutes = interval  # Default to interval
+                while True:
+                    schedule.run_pending()
+                    
+                    # Log next run time periodically (when it changes)
+                    jobs = schedule.jobs
+                    if jobs:
+                        next_job = jobs[0]
+                        current_next = next_job.next_run
+                        if next_run_time != current_next:
+                            next_run_time = current_next
+                            if next_run_time:
+                                wait_minutes = (next_run_time - datetime.now()).total_seconds() / 60
+                                log_message(f"Next sync scheduled in {wait_minutes:.1f} minutes (at {next_run_time.strftime('%H:%M:%S')})", also_print=False)
+                    
+                    # Heartbeat log every 10 minutes to confirm script is running
+                    heartbeat_counter += 1
+                    if heartbeat_counter >= 10:
+                        heartbeat_counter = 0
+                        if next_run_time:
+                            wait_minutes = (next_run_time - datetime.now()).total_seconds() / 60
+                        log_message(f"[HEARTBEAT] Service is running... Next sync in {wait_minutes:.1f} minutes", also_print=False)
+                    
+                    time.sleep(60)  # Check every minute
+            except KeyboardInterrupt:
+                log_message("\n" + "=" * 70)
+                log_message("Service stopped by user")
+                log_message("=" * 70)
+                return 0
+            except Exception as e:
+                log_message(f"Unexpected error in main loop: {e}", level="ERROR")
+                log_message(traceback.format_exc(), level="ERROR")
+                log_message("Restarting loop in 60 seconds...", level="WARNING")
+                # Re-register the schedule job in case it was lost
+                schedule.clear()
+                schedule.every(interval).minutes.do(run_scheduled_sync)
+                time.sleep(60)
+                # Continue outer loop to restart
+                break
 
 
 if __name__ == "__main__":

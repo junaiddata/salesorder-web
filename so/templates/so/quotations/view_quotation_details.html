@@ -747,6 +747,23 @@
                     Edit Quotation
                 </a>
            
+            <!-- Convert to Sales Order Button -->
+            {% if quotation.status == 'Approved' and not quotation.converted_to_sales_order %}
+            <a href="{% url 'convert_quotation_to_sales_order' quotation.id %}" 
+               class="sap-button sap-button-success"
+               onclick="return confirm('Are you sure you want to convert this quotation to a sales order? This will create a new sales order with all items from this quotation.');">
+                <i class="fas fa-shopping-cart"></i>
+                Convert to Sales Order
+            </a>
+            {% elif quotation.converted_to_sales_order %}
+            <a href="{% url 'view_sales_order_details' quotation.converted_to_sales_order.id %}" 
+               class="sap-button sap-button-secondary"
+               style="opacity: 0.6; cursor: pointer; background-color: var(--sap-gray-300); color: var(--sap-gray-600);"
+               title="Click to view Sales Order {{ quotation.converted_to_sales_order.order_number }}">
+                <i class="fas fa-check-circle"></i>
+                Already Converted ({{ quotation.converted_to_sales_order.order_number }})
+            </a>
+            {% endif %}
             
             <a href="{% url 'view_quotations' %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-arrow-left"></i>

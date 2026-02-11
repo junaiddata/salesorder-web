@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Quotation, QuotationItem, Customer, Salesman, Items, CustomerPrice
 from .models import Quotation, QuotationItem, CustomerPrice, Customer, Items, Salesman, QuotationLog
+from .models import SalesOrder, OrderItem
 from .utils import get_client_ip, label_network
 from django.db.models import Q
 from .utils import parse_device_info
@@ -481,6 +482,118 @@ def view_quotation_details(request, quotation_id):
         "has_undercost_items": has_undercost_items,
     })
 
+
+@login_required
+@transaction.atomic
+def convert_quotation_to_sales_order(request, quotation_id):
+    """
+    Convert a quotation to a sales order.
+    Copies all quotation data (customer, salesman, items, prices) to create a new sales order.
+    """
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+    
+    # Check if already converted
+    if quotation.converted_to_sales_order:
+        messages.warning(
+            request, 
+            f'This quotation has already been converted to Sales Order {quotation.converted_to_sales_order.order_number}.'
+        )
+        return redirect('view_sales_order_details', order_id=quotation.converted_to_sales_order.id)
+    
+    quotation_items = quotation.items.all()
+    
+    # Validate that quotation has items
+    if not quotation_items.exists():
+        messages.error(request, 'Cannot convert quotation with no items.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+    
+    try:
+        # Determine division (same logic as create_sales_order)
+        division = quotation.division  # Use quotation's division
+        if not division:
+            # Fallback to user-based division
+            division = 'JUNAID'  # Default
+            if request.user.is_authenticated and 'alabama' in request.user.username.lower():
+                division = 'ALABAMA'
+        
+        # Create the sales order
+        sales_order = SalesOrder.objects.create(
+            customer=quotation.customer,
+            division=division,
+            salesman=quotation.salesman,
+            remarks=quotation.remarks or '',
+        )
+        
+        # Process order items from quotation items
+        order_items = []
+        customer_price_updates = []
+        total_amount = 0.0
+        
+        for quotation_item in quotation_items:
+            if not quotation_item.item:
+                continue  # Skip items without valid item reference
+            
+            item = quotation_item.item
+            quantity = quotation_item.quantity
+            price = quotation_item.price
+            unit = quotation_item.unit if quotation_item.unit in ['pcs', 'ctn', 'roll'] else 'pcs'
+            
+            # Check if price is custom (differs from item default price)
+            is_custom_price = abs(float(price) - float(item.item_price)) > 0.01
+            
+            # Calculate line total
+            line_total = quantity * price
+            total_amount += line_total
+            
+            order_items.append(OrderItem(
+                order=sales_order,
+                item=item,
+                quantity=quantity,
+                price=price,
+                unit=unit,
+                is_custom_price=is_custom_price
+            ))
+            
+            # Track customer price updates if custom price
+            if is_custom_price:
+                customer_price_updates.append((quotation.customer, item, price))
+        
+        # Bulk create order items
+        if order_items:
+            OrderItem.objects.bulk_create(order_items)
+            
+            # Update customer prices for custom prices
+            for customer, item, price in customer_price_updates:
+                CustomerPrice.objects.update_or_create(
+                    customer=customer,
+                    item=item,
+                    defaults={'custom_price': price}
+                )
+            
+            # Calculate totals
+            tax = round(0.05 * total_amount, 2)
+            sales_order.tax = tax
+            sales_order.total_amount = total_amount
+            sales_order.save()
+            
+            # Mark quotation as converted
+            quotation.converted_to_sales_order = sales_order
+            quotation.save()
+            
+            messages.success(
+                request, 
+                f'Quotation {quotation.quotation_number} successfully converted to Sales Order {sales_order.order_number}!'
+            )
+            return redirect('view_sales_order_details', order_id=sales_order.id)
+        else:
+            # No valid items, delete the sales order
+            sales_order.delete()
+            messages.error(request, 'No valid items found in quotation to convert.')
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+            
+    except Exception as e:
+        messages.error(request, f'An error occurred while converting quotation: {str(e)}')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
 
 
 from django.shortcuts import render, get_object_or_404, redirect
