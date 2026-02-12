@@ -2242,6 +2242,7 @@ THEMES = {
             'https://alabamauae.com/alabama4.png',
         ],
         'logo_local': [
+            'media/alabama.jpeg',
             'static/images/alabama-logo.png',
             'media/alabama-logo.png',
         ],
