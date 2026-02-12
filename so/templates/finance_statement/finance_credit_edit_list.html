@@ -1,0 +1,91 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Credit Edit List</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; }
+    .container { max-width: 1300px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; }
+    .card-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; font-weight: 700; }
+    .card-body { padding: 14px 16px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+    .field input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .btn { display: inline-block; padding: 9px 14px; border-radius: 6px; text-decoration: none; border: 1px solid #2563eb; background: #2563eb; color: #fff; font-size: 14px; }
+    .btn-secondary { background: #fff; color: #1e293b; border-color: #cbd5e1; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; font-size: 12px; text-transform: uppercase; }
+    .text-right { text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-header">Consolidated Credit Edit List</div>
+      <div class="card-body">
+        <form method="get" class="row">
+          <div class="field">
+            <label>From Date</label>
+            <input type="date" name="from_date" value="{{ from_date }}">
+          </div>
+          <div class="field">
+            <label>To Date</label>
+            <input type="date" name="to_date" value="{{ to_date }}">
+          </div>
+          <div class="field">
+            <button class="btn" type="submit">Apply</button>
+          </div>
+          <div class="field">
+            <a class="btn btn-secondary" href="{% url 'export_finance_credit_edit_list_pdf' %}?from_date={{ from_date }}&to_date={{ to_date }}">Export PDF</a>
+          </div>
+          <div class="field">
+            <a class="btn btn-secondary" href="{% url 'finance_statement_list' %}">Back to Finance List</a>
+          </div>
+        </form>
+        <p style="margin-top: 10px; color: #475569;">Total edits: <strong>{{ total_edits }}</strong></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" style="padding: 0;">
+        <table>
+          <thead>
+            <tr>
+              <th>Edited At</th>
+              <th>Customer Code</th>
+              <th>Customer Name</th>
+              <th>Salesman</th>
+              <th class="text-right">Edited Credit Limit</th>
+              <th>Edited Payment Terms</th>
+              <th>Edited By</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for edit in edits %}
+            <tr>
+              <td>{{ edit.created_at|date:"d M Y H:i" }}</td>
+              <td>{{ edit.customer.customer_code }}</td>
+              <td>{{ edit.customer.customer_name }}</td>
+              <td>{{ edit.customer.salesman.salesman_name|default:"—" }}</td>
+              <td class="text-right">{{ edit.edited_credit_limit|floatformat:2|intcomma }}</td>
+              <td>{{ edit.edited_credit_days }}</td>
+              <td>{{ edit.edited_by.username|default:"—" }}</td>
+              <td>{{ edit.remarks|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center; color:#64748b; padding: 20px;">No edits found for selected date range.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

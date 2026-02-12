@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, Value, FloatField
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
 
 from reportlab.lib import colors
@@ -26,7 +26,7 @@ from reportlab.platypus import (
     PageBreak, KeepTogether,
 )
 
-from so.models import Customer, Salesman
+from so.models import Customer, Salesman, FinanceCreditEditLog
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -834,6 +834,149 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(summary_table)
 
     # ── Build and return ──
+    doc.build(elements, onFirstPage=_build_page_footer, onLaterPages=_build_page_footer)
+    response.write(buffer.getvalue())
+    return response
+
+
+@login_required
+def export_finance_credit_edit_list_pdf(request):
+    """
+    Export consolidated manager credit edits to PDF using date range filter.
+    """
+    if request.user.username != 'manager':
+        return HttpResponseForbidden("Only manager can export credit edit list.")
+
+    today = datetime.now().date()
+    from_date_str = request.GET.get('from_date', today.strftime('%Y-%m-%d'))
+    to_date_str = request.GET.get('to_date', today.strftime('%Y-%m-%d'))
+
+    try:
+        from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        from_date = today
+        from_date_str = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        to_date = today
+        to_date_str = today.strftime('%Y-%m-%d')
+
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+        from_date_str, to_date_str = to_date_str, from_date_str
+
+    edits = (
+        FinanceCreditEditLog.objects
+        .filter(created_at__date__gte=from_date, created_at__date__lte=to_date)
+        .select_related('customer__salesman', 'edited_by')
+        .order_by('-created_at')
+    )
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="finance_credit_edits_'
+        f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
+    )
+
+    buffer = BytesIO()
+    page_w, page_h = landscape(A4)
+    margin_h, margin_v = 24, 24
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=margin_h,
+        leftMargin=margin_h,
+        topMargin=margin_v,
+        bottomMargin=margin_v + 6,
+    )
+
+    usable_width = page_w - 2 * margin_h
+    styles = _build_styles()
+    elements = []
+
+    subtitle = f"Manager credit edits from {from_date_str} to {to_date_str}"
+    elements.extend(_build_document_header(
+        styles,
+        title_text='CREDIT EDIT CONSOLIDATED REPORT',
+        subtitle_text=subtitle,
+        page_width=usable_width,
+    ))
+
+    kpi_items = [
+        ('Total Edits', str(edits.count())),
+        ('From Date', from_date_str),
+        ('To Date', to_date_str),
+        ('Prepared By', request.user.username),
+    ]
+    elements.append(_build_kpi_bar(kpi_items, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    col_widths = [
+        0.35 * inch,
+        1.00 * inch,
+        2.30 * inch,
+        1.00 * inch,
+        1.20 * inch,
+        1.00 * inch,
+        0.90 * inch,
+        2.20 * inch,
+    ]
+    allocated = sum(col_widths)
+    remainder = max(0, usable_width - allocated)
+    col_widths[7] += remainder
+
+    table_data = [[
+        Paragraph('#', styles['header_cell']),
+        Paragraph('Code', styles['header_cell']),
+        Paragraph('Customer', styles['header_cell']),
+        Paragraph('Salesman', styles['header_cell']),
+        Paragraph('Edited Limit', styles['header_cell_r']),
+        Paragraph('Terms', styles['header_cell_r']),
+        Paragraph('Edited By', styles['header_cell']),
+        Paragraph('Edited At / Remarks', styles['header_cell']),
+    ]]
+
+    for idx, edit in enumerate(edits, start=1):
+        salesman_name = (
+            edit.customer.salesman.salesman_name
+            if edit.customer and edit.customer.salesman else '—'
+        )
+        edit_by = edit.edited_by.username if edit.edited_by else '—'
+        notes = edit.created_at.strftime('%d %b %Y %H:%M')
+        if edit.remarks:
+            notes = f"{notes} | {edit.remarks}"
+
+        table_data.append([
+            Paragraph(str(idx), styles['cell']),
+            Paragraph(edit.customer.customer_code or '—', styles['cell']),
+            Paragraph(edit.customer.customer_name or '—', styles['cell']),
+            Paragraph(str(salesman_name)[:20], styles['cell']),
+            Paragraph(_fmt(edit.edited_credit_limit), styles['cell_r']),
+            Paragraph(str(edit.edited_credit_days or '—'), styles['cell_r']),
+            Paragraph(edit_by, styles['cell']),
+            Paragraph(notes, styles['cell']),
+        ])
+
+    if not edits.exists():
+        table_data.append([
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('No edits found for selected date range.', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+        ])
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table_style = _standard_data_table_style(len(table_data), has_total_row=False)
+    table_style.add('ALIGN', (4, 0), (5, -1), 'RIGHT')
+    table.setStyle(table_style)
+    elements.append(table)
+
     doc.build(elements, onFirstPage=_build_page_footer, onLaterPages=_build_page_footer)
     response.write(buffer.getvalue())
     return response

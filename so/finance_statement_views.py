@@ -1,17 +1,18 @@
 """
 Finance Statement Views - Customer Finance Summary
 """
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.db.models import Q, Sum, Value, FloatField
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from decimal import Decimal
 from datetime import datetime, timedelta
 import pandas as pd
 from io import BytesIO
-from so.models import Customer, Salesman
+from so.models import Customer, Salesman, FinanceCreditEditLog
 
 
 @login_required
@@ -109,6 +110,7 @@ def finance_statement_list(request):
         'customers': page_obj,  # Pass page_obj for pagination
         'page_obj': page_obj,  # Also pass as page_obj for template
         'salesmen': salesmen,
+        'is_manager': request.user.username == 'manager',
         'filters': {
             'q': search_query,
             'salesmen_filter': salesmen_filter,
@@ -168,6 +170,15 @@ def finance_statement_detail(request, customer_id):
     has_over_limit = total_with_pdc > customer.credit_limit if customer.credit_limit > 0 else False
     credit_utilization = (total_with_pdc / customer.credit_limit * 100) if customer.credit_limit > 0 else 0
     
+    is_manager = request.user.username == 'manager'
+    latest_credit_edit = (
+        FinanceCreditEditLog.objects
+        .filter(customer=customer)
+        .select_related('edited_by')
+        .order_by('-created_at')
+        .first()
+    )
+
     context = {
         'customer': customer,
         'monthly_data': monthly_data,
@@ -181,9 +192,97 @@ def finance_statement_detail(request, customer_id):
         'credit_days': customer.credit_days or '0',
         'has_over_limit': has_over_limit,
         'credit_utilization': credit_utilization,
+        'is_manager': is_manager,
+        'latest_credit_edit': latest_credit_edit,
     }
     
     return render(request, 'finance_statement/finance_statement_detail.html', context)
+
+
+@login_required
+def save_finance_credit_edit(request, customer_id):
+    """
+    Save manager-edited credit limit and payment terms to log table.
+    """
+    if request.user.username != 'manager':
+        return HttpResponseForbidden("Only manager can submit credit edits.")
+
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required.")
+
+    customer = get_object_or_404(Customer, id=customer_id)
+
+    credit_limit_raw = request.POST.get('edited_credit_limit', '').strip()
+    credit_days = request.POST.get('edited_credit_days', '').strip()
+    remarks = request.POST.get('remarks', '').strip()
+
+    try:
+        edited_credit_limit = float(credit_limit_raw)
+    except (TypeError, ValueError):
+        messages.error(request, "Please enter a valid credit limit.")
+        return redirect('finance_statement_detail', customer_id=customer_id)
+
+    if edited_credit_limit < 0:
+        messages.error(request, "Credit limit cannot be negative.")
+        return redirect('finance_statement_detail', customer_id=customer_id)
+
+    if not credit_days:
+        messages.error(request, "Payment terms cannot be empty.")
+        return redirect('finance_statement_detail', customer_id=customer_id)
+
+    FinanceCreditEditLog.objects.create(
+        customer=customer,
+        edited_credit_limit=edited_credit_limit,
+        edited_credit_days=credit_days,
+        edited_by=request.user,
+        remarks=remarks or None,
+    )
+    messages.success(request, "Credit edit saved to consolidated list.")
+    return redirect('finance_statement_detail', customer_id=customer_id)
+
+
+@login_required
+def finance_credit_edit_list(request):
+    """
+    Consolidated manager credit edit list with date range filter.
+    """
+    if request.user.username != 'manager':
+        return HttpResponseForbidden("Only manager can view credit edit list.")
+
+    today = datetime.now().date()
+    from_date_str = request.GET.get('from_date', today.strftime('%Y-%m-%d'))
+    to_date_str = request.GET.get('to_date', today.strftime('%Y-%m-%d'))
+
+    try:
+        from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        from_date = today
+        from_date_str = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        to_date = today
+        to_date_str = today.strftime('%Y-%m-%d')
+
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+        from_date_str, to_date_str = to_date_str, from_date_str
+
+    edits = (
+        FinanceCreditEditLog.objects
+        .filter(created_at__date__gte=from_date, created_at__date__lte=to_date)
+        .select_related('customer__salesman', 'edited_by')
+        .order_by('-created_at')
+    )
+
+    context = {
+        'edits': edits,
+        'from_date': from_date_str,
+        'to_date': to_date_str,
+        'total_edits': edits.count(),
+    }
+    return render(request, 'finance_statement/finance_credit_edit_list.html', context)
 
 
 @login_required

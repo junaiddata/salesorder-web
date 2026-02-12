@@ -81,6 +81,36 @@ class Salesman(models.Model):
     def __str__(self):
         return self.salesman_name
 
+
+class FinanceCreditEditLog(models.Model):
+    customer = models.ForeignKey(
+        'Customer',
+        on_delete=models.CASCADE,
+        related_name='finance_credit_edits'
+    )
+    edited_credit_limit = models.FloatField(default=0.0)
+    edited_credit_days = models.CharField(max_length=30)
+    edited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='finance_credit_edits'
+    )
+    remarks = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['customer']),
+            models.Index(fields=['edited_by']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.customer.customer_code} - {self.edited_credit_limit}"
+
 class SalesOrder(models.Model):
     STATUS = (
         ('Pending', 'Pending'),

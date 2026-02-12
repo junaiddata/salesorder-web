@@ -37,10 +37,13 @@ urlpatterns = [
     ############### FINANCE STATEMENT ##################
     path('finance-statement/', finance_statement_views.finance_statement_list, name='finance_statement_list'),
     path('finance-statement/<int:customer_id>/', finance_statement_views.finance_statement_detail, name='finance_statement_detail'),
+    path('finance-statement/<int:customer_id>/save-credit-edit/', finance_statement_views.save_finance_credit_edit, name='save_finance_credit_edit'),
+    path('finance-statement/credit-edits/', finance_statement_views.finance_credit_edit_list, name='finance_credit_edit_list'),
     path('finance-statement/export/', finance_statement_views.export_finance_statement_list_excel, name='export_finance_statement_list_excel'),
     path('finance-statement/export-pdf/', finance_statement_pdf_export.export_finance_statement_list_pdf, name='export_finance_statement_list_pdf'),
     path('finance-statement/<int:customer_id>/export/', finance_statement_views.export_finance_statement_detail_excel, name='export_finance_statement_detail_excel'),
     path('finance-statement/<int:customer_id>/export-pdf/', finance_statement_pdf_export.export_finance_statement_detail_pdf, name='export_finance_statement_detail_pdf'),
+    path('finance-statement/credit-edits/export-pdf/', finance_statement_pdf_export.export_finance_credit_edit_list_pdf, name='export_finance_credit_edit_list_pdf'),
 
     ################ ITEM MANAGEMENT ##################
     path('items/', views.item_list, name='item_list'),
