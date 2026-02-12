@@ -492,6 +492,21 @@ def edit_sales_order(request, order_id):
         'firms': firms,
         'order_items': sales_order.items.all()
     })
+
+
+@login_required
+@require_POST
+def delete_sales_order(request, order_id):
+    """Delete a customer sales order (admin only)."""
+    sales_order = get_object_or_404(SalesOrder, id=order_id)
+
+    # Restrict delete to admins/superusers only
+    user_role = getattr(getattr(request.user, "role", None), "role", "")
+    if not (request.user.is_superuser or user_role == "Admin"):
+        return HttpResponseForbidden("You are not authorized to delete this sales order.")
+
+    sales_order.delete()
+    return redirect('view_sales_orders')
 # @csrf_exempt
 # def create_sales_order(request):
 #     if request.method == 'POST':

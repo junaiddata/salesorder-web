@@ -75,6 +75,7 @@ urlpatterns = [
     path('api/total-outstanding/', total_outstanding_sum, name='total_outstanding_api'),
     path("api/items-search/", views.items_search, name="items_search"),
     path('sales-order/<int:order_id>/edit/', views.edit_sales_order, name='edit_sales_order'),
+    path('sales-order/<int:order_id>/delete/', views.delete_sales_order, name='delete_sales_order'),
 
     path('api/get-last-location/<int:customer_id>/', get_last_location, name='get_last_location'),
     path('sales-orders/<int:order_id>/so-created/', views.mark_so_created, name='mark_so_created'),
