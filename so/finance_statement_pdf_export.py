@@ -457,7 +457,7 @@ def export_finance_statement_list_pdf(request):
     # ── 2. KPI Summary Bar ──
     kpi_items = [
         ('Total Outstanding', _fmt(totals['total_outstanding']) + ' AED'),
-        ('PDC Received', _fmt(totals['total_pdc']) + ' AED'),
+        ('PDC Received in Hand', _fmt(totals['total_pdc']) + ' AED'),
         ('Net Balance', _fmt(totals['total_with_pdc']) + ' AED'),
         ('Customers', str(customers.count())),
     ]
@@ -505,7 +505,7 @@ def export_finance_statement_list_pdf(request):
         Paragraph('Customer Name', styles['header_cell']),
         Paragraph('Salesman', styles['header_cell']),
         Paragraph('Balance (AED)', styles['header_cell_r']),
-        Paragraph('PDC (AED)', styles['header_cell_r']),
+        Paragraph('PDC in Hand (AED)', styles['header_cell_r']),
         Paragraph('Total (AED)', styles['header_cell_r']),
         Paragraph('Limit (AED)', styles['header_cell_r']),
         Paragraph('Terms', styles['header_cell_r']),
@@ -672,8 +672,11 @@ def export_finance_statement_detail_pdf(request, customer_id):
             Paragraph(str(customer.credit_days or '—') + ' days', styles['cell']),
             Paragraph('Status', styles['label']),
             Paragraph(
-                '<font color="#DC2626"><b>OVER LIMIT</b></font>' if has_over_limit
-                else '<font color="#059669"><b>Within Limit</b></font>',
+                '<font color="#D97706"><b>Limit not set</b></font>' if credit_limit <= 0
+                else (
+                    '<font color="#DC2626"><b>OVER LIMIT</b></font>' if has_over_limit
+                    else '<font color="#059669"><b>Within Limit</b></font>'
+                ),
                 styles['cell'],
             ),
         ],
@@ -694,7 +697,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
 
     outstanding_kpis = [
         ('Balance Due', _fmt(total_outstanding) + ' AED'),
-        ('PDC Received', _fmt(pdc_received) + ' AED'),
+        ('PDC Received in Hand', _fmt(pdc_received) + ' AED'),
         ('Net Outstanding', _fmt(total_with_pdc) + ' AED'),
     ]
     elements.append(_build_kpi_bar(outstanding_kpis, styles, usable_width * 0.75))
@@ -802,9 +805,9 @@ def export_finance_statement_detail_pdf(request, customer_id):
             Paragraph(_fmt(total_outstanding), styles['cell_bold_r']),
         ],
         [
-            Paragraph('<b>PDC Received</b>', styles['cell_bold']),
+            Paragraph('<b>PDC Received in Hand</b>', styles['cell_bold']),
             Paragraph(
-                f'({_fmt(pdc_received)})',
+                _fmt(pdc_received),
                 ParagraphStyle(
                     'PDCDeduct', parent=styles['cell_bold_r'],
                     textColor=HexColor('#059669'),

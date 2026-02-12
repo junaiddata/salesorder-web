@@ -341,9 +341,13 @@
           </div>
           <div class="info-item">
             <span class="info-label">Credit Utilization</span>
+            {% if credit_limit <= 0 %}
+            <span class="info-value warning">Limit not set</span>
+            {% else %}
             <span class="info-value {% if credit_utilization > 100 %}danger{% elif credit_utilization > 80 %}warning{% else %}success{% endif %}">
               {{ credit_utilization|floatformat:1 }}%
             </span>
+            {% endif %}
             <div class="progress-bar">
               <div class="progress-fill {% if credit_utilization > 100 %}danger{% elif credit_utilization > 80 %}warning{% endif %}" 
                    style="width: {% if credit_utilization > 100 %}100{% else %}{{ credit_utilization }}{% endif %}%"></div>
@@ -405,7 +409,7 @@
             <span class="info-value large">{{ total_outstanding|floatformat:2|intcomma }} AED</span>
           </div>
           <div class="info-item">
-            <span class="info-label">PDC Received</span>
+            <span class="info-label">PDC Received in Hand</span>
             <span class="info-value large">{{ pdc_received|floatformat:2|intcomma }} AED</span>
           </div>
           <div class="info-item">
@@ -503,7 +507,7 @@
               </td>
             </tr>
             <tr>
-              <td><strong>PDC Received</strong></td>
+              <td><strong>PDC Received in Hand</strong></td>
               <td class="text-right"><strong>{{ pdc_received|floatformat:2|intcomma }} AED</strong></td>
             </tr>
             <tr style="border-top: 2px solid var(--primary); background: var(--primary-light);">
