@@ -22,7 +22,8 @@ def finance_statement_list(request):
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    salesman_filter = request.GET.get('salesman', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    salesmen_filter = [s.strip() for s in salesmen_filter if s and s.strip()]
     store_filter = request.GET.get('store', '').strip()  # HO or Others
     sort_by = request.GET.get('sort', 'total_outstanding')  # Default sort by highest balance
     sort_order = request.GET.get('order', 'desc')  # Descending order (highest first)
@@ -41,8 +42,8 @@ def finance_statement_list(request):
         )
     
     # Apply salesman filter
-    if salesman_filter:
-        customers = customers.filter(salesman__id=salesman_filter)
+    if salesmen_filter:
+        customers = customers.filter(salesman__id__in=salesmen_filter)
     
     # Apply store filter (HO or Others)
     if store_filter == 'HO':
@@ -110,7 +111,7 @@ def finance_statement_list(request):
         'salesmen': salesmen,
         'filters': {
             'q': search_query,
-            'salesman': salesman_filter,
+            'salesmen_filter': salesmen_filter,
             'store': store_filter,
         },
         'sort': sort_by.replace('-', ''),
@@ -192,7 +193,8 @@ def export_finance_statement_list_excel(request):
     """
     # Get filter parameters (same as list view)
     search_query = request.GET.get('q', '').strip()
-    salesman_filter = request.GET.get('salesman', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    salesmen_filter = [s.strip() for s in salesmen_filter if s and s.strip()]
     store_filter = request.GET.get('store', '').strip()  # HO or Others
     
     # Base queryset - only customers with finance data (non-zero balance or PDC)
@@ -208,8 +210,8 @@ def export_finance_statement_list_excel(request):
         )
     
     # Apply salesman filter
-    if salesman_filter:
-        customers = customers.filter(salesman__id=salesman_filter)
+    if salesmen_filter:
+        customers = customers.filter(salesman__id__in=salesmen_filter)
     
     # Apply store filter (HO or Others)
     if store_filter == 'HO':

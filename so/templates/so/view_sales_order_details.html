@@ -870,17 +870,19 @@
                 Edit Order
             </a>
         {% endif %}
-        {% if sales_order.order_status == "Pending" and (user.role.role == 'Admin' or user.is_superuser) %}
-            <form method="POST"
-                  action="{% url 'delete_sales_order' sales_order.id %}"
-                  style="margin: 0; display: inline-block;"
-                  onsubmit="return confirm('Are you sure you want to delete this sales order? This action cannot be undone.');">
-                {% csrf_token %}
-                <button type="submit" class="sap-button sap-button-danger">
-                    <i class="fas fa-trash"></i>
-                    Delete Order
-                </button>
-            </form>
+        {% if sales_order.order_status == "Pending" %}
+            {% if user.role.role == 'Admin' or user.is_superuser %}
+                <form method="POST"
+                      action="{% url 'delete_sales_order' sales_order.id %}"
+                      style="margin: 0; display: inline-block;"
+                      onsubmit="return confirm('Are you sure you want to delete this sales order? This action cannot be undone.');">
+                    {% csrf_token %}
+                    <button type="submit" class="sap-button sap-button-danger">
+                        <i class="fas fa-trash"></i>
+                        Delete Order
+                    </button>
+                </form>
+            {% endif %}
         {% endif %}
             <a href="{% url 'view_sales_orders' %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-arrow-left"></i>

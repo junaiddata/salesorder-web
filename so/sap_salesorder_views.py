@@ -32,7 +32,7 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
@@ -8433,6 +8433,188 @@ def item_analysis(request):
     }
     
     return render(request, 'salesorders/item_analysis.html', context)
+
+
+@login_required
+def quotation_conversion_analysis(request):
+    """
+    Item Conversion Analysis: Qty Quoted vs Qty Sold
+    - Qty Quoted: from SAP Quotations (SAPQuotationItem)
+    - Qty Sold: from SAP Sales Orders (SAPSalesorderItem)
+    - Conversion Rate: (Qty Sold / Qty Quoted) * 100
+    """
+    from django.db.models import Sum
+
+    # Get filters from request
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    start_date = request.GET.get('start', '').strip()
+    end_date = request.GET.get('end', '').strip()
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    # Base querysets with salesman scope
+    quotation_qs = SAPQuotation.objects.filter(salesman_scope_q(request.user))
+    salesorder_qs = SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
+
+    # Apply date range filter
+    start_date_parsed = parse_date(start_date)
+    end_date_parsed = parse_date(end_date)
+    if start_date_parsed:
+        quotation_qs = quotation_qs.filter(posting_date__gte=start_date_parsed)
+        salesorder_qs = salesorder_qs.filter(posting_date__gte=start_date_parsed)
+    if end_date_parsed:
+        quotation_qs = quotation_qs.filter(posting_date__lte=end_date_parsed)
+        salesorder_qs = salesorder_qs.filter(posting_date__lte=end_date_parsed)
+
+    # Apply salesman filter
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            quotation_qs = quotation_qs.filter(salesman_name__in=clean_salesmen)
+            salesorder_qs = salesorder_qs.filter(salesman_name__in=clean_salesmen)
+
+    # Aggregate qty quoted by item_no
+    quoted_agg = list(
+        SAPQuotationItem.objects.filter(quotation__in=quotation_qs)
+        .exclude(item_no__isnull=True).exclude(item_no='')
+        .values('item_no')
+        .annotate(qty_quoted=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())))
+    )
+    quoted_by_item = {r['item_no']: {'qty': r['qty_quoted'], 'description': None} for r in quoted_agg}
+
+    # Get one description per item_no from quotation items (latest by posting_date)
+    for qi in SAPQuotationItem.objects.filter(
+        quotation__in=quotation_qs, item_no__in=list(quoted_by_item.keys())
+    ).exclude(item_no__isnull=True).exclude(item_no='').order_by('item_no', '-quotation__posting_date'):
+        if qi.item_no and quoted_by_item.get(qi.item_no) and quoted_by_item[qi.item_no]['description'] is None:
+            quoted_by_item[qi.item_no]['description'] = qi.description or '—'
+
+    for k in quoted_by_item:
+        if quoted_by_item[k]['description'] is None:
+            quoted_by_item[k]['description'] = '—'
+
+    # Aggregate qty sold by item_no
+    sold_agg = list(
+        SAPSalesorderItem.objects.filter(salesorder__in=salesorder_qs)
+        .exclude(item_no__isnull=True).exclude(item_no='')
+        .values('item_no')
+        .annotate(qty_sold=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())))
+    )
+    sold_by_item = {r['item_no']: {'qty': r['qty_sold'], 'description': None} for r in sold_agg}
+
+    for si in SAPSalesorderItem.objects.filter(
+        salesorder__in=salesorder_qs, item_no__in=list(sold_by_item.keys())
+    ).exclude(item_no__isnull=True).exclude(item_no='').order_by('item_no', '-salesorder__posting_date'):
+        if si.item_no and sold_by_item.get(si.item_no) and sold_by_item[si.item_no]['description'] is None:
+            sold_by_item[si.item_no]['description'] = si.description or '—'
+
+    for k in sold_by_item:
+        if sold_by_item[k]['description'] is None:
+            sold_by_item[k]['description'] = '—'
+
+    # Build combined item data (items that appear in either quoted or sold)
+    all_item_nos = set(quoted_by_item.keys()) | set(sold_by_item.keys())
+    item_data = []
+    for item_no in all_item_nos:
+        qty_quoted = quoted_by_item.get(item_no, {}).get('qty', Decimal('0')) or Decimal('0')
+        qty_sold = sold_by_item.get(item_no, {}).get('qty', Decimal('0')) or Decimal('0')
+        desc = (quoted_by_item.get(item_no, {}).get('description') or
+                sold_by_item.get(item_no, {}).get('description') or '—')
+        conversion_rate = None
+        if qty_quoted and qty_quoted > 0:
+            try:
+                conversion_rate = float(qty_sold) / float(qty_quoted) * 100
+            except (ZeroDivisionError, TypeError, InvalidOperation):
+                pass
+        item_data.append({
+            'item_no': item_no or '—',
+            'description': desc,
+            'qty_quoted': qty_quoted,
+            'qty_sold': qty_sold,
+            'conversion_rate': conversion_rate,
+        })
+
+    # Apply firm filter (via Items model)
+    if firm_filter:
+        clean_firms = [f for f in firm_filter if f.strip()]
+        if clean_firms:
+            firm_item_codes = set(
+                Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            )
+            item_data = [i for i in item_data if (i['item_no'] or '') in firm_item_codes]
+
+    # Apply search filter
+    if search_query:
+        q = search_query.lower()
+        item_data = [
+            i for i in item_data
+            if q in (i['item_no'] or '').lower() or q in (i['description'] or '').lower()
+        ]
+
+    # Sort by qty_quoted descending (most quoted first)
+    item_data.sort(key=lambda x: (x['qty_quoted'] or 0), reverse=True)
+
+    # Totals
+    total_quoted = sum(i['qty_quoted'] or Decimal('0') for i in item_data)
+    total_sold = sum(i['qty_sold'] or Decimal('0') for i in item_data)
+    overall_conversion = None
+    if total_quoted and total_quoted > 0:
+        try:
+            overall_conversion = float(total_sold) / float(total_quoted) * 100
+        except (ZeroDivisionError, TypeError, InvalidOperation):
+            pass
+
+    # Get distinct salesmen for filter dropdown (from both quotations and sales orders)
+    quotation_salesmen = list(
+        SAPQuotation.objects.filter(salesman_scope_q(request.user))
+        .exclude(salesman_name__isnull=True).exclude(salesman_name='')
+        .values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
+    )
+    so_salesmen = list(
+        SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
+        .exclude(salesman_name__isnull=True).exclude(salesman_name='')
+        .values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
+    )
+    all_salesmen = sorted(set(quotation_salesmen + so_salesmen))
+
+    all_firms = list(
+        Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='')
+        .values_list('item_firm', flat=True).distinct().order_by('item_firm')
+    )
+
+    # Paginate
+    page_size = 500
+    paginator = Paginator(item_data, page_size)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    total_count = len(item_data)
+
+    context = {
+        'items': page_obj,
+        'page_obj': page_obj,
+        'total_count': total_count,
+        'total_quoted': total_quoted,
+        'total_sold': total_sold,
+        'overall_conversion': overall_conversion,
+        'salesmen': all_salesmen,
+        'firms': all_firms,
+        'filters': {
+            'q': search_query,
+            'salesman': salesmen_filter,
+            'firm': firm_filter,
+            'start': start_date,
+            'end': end_date,
+        },
+    }
+    return render(request, 'salesorders/quotation_conversion_analysis.html', context)
 
 
 @login_required

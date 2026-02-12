@@ -1,0 +1,584 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quotation Conversion Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+      --primary-light: #eff6ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .filters-card {
+      margin-bottom: 20px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .multi-select {
+      position: relative;
+      width: 100%;
+    }
+
+    .select-box {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      transition: all var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--primary);
+    }
+
+    .options-container {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      margin-top: 4px;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: block;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .summary-stats {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      padding: 12px 20px;
+      background: var(--primary-light);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 2px;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    td {
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    td.text-right {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .item-code {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .item-description {
+      color: var(--text-secondary);
+      font-size: 0.813rem;
+      max-width: 300px;
+    }
+
+    .conversion-high {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    .conversion-medium {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    .conversion-low {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .totals-row {
+      background: var(--primary-light);
+      border-top: 2px solid var(--primary);
+      font-weight: 700;
+    }
+
+    .totals-row td {
+      background: var(--primary-light);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .filter-display {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .filter-display span {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Quotation Conversion Analysis</h1>
+        <p>Qty Quoted (SAP Quotations) vs Qty Sold (SAP Sales Orders) with conversion rate</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'item_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-chart-bar"></i>
+          Item Analysis
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'quotation_conversion_analysis' %}" id="filters-form">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="Item Code or Description" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem;">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div style="padding: 8px; border-bottom: 1px solid var(--border);">
+                  <input type="text" id="salesman-search" placeholder="Search..." style="width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.813rem;">
+                </div>
+                <div id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                  <label class="option-label" data-value="{{ salesman }}">
+                    <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                    <span class="option-text">{{ salesman }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Firm</label>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger">
+                <span id="firm-text">All Firms</span>
+              </div>
+              <div class="options-container" id="firm-options">
+                <div id="firm-options-list">
+                  {% for firm in firms %}
+                  <label class="option-label">
+                    <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm %}checked{% endif %}>
+                    <span class="option-text">{{ firm }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem;">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem;">
+          </div>
+          <div class="field" style="display: flex; gap: 8px; align-self: end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
+            <button class="btn btn-primary" type="submit">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="summary-stats">
+      <div class="stat-box">
+        <div class="stat-label">Total Qty Quoted</div>
+        <div class="stat-value">{{ total_quoted|floatformat:0|intcomma }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Total Qty Sold</div>
+        <div class="stat-value">{{ total_sold|floatformat:0|intcomma }}</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Overall Conversion Rate</div>
+        <div class="stat-value">{% if overall_conversion is not None %}{{ overall_conversion|floatformat:1 }}%{% else %}—{% endif %}</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      <div class="table-header">
+        <h3 class="table-title">Item Conversion Matrix</h3>
+        {% if filters.salesman or filters.firm %}
+        <div class="filter-display">
+          {% if filters.salesman %}<span>Salesmen: {{ filters.salesman|join:", " }}</span>{% endif %}
+          {% if filters.firm %}<span>Firms: {{ filters.firm|join:", " }}</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Item Code</th>
+              <th>Description</th>
+              <th class="text-right">Qty Quoted</th>
+              <th class="text-right">Qty Sold</th>
+              <th class="text-right">Conversion Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="totals-row">
+              <td>TOTAL</td>
+              <td></td>
+              <td class="text-right">{{ total_quoted|floatformat:0|intcomma }}</td>
+              <td class="text-right">{{ total_sold|floatformat:0|intcomma }}</td>
+              <td class="text-right">{% if overall_conversion is not None %}{{ overall_conversion|floatformat:1 }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% for item in items %}
+            <tr>
+              <td class="item-code">{{ item.item_no }}</td>
+              <td class="item-description">{{ item.description }}</td>
+              <td class="text-right">{{ item.qty_quoted|floatformat:0|intcomma }}</td>
+              <td class="text-right">{{ item.qty_sold|floatformat:0|intcomma }}</td>
+              <td class="text-right">
+                {% if item.conversion_rate is not None %}
+                  <span class="{% if item.conversion_rate >= 80 %}conversion-high{% elif item.conversion_rate >= 40 %}conversion-medium{% else %}conversion-low{% endif %}">
+                    {{ item.conversion_rate|floatformat:1 }}%
+                  </span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No item data available. Adjust filters or ensure SAP Quotations and Sales Orders are synced.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <div style="padding: 16px 24px; border-top: 1px solid var(--border);">
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      </div>
+      {% endif %}
+      <div style="padding: 12px 24px; text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
+        Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count|intcomma }}</strong> items
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Salesman multi-select
+      const salesmanTrigger = document.getElementById('salesman-trigger');
+      const salesmanOptions = document.getElementById('salesman-options');
+      const salesmanText = document.getElementById('salesman-text');
+      const salesmanSearch = document.getElementById('salesman-search');
+      const getSalesmanCheckboxes = () => document.querySelectorAll('#salesman-options-list input[type="checkbox"]');
+      const getSalesmanLabels = () => document.querySelectorAll('#salesman-options-list .option-label');
+
+      if (salesmanTrigger) {
+        salesmanTrigger.addEventListener('click', () => salesmanOptions.classList.toggle('active'));
+        document.addEventListener('click', e => {
+          if (!document.getElementById('salesman-wrapper')?.contains(e.target))
+            salesmanOptions.classList.remove('active');
+        });
+      }
+      if (salesmanSearch) {
+        salesmanSearch.addEventListener('input', function() {
+          const q = this.value.toLowerCase();
+          getSalesmanLabels().forEach(l => {
+            const text = l.querySelector('.option-text')?.textContent?.toLowerCase() || '';
+            l.style.display = text.includes(q) ? '' : 'none';
+          });
+        });
+      }
+      function updateSalesmanLabel() {
+        const checked = Array.from(getSalesmanCheckboxes()).filter(c => c.checked);
+        salesmanText.textContent = checked.length === 0 ? 'All Salesmen' : checked.length === 1 ? checked[0].value : `${checked.length} Selected`;
+      }
+      getSalesmanCheckboxes().forEach(b => b.addEventListener('change', updateSalesmanLabel));
+      updateSalesmanLabel();
+
+      // Firm multi-select
+      const firmTrigger = document.getElementById('firm-trigger');
+      const firmOptions = document.getElementById('firm-options');
+      const firmText = document.getElementById('firm-text');
+      if (firmTrigger) {
+        firmTrigger.addEventListener('click', () => firmOptions.classList.toggle('active'));
+        document.addEventListener('click', e => {
+          if (!document.getElementById('firm-wrapper')?.contains(e.target))
+            firmOptions.classList.remove('active');
+        });
+      }
+      function updateFirmLabel() {
+        const checked = Array.from(document.querySelectorAll('#firm-options-list input[type="checkbox"]')).filter(c => c.checked);
+        firmText.textContent = checked.length === 0 ? 'All Firms' : checked.length === 1 ? checked[0].value : `${checked.length} Selected`;
+      }
+      document.querySelectorAll('#firm-options-list input[type="checkbox"]').forEach(b => b.addEventListener('change', updateFirmLabel));
+      updateFirmLabel();
+
+      // Clear filters
+      document.getElementById('clear-filters')?.addEventListener('click', () => {
+        window.location.href = '{% url "quotation_conversion_analysis" %}';
+      });
+    });
+  </script>
+</body>
+</html>

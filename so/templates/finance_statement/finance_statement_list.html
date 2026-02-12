@@ -202,6 +202,66 @@
       cursor: pointer;
     }
 
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--text-muted);
+    }
+
+    .select-box::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 1200;
+      padding: 6px;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.813rem;
+      color: var(--text);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
     /* Stats Bar */
     .stats-bar {
       display: grid;
@@ -584,15 +644,20 @@
         </div>
 
         <div class="field">
-          <label for="salesman">Salesman</label>
-          <select class="select" id="salesman" name="salesman">
-            <option value="">All Salesmen</option>
-            {% for salesman in salesmen %}
-              <option value="{{ salesman.id }}" {% if filters.salesman == salesman.id|stringformat:"s" %}selected{% endif %}>
-                {{ salesman.salesman_name }}
-              </option>
-            {% endfor %}
-          </select>
+          <label>Salesman</label>
+          <div class="multi-select" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger">
+              <span id="salesman-text">All Salesmen</span>
+            </div>
+            <div class="options-container" id="salesman-options">
+              {% for s in salesmen %}
+                <label class="option-label">
+                  <input type="checkbox" name="salesman" value="{{ s.id }}" {% if s.id|stringformat:"s" in filters.salesmen_filter %}checked{% endif %}>
+                  {{ s.salesman_name }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -713,8 +778,8 @@
       <div class="table-footer">
         <div class="pagination">
           {% if page_obj.has_previous %}
-            <a href="?page=1{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="First Page">&laquo;</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Prev</a>
+            <a href="?page=1{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="First Page">&laquo;</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Prev</a>
           {% else %}
             <span class="disabled">&laquo;</span>
             <span class="disabled">Prev</span>
@@ -723,8 +788,8 @@
           <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
 
             {% if page_obj.has_next %}
-              <a href="?page={{ page_obj.next_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Next</a>
-              <a href="?page={{ page_obj.paginator.num_pages }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.salesman %}&salesman={{ filters.salesman }}{% endif %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="Last Page">&raquo;</a>
+              <a href="?page={{ page_obj.next_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Next</a>
+              <a href="?page={{ page_obj.paginator.num_pages }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="Last Page">&raquo;</a>
           {% else %}
             <span class="disabled">Next</span>
             <span class="disabled">&raquo;</span>
@@ -740,5 +805,43 @@
       </div>
     </div>
   </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const wrapper = document.getElementById('salesman-wrapper');
+    const trigger = document.getElementById('salesman-trigger');
+    const options = document.getElementById('salesman-options');
+    const textSpan = document.getElementById('salesman-text');
+    const getCheckboxes = () => options ? options.querySelectorAll('input[type="checkbox"]') : [];
+
+    function updateSalesmanLabel() {
+      const checked = Array.from(getCheckboxes()).filter(cb => cb.checked);
+      if (checked.length === 0) {
+        textSpan.textContent = 'All Salesmen';
+      } else if (checked.length <= 2) {
+        textSpan.textContent = checked
+          .map(cb => cb.parentElement.textContent.trim())
+          .join(', ');
+      } else {
+        textSpan.textContent = `${checked.length} selected`;
+      }
+    }
+
+    if (wrapper && trigger && options && textSpan) {
+      trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        options.style.display = options.style.display === 'block' ? 'none' : 'block';
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!wrapper.contains(e.target)) {
+          options.style.display = 'none';
+        }
+      });
+
+      getCheckboxes().forEach(cb => cb.addEventListener('change', updateSalesmanLabel));
+      updateSalesmanLabel();
+    }
+  });
+</script>
 </body>
 </html>
