@@ -870,7 +870,7 @@
                 Edit Order
             </a>
         {% endif %}
-        {% if user.role.role == 'Admin' or user.is_superuser %}
+        {% if sales_order.order_status == "Pending" and (user.role.role == 'Admin' or user.is_superuser) %}
             <form method="POST"
                   action="{% url 'delete_sales_order' sales_order.id %}"
                   style="margin: 0; display: inline-block;"

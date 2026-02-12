@@ -497,13 +497,16 @@ def edit_sales_order(request, order_id):
 @login_required
 @require_POST
 def delete_sales_order(request, order_id):
-    """Delete a customer sales order (admin only)."""
+    """Delete a pending customer sales order (admin only)."""
     sales_order = get_object_or_404(SalesOrder, id=order_id)
 
     # Restrict delete to admins/superusers only
     user_role = getattr(getattr(request.user, "role", None), "role", "")
     if not (request.user.is_superuser or user_role == "Admin"):
         return HttpResponseForbidden("You are not authorized to delete this sales order.")
+
+    if sales_order.order_status != "Pending":
+        return HttpResponseForbidden("Only pending sales orders can be deleted.")
 
     sales_order.delete()
     return redirect('view_sales_orders')
