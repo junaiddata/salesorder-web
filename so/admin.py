@@ -51,6 +51,20 @@ class CustomerAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(FinanceCreditEditLog)
+class FinanceCreditEditLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'customer',
+        'edited_credit_limit',
+        'edited_credit_days',
+        'edited_by',
+        'created_at',
+    )
+    list_filter = ('created_at', 'edited_by', 'customer__salesman')
+    search_fields = ('customer__customer_code', 'customer__customer_name', 'edited_by__username', 'remarks')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+
 
 
 
