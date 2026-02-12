@@ -2206,7 +2206,12 @@ def generate_junaid(buffer, sales_order):
     
     # 2. Define Junaid Specific Settings (Logo & Header)
     current_logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
-    local_logo_path = os.path.join(settings.BASE_DIR, 'static/images/footer-logo.png.webp')
+    # Match PI/finance export behavior: prefer local PNG logos from media
+    local_logo_candidates = [
+        os.path.join(settings.BASE_DIR, 'media', 'footer-logo.png'),
+        os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png'),
+        os.path.join(settings.BASE_DIR, 'static', 'images', 'footer-logo.png'),
+    ]
     header_text = "CUSTOMER ORDER FORM"
 
     # 3. Create the PDF document using the passed buffer
@@ -2258,24 +2263,30 @@ def generate_junaid(buffer, sales_order):
         fontName='Helvetica-Bold'
     )
     
-    # Try to load logo
-    try:
-        response_img = requests.get(current_logo_url, timeout=5)
-        if response_img.status_code == 200:
-            logo = Image(BytesIO(response_img.content), width=150, height=50)
-            logo.hAlign = 'CENTER'
-            elements.append(logo)
-            elements.append(Spacer(1, 0.3*inch))
-    except Exception:
-        # Fallback: load from local static file
+    # Try to load logo (local PNG first, URL fallback)
+    logo_added = False
+    for logo_path in local_logo_candidates:
         try:
-            if os.path.exists(local_logo_path):
-                logo = Image(local_logo_path, width=150, height=50)
+            if os.path.exists(logo_path):
+                logo = Image(logo_path, width=150, height=50)
+                logo.hAlign = 'CENTER'
+                elements.append(logo)
+                elements.append(Spacer(1, 0.3 * inch))
+                logo_added = True
+                break
+        except Exception:
+            continue
+
+    if not logo_added:
+        try:
+            response_img = requests.get(current_logo_url, timeout=5)
+            if response_img.status_code == 200:
+                logo = Image(BytesIO(response_img.content), width=150, height=50)
                 logo.hAlign = 'CENTER'
                 elements.append(logo)
                 elements.append(Spacer(1, 0.3 * inch))
         except Exception:
-            pass 
+            pass
     
     # Add title
     elements.append(Paragraph(header_text, title_style))
