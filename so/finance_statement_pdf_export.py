@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum, Value, FloatField
+from django.db.models import Q, Sum, Value, FloatField, Max
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
@@ -867,9 +867,19 @@ def export_finance_credit_edit_list_pdf(request):
         from_date, to_date = to_date, from_date
         from_date_str, to_date_str = to_date_str, from_date_str
 
+    filtered_edits = FinanceCreditEditLog.objects.filter(
+        created_at__date__gte=from_date,
+        created_at__date__lte=to_date
+    )
+    latest_edit_ids = (
+        filtered_edits
+        .values('customer_id')
+        .annotate(latest_id=Max('id'))
+        .values_list('latest_id', flat=True)
+    )
     edits = (
         FinanceCreditEditLog.objects
-        .filter(created_at__date__gte=from_date, created_at__date__lte=to_date)
+        .filter(id__in=latest_edit_ids)
         .select_related('customer__salesman', 'edited_by')
         .order_by('-created_at')
     )
