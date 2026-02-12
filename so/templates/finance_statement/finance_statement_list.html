@@ -131,9 +131,9 @@
     .btn-link {
       background: var(--primary-light);
       color: var(--primary);
-      padding: 6px 14px;
+      padding: 2px 8px;
       font-weight: 600;
-      font-size: 0.813rem;
+      font-size: 0.65rem;
     }
 
     .btn-link:hover {
@@ -206,8 +206,8 @@
     .stats-bar {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      padding: 16px 20px;
+      gap: 8px;
+      padding: 10px 14px;
       background: var(--bg);
       border-top: 1px solid var(--border-light);
     }
@@ -221,15 +221,15 @@
     .stat-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      padding: 12px 16px;
+      gap: 2px;
+      padding: 5px 10px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border-radius: 4px;
     }
 
     .stat-label {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       font-weight: 600;
       color: var(--text-secondary);
       text-transform: uppercase;
@@ -237,7 +237,7 @@
     }
 
     .stat-value {
-      font-size: 1.125rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: var(--text);
     }
@@ -254,8 +254,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 950px;
-      table-layout: fixed;
+      min-width: 900px;
     }
 
     thead {
@@ -264,13 +263,13 @@
     }
 
     th {
-      padding: 14px 12px;
+      padding: 4px 8px;
       text-align: left;
       font-weight: 600;
       color: var(--text-secondary);
-      font-size: 0.75rem;
+      font-size: 0.6rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       white-space: nowrap;
     }
 
@@ -306,13 +305,14 @@
     }
 
     tbody tr.totals-row td {
-      padding: 16px 12px;
+      padding: 6px 8px;
     }
 
     td {
-      padding: 12px;
+      padding: 3px 8px;
       color: var(--text);
-      font-size: 0.875rem;
+      font-size: 0.7rem;
+      line-height: 1.25;
       vertical-align: middle;
     }
 
@@ -328,24 +328,33 @@
     .customer-code {
       font-weight: 700;
       color: var(--primary);
-      font-size: 0.813rem;
+      font-size: 0.7rem;
       white-space: nowrap;
     }
 
     .customer-name {
       font-weight: 500;
       color: var(--text);
-      line-height: 1.4;
-      word-wrap: break-word;
-      word-break: break-word;
+      line-height: 1.25;
+      white-space: nowrap;
     }
 
     .salesman-name {
       color: var(--text-secondary);
-      font-size: 0.813rem;
-      line-height: 1.4;
-      word-wrap: break-word;
-      word-break: break-word;
+      font-size: 0.7rem;
+      line-height: 1.25;
+      white-space: nowrap;
+    }
+
+    .col-customer {
+      white-space: nowrap;
+    }
+
+    .col-narrow {
+      width: 1%;
+      padding-left: 4px !important;
+      padding-right: 4px !important;
+      white-space: nowrap;
     }
 
     .amount {
@@ -371,11 +380,11 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 4px 10px;
+      padding: 1px 5px;
       background: var(--bg);
       border: 1px solid var(--border-light);
-      border-radius: 6px;
-      font-size: 0.813rem;
+      border-radius: 4px;
+      font-size: 0.6rem;
       font-weight: 500;
       color: var(--text-secondary);
       white-space: nowrap;
@@ -387,15 +396,15 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 16px;
-      padding: 16px 20px;
+      gap: 10px;
+      padding: 8px 14px;
       border-top: 1px solid var(--border-light);
       background: var(--bg);
     }
 
     .pagination {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       align-items: center;
     }
 
@@ -404,10 +413,10 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 36px;
-      height: 36px;
-      padding: 0 12px;
-      font-size: 0.875rem;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      font-size: 0.75rem;
       font-weight: 500;
       color: var(--text);
       background: var(--surface);
@@ -444,7 +453,7 @@
     }
 
     .total-count {
-      font-size: 0.875rem;
+      font-size: 0.75rem;
       color: var(--text-secondary);
     }
 
@@ -456,20 +465,21 @@
     /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 64px 20px;
+      padding: 24px 16px;
+      font-size: 0.75rem;
       color: var(--text-secondary);
     }
 
     .empty-state svg {
-      width: 56px;
-      height: 56px;
-      margin-bottom: 16px;
+      width: 32px;
+      height: 32px;
+      margin-bottom: 8px;
       opacity: 0.3;
       color: var(--text-muted);
     }
 
     .empty-state p {
-      font-size: 0.938rem;
+      font-size: 0.75rem;
       font-weight: 500;
     }
 
@@ -497,16 +507,16 @@
       }
 
       .stats-bar {
-        padding: 12px 16px;
-        gap: 8px;
+        padding: 8px 12px;
+        gap: 6px;
       }
 
       .stat-item {
-        padding: 10px 12px;
+        padding: 4px 8px;
       }
 
       .stat-value {
-        font-size: 1rem;
+        font-size: 0.85rem;
       }
 
       .table-footer {
@@ -540,6 +550,12 @@
             <path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
           Export Excel
+        </a>
+        <a class="btn btn-primary" href="{% url 'export_finance_statement_list_pdf' %}?{{ request.GET.urlencode }}" style="background: #dc3545; border-color: #dc3545;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+          </svg>
+          Export PDF
         </a>
         {% if user.role.role == 'Salesman' %}
           <a class="btn btn-secondary" href="{% url 'sales_home' %}">
@@ -622,37 +638,26 @@
     <div class="card table-card">
       <div class="table-wrap">
         <table>
-          <colgroup>
-            <col style="width: 90px;">
-            <col style="width: 280px;">
-            <col style="width: 150px;">
-            <col style="width: 110px;">
-            <col style="width: 100px;">
-            <col style="width: 110px;">
-            <col style="width: 100px;">
-            <col style="width: 80px;">
-            <col style="width: 80px;">
-          </colgroup>
           <thead>
             <tr>
-              <th>Code</th>
-              <th>Customer Name</th>
+              <th class="col-narrow">Code</th>
+              <th class="col-customer">Customer Name</th>
               <th>Salesman</th>
               <th class="text-right">Balance</th>
               <th class="text-right">PDC</th>
               <th class="text-right">Total</th>
               <th class="text-right">Limit</th>
-              <th class="text-center">Terms</th>
-              <th class="text-center">Action</th>
+              <th class="text-center col-narrow">Terms</th>
+              <th class="text-center col-narrow">Action</th>
             </tr>
           </thead>
           <tbody>
             {% for customer in page_obj %}
             <tr>
-              <td>
+              <td class="col-narrow">
                 <span class="customer-code">{{ customer.customer_code }}</span>
               </td>
-              <td>
+              <td class="col-customer">
                 <span class="customer-name">{{ customer.customer_name }}</span>
               </td>
               <td>
@@ -672,10 +677,10 @@
               <td class="text-right">
                 <span class="amount amount-muted">{{ customer.credit_limit|floatformat:0|intcomma }}</span>
               </td>
-              <td class="text-center">
+              <td class="text-center col-narrow">
                 <span class="terms-badge">{{ customer.credit_days|default:"—" }}</span>
               </td>
-              <td class="text-center">
+              <td class="text-center col-narrow">
                 <a href="{% url 'finance_statement_detail' customer.id %}" class="btn btn-link">View</a>
               </td>
             </tr>
