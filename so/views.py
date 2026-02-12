@@ -2163,20 +2163,766 @@ from django.http import HttpResponse
 
 
 
+"""
+Sales Order PDF Export — Junaid & Alabama Divisions
+Refactored for enterprise-grade visual output using ReportLab only.
+"""
+import os
+from io import BytesIO
+from datetime import datetime
+
+import requests
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+
+from reportlab.lib import colors
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch, mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph,
+    Spacer, Image, KeepTogether,
+)
+
+from so.models import SalesOrder
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# THEME DEFINITIONS — each division gets a complete color palette
+# ─────────────────────────────────────────────────────────────────────────────
+
+THEMES = {
+    'junaid': {
+        'name': 'JUNAID',
+        'primary': HexColor('#1B2A4A'),          # Deep navy
+        'primary_light': HexColor('#2C4A7C'),     # Medium navy
+        'accent': HexColor('#D4912A'),            # Warm gold
+        'accent_light': HexColor('#F5E6CC'),      # Pale gold tint
+        'header_bg': HexColor('#1B2A4A'),         # Table headers
+        'row_alt': HexColor('#F7F9FC'),           # Zebra stripe
+        'row_white': colors.white,
+        'total_bg': HexColor('#EBF0F7'),          # Totals row
+        'grand_total_bg': HexColor('#E8F0E8'),    # Grand total highlight
+        'border': HexColor('#D1D5DB'),            # Grid lines
+        'border_heavy': HexColor('#9CA3AF'),      # Outer box
+        'text': HexColor('#1F2937'),              # Body text
+        'text_muted': HexColor('#6B7280'),        # Labels
+        'text_white': colors.white,
+        'logo_urls': [
+            'https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp',
+        ],
+        'logo_local': [
+        
+            'media/footer-logo1.png',
+            'static/images/footer-logo.png',
+        ],
+        'terms_prefix': 'Junaid Trading',
+    },
+    'alabama': {
+        'name': 'ALABAMA',
+        'primary': HexColor('#1A1A1A'),           # Rich black
+        'primary_light': HexColor('#3D3D3D'),     # Charcoal
+        'accent': HexColor('#C0392B'),            # Signature red
+        'accent_light': HexColor('#FDECEA'),      # Pale red tint
+        'header_bg': HexColor('#1A1A1A'),         # Table headers
+        'row_alt': HexColor('#FAFAFA'),           # Zebra stripe
+        'row_white': colors.white,
+        'total_bg': HexColor('#F5F5F5'),          # Totals row
+        'grand_total_bg': HexColor('#FDECEA'),    # Grand total highlight
+        'border': HexColor('#D1D5DB'),
+        'border_heavy': HexColor('#9CA3AF'),
+        'text': HexColor('#1A1A1A'),
+        'text_muted': HexColor('#6B7280'),
+        'text_white': colors.white,
+        'logo_urls': [
+            'https://alabamauae.com/alabama4.png',
+        ],
+        'logo_local': [
+            'static/images/alabama-logo.png',
+            'media/alabama-logo.png',
+        ],
+        'terms_prefix': 'Alabama Systems',
+    },
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TYPOGRAPHY & SPACING CONSTANTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+FONT_TITLE = 16
+FONT_SUBTITLE = 8
+FONT_SECTION = 10
+FONT_BODY = 8.5
+FONT_BODY_SM = 7.5
+FONT_TABLE_HDR = 8
+FONT_TABLE_BODY = 7.5
+FONT_FOOTER = 6
+FONT_TERMS = 7
+FONT_NOTES = 7.5
+FONT_GRAND_TOTAL = 11
+
+LOGO_WIDTH = 2.5 * inch
+LOGO_HEIGHT = 0.95 * inch
+
+PAGE_MARGIN_H = 0.5 * inch
+PAGE_MARGIN_TOP = 0.5 * inch
+PAGE_MARGIN_BOT = 0.5 * inch
+
+SP_SECTION = 6
+SP_INNER = 3
+SP_AFTER_TABLE = 4
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STYLE FACTORY — builds themed ParagraphStyles
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_styles(theme):
+    """Build a dict of ParagraphStyles bound to the given theme palette."""
+    base = getSampleStyleSheet()['Normal']
+    return {
+        'title': ParagraphStyle(
+            'SOTitle', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TITLE,
+            textColor=theme['primary'], leading=FONT_TITLE + 4,
+            alignment=TA_CENTER,
+        ),
+        'subtitle': ParagraphStyle(
+            'SOSubtitle', parent=base,
+            fontName='Helvetica', fontSize=FONT_SUBTITLE,
+            textColor=theme['text_muted'], leading=FONT_SUBTITLE + 3,
+            alignment=TA_CENTER,
+        ),
+        'section': ParagraphStyle(
+            'SOSection', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_SECTION,
+            textColor=theme['text_white'], leading=FONT_SECTION + 2,
+        ),
+        'label': ParagraphStyle(
+            'SOLabel', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY_SM,
+            textColor=theme['text_muted'], leading=FONT_BODY_SM + 2,
+        ),
+        'value': ParagraphStyle(
+            'SOValue', parent=base,
+            fontName='Helvetica', fontSize=FONT_BODY,
+            textColor=theme['text'], leading=FONT_BODY + 2,
+        ),
+        'value_bold': ParagraphStyle(
+            'SOValueBold', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=theme['text'], leading=FONT_BODY + 2,
+        ),
+        'th': ParagraphStyle(
+            'SOTH', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TABLE_HDR,
+            textColor=theme['text_white'], leading=FONT_TABLE_HDR + 2,
+        ),
+        'th_r': ParagraphStyle(
+            'SOTHRight', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TABLE_HDR,
+            textColor=theme['text_white'], leading=FONT_TABLE_HDR + 2,
+            alignment=TA_RIGHT,
+        ),
+        'th_c': ParagraphStyle(
+            'SOTHCenter', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TABLE_HDR,
+            textColor=theme['text_white'], leading=FONT_TABLE_HDR + 2,
+            alignment=TA_CENTER,
+        ),
+        'td': ParagraphStyle(
+            'SOTD', parent=base,
+            fontName='Helvetica', fontSize=FONT_TABLE_BODY,
+            textColor=theme['text'], leading=FONT_TABLE_BODY + 2,
+        ),
+        'td_c': ParagraphStyle(
+            'SOTDCenter', parent=base,
+            fontName='Helvetica', fontSize=FONT_TABLE_BODY,
+            textColor=theme['text'], leading=FONT_TABLE_BODY + 2,
+            alignment=TA_CENTER,
+        ),
+        'td_r': ParagraphStyle(
+            'SOTDRight', parent=base,
+            fontName='Helvetica', fontSize=FONT_TABLE_BODY,
+            textColor=theme['text'], leading=FONT_TABLE_BODY + 2,
+            alignment=TA_RIGHT,
+        ),
+        'td_bold': ParagraphStyle(
+            'SOTDBold', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TABLE_BODY,
+            textColor=theme['text'], leading=FONT_TABLE_BODY + 2,
+        ),
+        'td_bold_r': ParagraphStyle(
+            'SOTDBoldR', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_TABLE_BODY,
+            textColor=theme['text'], leading=FONT_TABLE_BODY + 2,
+            alignment=TA_RIGHT,
+        ),
+        'summary_label': ParagraphStyle(
+            'SOSumLabel', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=theme['text'], leading=FONT_BODY + 3,
+            alignment=TA_RIGHT,
+        ),
+        'summary_value': ParagraphStyle(
+            'SOSumValue', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=theme['text'], leading=FONT_BODY + 3,
+            alignment=TA_RIGHT,
+        ),
+        'grand_label': ParagraphStyle(
+            'SOGrandLabel', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_GRAND_TOTAL,
+            textColor=theme['primary'], leading=FONT_GRAND_TOTAL + 4,
+            alignment=TA_RIGHT,
+        ),
+        'grand_value': ParagraphStyle(
+            'SOGrandValue', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_GRAND_TOTAL,
+            textColor=theme['primary'], leading=FONT_GRAND_TOTAL + 4,
+            alignment=TA_RIGHT,
+        ),
+        'notes': ParagraphStyle(
+            'SONotes', parent=base,
+            fontName='Helvetica', fontSize=FONT_NOTES,
+            textColor=theme['text_muted'], leading=FONT_NOTES + 3,
+        ),
+        'terms': ParagraphStyle(
+            'SOTerms', parent=base,
+            fontName='Helvetica', fontSize=FONT_TERMS,
+            textColor=theme['text_muted'], leading=FONT_TERMS + 3,
+        ),
+        'footer': ParagraphStyle(
+            'SOFooter', parent=base,
+            fontName='Helvetica', fontSize=FONT_FOOTER,
+            textColor=theme['text_muted'], leading=FONT_FOOTER + 2,
+            alignment=TA_CENTER,
+        ),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SHARED HELPER FUNCTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_logo(theme):
+    """
+    Try local files first (faster, no network dependency), then URL fallback.
+    Returns a ReportLab Image or None.
+    """
+    # Local candidates
+    for rel_path in theme['logo_local']:
+        full_path = os.path.join(settings.BASE_DIR, rel_path)
+        if os.path.exists(full_path):
+            try:
+                return Image(full_path, width=LOGO_WIDTH, height=LOGO_HEIGHT)
+            except Exception:
+                continue
+
+    # URL fallback
+    for url in theme['logo_urls']:
+        try:
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return Image(BytesIO(resp.content), width=LOGO_WIDTH, height=LOGO_HEIGHT)
+        except Exception:
+            continue
+
+    return None
+
+
+def _fmt(num):
+    """Format number: integers without decimals, floats with 2 decimal places."""
+    if num is None:
+        return "0.00"
+    try:
+        v = float(num)
+        return f"{v:,.0f}" if v == int(v) else f"{v:,.2f}"
+    except (TypeError, ValueError):
+        return "0.00"
+
+
+def _build_header(theme, styles, usable_width):
+    """
+    Build the document header block:
+    Logo centered → Title → Accent line → Subtitle with date.
+    """
+    elements = []
+    logo = _load_logo(theme)
+
+    if logo:
+        logo.hAlign = 'CENTER'
+        elements.append(logo)
+        elements.append(Spacer(1, 4))
+
+    # Title
+    elements.append(Paragraph('CUSTOMER ORDER FORM', styles['title']))
+    elements.append(Spacer(1, 1))
+
+    # Accent divider line
+    line_data = [['']]
+    line_tbl = Table(line_data, colWidths=[usable_width * 0.4])
+    line_tbl.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, -1), 2, theme['accent']),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+    ]))
+    # Center the short accent line
+    wrapper = Table([[line_tbl]], colWidths=[usable_width])
+    wrapper.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(wrapper)
+    elements.append(Spacer(1, 2))
+
+    # Date subtitle
+    elements.append(Paragraph(
+        f"Generated on {datetime.now().strftime('%d %B %Y at %H:%M')}",
+        styles['subtitle'],
+    ))
+    elements.append(Spacer(1, SP_SECTION))
+
+    return elements
+
+
+def _build_section_bar(title, theme, styles, usable_width):
+    """
+    Full-width section header bar with accent left-strip.
+    Returns a single Table flowable.
+    """
+    accent_w = 4
+    content_w = usable_width - accent_w
+
+    tbl = Table(
+        [['', Paragraph(title, styles['section'])]],
+        colWidths=[accent_w, content_w],
+    )
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), theme['accent']),
+        ('BACKGROUND', (1, 0), (1, 0), theme['header_bg']),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (1, 0), (1, 0), 8),
+    ]))
+    return tbl
+
+
+def _build_info_table(rows, theme, styles, usable_width):
+    """
+    Build a two-column key:value information grid.
+    rows: list of (label, value) tuples.
+    """
+    label_w = 1.6 * inch
+    value_w = usable_width / 2 - label_w
+    col_widths = [label_w, value_w, label_w, value_w]
+
+    # Pair rows into two-column layout
+    table_data = []
+    paired = []
+    for i in range(0, len(rows), 2):
+        left = rows[i]
+        right = rows[i + 1] if i + 1 < len(rows) else ('', '')
+        paired.append((left, right))
+
+    for (l_label, l_val), (r_label, r_val) in paired:
+        table_data.append([
+            Paragraph(l_label, styles['label']),
+            Paragraph(str(l_val), styles['value_bold']),
+            Paragraph(r_label, styles['label']),
+            Paragraph(str(r_val), styles['value_bold']),
+        ])
+
+    tbl = Table(table_data, colWidths=col_widths)
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        # Subtle row separators
+        ('LINEBELOW', (0, 0), (-1, -2), 0.25, theme['border']),
+        # Light background on label columns
+        ('BACKGROUND', (0, 0), (0, -1), HexColor('#F9FAFB')),
+        ('BACKGROUND', (2, 0), (2, -1), HexColor('#F9FAFB')),
+    ]))
+    return tbl
+
+
+def _build_items_table(order_items, theme, styles, usable_width):
+    """
+    Build the line-items table with header, data rows, and zebra striping.
+    Returns (table, subtotal).
+    """
+    # Column proportions tuned for A4 portrait with side margins
+    col_widths = [
+        0.40 * inch,   # S.No
+        1.00 * inch,   # Item Code
+        2.90 * inch,   # Description (widest)
+        0.65 * inch,   # Qty
+        0.90 * inch,   # Unit Price
+        0.95 * inch,   # Total
+    ]
+    # Absorb remainder into description column
+    allocated = sum(col_widths)
+    col_widths[2] += max(0, usable_width - allocated)
+
+    # Header row
+    hdr = [
+        Paragraph('#', styles['th_c']),
+        Paragraph('Item Code', styles['th_c']),
+        Paragraph('Description', styles['th']),
+        Paragraph('Qty', styles['th_c']),
+        Paragraph('Unit Price', styles['th_r']),
+        Paragraph('Total', styles['th_r']),
+    ]
+    table_data = [hdr]
+
+    subtotal = 0.0
+    for idx, item in enumerate(order_items, 1):
+        line_total = item.quantity * item.price
+        subtotal += line_total
+
+        # Truncate long descriptions gracefully
+        desc = item.item.item_description or ''
+        if len(desc) > 55:
+            desc = desc[:55] + '…'
+
+        table_data.append([
+            Paragraph(str(idx), styles['td_c']),
+            Paragraph(item.item.item_code, styles['td_c']),
+            Paragraph(desc, styles['td_bold']),
+            Paragraph(f"{item.quantity} {item.unit}", styles['td_c']),
+            Paragraph(f"{item.price:,.2f}", styles['td_r']),
+            Paragraph(f"{line_total:,.2f}", styles['td_r']),
+        ])
+
+    num_rows = len(table_data)
+    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    # Build style commands
+    cmds = [
+        # Header
+        ('BACKGROUND', (0, 0), (-1, 0), theme['header_bg']),
+        ('TEXTCOLOR', (0, 0), (-1, 0), theme['text_white']),
+
+        # Outer box
+        ('BOX', (0, 0), (-1, -1), 0.75, theme['border_heavy']),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, theme['border_heavy']),
+
+        # Cell padding (compact for more rows per page)
+        ('TOPPADDING', (0, 0), (-1, 0), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+        ('TOPPADDING', (0, 1), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]
+
+    # Zebra striping
+    for i in range(1, num_rows):
+        bg = theme['row_alt'] if i % 2 == 0 else theme['row_white']
+        cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+        # Subtle inner line
+        if i < num_rows - 1:
+            cmds.append(('LINEBELOW', (0, i), (-1, i), 0.25, theme['border']))
+
+    tbl.setStyle(TableStyle(cmds))
+    return tbl, subtotal
+
+
+def _build_summary_block(sales_order, subtotal, theme, styles, usable_width):
+    """
+    Build the financial summary (subtotal, tax, discount, grand total).
+    Right-aligned block that visually anchors below the items table.
+    """
+    label_w = 1.6 * inch
+    value_w = 1.3 * inch
+    spacer_w = usable_width - label_w - value_w
+
+    rows = []
+
+    # Subtotal
+    rows.append([
+        '', '',
+        Paragraph('Subtotal:', styles['summary_label']),
+        Paragraph(f"{subtotal:,.2f} AED", styles['summary_value']),
+    ])
+
+    # Tax
+    tax_amount = 0.0
+    if hasattr(sales_order, 'tax') and sales_order.tax:
+        tax_amount = float(sales_order.tax)
+        rows.append([
+            '', '',
+            Paragraph('VAT (5%):', styles['summary_label']),
+            Paragraph(f"{tax_amount:,.2f} AED", styles['summary_value']),
+        ])
+
+    # Discount
+    if hasattr(sales_order, 'discount_amount') and sales_order.discount_amount:
+        rows.append([
+            '', '',
+            Paragraph('Discount:', styles['summary_label']),
+            Paragraph(f"−{float(sales_order.discount_amount):,.2f} AED", styles['summary_value']),
+        ])
+
+    # Grand total
+    total_amount = float(sales_order.total_amount)
+    grand_total = round(total_amount + tax_amount, 2)
+
+    rows.append([
+        '', '',
+        Paragraph('Total Amount:', styles['grand_label']),
+        Paragraph(f"{grand_total:,.2f} AED", styles['grand_value']),
+    ])
+
+    # Column widths: empty spacer | empty spacer | label | value
+    half_spacer = spacer_w / 2
+    col_widths = [half_spacer, half_spacer, label_w, value_w]
+
+    tbl = Table(rows, colWidths=col_widths)
+
+    num_rows = len(rows)
+    cmds = [
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -2), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -2), 2),
+
+        # Grand total row emphasis
+        ('TOPPADDING', (0, -1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
+        ('LINEABOVE', (2, -1), (3, -1), 1.5, theme['primary']),
+        ('BACKGROUND', (2, -1), (3, -1), theme['grand_total_bg']),
+
+        # Subtle line above subtotal row if multiple summary rows
+        ('LINEABOVE', (2, 0), (3, 0), 0.5, theme['border']),
+    ]
+
+    tbl.setStyle(TableStyle(cmds))
+    return tbl
+
+
+def _build_notes_block(sales_order, theme, styles, usable_width):
+    """Build notes section if notes exist. Returns list of flowables."""
+    elements = []
+    if not (hasattr(sales_order, 'notes') and sales_order.notes):
+        return elements
+
+    # Notes container with left border accent
+    note_text = Paragraph(sales_order.notes, styles['notes'])
+    note_tbl = Table(
+        [['', note_text]],
+        colWidths=[3, usable_width - 3],
+    )
+    note_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), theme['accent']),
+        ('BACKGROUND', (1, 0), (1, 0), theme['accent_light']),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (1, 0), (1, 0), 8),
+        ('RIGHTPADDING', (1, 0), (1, 0), 8),
+    ]))
+
+    elements.append(Paragraph(
+        '<b>Notes</b>', ParagraphStyle(
+            'NotesHeading', parent=styles['label'],
+            fontSize=FONT_BODY, textColor=theme['text'],
+        )
+    ))
+    elements.append(Spacer(1, 2))
+    elements.append(note_tbl)
+    return elements
+
+
+def _build_terms_block(theme, styles):
+    """Build terms & conditions section. Returns list of flowables."""
+    elements = []
+
+    elements.append(Spacer(1, SP_SECTION))
+
+    # Thin divider
+    elements.append(Spacer(1, 1))
+
+    heading_style = ParagraphStyle(
+        'TermsHeading', parent=styles['label'],
+        fontSize=FONT_BODY_SM, textColor=theme['text_muted'],
+        fontName='Helvetica-Bold',
+    )
+    elements.append(Paragraph('Terms & Conditions', heading_style))
+    elements.append(Spacer(1, 2))
+
+    terms = [
+        f"1. This document is system-generated by {theme['terms_prefix']} and does not require a physical signature.",
+        "2. All disputes are subject to the jurisdiction of UAE courts.",
+        "3. Payment is due as per the agreed customer account terms.",
+        "4. Goods once sold will not be taken back or exchanged.",
+    ]
+    for term in terms:
+        elements.append(Paragraph(term, styles['terms']))
+        elements.append(Spacer(1, 1))
+
+    return elements
+
+
+def _page_footer_factory(theme):
+    """
+    Return an onPage callback that draws a branded footer on every page.
+    """
+    def _draw_footer(canvas, doc):
+        canvas.saveState()
+        page_w, page_h = doc.pagesize
+
+        # Accent line
+        y_line = PAGE_MARGIN_BOT - 12
+        canvas.setStrokeColor(theme['accent'])
+        canvas.setLineWidth(0.75)
+        canvas.line(PAGE_MARGIN_H, y_line, page_w - PAGE_MARGIN_H, y_line)
+
+        # Footer text
+        canvas.setFont('Helvetica', 6)
+        canvas.setFillColor(theme['text_muted'])
+        footer_text = (
+            f"Page {doc.page}  ·  {theme['name']}  ·  "
+            f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}  ·  "
+            f"Confidential"
+        )
+        canvas.drawCentredString(page_w / 2, y_line - 10, footer_text)
+        canvas.restoreState()
+
+    return _draw_footer
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CORE PDF ENGINE — shared generator that both themes call
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generate_order_pdf(buffer, sales_order, theme_key):
+    """
+    Core engine: builds a complete sales order PDF using the specified theme.
+    This eliminates all duplication between Junaid and Alabama generators.
+    """
+    theme = THEMES[theme_key]
+    order_items = sales_order.items.all()
+
+    # ── Document setup ──
+    page_w, page_h = A4
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=PAGE_MARGIN_H,
+        leftMargin=PAGE_MARGIN_H,
+        topMargin=PAGE_MARGIN_TOP,
+        bottomMargin=PAGE_MARGIN_BOT,
+    )
+    usable_width = page_w - 2 * PAGE_MARGIN_H
+    styles = _build_styles(theme)
+    elements = []
+
+    # ── 1. Header (logo + title + accent line + date) ──
+    elements.extend(_build_header(theme, styles, usable_width))
+
+    # ── 2. Order Information ──
+    elements.append(_build_section_bar('ORDER INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    order_info_rows = [
+        ('Order Number', sales_order.order_number),
+        ('Order Date', sales_order.order_date.strftime('%d %B %Y')),
+        ('Location', getattr(sales_order, 'location', 'Not Specified')),
+        ('Division', getattr(sales_order, 'division', '—')),
+    ]
+    elements.append(_build_info_table(order_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    # ── 3. Customer Information ──
+    elements.append(_build_section_bar('CUSTOMER INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    customer_info_rows = [
+        ('Customer Name', sales_order.customer.customer_name),
+        ('Customer Code', sales_order.customer.customer_code),
+    ]
+    if sales_order.salesman:
+        customer_info_rows.append(('Salesman', sales_order.salesman.salesman_name))
+        # Add an empty pair to balance the two-column layout
+        if len(customer_info_rows) % 2 != 0:
+            customer_info_rows.append(('', ''))
+
+    elements.append(_build_info_table(customer_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    # ── 4. Line Items ──
+    elements.append(_build_section_bar('ORDER ITEMS', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    items_table, subtotal = _build_items_table(order_items, theme, styles, usable_width)
+    elements.append(items_table)
+    elements.append(Spacer(1, SP_AFTER_TABLE))
+
+    # ── 5. Summary ──
+    summary_block = _build_summary_block(sales_order, subtotal, theme, styles, usable_width)
+    elements.append(summary_block)
+    elements.append(Spacer(1, SP_SECTION))
+
+    # ── 6. Notes (if any) ──
+    notes_elements = _build_notes_block(sales_order, theme, styles, usable_width)
+    if notes_elements:
+        elements.extend(notes_elements)
+        elements.append(Spacer(1, SP_INNER))
+
+    # ── 7. Terms & Conditions ──
+    elements.extend(_build_terms_block(theme, styles))
+
+    # ── Build with page footer ──
+    footer_fn = _page_footer_factory(theme)
+    doc.build(elements, onFirstPage=footer_fn, onLaterPages=footer_fn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PUBLIC API — function signatures are UNCHANGED
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_junaid(buffer, sales_order):
+    """Generate Junaid-branded sales order PDF into the given buffer."""
+    _generate_order_pdf(buffer, sales_order, theme_key='junaid')
+
+
+def generate_alabama_pdf(buffer, sales_order):
+    """Generate Alabama-branded sales order PDF into the given buffer."""
+    _generate_order_pdf(buffer, sales_order, theme_key='alabama')
+
+
+@login_required
 def export_sales_order_to_pdf(request, order_id):
+    """Export a sales order to a professionally formatted PDF."""
     sales_order = get_object_or_404(SalesOrder, id=order_id)
-    
-    # 1. Setup the HTTP Response (Shared logic)
+
+    # 1. Setup HTTP Response
     response = HttpResponse(content_type='application/pdf')
-    # Use the specific order number in the filename
-    filename = f"Order_{sales_order.order_number}_{sales_order.order_date.strftime('%Y%m%d')}.pdf"
+    filename = (
+        f"Order_{sales_order.order_number}_"
+        f"{sales_order.order_date.strftime('%Y%m%d')}.pdf"
+    )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
+
     # 2. Create Buffer
     buffer = BytesIO()
 
-    # 3. DISPATCH: Choose the correct design function based on the order
-    # (Assuming you added the 'division' field we discussed)
+    # 3. Dispatch to correct theme
     if sales_order.division == 'ALABAMA':
         generate_alabama_pdf(buffer, sales_order)
     else:
@@ -2187,618 +2933,6 @@ def export_sales_order_to_pdf(request, order_id):
     buffer.close()
     response.write(pdf_value)
     return response
-
-
-from io import BytesIO
-import os
-import requests
-from django.conf import settings
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-
-def generate_junaid(buffer, sales_order):
-    # 1. Get Items
-    order_items = sales_order.items.all()
-    
-    # 2. Define Junaid Specific Settings (Logo & Header)
-    current_logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
-    # Match PI/finance export behavior: prefer local PNG logos from media
-    local_logo_candidates = [
-        os.path.join(settings.BASE_DIR, 'media', 'footer-logo.png'),
-        os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png'),
-        os.path.join(settings.BASE_DIR, 'static', 'images', 'footer-logo.png'),
-    ]
-    header_text = "CUSTOMER ORDER FORM"
-
-    # 3. Create the PDF document using the passed buffer
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=0.5*inch,
-        leftMargin=0.5*inch,
-        topMargin=0.75*inch,
-        bottomMargin=0.75*inch
-    )
-    
-    # Container for the 'Flowable' objects
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Title'],
-        fontSize=24,
-        textColor=colors.HexColor('#2C3E50'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#34495E'),
-        spaceAfter=12
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=6
-    )
-    
-    label_style = ParagraphStyle(
-        'LabelStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#555555'),
-        fontName='Helvetica-Bold'
-    )
-    
-    # Try to load logo (local PNG first, URL fallback)
-    logo_added = False
-    for logo_path in local_logo_candidates:
-        try:
-            if os.path.exists(logo_path):
-                logo = Image(logo_path, width=150, height=50)
-                logo.hAlign = 'CENTER'
-                elements.append(logo)
-                elements.append(Spacer(1, 0.3 * inch))
-                logo_added = True
-                break
-        except Exception:
-            continue
-
-    if not logo_added:
-        try:
-            response_img = requests.get(current_logo_url, timeout=5)
-            if response_img.status_code == 200:
-                logo = Image(BytesIO(response_img.content), width=150, height=50)
-                logo.hAlign = 'CENTER'
-                elements.append(logo)
-                elements.append(Spacer(1, 0.3 * inch))
-        except Exception:
-            pass
-    
-    # Add title
-    elements.append(Paragraph(header_text, title_style))
-    
-    # Order Information Section
-    order_data = [
-        ['ORDER INFORMATION', ''],
-        ['Order Number:', f'{sales_order.order_number}'],
-        ['Order Date:', sales_order.order_date.strftime('%d-%m-%Y')],
-        ['Location:', getattr(sales_order, 'location', 'Not Specified')],
-    ]
-    
-    order_table = Table(order_data, colWidths=[2.5*inch, 4*inch])
-    order_table.setStyle(TableStyle([
-        # Header row
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
-        ('SPAN', (0, 0), (-1, 0)),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#555555')),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
-    ]))
-    elements.append(order_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Customer Information Section
-    customer_data = [
-        ['CUSTOMER INFORMATION', ''],
-        ['Customer Name:', sales_order.customer.customer_name],
-        ['Customer Code:', sales_order.customer.customer_code]
-    ]
-    
-    # Add salesman info if available
-    if sales_order.salesman:
-        customer_data.append(['Salesman:', sales_order.salesman.salesman_name])
-    
-    customer_table = Table(customer_data, colWidths=[2.5*inch, 4*inch])
-    customer_table.setStyle(TableStyle([
-        # Header row
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
-        ('SPAN', (0, 0), (-1, 0)),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#555555')),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
-    ]))
-    elements.append(customer_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Items Table
-    items_data = [
-        ['S.No', 'Item Code', 'Description', 'Qty', 'Unit Price', 'Total']
-    ]
-    
-    subtotal = 0.00
-    for idx, item in enumerate(order_items, 1):
-        line_total = item.quantity * item.price
-        subtotal += line_total
-        
-        items_data.append([
-            str(idx),
-            item.item.item_code,
-            Paragraph(item.item.item_description[:50] + '...' if len(item.item.item_description) > 50 else item.item.item_description, normal_style),
-            f"{str(item.quantity)} {item.unit}",
-            f"{item.price:,.2f} ",
-            f"{line_total:,.2f} "
-        ])
-    
-    # Create items table
-    items_table = Table(
-        items_data,
-        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
-    )
-    
-    items_table.setStyle(TableStyle([
-        # Header row
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # S.No
-        ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Item Code
-        ('ALIGN', (2, 1), (2, -1), 'LEFT'),    # Description
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Qty
-        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),   # Unit Price
-        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),   # Total
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        
-        # Alternate row colors
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-    ]))
-    
-    elements.append(items_table)
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Summary Section
-    summary_data = []
-    
-    # Subtotal
-    summary_data.append(['', '', '', '', 'Subtotal:', f"{subtotal:,.2f} AED"])
-    
-    # Tax if applicable
-    tax_amount = 0.00
-    if hasattr(sales_order, 'tax') and sales_order.tax:
-        tax_amount = sales_order.tax
-        summary_data.append(['', '', '', '', f'VAT (5%):', f"{tax_amount:,.2f} AED"])
-    
-    # Discount if applicable
-    if hasattr(sales_order, 'discount_amount') and sales_order.discount_amount:
-        summary_data.append(['', '', '', '', 'Discount:', f"-{sales_order.discount_amount:,.2f} AED"])
-    
-    # Total
-    total_amount = sales_order.total_amount
-    grand_total = round(total_amount + tax_amount, 2)
-    summary_data.append(['', '', '', '', 'Total Amount:      ', f"{grand_total:,.2f} AED"])
-    
-    summary_table = Table(
-        summary_data,
-        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
-    )
-    
-    summary_table.setStyle(TableStyle([
-        ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
-        ('ALIGN', (5, 0), (5, -1), 'RIGHT'),
-        ('FONTNAME', (4, 0), (5, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (4, 0), (5, -1), 10),
-        
-        # Total row styling
-        ('FONTNAME', (4, -1), (5, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (4, -1), (5, -1), 12),
-        ('TEXTCOLOR', (4, -1), (5, -1), colors.HexColor('#2C3E50')),
-        ('LINEABOVE', (4, -1), (5, -1), 1.5, colors.HexColor('#2C3E50')),
-        ('BACKGROUND', (4, -1), (5, -1), colors.HexColor('#E8F5E9')),
-        ('TOPPADDING', (4, -1), (5, -1), 8),
-        ('BOTTOMPADDING', (4, -1), (5, -1), 8),
-    ]))
-    
-    elements.append(summary_table)
-    elements.append(Spacer(1, 0.5*inch))
-    
-    # Notes Section
-    if hasattr(sales_order, 'notes') and sales_order.notes:
-        elements.append(Paragraph("Notes:", heading_style))
-        notes_style = ParagraphStyle(
-            'NotesStyle',
-            parent=styles['Normal'],
-            fontSize=9,
-            textColor=colors.HexColor('#555555'),
-            leftIndent=20,
-            rightIndent=20,
-            borderColor=colors.HexColor('#CCCCCC'),
-            borderWidth=1,
-            borderPadding=10,
-            backColor=colors.HexColor('#F8F9FA')
-        )
-        elements.append(Paragraph(sales_order.notes, notes_style))
-        elements.append(Spacer(1, 0.3*inch))
-    
-    # Terms and Conditions
-    terms_heading = Paragraph("System Generated - Terms & Conditions", heading_style)
-    elements.append(terms_heading)
-    
-    terms_style = ParagraphStyle(
-        'TermsStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=colors.HexColor('#666666'),
-        leftIndent=20
-    )
-    
-    terms = [
-        "1. This document is automatically generated as per prior sales agreement and does not require a physical signature.",
-        "2. All disputes are subject to local jurisdiction only.",
-        "3. Payment due as per customer account terms or prior agreement.",
-    ]
-    
-    for term in terms:
-        elements.append(Paragraph(term, terms_style))
-    
-    elements.append(Spacer(1, 0.5*inch))
-    
-    # Finalize PDF
-    doc.build(elements)
-
-def generate_alabama_pdf(buffer, sales_order):
-    # 1. Get Items
-    order_items = sales_order.items.all()
-    
-    # 2. Define Alabama Specific Settings (Red Theme)
-    # Using the specific logo URL provided
-    current_logo_url = "https://alabamauae.com/alabama4.png"
-    local_logo_path = os.path.join(settings.BASE_DIR, 'static/images/alabama-logo.png')
-    header_text = "CUSTOMER ORDER FORM"
-    
-    # Theme Colors
-    THEME_RED = colors.HexColor("#211F1F")  # Dark Red for headers
-    THEME_TEXT = colors.HexColor('#000000') # Black for standard text
-
-    # 3. Create the PDF document
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=0.5*inch,
-        leftMargin=0.5*inch,
-        topMargin=0.75*inch,
-        bottomMargin=0.75*inch
-    )
-    
-    # Container for the 'Flowable' objects
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    
-    # Custom styles - RED THEME
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Title'],
-        fontSize=24,
-        textColor=THEME_RED,
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=THEME_RED,
-        spaceAfter=12
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=THEME_TEXT,
-        spaceAfter=6
-    )
-    
-    label_style = ParagraphStyle(
-        'LabelStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#333333'),
-        fontName='Helvetica-Bold'
-    )
-    
-    # Try to load logo
-    try:
-        response_img = requests.get(current_logo_url, timeout=5)
-        if response_img.status_code == 200:
-            logo = Image(BytesIO(response_img.content), width=150, height=50)
-            logo.hAlign = 'CENTER'
-            elements.append(logo)
-            elements.append(Spacer(1, 0.3*inch))
-    except Exception:
-        # Fallback: load from local static file
-        try:
-            if os.path.exists(local_logo_path):
-                logo = Image(local_logo_path, width=150, height=50)
-                logo.hAlign = 'CENTER'
-                elements.append(logo)
-                elements.append(Spacer(1, 0.3 * inch))
-        except Exception:
-            pass 
-    
-    # Add title
-    elements.append(Paragraph(header_text, title_style))
-    
-    # Order Information Section
-    order_data = [
-        ['ORDER INFORMATION', ''],
-        ['Order Number:', f'{sales_order.order_number}'],
-        ['Order Date:', sales_order.order_date.strftime('%d-%m-%Y')],
-        ['Location:', getattr(sales_order, 'location', 'Not Specified')],
-    ]
-    
-    order_table = Table(order_data, colWidths=[2.5*inch, 4*inch])
-    order_table.setStyle(TableStyle([
-        # Header row - RED Background
-        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
-        ('SPAN', (0, 0), (-1, 0)),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#333333')),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]), # Slight Red Tint
-    ]))
-    elements.append(order_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Customer Information Section
-    customer_data = [
-        ['CUSTOMER INFORMATION', ''],
-        ['Customer Name:', sales_order.customer.customer_name],
-    ]
-    
-    # Add salesman info if available
-    if sales_order.salesman:
-        customer_data.append(['Salesman:', sales_order.salesman.salesman_name])
-    
-    customer_table = Table(customer_data, colWidths=[2.5*inch, 4*inch])
-    customer_table.setStyle(TableStyle([
-        # Header row - RED Background
-        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
-        ('SPAN', (0, 0), (-1, 0)),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#333333')),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]), # Slight Red Tint
-    ]))
-    elements.append(customer_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Items Table
-    items_data = [
-        ['S.No', 'Item Code', 'Description', 'Qty', 'Unit Price', 'Total']
-    ]
-    
-    subtotal = 0.00
-    for idx, item in enumerate(order_items, 1):
-        line_total = item.quantity * item.price
-        subtotal += line_total
-        
-        items_data.append([
-            str(idx),
-            item.item.item_code,
-            Paragraph(item.item.item_description[:50] + '...' if len(item.item.item_description) > 50 else item.item.item_description, normal_style),
-            f"{str(item.quantity)} {item.unit}",
-            f"{item.price:,.2f} ",
-            f"{line_total:,.2f} "
-        ])
-    
-    # Create items table
-    items_table = Table(
-        items_data,
-        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
-    )
-    
-    items_table.setStyle(TableStyle([
-        # Header row - RED Background
-        ('BACKGROUND', (0, 0), (-1, 0), THEME_RED),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        
-        # Data rows
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # S.No
-        ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Item Code
-        ('ALIGN', (2, 1), (2, -1), 'LEFT'),    # Description
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Qty
-        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),   # Unit Price
-        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),   # Total
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        
-        # Alternate row colors - White and Very Pale Red
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')]),
-    ]))
-    
-    elements.append(items_table)
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Summary Section
-    summary_data = []
-    
-    # Subtotal
-    summary_data.append(['', '', '', '', 'Subtotal:', f"{subtotal:,.2f} AED"])
-    
-    # Tax if applicable
-    tax_amount = 0.00
-    if hasattr(sales_order, 'tax') and sales_order.tax:
-        tax_amount = sales_order.tax
-        summary_data.append(['', '', '', '', f'VAT (5%):', f"{tax_amount:,.2f} AED"])
-    
-    # Discount if applicable
-    if hasattr(sales_order, 'discount_amount') and sales_order.discount_amount:
-        summary_data.append(['', '', '', '', 'Discount:', f"-{sales_order.discount_amount:,.2f} AED"])
-    
-    # Total
-    total_amount = sales_order.total_amount
-    grand_total = round(total_amount + tax_amount, 2)
-    summary_data.append(['', '', '', '', 'Total Amount:      ', f"{grand_total:,.2f} AED"])
-    
-    summary_table = Table(
-        summary_data,
-        colWidths=[0.5*inch, 1*inch, 2.5*inch, 0.7*inch, 1*inch, 1*inch]
-    )
-    
-    summary_table.setStyle(TableStyle([
-        ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
-        ('ALIGN', (5, 0), (5, -1), 'RIGHT'),
-        ('FONTNAME', (4, 0), (5, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (4, 0), (5, -1), 10),
-        
-        # Total row styling - Red Line Above
-        ('FONTNAME', (4, -1), (5, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (4, -1), (5, -1), 12),
-        ('TEXTCOLOR', (4, -1), (5, -1), THEME_RED),
-        ('LINEABOVE', (4, -1), (5, -1), 1.5, THEME_RED),
-        ('BACKGROUND', (4, -1), (5, -1), colors.HexColor('#FFF0F0')),
-        ('TOPPADDING', (4, -1), (5, -1), 8),
-        ('BOTTOMPADDING', (4, -1), (5, -1), 8),
-    ]))
-    
-    elements.append(summary_table)
-    elements.append(Spacer(1, 0.5*inch))
-    
-    # Notes Section
-    if hasattr(sales_order, 'notes') and sales_order.notes:
-        elements.append(Paragraph("Notes:", heading_style))
-        notes_style = ParagraphStyle(
-            'NotesStyle',
-            parent=styles['Normal'],
-            fontSize=9,
-            textColor=colors.HexColor('#555555'),
-            leftIndent=20,
-            rightIndent=20,
-            borderColor=colors.HexColor('#CCCCCC'),
-            borderWidth=1,
-            borderPadding=10,
-            backColor=colors.HexColor('#FFF9F9')
-        )
-        elements.append(Paragraph(sales_order.notes, notes_style))
-        elements.append(Spacer(1, 0.3*inch))
-    
-    # Terms and Conditions
-    terms_heading = Paragraph("System Generated - Terms & Conditions", heading_style)
-    elements.append(terms_heading)
-    
-    terms_style = ParagraphStyle(
-        'TermsStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=colors.HexColor('#666666'),
-        leftIndent=20
-    )
-    
-    terms = [
-        "1. This document is automatically generated by Alabama Systems.",
-        "2. All disputes are subject to local jurisdiction only.",
-        "3. Payment due as per customer account terms or prior agreement.",
-    ]
-    
-    for term in terms:
-        elements.append(Paragraph(term, terms_style))
-    
-    elements.append(Spacer(1, 0.5*inch))
-    
-    # Finalize PDF
-    doc.build(elements)
 
 
 
