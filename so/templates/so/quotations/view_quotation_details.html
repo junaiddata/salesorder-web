@@ -622,6 +622,7 @@
                             <th>Item Code</th>
                             <th>Item Description</th>
                             <th style="width: 120px; text-align: right;">Quantity</th>
+                            <th style="width: 110px; text-align: right;">DIP Stock</th>
                             <th style="width: 150px; text-align: right;">Unit Price</th>
                             {% if user.role.role == "Admin" %}
                             <th style="width: 150px; text-align: right;">Cost Price</th>
@@ -637,6 +638,9 @@
                             <td data-label="Item Code">{{ item.item.item_code }}</td>
                             <td data-label="Item Description">{{ item.item.item_description }}</td>
                             <td style="text-align: right;" data-label="Quantity">{{ item.quantity }} {{item.unit}}</td>
+                            <td style="text-align: right;" data-label="Current Stock">
+                                {% if item.item.total_available_stock is not None %}{{ item.item.total_available_stock|floatformat:0 }}{% else %}{{ item.item.item_stock|default:"—" }}{% endif %}
+                            </td>
                             <td 
                                 {% if item.is_undercost %}
                                     style="text-align: right; color: red; font-weight: bold;"
@@ -654,7 +658,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if user.role.role == 'Admin' %}8{% else %}6{% endif %}">
+                            <td colspan="{% if user.role.role == 'Admin' %}9{% else %}7{% endif %}">
                                 <div class="empty-state">
                                     <i class="fas fa-inbox"></i>
                                     <p>No items in this quotation</p>
@@ -664,14 +668,10 @@
                         {% endfor %}
                         {% if quotation_items %}
                         <tr class="table-total-row">
-                            <td colspan="{% if user.role.role == 'Admin' %}6{% else %}4{% endif %}" style="text-align: right;">Quotation Total:</td>
+                            <td colspan="{% if user.role.role == 'Admin' %}8{% else %}6{% endif %}" style="text-align: right;">Quotation Total:</td>
                             <td style="text-align: right; color: var(--sap-blue);">
                                 AED {{ quotation.total_amount|floatformat:2 }}
                             </td>
-                            {% if user.role.role == "Admin" %}
-                            <td colspan="2"></td>
-                            {% endif %}
-                            <td></td>
                         </tr>
                         {% endif %}
                     </tbody>
