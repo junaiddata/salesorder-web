@@ -622,8 +622,9 @@
                             <th>Item Code</th>
                             <th>Item Description</th>
                             <th style="width: 120px; text-align: right;">Quantity</th>
-                            <th style="width: 100px; text-align: right;">Total Stock</th>
                             <th style="width: 90px; text-align: right;">DIP Stock</th>
+                            <th style="width: 100px; text-align: right;">Total Stock</th>
+                            
                             <th style="width: 150px; text-align: right;">Unit Price</th>
                             {% if user.role.role == "Admin" %}
                             <th style="width: 150px; text-align: right;">Cost Price</th>
@@ -639,12 +640,13 @@
                             <td data-label="Item Code">{{ item.item.item_code }}</td>
                             <td data-label="Item Description">{{ item.item.item_description }}</td>
                             <td style="text-align: right;" data-label="Quantity">{{ item.quantity }} {{item.unit}}</td>
-                            <td style="text-align: right;" data-label="Total Stock">
-                                {% if item.item.total_available_stock is not None %}{{ item.item.total_available_stock|floatformat:0 }}{% else %}{{ item.item.item_stock|default:"—" }}{% endif %}
-                            </td>
                             <td style="text-align: right;" data-label="DIP Stock">
                                 {% if item.item.dip_warehouse_stock is not None %}{{ item.item.dip_warehouse_stock|floatformat:0 }}{% else %}—{% endif %}
                             </td>
+                            <td style="text-align: right;" data-label="Total Stock">
+                                {% if item.item.total_available_stock is not None %}{{ item.item.total_available_stock|floatformat:0 }}{% else %}{{ item.item.item_stock|default:"—" }}{% endif %}
+                            </td>
+
                             <td 
                                 {% if item.is_undercost %}
                                     style="text-align: right; color: red; font-weight: bold;"
