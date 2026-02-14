@@ -1,0 +1,26 @@
+{% for item in page_obj %}
+<tr>
+  <td class="col-narrow">
+    <a class="po-link" href="{% url 'purchaseorder_detail' item.purchaseorder.po_number %}">{{ item.purchaseorder.po_number }}</a>
+  </td>
+  <td class="col-narrow"><span class="badge badge-open">O</span></td>
+  <td class="col-date">{{ item.purchaseorder.posting_date|date:"d.m.y"|default:"-" }}</td>
+  <td class="col-narrow">{{ item.purchaseorder.supplier_code|default:"—" }}</td>
+  <td class="col-customer">{{ item.purchaseorder.supplier_name }}</td>
+  <td class="col-narrow">{{ item.item_no|default:"—" }}</td>
+  <td>{{ item.description|truncatechars:30 }}</td>
+  <td class="num">{{ item.quantity|default_if_none:"0"|floatformat:0 }}</td>
+  {% if show_price %}
+  <td class="num">{{ item.price|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ item.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ item.row_total|default_if_none:"0"|floatformat:2 }}</td>
+  {% endif %}
+</tr>
+{% empty %}
+<tr>
+  <td colspan="{% if show_price %}11{% else %}8{% endif %}" class="empty-state">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 6px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    No open purchase order items found
+  </td>
+</tr>
+{% endfor %}

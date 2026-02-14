@@ -453,6 +453,64 @@ class SAPSalesorderItem(models.Model):
         return f"{self.salesorder.so_number} - {self.description}"
 
 
+# SAP Purchase Order models
+class SAPPurchaseOrder(models.Model):
+    po_number = models.CharField(max_length=100, unique=True)  # Document Number
+    internal_number = models.CharField(max_length=100, blank=True, null=True)
+    posting_date = models.DateField(blank=True, null=True)
+    supplier_code = models.CharField(max_length=100, blank=True, null=True)
+    supplier_name = models.CharField(max_length=255)
+    supplier_address = models.TextField(blank=True, null=True)
+    supplier_phone = models.CharField(max_length=50, blank=True, null=True)
+    vat_number = models.CharField(max_length=100, blank=True, null=True)
+    bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
+    salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="Purchaser/salesman name")
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    row_total_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    vat_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    total_discount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    status = models.CharField(max_length=50, blank=True, null=True)
+    closing_remarks = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.po_number} - {self.supplier_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["posting_date"]),
+            models.Index(fields=["supplier_name"]),
+            models.Index(fields=["status"]),
+        ]
+
+
+class SAPPurchaseOrderItem(models.Model):
+    purchaseorder = models.ForeignKey(SAPPurchaseOrder, related_name='items', on_delete=models.CASCADE)
+    line_no = models.IntegerField(default=1, help_text="Line number within the purchase order (1-based)")
+    item_no = models.CharField(max_length=100, blank=True, null=True)
+    description = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    row_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    row_status = models.CharField(max_length=50, blank=True, null=True)
+    job_type = models.CharField(max_length=255, blank=True, null=True)
+    manufacture = models.CharField(max_length=255, blank=True, null=True)
+    remaining_open_quantity = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    pending_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['purchaseorder', 'line_no']),
+            models.Index(fields=['item_no']),
+            models.Index(fields=['row_status']),
+        ]
+
+    def __str__(self):
+        return f"{self.purchaseorder.po_number} - {self.description}"
+
+
 # SAP Proforma Invoice (PI) Models
 def cheque_upload_path(instance, filename):
     """Generate upload path for cheque attachments: cheques/PI_NUMBER/filename"""

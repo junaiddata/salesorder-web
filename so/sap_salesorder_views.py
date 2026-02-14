@@ -6371,16 +6371,6 @@ def export_arinvoice_list_excel(request):
             cell.font = header_font
             cell.alignment = Alignment(horizontal="center", vertical="center")
         
-        # Format number columns (currency)
-        currency_columns = ['Doc Total (with VAT)', 'Total (without VAT)', 'VAT Amount']
-        if request.user.is_superuser or request.user.is_staff:
-            currency_columns.append('Total GP')
-        for col_idx, col_name in enumerate(df.columns, 1):
-            if col_name in currency_columns:
-                for row_idx in range(2, len(df) + 2):
-                    cell = worksheet.cell(row=row_idx, column=col_idx)
-                    cell.number_format = '#,##0.00'
-        
         # Auto-adjust column widths
         for column in worksheet.columns:
             max_length = 0
@@ -6743,7 +6733,7 @@ def export_combined_sales_invoices_excel(request):
     data = []
     
     # Check if user is admin
-    is_admin = request.user.is_superuser or request.user.is_staff or request.user.role.role == 'Admin'
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin')
     
     # Add invoices
     for inv in invoice_qs:

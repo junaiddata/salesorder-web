@@ -824,6 +824,27 @@
                     <span class="live-badge-small">LIVE</span>
                 </a>
             </li>
+            <li class="has-submenu">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-shopping-cart"></i>
+                    Open Purchase Orders
+                    <span class="live-badge-small">LIVE</span>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{% url 'purchaseorder_list' %}">
+                            <i class="fas fa-warehouse"></i>
+                            Local
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://purchase.junaidworld.com/consolidated/" target="_blank" rel="noopener noreferrer">
+                            <i class="fas fa-ship"></i>
+                            Import
+                        </a>
+                    </li>
+                </ul>
+            </li>
             <li>
                 <a href="{% url 'pi_list' %}">
                     <i class="fas fa-file-invoice"></i>
@@ -888,12 +909,6 @@
                     Open SO
                 </a>
             </li> -->
-                        <li>
-                <a href="https://purchase.junaidworld.com/">
-                    <i class="fas fa-list-alt"></i>
-                    Purchase View
-                </a>
-            </li>
             <li>
                 <a href="{% url 'upload_items' %}">
                     <i class="fas fa-chart-bar"></i>

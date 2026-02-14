@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Open Purchase Orders (Item Level)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --bg-pattern: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #fafbfc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #2C5530;
+      --primary-dark: #1e3d21;
+      --primary-light: #e8f5e9;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .header-left h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .header-left p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 2px; }
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; transition: all var(--transition); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); border-color: var(--text-muted); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .filters-card { margin-bottom: 16px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; padding: 16px 18px; }
+    @media (min-width: 900px) {
+      .filters-grid { grid-template-columns: 2fr 1.5fr 1.2fr 1fr 1fr 1fr 1fr 1fr auto; }
+    }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .input, .select { width: 100%; padding: 9px 11px; font-size: 0.875rem; font-family: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44, 85, 48, 0.12); }
+    .stats-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); }
+    .stat-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 0.813rem; }
+    .stat-label { color: var(--text-secondary); }
+    .stat-value { font-weight: 700; color: var(--text); }
+    .stat-value.highlight { color: var(--success); }
+    .multi-select { position: relative; }
+    .select-box { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 11px; font-size: 0.875rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+    .select-box::after { content: '▾'; font-size: 0.75rem; color: var(--text-muted); }
+    .options-container { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow-md); z-index: 100; }
+    .options-container.active { display: block; }
+    .option-label { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 0.875rem; }
+    .option-label input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); }
+    .table-card { overflow: hidden; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+    thead th { padding: 6px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    tbody td { padding: 6px 10px; font-size: 0.8rem; line-height: 1.35; border-bottom: 1px solid var(--border-light); color: var(--text); }
+    tbody tr:hover { background: var(--surface-hover); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .col-date { white-space: nowrap; min-width: 4.5rem; }
+    .col-customer { white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+    .col-narrow { width: 1%; padding-left: 4px !important; padding-right: 4px !important; white-space: nowrap; }
+    .po-link { color: var(--primary); font-weight: 600; text-decoration: none; }
+    .po-link:hover { text-decoration: underline; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 6px; font-size: 0.688rem; font-weight: 600; border-radius: 4px; }
+    .badge-open { background: var(--success-light); color: var(--success); }
+    .table-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); }
+    .pagination { display: flex; gap: 4px; }
+    .pagination a, .pagination span { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 8px; font-size: 0.813rem; font-weight: 500; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; }
+    .pagination a:hover { border-color: var(--primary); color: var(--primary); }
+    .total-count { font-size: 0.813rem; color: var(--text-secondary); }
+    .total-count strong { color: var(--text); }
+    .empty-state { text-align: center; padding: 28px 20px; font-size: 0.813rem; color: var(--text-secondary); }
+    .empty-state svg { width: 32px; height: 32px; margin-bottom: 6px; opacity: 0.4; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-left">
+        <h1>Open Purchase Orders (Item Level)</h1>
+        <p>Open PO line items with Doc No, Supplier, Item, Qty{% if show_price %}, Price, Pending{% endif %}</p>
+      </div>
+      <div class="header-actions">
+        {% if show_price %}
+        <label class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;cursor:default;margin-right:4px;">
+          <input type="checkbox" id="export-show-price" {% if request.GET.show_price %}checked{% endif %}>
+          Include prices in export
+        </label>
+        {% endif %}
+        <a class="btn btn-primary" href="#" id="btn-export-excel" data-export="excel">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Export Excel
+        </a>
+        <a class="btn btn-primary" href="#" id="btn-export-pdf" data-export="pdf" style="background: #dc3545; border-color: #dc3545;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Export PDF
+        </a>
+        <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+      </div>
+    </header>
+
+    <div class="card filters-card">
+      <form id="filters" class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="PO No, Supplier, Item, LPO...">
+        </div>
+        <div class="field">
+          <label>Item No / Desc</label>
+          <input class="input" type="text" name="item" value="{{ filters.item }}" placeholder="Item code or description">
+        </div>
+        <div class="field">
+          <label>Firm</label>
+          <div class="multi-select" id="firm-wrapper">
+            <div class="select-box" id="firm-trigger">
+              <span id="firm-text">All Firms</span>
+            </div>
+            <div class="options-container" id="firm-options">
+              {% for firm in firms %}
+                <label class="option-label">
+                  <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm_filter %}checked{% endif %}>
+                  {{ firm }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Purchaser</label>
+          <div class="multi-select" id="purchaser-wrapper">
+            <div class="select-box" id="purchaser-trigger">
+              <span id="purchaser-text">All Purchasers</span>
+            </div>
+            <div class="options-container" id="purchaser-options">
+              {% for p in purchasers %}
+                <label class="option-label">
+                  <input type="checkbox" name="purchaser" value="{{ p }}" {% if p in filters.purchaser_filter %}checked{% endif %}>
+                  {{ p|truncatechars:25 }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Start</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+        <div class="field">
+          <label>Amt Range</label>
+          <select class="select" name="total">
+            <option value="">All</option>
+            <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0-5K</option>
+            <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5K-10K</option>
+            <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10K-25K</option>
+            <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25K-50K</option>
+            <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50K-100K</option>
+            <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100K+</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}" style="width:70px;">
+        </div>
+        <div class="field" style="align-self:end;">
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+
+      {% if show_price %}
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">Pending Total:</span>
+          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">2025:</span>
+          <span class="stat-value">{{ total_2025|default:0|floatformat:2 }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">2026:</span>
+          <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2 }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-narrow">Doc No</th>
+              <th class="col-narrow">St</th>
+              <th class="col-date">Date</th>
+              <th class="col-narrow">Supplier Code</th>
+              <th class="col-customer">Supplier Name</th>
+              <th class="col-narrow">Item No</th>
+              <th>Description</th>
+              <th style="text-align:right">Qty</th>
+              {% if show_price %}
+              <th style="text-align:right">Price</th>
+              <th style="text-align:right">Pending</th>
+              <th style="text-align:right">Row Total</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody id="purchaseorders-body">
+            {% include 'purchaseorders/_purchaseorder_rows.html' with page_obj=page_obj show_price=show_price %}
+          </tbody>
+        </table>
+      </div>
+
+      <div id="pagination" class="table-footer">
+        {% include 'purchaseorders/_pagination.html' with page_obj=page_obj %}
+        {% if total_count is not None %}
+          <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> items</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+<script>
+  (function() {
+    const form = document.getElementById('filters');
+    const body = document.getElementById('purchaseorders-body');
+    const pagination = document.getElementById('pagination');
+
+    function debounce(fn, delay) {
+      let timer = null;
+      return function() { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, arguments), delay); };
+    }
+
+    function collectParams(overrides={}) {
+      const data = new FormData(form);
+      const params = new URLSearchParams();
+      for (const [key, value] of data.entries()) params.append(key, value);
+      for (const k in overrides) {
+        if (k === 'page') params.delete('page');
+        params.append(k, overrides[k]);
+      }
+      return params;
+    }
+
+    function load(params) {
+      fetch('{% url "purchaseorder_search" %}?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(data => {
+          body.innerHTML = data.rows_html;
+          pagination.innerHTML = data.pagination_html +
+            `<div class="total-count">Showing <strong>${Math.min(data.count, 200)}</strong> of <strong>${data.count}</strong> items</div>`;
+          const totalSpan = document.getElementById('total-value');
+          if (totalSpan && data.total_value !== undefined) {
+            totalSpan.textContent = Number(data.total_value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          }
+        })
+        .catch(console.error);
+    }
+
+    form.addEventListener('submit', function(e) { e.preventDefault(); load(collectParams({ page: 1 })); });
+    form.querySelector('input[name="q"]').addEventListener('input', debounce(function() {
+      if (form.querySelector('input[name="q"]').value.length === 0 || form.querySelector('input[name="q"]').value.length >= 2) {
+        load(collectParams({ page: 1 }));
+      }
+    }, 300));
+    form.querySelector('input[name="item"]').addEventListener('input', debounce(function() {
+      load(collectParams({ page: 1 }));
+    }, 300));
+    form.querySelectorAll('select, input[type="date"], input[name="page_size"]').forEach(el => {
+      el.addEventListener('change', () => load(collectParams({ page: 1 })));
+    });
+    pagination.addEventListener('click', function(e) {
+      const a = e.target.closest('a[data-page]');
+      if (!a) return;
+      e.preventDefault();
+      load(collectParams({ page: a.getAttribute('data-page') }));
+    });
+  })();
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const excelBtn = document.getElementById('btn-export-excel');
+    const pdfBtn = document.getElementById('btn-export-pdf');
+    const showPriceCheck = document.getElementById('export-show-price');
+    function getExportUrl(type) {
+      const formData = new FormData(document.getElementById('filters'));
+      const params = new URLSearchParams(formData);
+      if (showPriceCheck && showPriceCheck.checked) params.set('show_price', '1');
+      const base = type === 'excel' ? '{% url "export_purchaseorder_list_excel" %}' : '{% url "export_purchaseorder_list_pdf" %}';
+      return base + '?' + params.toString();
+    }
+    if (excelBtn) excelBtn.addEventListener('click', function(e) { e.preventDefault(); window.location.href = getExportUrl('excel'); });
+    if (pdfBtn) pdfBtn.addEventListener('click', function(e) { e.preventDefault(); window.location.href = getExportUrl('pdf'); });
+  });
+
+
+  function initMultiSelect(id, defaultText) {
+    const wrapper = document.getElementById(id + '-wrapper');
+    if (!wrapper) return;
+    const trigger = document.getElementById(id + '-trigger');
+    const options = document.getElementById(id + '-options');
+    const textSpan = document.getElementById(id + '-text');
+    if (!trigger || !options || !textSpan) return;
+
+    trigger.addEventListener('click', e => { e.stopPropagation(); options.classList.toggle('active'); });
+    options.addEventListener('click', e => e.stopPropagation());
+
+    function updateLabel() {
+      const checked = Array.from(options.querySelectorAll('input[type="checkbox"]')).filter(c => c.checked);
+      if (checked.length === 0) { textSpan.textContent = defaultText; textSpan.style.opacity = "0.6"; }
+      else if (checked.length === 1) { textSpan.textContent = String(checked[0].value).slice(0, 28); textSpan.style.opacity = "1"; }
+      else { textSpan.textContent = checked.length + " Selected"; textSpan.style.opacity = "1"; }
+    }
+    updateLabel();
+    options.querySelectorAll('input[type="checkbox"]').forEach(box => {
+      box.addEventListener('change', function() {
+        updateLabel();
+        document.getElementById('filters').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      });
+    });
+    document.addEventListener('click', e => { if (!wrapper.contains(e.target)) options.classList.remove('active'); });
+  }
+  document.addEventListener("DOMContentLoaded", function() {
+    initMultiSelect('firm', 'All Firms');
+    initMultiSelect('purchaser', 'All Purchasers');
+  });
+</script>
+</body>
+</html>

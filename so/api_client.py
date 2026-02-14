@@ -558,7 +558,164 @@ class SAPAPIClient:
             'status': status,
             'items': items,
         }
-    
+
+    # ----- Purchase Order API (same structure as Sales Order, different base URL) -----
+    def _get_po_base_url(self) -> str:
+        return getattr(settings, 'SAP_PURCHASE_ORDER_API_URL', 'http://192.168.1.103/IntegrationApi/api/PurchaseOrder')
+
+    def fetch_open_purchaseorders(self) -> List[Dict]:
+        """
+        Fetch all currently open purchase orders (with pagination).
+        """
+        payload = {"DocumentStatus": "bost_Open"}
+        base_url = self._get_po_base_url()
+        logger.info("Fetching open purchase orders from API (with pagination)...")
+        all_orders = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_orders)} open purchase orders (all pages)")
+        return all_orders
+
+    def fetch_purchaseorders_by_date(self, single_date: str) -> List[Dict]:
+        """
+        Fetch purchase orders for a specific date (with pagination).
+        Uses FromDate/ToDate with same date for single day.
+        """
+        payload = {"FromDate": single_date, "ToDate": single_date}
+        base_url = self._get_po_base_url()
+        logger.info(f"Fetching purchase orders for date: {single_date} (with pagination)...")
+        all_orders = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_orders)} purchase orders for {single_date} (all pages)")
+        return all_orders
+
+    def fetch_purchaseorders_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
+        """
+        Fetch purchase orders for a date range (with pagination).
+        """
+        payload = {"FromDate": from_date, "ToDate": to_date}
+        base_url = self._get_po_base_url()
+        logger.info(f"Fetching purchase orders for date range: {from_date} to {to_date} (with pagination)...")
+        all_orders = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_orders)} purchase orders for {from_date} to {to_date} (all pages)")
+        return all_orders
+
+    def fetch_purchaseorders_by_docnum(self, docnum: int) -> List[Dict]:
+        """
+        Fetch purchase order by document number (with pagination).
+        """
+        payload = {"DocNum": docnum}
+        base_url = self._get_po_base_url()
+        logger.info(f"Fetching purchase order by DocNum: {docnum} (with pagination)...")
+        all_orders = self._fetch_all_pages_with_url(payload, base_url)
+        logger.info(f"Fetched {len(all_orders)} purchase orders for DocNum {docnum} (all pages)")
+        return all_orders
+
+    def _map_purchaseorder_api_response(self, api_order: Dict) -> Dict:
+        """
+        Map Purchase Order API response to Django model format (SAPPurchaseOrder / SAPPurchaseOrderItem).
+        """
+        docnum = str(api_order.get('DocNum', ''))
+        doc_entry = str(api_order.get('DocEntry', '')) if api_order.get('DocEntry') else None
+
+        doc_date_str = api_order.get('DocDate', '')
+        posting_date = None
+        if doc_date_str:
+            try:
+                posting_date = datetime.strptime(doc_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                try:
+                    posting_date = datetime.strptime(doc_date_str, '%Y/%m/%d').date()
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse date: {doc_date_str}")
+
+        bp = api_order.get('BusinessPartner', {})
+        supplier_code = bp.get('CardCode', '') or api_order.get('CardCode', '')
+        supplier_name = bp.get('CardName', '') or api_order.get('CardName', '')
+        vat_number = str(bp.get('FederalTaxID', '')).strip() if bp.get('FederalTaxID') else ''
+        supplier_phone = str(bp.get('Phone1', '')).strip() if bp.get('Phone1') else ''
+        supplier_address = str(api_order.get('Address', '')).strip() if api_order.get('Address') else ''
+        closing_remarks = str(api_order.get('ClosingRemarks', '')).strip() if api_order.get('ClosingRemarks') else ''
+        if closing_remarks:
+            closing_remarks = closing_remarks.replace('\r', '\n')
+
+        sales_person = api_order.get('SalesPerson', {})
+        salesman_name = sales_person.get('SalesEmployeeName', '') or api_order.get('SalesPersonCode', '')
+
+        # LPO reference from NumAtCard only (e.g. "V2092666/5275-6/6320/1311"); if not present use "Not mentioned"
+        num_at_card = api_order.get('NumAtCard')
+        bp_reference = str(num_at_card).strip() if num_at_card else 'Not mentioned'
+        doc_total = api_order.get('DocTotal', 0) or 0
+        vat_sum = api_order.get('VatSum', 0) or 0
+        total_discount = api_order.get('TotalDiscount', 0) or 0
+
+        discount_percent_raw = api_order.get('DiscountPercent', 0) or 0
+        try:
+            discount_percent_exact = float(discount_percent_raw)
+        except (ValueError, TypeError):
+            discount_percent_exact = 0.0
+
+        doc_status = api_order.get('DocumentStatus', '')
+        status = "O" if doc_status == "bost_Open" else "C"
+
+        document_lines = api_order.get('DocumentLines', [])
+        items = []
+
+        for idx, line in enumerate(document_lines):
+            item_code = str(line.get('ItemCode', '')) if line.get('ItemCode') else ''
+            line_status = line.get('LineStatus', '')
+            row_status = "O" if line_status == "bost_Open" else "C"
+
+            line_num = line.get('LineNum', idx)
+            if isinstance(line_num, int):
+                line_no = line_num + 1 if line_num >= 0 else idx + 1
+            else:
+                line_no = idx + 1
+
+            remaining_open_qty = line.get('RemainingOpenQuantity', 0) or 0
+            quantity = line.get('Quantity', 0) or 0
+            price = line.get('Price', 0) or 0
+            line_total = line.get('LineTotal', 0) or 0
+            pending_amount = remaining_open_qty * price
+
+            item_data = {
+                'line_no': line_no,
+                'item_no': item_code,
+                'description': line.get('ItemDescription', '') or '',
+                'quantity': quantity,
+                'price': price,
+                'row_total': line_total,
+                'row_status': row_status,
+                'manufacture': '',
+                'job_type': '',
+                'remaining_open_quantity': remaining_open_qty,
+                'pending_amount': pending_amount,
+            }
+            items.append(item_data)
+
+        row_total_sum = sum(item.get('row_total', 0) for item in items)
+        pending_total = sum(item.get('pending_amount', 0) for item in items)
+        if pending_total == 0:
+            pending_total = doc_total
+
+        return {
+            'po_number': docnum,
+            'internal_number': doc_entry,
+            'posting_date': posting_date,
+            'supplier_code': supplier_code or '',
+            'supplier_name': supplier_name or '',
+            'supplier_address': supplier_address,
+            'supplier_phone': supplier_phone,
+            'vat_number': vat_number,
+            'bp_reference_no': bp_reference or '',
+            'salesman_name': salesman_name or '',
+            'discount_percentage': discount_percent_exact,
+            'document_total': pending_total,
+            'row_total_sum': row_total_sum,
+            'vat_sum': vat_sum,
+            'total_discount': total_discount,
+            'status': status,
+            'closing_remarks': closing_remarks,
+            'items': items,
+        }
+
     def fetch_arinvoices_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
         """
         Fetch AR Invoices for a date range (with pagination)

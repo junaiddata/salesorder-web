@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Purchase Order {{ purchaseorder.po_number }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #2C5530;
+      --primary-dark: #1e3d21;
+      --primary-light: #e8f5e9;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 4px; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; transition: all var(--transition); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); border-color: var(--text-muted); }
+    .badge { display: inline-flex; padding: 4px 12px; font-size: 0.813rem; font-weight: 600; border-radius: 20px; }
+    .badge-open { background: var(--success-light); color: var(--success); }
+    .badge-closed { background: var(--surface-alt); color: var(--text-secondary); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); font-weight: 600; font-size: 1rem; }
+    .card-body { padding: 20px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
+    .info-label { font-size: 0.813rem; color: var(--text-muted); font-weight: 500; }
+    .info-value { font-size: 0.938rem; font-weight: 600; }
+    .totals-list { display: grid; gap: 10px; }
+    .totals-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+    .totals-label { font-size: 0.875rem; color: var(--text-secondary); font-weight: 700; }
+    .totals-value { font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .totals-row.grand { background: var(--primary-light); border-color: rgba(44, 85, 48, 0.2); }
+    .totals-row.grand .totals-value { color: var(--primary); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    thead th { padding: 12px 14px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: var(--surface-alt); border-bottom: 1px solid var(--border); text-align: left; }
+    tbody td { padding: 12px 14px; font-size: 0.875rem; border-bottom: 1px solid var(--border-light); }
+    tbody tr:hover { background: var(--surface-alt); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .item-badge { display: inline-flex; padding: 2px 8px; font-size: 0.688rem; font-weight: 600; border-radius: 12px; }
+    .item-badge-open { background: var(--success-light); color: var(--success); }
+    .item-badge-closed { background: var(--surface-alt); color: var(--text-muted); }
+    .footer-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    @media (min-width: 768px) {
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-left">
+        <h1>
+          {{ purchaseorder.po_number }}
+          {% if status_label == 'Open' %}
+            <span class="badge badge-open">Open</span>
+          {% else %}
+            <span class="badge badge-closed">Closed</span>
+          {% endif %}
+        </h1>
+        <p>{{ purchaseorder.supplier_name }}</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'purchaseorder_list' %}">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          Back to List
+        </a>
+        <a class="btn btn-secondary" href="{% url 'export_sap_purchaseorder_open_items_pdf' purchaseorder.po_number %}">
+          Export Open Items PDF
+        </a>
+        <a class="btn btn-primary" href="{% url 'export_sap_purchaseorder_pdf' purchaseorder.po_number %}">
+          Export PDF
+        </a>
+      </div>
+    </header>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">Order Information</div>
+        <div class="card-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Supplier</span>
+              <span class="info-value">{{ purchaseorder.supplier_name }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Supplier Code</span>
+              <span class="info-value">{{ purchaseorder.supplier_code|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Purchaser</span>
+              <span class="info-value">{{ purchaseorder.salesman_name|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Posting Date</span>
+              <span class="info-value">{{ purchaseorder.posting_date|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">BP Reference No</span>
+              <span class="info-value">{{ purchaseorder.bp_reference_no|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Status</span>
+              <span class="info-value">{{ status_label }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if show_price %}
+      <div class="card">
+        <div class="card-header">Order Totals</div>
+        <div class="card-body">
+          <div class="totals-list">
+            <div class="totals-row">
+              <div class="totals-label">Pending Total</div>
+              <div class="totals-value">{{ pending_total|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Subtotal</div>
+              <div class="totals-value">{{ subtotal|floatformat:2 }}</div>
+            </div>
+            {% if discount_percentage != 0 %}
+            <div class="totals-row">
+              <div class="totals-label">Discount ({{ discount_percentage|floatformat:1 }}%)</div>
+              <div class="totals-value">-{{ discount_amount|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Total Before Tax</div>
+              <div class="totals-value">{{ total_before_tax|floatformat:2 }}</div>
+            </div>
+            {% endif %}
+            <div class="totals-row">
+              <div class="totals-label">VAT</div>
+              <div class="totals-value">{{ vat_sum|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row grand">
+              <div class="totals-label">Grand Total</div>
+              <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if purchaseorder.closing_remarks %}
+    <div class="card">
+      <div class="card-header">Closing Remarks</div>
+      <div class="card-body">
+        <p style="white-space: pre-wrap;">{{ purchaseorder.closing_remarks }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header">Line Items ({{ items|length }})</div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Item No</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th class="num">Qty</th>
+                {% if show_price %}
+                <th class="num">Unit Price</th>
+                <th class="num">Row Total</th>
+                {% endif %}
+                <th class="num">Open Qty</th>
+                {% if show_price %}
+                <th class="num">Pending Amt</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in items %}
+              <tr>
+                <td><strong>{{ it.item_no }}</strong></td>
+                <td>{{ it.description }}</td>
+                <td>
+                  {% if it.row_status == 'O' or it.row_status == 'Open' %}
+                    <span class="item-badge item-badge-open">Open</span>
+                  {% else %}
+                    <span class="item-badge item-badge-closed">Closed</span>
+                  {% endif %}
+                </td>
+                <td class="num">{{ it.quantity|floatformat:2 }}</td>
+                {% if show_price %}
+                <td class="num">{{ it.unit_price|floatformat:2 }}</td>
+                <td class="num">{{ it.row_total|floatformat:2 }}</td>
+                {% endif %}
+                <td class="num">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
+                {% if show_price %}
+                <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+                {% endif %}
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="{% if show_price %}8{% else %}5{% endif %}" class="empty-state">No line items found</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <a class="btn btn-secondary" href="{% url 'purchaseorder_list' %}">Back to Purchase Orders</a>
+      <a class="btn btn-primary" href="{% url 'export_sap_purchaseorder_pdf' purchaseorder.po_number %}">Export PDF</a>
+    </div>
+  </div>
+</body>
+</html>
