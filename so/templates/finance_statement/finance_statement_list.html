@@ -55,6 +55,12 @@
       padding: 24px 20px 48px;
     }
 
+    .container.with-detail {
+      max-width: 100%;
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
     /* Header */
     .header {
       display: flex;
@@ -317,6 +323,15 @@
       min-width: 900px;
     }
 
+    table.with-detail {
+      min-width: 1400px;
+    }
+
+    .col-detail {
+      font-size: 0.65rem;
+      min-width: 52px;
+    }
+
     thead {
       background: var(--bg);
       border-bottom: 2px solid var(--border);
@@ -390,6 +405,11 @@
       color: var(--primary);
       font-size: 0.7rem;
       white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .customer-code:hover {
+      text-decoration: underline;
     }
 
     .customer-name {
@@ -597,7 +617,7 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="container {% if show_detail_columns %}with-detail{% endif %}">
     <!-- Header -->
     <header class="header">
       <div class="header-left">
@@ -674,6 +694,13 @@
           </select>
         </div>
 
+        <div class="field" style="display: flex; align-items: center; padding-top: 28px;">
+          <label class="toggle-wrap" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.813rem; color: var(--text-secondary); margin: 0; font-weight: 500;">
+            <input type="checkbox" id="detail-toggle" name="detail" value="1" {% if show_detail_columns %}checked{% endif %}>
+            <span>Show detail columns (6 months + 6+)</span>
+          </label>
+        </div>
+
         <div class="field">
           <button class="btn btn-primary" type="submit" style="width: 100%;">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -707,12 +734,19 @@
     <!-- Table -->
     <div class="card table-card">
       <div class="table-wrap">
-        <table>
+        <table class="{% if show_detail_columns %}with-detail{% endif %}">
           <thead>
             <tr>
               <th class="col-narrow">Code</th>
               <th class="col-customer">Customer Name</th>
               <th>Salesman</th>
+              {% if show_detail_columns %}
+              {% for m in monthly_labels %}
+              <th class="text-right col-detail" title="{{ m.full_label }}">{{ m.label }}</th>
+              {% endfor %}
+              <th class="text-right col-detail">6+</th>
+              <th class="text-right col-detail">6++</th>
+              {% endif %}
               <th class="text-right">Balance</th>
               <th class="text-right">PDC in Hand</th>
               <th class="text-right">Total</th>
@@ -725,7 +759,7 @@
             {% for customer in page_obj %}
             <tr>
               <td class="col-narrow">
-                <span class="customer-code">{{ customer.customer_code }}</span>
+                <a href="{% url 'finance_statement_detail' customer.id %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="customer-code">{{ customer.customer_code }}</a>
               </td>
               <td class="col-customer">
                 <span class="customer-name">{{ customer.customer_name }}</span>
@@ -733,6 +767,16 @@
               <td>
                 <span class="salesman-name">{{ customer.salesman.salesman_name|default:"—" }}</span>
               </td>
+              {% if show_detail_columns %}
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_1|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_2|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_3|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_4|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_5|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.month_pending_6|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.old_months_pending|floatformat:0|intcomma }}</span></td>
+              <td class="text-right col-detail"><span class="amount amount-muted">{{ customer.very_old_months_pending|floatformat:0|intcomma }}</span></td>
+              {% endif %}
               <td class="text-right">
                 <span class="amount">{{ customer.total_outstanding|floatformat:0|intcomma }}</span>
               </td>
@@ -751,12 +795,12 @@
                 <span class="terms-badge">{{ customer.credit_days|default:"—" }}</span>
               </td>
               <td class="text-center col-narrow">
-                <a href="{% url 'finance_statement_detail' customer.id %}" class="btn btn-link">View</a>
+                <a href="{% url 'finance_statement_detail' customer.id %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-link">View</a>
               </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="9">
+              <td colspan="{% if show_detail_columns %}17{% else %}9{% endif %}">
                 <div class="empty-state">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -770,6 +814,16 @@
             {% if page_obj %}
             <tr class="totals-row">
               <td colspan="3"><strong>TOTAL</strong></td>
+              {% if show_detail_columns %}
+              <td class="text-right"><span class="amount">{{ totals.total_month_1|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_month_2|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_month_3|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_month_4|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_month_5|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_month_6|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_old_months|floatformat:0|intcomma }}</span></td>
+              <td class="text-right"><span class="amount">{{ totals.total_very_old_months|floatformat:0|intcomma }}</span></td>
+              {% endif %}
               <td class="text-right"><span class="amount">{{ totals.total_outstanding|floatformat:0|intcomma }}</span></td>
               <td class="text-right"><span class="amount">{{ totals.total_pdc|floatformat:0|intcomma }}</span></td>
               <td class="text-right"><span class="amount">{{ totals.total_with_pdc|floatformat:0|intcomma }}</span></td>
@@ -783,8 +837,8 @@
       <div class="table-footer">
         <div class="pagination">
           {% if page_obj.has_previous %}
-            <a href="?page=1{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="First Page">&laquo;</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Prev</a>
+            <a href="?page=1{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.detail %}&detail=1{% endif %}" title="First Page">&laquo;</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.detail %}&detail=1{% endif %}">Prev</a>
           {% else %}
             <span class="disabled">&laquo;</span>
             <span class="disabled">Prev</span>
@@ -793,8 +847,8 @@
           <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
 
             {% if page_obj.has_next %}
-              <a href="?page={{ page_obj.next_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}">Next</a>
-              <a href="?page={{ page_obj.paginator.num_pages }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}" title="Last Page">&raquo;</a>
+              <a href="?page={{ page_obj.next_page_number }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.detail %}&detail=1{% endif %}">Next</a>
+              <a href="?page={{ page_obj.paginator.num_pages }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% for sid in filters.salesmen_filter %}&salesman={{ sid }}{% endfor %}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.detail %}&detail=1{% endif %}" title="Last Page">&raquo;</a>
           {% else %}
             <span class="disabled">Next</span>
             <span class="disabled">&raquo;</span>

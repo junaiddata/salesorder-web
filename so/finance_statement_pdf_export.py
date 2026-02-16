@@ -66,12 +66,94 @@ SP_ROW_PAD_H = 5       # Horizontal cell padding
 SP_HEADER_PAD_V = 5    # Vertical cell padding — header rows
 
 
+"""
+Finance Statement PDF Export - Customer Finance Summary
+Optimized for landscape A4 with full monthly detail columns.
+Uses logo from media/footer-logo.png or footer-logo1.png.
+"""
+import os
+from io import BytesIO
+from decimal import Decimal
+from datetime import datetime, timedelta
+
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Sum, Value, FloatField
+from django.db.models.functions import Coalesce
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+
+from reportlab.lib import colors
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch, mm
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
+    PageBreak, KeepTogether,
+)
+
+from so.models import Customer, Salesman
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# SHARED STYLES — built once, reused everywhere
+# DESIGN CONSTANTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Brand palette
+CLR_PRIMARY      = HexColor('#1B2A4A')
+CLR_PRIMARY_LT   = HexColor('#2C4A7C')
+CLR_ACCENT       = HexColor('#D4912A')
+CLR_ACCENT_LT    = HexColor('#F5E6CC')
+CLR_BG_HEADER    = HexColor('#1B2A4A')
+CLR_BG_TOTAL     = HexColor('#EBF0F7')
+CLR_BG_ZEBRA     = HexColor('#F8F9FB')
+CLR_BG_SECTION   = HexColor('#F3F4F6')
+CLR_BORDER       = HexColor('#D1D5DB')
+CLR_BORDER_HEAVY = HexColor('#9CA3AF')
+CLR_TEXT         = HexColor('#1F2937')
+CLR_TEXT_MUTED   = HexColor('#6B7280')
+CLR_TEXT_FAINT   = HexColor('#9CA3AF')
+CLR_DANGER       = HexColor('#DC2626')
+CLR_SUCCESS      = HexColor('#059669')
+CLR_WHITE        = colors.white
+
+# ── Typography — TWO size tiers: normal (simple) and compact (detail) ──
+
+# Simple mode (9 columns — plenty of room)
+FONT_TITLE       = 13
+FONT_SUBTITLE    = 8
+FONT_SECTION     = 8.5
+FONT_BODY        = 7.5
+FONT_BODY_SM     = 7
+FONT_KPI         = 9
+FONT_FOOTER      = 6.5
+
+# Compact mode (17 columns — every point matters)
+FONT_C_HEADER    = 5.5      # Table header text
+FONT_C_BODY      = 5.5      # Table body text
+FONT_C_BODY_BOLD = 5.5      # Bold variant (same size, weight differs)
+
+# Spacing
+SP_SECTION       = 10
+SP_AFTER_HEADER  = 4
+SP_ROW_PAD_V     = 3.5      # Normal mode vertical padding
+SP_ROW_PAD_H     = 5        # Normal mode horizontal padding
+SP_HEADER_PAD_V  = 5
+
+# Compact mode padding (detail view)
+SP_C_PAD_V       = 2        # Tight vertical cell padding
+SP_C_PAD_H       = 2.5      # Tight horizontal cell padding
+SP_C_HDR_PAD_V   = 3.5      # Header row vertical padding
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STYLE BUILDERS — two tiers
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_styles():
-    """Return a dict of ParagraphStyles for consistent typography."""
+    """Return a dict of ParagraphStyles for page-level elements and simple-mode table."""
     base = getSampleStyleSheet()['Normal']
     return {
         'title': ParagraphStyle(
@@ -94,13 +176,14 @@ def _build_styles():
             fontName='Helvetica', fontSize=FONT_BODY_SM,
             textColor=CLR_TEXT_MUTED, leading=FONT_BODY_SM + 3,
         ),
+        # ── Simple-mode table styles ──
         'cell': ParagraphStyle(
             'PDFCell', parent=base,
             fontName='Helvetica', fontSize=FONT_BODY,
             textColor=CLR_TEXT, leading=FONT_BODY + 3,
         ),
         'cell_r': ParagraphStyle(
-            'PDFCellRight', parent=base,
+            'PDFCellR', parent=base,
             fontName='Helvetica', fontSize=FONT_BODY,
             textColor=CLR_TEXT, leading=FONT_BODY + 3,
             alignment=TA_RIGHT,
@@ -117,16 +200,17 @@ def _build_styles():
             alignment=TA_RIGHT,
         ),
         'header_cell': ParagraphStyle(
-            'PDFHeaderCell', parent=base,
-            fontName='Helvetica-Bold', fontSize=FONT_SECTION,
-            textColor=CLR_WHITE, leading=FONT_SECTION + 3,
+            'PDFHdrCell', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=CLR_WHITE, leading=FONT_BODY + 3,
         ),
         'header_cell_r': ParagraphStyle(
-            'PDFHeaderCellR', parent=base,
-            fontName='Helvetica-Bold', fontSize=FONT_SECTION,
-            textColor=CLR_WHITE, leading=FONT_SECTION + 3,
+            'PDFHdrCellR', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=CLR_WHITE, leading=FONT_BODY + 3,
             alignment=TA_RIGHT,
         ),
+        # ── KPI / footer ──
         'kpi_value': ParagraphStyle(
             'PDFKpiValue', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_KPI,
@@ -143,23 +227,88 @@ def _build_styles():
             textColor=CLR_TEXT_MUTED, leading=FONT_FOOTER + 2,
             alignment=TA_CENTER,
         ),
-        'danger_bold': ParagraphStyle(
-            'PDFDangerBold', parent=base,
-            fontName='Helvetica-Bold', fontSize=FONT_BODY,
-            textColor=CLR_DANGER, leading=FONT_BODY + 3,
-            alignment=TA_RIGHT,
-        ),
         'danger_bold_r': ParagraphStyle(
             'PDFDangerBoldR', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_BODY,
             textColor=CLR_DANGER, leading=FONT_BODY + 3,
             alignment=TA_RIGHT,
         ),
-        'danger_bold_lg': ParagraphStyle(
-            'PDFDangerBoldLg', parent=base,
-            fontName='Helvetica-Bold', fontSize=FONT_KPI,
-            textColor=CLR_DANGER, leading=FONT_KPI + 3,
+    }
+
+
+def _build_compact_styles():
+    """
+    Return a dict of COMPACT ParagraphStyles for the 17-column detail table.
+    Smaller fonts, tighter leading — numbers never wrap.
+    """
+    base = getSampleStyleSheet()['Normal']
+    return {
+        # Header row
+        'hdr': ParagraphStyle(
+            'CHdr', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
+            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
+        ),
+        'hdr_r': ParagraphStyle(
+            'CHdrR', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
+            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
             alignment=TA_RIGHT,
+        ),
+        'hdr_c': ParagraphStyle(
+            'CHdrC', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
+            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
+            alignment=TA_CENTER,
+        ),
+        # Data cells
+        'td': ParagraphStyle(
+            'CTd', parent=base,
+            fontName='Helvetica', fontSize=FONT_C_BODY,
+            textColor=CLR_TEXT, leading=FONT_C_BODY + 2,
+        ),
+        'td_r': ParagraphStyle(
+            'CTdR', parent=base,
+            fontName='Helvetica', fontSize=FONT_C_BODY,
+            textColor=CLR_TEXT, leading=FONT_C_BODY + 2,
+            alignment=TA_RIGHT,
+        ),
+        'td_c': ParagraphStyle(
+            'CTdC', parent=base,
+            fontName='Helvetica', fontSize=FONT_C_BODY,
+            textColor=CLR_TEXT, leading=FONT_C_BODY + 2,
+            alignment=TA_CENTER,
+        ),
+        'td_bold': ParagraphStyle(
+            'CTdBold', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_BODY_BOLD,
+            textColor=CLR_TEXT, leading=FONT_C_BODY_BOLD + 2,
+        ),
+        'td_bold_r': ParagraphStyle(
+            'CTdBoldR', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_BODY_BOLD,
+            textColor=CLR_TEXT, leading=FONT_C_BODY_BOLD + 2,
+            alignment=TA_RIGHT,
+        ),
+        # Muted dash for zero
+        'td_muted': ParagraphStyle(
+            'CTdMuted', parent=base,
+            fontName='Helvetica', fontSize=FONT_C_BODY,
+            textColor=CLR_TEXT_FAINT, leading=FONT_C_BODY + 2,
+            alignment=TA_RIGHT,
+        ),
+        # Danger (over-limit)
+        'td_danger_r': ParagraphStyle(
+            'CTdDangerR', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_C_BODY_BOLD,
+            textColor=CLR_DANGER, leading=FONT_C_BODY_BOLD + 2,
+            alignment=TA_RIGHT,
+        ),
+        # Label (for totals row count)
+        'td_label': ParagraphStyle(
+            'CTdLabel', parent=base,
+            fontName='Helvetica-Oblique', fontSize=FONT_C_BODY,
+            textColor=CLR_TEXT_MUTED, leading=FONT_C_BODY + 2,
         ),
     }
 
@@ -191,23 +340,38 @@ def _fmt(num):
         return "0"
 
 
+def _fmt_compact(num):
+    """
+    Compact number format for tight columns.
+    - None/0 → "–" (en-dash, visually cleaner than "0")
+    - Integers → no decimals, with comma grouping
+    - Floats → 1 decimal max
+    Keeps strings short to prevent line wrapping.
+    """
+    if num is None:
+        return "–"
+    try:
+        v = float(num)
+        if v == 0:
+            return "–"
+        if v == int(v):
+            return f"{int(v):,}"
+        return f"{v:,.1f}"
+    except (TypeError, ValueError):
+        return "–"
+
+
 def _build_document_header(styles, title_text, subtitle_text, page_width):
-    """
-    Build the top-of-page header: logo on left, title block on right,
-    separated by a thin accent line.
-    """
+    """Build the top-of-page header: logo left, title right, accent line."""
     logo_img = _get_logo()
 
-    title_block = Paragraph(
-        f"<b>{title_text}</b>", styles['title']
-    )
+    title_block = Paragraph(f"<b>{title_text}</b>", styles['title'])
     subtitle_block = Paragraph(subtitle_text, styles['subtitle'])
     date_block = Paragraph(
         f"Generated: {datetime.now().strftime('%d %b %Y, %H:%M')}",
         styles['label'],
     )
 
-    # Right-side stack: title, subtitle, date
     right_content = Table(
         [[title_block], [subtitle_block], [date_block]],
         colWidths=[page_width - 2.2 * inch],
@@ -222,13 +386,9 @@ def _build_document_header(styles, title_text, subtitle_text, page_width):
         row = [[logo_img, right_content]]
         widths = [2.0 * inch, page_width - 2.0 * inch]
     else:
-        # Fallback: text-only brand
-        brand = Paragraph(
-            "<b>JUNAID</b>", ParagraphStyle(
-                'Brand', fontName='Helvetica-Bold',
-                fontSize=16, textColor=CLR_PRIMARY,
-            )
-        )
+        brand = Paragraph("<b>JUNAID</b>", ParagraphStyle(
+            'Brand', fontName='Helvetica-Bold', fontSize=16, textColor=CLR_PRIMARY,
+        ))
         row = [[brand, right_content]]
         widths = [2.0 * inch, page_width - 2.0 * inch]
 
@@ -239,9 +399,7 @@ def _build_document_header(styles, title_text, subtitle_text, page_width):
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
 
-    # Accent line under header
-    line_data = [['']]
-    line_table = Table(line_data, colWidths=[page_width])
+    line_table = Table([['']], colWidths=[page_width])
     line_table.setStyle(TableStyle([
         ('LINEBELOW', (0, 0), (-1, -1), 1.5, CLR_ACCENT),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
@@ -252,15 +410,10 @@ def _build_document_header(styles, title_text, subtitle_text, page_width):
 
 
 def _build_kpi_bar(kpi_items, styles, page_width):
-    """
-    Build a horizontal KPI summary bar.
-    kpi_items: list of (label, value_str) tuples.
-    Returns a Table with card-like KPI cells.
-    """
+    """Build a horizontal KPI summary bar."""
     num_items = len(kpi_items)
     cell_width = page_width / num_items
 
-    # Each KPI is a mini-table: value on top, label below
     kpi_cells = []
     for label, value in kpi_items:
         mini = Table(
@@ -292,9 +445,7 @@ def _build_kpi_bar(kpi_items, styles, page_width):
 
 
 def _build_section_header(text, styles, width):
-    """
-    Build a section header bar: gold accent strip + bold label on gray background.
-    """
+    """Build a section header bar: accent strip + bold label."""
     t = Table(
         [['', Paragraph(f"<b>{text}</b>", styles['section'])]],
         colWidths=[3, width - 3],
@@ -310,94 +461,164 @@ def _build_section_header(text, styles, width):
     return t
 
 
-def _standard_data_table_style(num_rows, has_total_row=True):
-    """
-    Build a clean, professional TableStyle for data grids.
-    Applies: header styling, zebra striping, border treatment, total row emphasis.
-    num_rows: total rows including header and optional total row.
-    """
+def _build_table_style_simple(num_rows):
+    """Table style for simple mode (9 columns, comfortable spacing)."""
     cmds = [
-        # Header row
         ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
         ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), FONT_BODY),
-
-        # Global grid: light inner lines, slightly heavier outer box
         ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
         ('LINEBELOW', (0, 0), (-1, 0), 0.75, CLR_BORDER_HEAVY),
-
-        # Cell padding
         ('TOPPADDING', (0, 0), (-1, -1), SP_ROW_PAD_V),
         ('BOTTOMPADDING', (0, 0), (-1, -1), SP_ROW_PAD_V),
         ('LEFTPADDING', (0, 0), (-1, -1), SP_ROW_PAD_H),
         ('RIGHTPADDING', (0, 0), (-1, -1), SP_ROW_PAD_H),
         ('TOPPADDING', (0, 0), (-1, 0), SP_HEADER_PAD_V),
         ('BOTTOMPADDING', (0, 0), (-1, 0), SP_HEADER_PAD_V),
-
-        # Vertical alignment
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]
 
-    # Zebra striping on data rows (skip header row 0, skip total row if present)
-    last_data_row = (num_rows - 2) if has_total_row else (num_rows - 1)
-    for i in range(1, last_data_row + 1):
+    for i in range(1, num_rows - 1):
         if i % 2 == 0:
             cmds.append(('BACKGROUND', (0, i), (-1, i), CLR_BG_ZEBRA))
+        if i < num_rows - 1:
+            cmds.append(('LINEBELOW', (0, i), (-1, i), 0.25, CLR_BORDER))
 
-    # Subtle horizontal lines between data rows (instead of full grid)
-    for i in range(1, num_rows - 1):
-        cmds.append(('LINEBELOW', (0, i), (-1, i), 0.25, CLR_BORDER))
+    # Total row
+    cmds.extend([
+        ('BACKGROUND', (0, -1), (-1, -1), CLR_BG_TOTAL),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, CLR_PRIMARY),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    ])
+    return TableStyle(cmds)
 
-    # Total row emphasis
-    if has_total_row:
+
+def _standard_data_table_style(num_rows, has_total_row=True):
+    """
+    General-purpose table style: header, zebra striping, optional total row.
+    Used by finance statement detail PDF, credit edit list, and sap_purchaseorder_pdf_export.
+    """
+    cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), FONT_BODY),
+        ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.75, CLR_BORDER_HEAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), SP_ROW_PAD_V),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), SP_ROW_PAD_V),
+        ('LEFTPADDING', (0, 0), (-1, -1), SP_ROW_PAD_H),
+        ('RIGHTPADDING', (0, 0), (-1, -1), SP_ROW_PAD_H),
+        ('TOPPADDING', (0, 0), (-1, 0), SP_HEADER_PAD_V),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), SP_HEADER_PAD_V),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]
+    last_data_idx = num_rows - 2 if has_total_row else num_rows - 1
+    for i in range(1, last_data_idx + 1):
+        if i % 2 == 0:
+            cmds.append(('BACKGROUND', (0, i), (-1, i), CLR_BG_ZEBRA))
+        if i < num_rows - 1:
+            cmds.append(('LINEBELOW', (0, i), (-1, i), 0.25, CLR_BORDER))
+    if has_total_row and num_rows > 1:
         cmds.extend([
             ('BACKGROUND', (0, -1), (-1, -1), CLR_BG_TOTAL),
             ('LINEABOVE', (0, -1), (-1, -1), 1.2, CLR_PRIMARY),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ])
+    return TableStyle(cmds)
+
+
+def _build_table_style_compact(num_rows, date_col_start, date_col_end, summary_col_start):
+    """
+    Table style for compact detail mode (17 columns).
+    Adds visual grouping: vertical separators between column groups.
+    """
+    cmds = [
+        # ── Header row ──
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
+
+        # ── Outer border ──
+        ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, CLR_BORDER_HEAVY),
+
+        # ── Compact cell padding — the key to fitting everything ──
+        ('TOPPADDING', (0, 0), (-1, -1), SP_C_PAD_V),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), SP_C_PAD_V),
+        ('LEFTPADDING', (0, 0), (-1, -1), SP_C_PAD_H),
+        ('RIGHTPADDING', (0, 0), (-1, -1), SP_C_PAD_H),
+
+        # Header row gets slightly more vertical room
+        ('TOPPADDING', (0, 0), (-1, 0), SP_C_HDR_PAD_V),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), SP_C_HDR_PAD_V),
+
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # ── Column group separators — visual clarity without full grid ──
+        # Between info columns and date columns
+        ('LINEAFTER', (date_col_start - 1, 0), (date_col_start - 1, -1), 0.75, CLR_BORDER_HEAVY),
+        # Between date columns and summary columns
+        ('LINEAFTER', (date_col_end, 0), (date_col_end, -1), 0.75, CLR_BORDER_HEAVY),
+        # Between aging columns (6+ / 6++) and summary
+        ('LINEAFTER', (summary_col_start - 1, 0), (summary_col_start - 1, -1), 0.75, CLR_BORDER_HEAVY),
+
+        # ── Date column header tint — subtle differentiation ──
+        ('BACKGROUND', (date_col_start, 0), (date_col_end, 0), HexColor('#2C4A7C')),
+    ]
+
+    # Zebra striping + subtle row lines
+    for i in range(1, num_rows - 1):
+        if i % 2 == 0:
+            cmds.append(('BACKGROUND', (0, i), (-1, i), CLR_BG_ZEBRA))
+        if i < num_rows - 1:
+            cmds.append(('LINEBELOW', (0, i), (-1, i), 0.2, CLR_BORDER))
+
+    # Total row emphasis
+    cmds.extend([
+        ('BACKGROUND', (0, -1), (-1, -1), CLR_BG_TOTAL),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, CLR_PRIMARY),
+    ])
 
     return TableStyle(cmds)
 
 
 def _build_page_footer(canvas, doc, styles_dict=None):
-    """
-    Draw a consistent footer on every page: thin line + page number + timestamp.
-    Used as an onPage callback.
-    """
+    """Draw a consistent footer on every page."""
     canvas.saveState()
     page_w, page_h = doc.pagesize
 
-    # Thin line above footer
-    y = 18
+    y = 16
     canvas.setStrokeColor(CLR_BORDER)
     canvas.setLineWidth(0.5)
     canvas.line(doc.leftMargin, y, page_w - doc.rightMargin, y)
 
-    # Page number centered
     canvas.setFont('Helvetica', 6)
     canvas.setFillColor(CLR_TEXT_MUTED)
     canvas.drawCentredString(
-        page_w / 2, 8,
-        f"Page {doc.page}  •  Generated {datetime.now().strftime('%d %b %Y %H:%M')}  •  Confidential"
+        page_w / 2, 7,
+        f"Page {doc.page}  •  Finance Statement  •  "
+        f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}  •  Confidential"
     )
     canvas.restoreState()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VIEW 1: FINANCE STATEMENT LIST (landscape, multi-customer)
+# VIEW: FINANCE STATEMENT LIST
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
 def export_finance_statement_list_pdf(request):
     """
-    Export Finance Statement List to PDF - Compact layout, more data per page.
+    Export Finance Statement List to PDF - Landscape, compact layout.
+    Supports ?detail=1 for full monthly breakdown (17 columns, no wrapping).
     Respects same filters as list view (q, salesman, store).
     """
-    # ── Get filter parameters (same as list view) ──
+    # ── Get filter parameters ──
     search_query = request.GET.get('q', '').strip()
     salesman_filter = request.GET.get('salesman', '').strip()
     store_filter = request.GET.get('store', '').strip()
+    include_detail = request.GET.get('detail', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
     customers = Customer.objects.filter(
         Q(total_outstanding__gt=0) | Q(pdc_received__gt=0)
@@ -417,10 +638,27 @@ def export_finance_statement_list_pdf(request):
 
     customers = customers.order_by('-total_outstanding_with_pdc', 'customer_name')
 
+    # Monthly labels
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    monthly_labels = []
+    for i in range(6):
+        months_ago = 5 - i
+        month_date = datetime.now().date() - timedelta(days=30 * months_ago)
+        monthly_labels.append(month_names[month_date.month - 1])
+
     totals = customers.aggregate(
         total_outstanding=Coalesce(Sum('total_outstanding'), Value(0.0, output_field=FloatField())),
         total_pdc=Coalesce(Sum('pdc_received'), Value(0.0, output_field=FloatField())),
         total_with_pdc=Coalesce(Sum('total_outstanding_with_pdc'), Value(0.0, output_field=FloatField())),
+        total_month_1=Coalesce(Sum('month_pending_1'), Value(0.0, output_field=FloatField())),
+        total_month_2=Coalesce(Sum('month_pending_2'), Value(0.0, output_field=FloatField())),
+        total_month_3=Coalesce(Sum('month_pending_3'), Value(0.0, output_field=FloatField())),
+        total_month_4=Coalesce(Sum('month_pending_4'), Value(0.0, output_field=FloatField())),
+        total_month_5=Coalesce(Sum('month_pending_5'), Value(0.0, output_field=FloatField())),
+        total_month_6=Coalesce(Sum('month_pending_6'), Value(0.0, output_field=FloatField())),
+        total_old_months=Coalesce(Sum('old_months_pending'), Value(0.0, output_field=FloatField())),
+        total_very_old_months=Coalesce(Sum('very_old_months_pending'), Value(0.0, output_field=FloatField())),
     )
 
     # ── Build PDF ──
@@ -432,7 +670,14 @@ def export_finance_statement_list_pdf(request):
 
     buffer = BytesIO()
     page_w, page_h = landscape(A4)
-    margin_h, margin_v = 24, 24
+
+    # ── Margins: tighter for detail mode to maximize usable width ──
+    if include_detail:
+        margin_h = 14          # ~0.19 inch — tight but print-safe
+        margin_v = 20
+    else:
+        margin_h = 24          # Standard comfortable margins
+        margin_v = 24
 
     doc = SimpleDocTemplate(
         buffer,
@@ -440,7 +685,7 @@ def export_finance_statement_list_pdf(request):
         rightMargin=margin_h,
         leftMargin=margin_h,
         topMargin=margin_v,
-        bottomMargin=margin_v + 6,  # Extra room for footer
+        bottomMargin=margin_v + 4,
     )
 
     usable_width = page_w - 2 * margin_h
@@ -451,21 +696,22 @@ def export_finance_statement_list_pdf(request):
     elements.extend(_build_document_header(
         styles,
         title_text='FINANCE STATEMENT',
-        subtitle_text='Customer Finance Summary & Outstanding Balances',
+        subtitle_text='Customer Finance Summary & Outstanding Balances'
+                      + (' — Detailed Monthly View' if include_detail else ''),
         page_width=usable_width,
     ))
 
     # ── 2. KPI Summary Bar ──
     kpi_items = [
         ('Total Outstanding', _fmt(totals['total_outstanding']) + ' AED'),
-        ('PDC Received in Hand', _fmt(totals['total_pdc']) + ' AED'),
+        ('PDC Received', _fmt(totals['total_pdc']) + ' AED'),
         ('Net Balance', _fmt(totals['total_with_pdc']) + ' AED'),
         ('Customers', str(customers.count())),
     ]
     elements.append(_build_kpi_bar(kpi_items, styles, usable_width))
     elements.append(Spacer(1, SP_SECTION))
 
-    # ── 3. Active Filters note (if any) ──
+    # ── 3. Active Filters note ──
     active_filters = []
     if search_query:
         active_filters.append(f'Search: "{search_query}"')
@@ -476,87 +722,234 @@ def export_finance_statement_list_pdf(request):
     if active_filters:
         filter_text = '  •  '.join(active_filters)
         elements.append(Paragraph(
-            f'<font color="#6B7280">Filters applied: {filter_text}</font>',
+            f'<font color="#6B7280">Filters: {filter_text}</font>',
             styles['label'],
         ))
         elements.append(Spacer(1, 4))
 
-    # ── 4. Data Table ──
-    # Column widths tuned for landscape A4 - Customer Name wider for full names
-    col_widths = [
-        0.38 * inch,    # #
-        0.70 * inch,    # Code
-        3.40 * inch,    # Customer Name (lengthened for full names)
-        0.95 * inch,    # Salesman
-        1.00 * inch,    # Balance
-        0.85 * inch,    # PDC
-        1.00 * inch,    # Total
-        0.85 * inch,    # Limit
-        0.50 * inch,    # Terms (right-aligned)
-    ]
-    # Give remainder to Customer Name column for full names
-    allocated = sum(col_widths)
-    remainder = max(0, usable_width - allocated)
-    col_widths[2] += remainder  # Customer Name
+    # ════════════════════════════════════════════════════════════════
+    # 4. DATA TABLE — DETAIL MODE (17 columns)
+    # ════════════════════════════════════════════════════════════════
 
-    # Header row - use white text styles for visibility on dark navy background
-    hdr = [
-        Paragraph('#', styles['header_cell']),
-        Paragraph('Code', styles['header_cell']),
-        Paragraph('Customer Name', styles['header_cell']),
-        Paragraph('Salesman', styles['header_cell']),
-        Paragraph('Balance (AED)', styles['header_cell_r']),
-        Paragraph('PDC in Hand (AED)', styles['header_cell_r']),
-        Paragraph('Total (AED)', styles['header_cell_r']),
-        Paragraph('Limit (AED)', styles['header_cell_r']),
-        Paragraph('Terms', styles['header_cell_r']),
-    ]
-    table_data = [hdr]
+    if include_detail:
+        cs = _build_compact_styles()
 
-    # Data rows
-    for idx, c in enumerate(customers, start=1):
-        salesman_name = c.salesman.salesman_name if c.salesman else '—'
-        over_limit = (
-            (c.total_outstanding_with_pdc or 0) > (c.credit_limit or 0)
-            and (c.credit_limit or 0) > 0
+        # ── Column layout for 17 columns on landscape A4 ──
+        # Usable width at 14pt margins: 842 - 28 = 814pt
+        #
+        # Group A: Info (3 cols - Code removed)
+        #   #=18  Name=flex (includes space from Code)  Salesman=52
+        # Group B: Monthly (6 cols) + Aging (2 cols)
+        #   M1..M6 = 6×46  6+=40  6++=40
+        # Group C: Summary (5 cols)
+        #   Balance=54  PDC=48  Total=56  Limit=48  Terms=28
+        #
+        # Total fixed: 18+42+52 + 276+40+40 + 54+48+56+48+28 = 702
+        # Name column: 814 - 702 = 112pt ≈ 1.56 inches (enough for ~25 chars at 5.5pt)
+
+        W_NUM    = 18     # Row number
+        W_CODE   = 42     # Customer code
+        W_SALES  = 52     # Salesman (truncated)
+        W_MONTH  = 46     # Each month column
+        W_AGE    = 40     # 6+ and 6++ columns
+        W_BAL    = 54     # Balance
+        W_PDC    = 48     # PDC
+        W_TOTAL  = 56     # Total outstanding
+        W_LIMIT  = 48     # Credit limit
+        W_TERMS  = 28     # Payment terms
+
+        fixed_w = (W_NUM + W_SALES
+                   + 6 * W_MONTH + 2 * W_AGE
+                   + W_BAL + W_PDC + W_TOTAL + W_LIMIT + W_TERMS)
+        W_NAME = max(100, usable_width - fixed_w)   # Absorb remainder (includes space from removed Code column)
+
+        col_widths = [
+            W_NUM, W_NAME, W_SALES,                                  # Info group (Code removed)
+            W_MONTH, W_MONTH, W_MONTH, W_MONTH, W_MONTH, W_MONTH,   # M1–M6
+            W_AGE, W_AGE,                                            # 6+, 6++
+            W_BAL, W_PDC, W_TOTAL, W_LIMIT, W_TERMS,                # Summary
+        ]
+
+        # Column group indices (for vertical separators)
+        DATE_COL_START = 3    # Changed from 4 (Code column removed)
+        DATE_COL_END   = 8    # Last month column (changed from 9)
+        AGING_COL_END  = 10   # Last aging column (changed from 11)
+        SUMMARY_START  = 11   # Changed from 12
+
+        # ── Header row ──
+        hdr = [
+            Paragraph('#', cs['hdr']),
+            Paragraph('Customer Name', cs['hdr']),
+            Paragraph('S/Man', cs['hdr']),
+        ]
+        for lbl in monthly_labels:
+            hdr.append(Paragraph(lbl, cs['hdr_r']))
+        hdr.extend([
+            Paragraph('6+', cs['hdr_r']),
+            Paragraph('6++', cs['hdr_r']),
+            Paragraph('Balance', cs['hdr_r']),
+            Paragraph('PDC', cs['hdr_r']),
+            Paragraph('Total', cs['hdr_r']),
+            Paragraph('Limit', cs['hdr_r']),
+            Paragraph('Trm', cs['hdr_c']),
+        ])
+        table_data = [hdr]
+
+        # ── Data rows ──
+        month_fields = [
+            'month_pending_1', 'month_pending_2', 'month_pending_3',
+            'month_pending_4', 'month_pending_5', 'month_pending_6',
+        ]
+
+        for idx, c in enumerate(customers, start=1):
+            s_name = c.salesman.salesman_name if c.salesman else '—'
+            over_limit = (
+                (c.total_outstanding_with_pdc or 0) > (c.credit_limit or 0)
+                and (c.credit_limit or 0) > 0
+            )
+
+            row = [
+                Paragraph(str(idx), cs['td_c']),
+                Paragraph((c.customer_name or '—')[:40], cs['td']),  # Increased from 28 to 40 chars
+                Paragraph(str(s_name)[:12], cs['td']),
+            ]
+
+            # Month columns — use compact format, muted style for zeros
+            for f in month_fields:
+                val = getattr(c, f, 0) or 0
+                if val and float(val) > 0:
+                    row.append(Paragraph(_fmt_compact(val), cs['td_r']))
+                else:
+                    row.append(Paragraph('–', cs['td_muted']))
+
+            # Aging columns
+            old_val = c.old_months_pending or 0
+            very_old_val = getattr(c, 'very_old_months_pending', 0) or 0
+            row.append(
+                Paragraph(_fmt_compact(old_val), cs['td_r'])
+                if old_val and float(old_val) > 0
+                else Paragraph('–', cs['td_muted'])
+            )
+            row.append(
+                Paragraph(_fmt_compact(very_old_val), cs['td_r'])
+                if very_old_val and float(very_old_val) > 0
+                else Paragraph('–', cs['td_muted'])
+            )
+
+            # Summary columns
+            row.append(Paragraph(_fmt_compact(c.total_outstanding), cs['td_bold_r']))
+            row.append(Paragraph(_fmt_compact(c.pdc_received), cs['td_r']))
+            row.append(Paragraph(
+                _fmt_compact(c.total_outstanding_with_pdc),
+                cs['td_danger_r'] if over_limit else cs['td_bold_r'],
+            ))
+            row.append(Paragraph(_fmt_compact(c.credit_limit), cs['td_r']))
+            row.append(Paragraph(str(c.credit_days or '—'), cs['td_c']))
+
+            table_data.append(row)
+
+        # ── Totals row ──
+        totals_row = [
+            Paragraph('', cs['td']),
+            Paragraph('TOTAL', cs['td_bold']),
+            Paragraph(f'{customers.count()} customers', cs['td_label']),
+        ]
+        month_total_keys = [
+            'total_month_1', 'total_month_2', 'total_month_3',
+            'total_month_4', 'total_month_5', 'total_month_6',
+        ]
+        for key in month_total_keys:
+            totals_row.append(Paragraph(_fmt_compact(totals[key]), cs['td_bold_r']))
+        totals_row.extend([
+            Paragraph(_fmt_compact(totals['total_old_months']), cs['td_bold_r']),
+            Paragraph(_fmt_compact(totals['total_very_old_months']), cs['td_bold_r']),
+            Paragraph(_fmt_compact(totals['total_outstanding']), cs['td_bold_r']),
+            Paragraph(_fmt_compact(totals['total_pdc']), cs['td_bold_r']),
+            Paragraph(_fmt_compact(totals['total_with_pdc']), cs['td_bold_r']),
+            Paragraph('', cs['td']),
+            Paragraph('', cs['td']),
+        ])
+        table_data.append(totals_row)
+
+        # ── Build table ──
+        data_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        ts = _build_table_style_compact(
+            num_rows=len(table_data),
+            date_col_start=DATE_COL_START,
+            date_col_end=AGING_COL_END,
+            summary_col_start=SUMMARY_START,
         )
-        total_val_style = styles['danger_bold_r'] if over_limit else styles['cell_bold_r']
+        # Right-align all numeric columns
+        ts.add('ALIGN', (DATE_COL_START, 0), (-2, -1), 'RIGHT')
+        data_table.setStyle(ts)
+        elements.append(data_table)
 
+    # ════════════════════════════════════════════════════════════════
+    # 4b. DATA TABLE — SIMPLE MODE (9 columns)
+    # ════════════════════════════════════════════════════════════════
+
+    else:
+        col_widths = [
+            0.38 * inch,    # #
+            0,              # Name (calculated below - includes space from removed Code)
+            0.95 * inch,    # Salesman
+            1.00 * inch,    # Balance
+            0.85 * inch,    # PDC
+            1.00 * inch,    # Total
+            0.85 * inch,    # Limit
+            0.50 * inch,    # Terms
+        ]
+        allocated = sum(col_widths)
+        col_widths[1] = max(3.0 * inch, usable_width - allocated)  # Increased from 2.0 to 3.0 inches
+
+        hdr = [
+            Paragraph('#', styles['header_cell']),
+            Paragraph('Customer Name', styles['header_cell']),
+            Paragraph('Salesman', styles['header_cell']),
+            Paragraph('Balance (AED)', styles['header_cell_r']),
+            Paragraph('PDC (AED)', styles['header_cell_r']),
+            Paragraph('Total (AED)', styles['header_cell_r']),
+            Paragraph('Limit (AED)', styles['header_cell_r']),
+            Paragraph('Terms', styles['header_cell_r']),
+        ]
+        table_data = [hdr]
+
+        for idx, c in enumerate(customers, start=1):
+            salesman_name = c.salesman.salesman_name if c.salesman else '—'
+            over_limit = (
+                (c.total_outstanding_with_pdc or 0) > (c.credit_limit or 0)
+                and (c.credit_limit or 0) > 0
+            )
+            total_style = styles['danger_bold_r'] if over_limit else styles['cell_bold_r']
+
+            table_data.append([
+                Paragraph(str(idx), styles['cell']),
+                Paragraph((c.customer_name or '—')[:60], styles['cell']),  # Increased from 48 to 60 chars
+                Paragraph(str(salesman_name)[:22], styles['cell']),
+                Paragraph(_fmt(c.total_outstanding), styles['cell_bold_r']),
+                Paragraph(_fmt(c.pdc_received), styles['cell_r']),
+                Paragraph(_fmt(c.total_outstanding_with_pdc), total_style),
+                Paragraph(_fmt(c.credit_limit), styles['cell_r']),
+                Paragraph(str(c.credit_days or '—'), styles['cell_r']),
+            ])
+
+        # Totals row
         table_data.append([
-            Paragraph(str(idx), styles['cell']),
-            Paragraph(c.customer_code or '—', styles['cell']),
-            Paragraph((c.customer_name or '—'), styles['cell']),
-            Paragraph(str(salesman_name)[:22], styles['cell']),
-            Paragraph(_fmt(c.total_outstanding), styles['cell_r']),
-            Paragraph(_fmt(c.pdc_received), styles['cell_r']),
-            Paragraph(_fmt(c.total_outstanding_with_pdc), total_val_style),
-            Paragraph(_fmt(c.credit_limit), styles['cell_r']),
-            Paragraph(str(c.credit_days or '—'), styles['cell_r']),
+            Paragraph('', styles['cell']),
+            Paragraph('<b>TOTAL</b>', styles['cell_bold']),
+            Paragraph(f'<i>{customers.count()} customers</i>', styles['label']),
+            Paragraph(_fmt(totals['total_outstanding']), styles['cell_bold_r']),
+            Paragraph(_fmt(totals['total_pdc']), styles['cell_bold_r']),
+            Paragraph(_fmt(totals['total_with_pdc']), styles['cell_bold_r']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
         ])
 
-    # Totals row
-    table_data.append([
-        Paragraph('', styles['cell']),
-        Paragraph('<b>TOTAL</b>', styles['cell_bold']),
-        Paragraph(f'<i>{customers.count()} customers</i>', styles['label']),
-        Paragraph('', styles['cell']),
-        Paragraph(_fmt(totals['total_outstanding']), styles['cell_bold_r']),
-        Paragraph(_fmt(totals['total_pdc']), styles['cell_bold_r']),
-        Paragraph(_fmt(totals['total_with_pdc']), styles['cell_bold_r']),
-        Paragraph('', styles['cell']),
-        Paragraph('', styles['cell']),
-    ])
-
-    data_table = Table(table_data, colWidths=col_widths, repeatRows=1)
-
-    # Apply base style
-    ts = _standard_data_table_style(len(table_data), has_total_row=True)
-
-    # Right-align numeric columns (4–7) and Terms (8)
-    ts.add('ALIGN', (4, 0), (8, -1), 'RIGHT')
-
-    data_table.setStyle(ts)
-    elements.append(data_table)
+        data_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        ts = _build_table_style_simple(len(table_data))
+        ts.add('ALIGN', (3, 0), (7, -1), 'RIGHT')  # Changed from (4, 0), (8, -1) since Code column removed
+        data_table.setStyle(ts)
+        elements.append(data_table)
 
     # ── Build and return ──
     doc.build(elements, onFirstPage=_build_page_footer, onLaterPages=_build_page_footer)

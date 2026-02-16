@@ -24,6 +24,7 @@ def finance_statement_list(request):
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
+    show_detail_columns = request.GET.get('detail', '').strip().lower() in ('1', 'true', 'yes', 'on')
     salesmen_filter = [s.strip() for s in salesmen_filter if s and s.strip()]
     store_filter = request.GET.get('store', '').strip()  # HO or Others
     sort_by = request.GET.get('sort', 'total_outstanding')  # Default sort by highest balance
@@ -111,10 +112,12 @@ def finance_statement_list(request):
         'page_obj': page_obj,  # Also pass as page_obj for template
         'salesmen': salesmen,
         'is_manager': request.user.username == 'manager',
+        'show_detail_columns': show_detail_columns,
         'filters': {
             'q': search_query,
             'salesmen_filter': salesmen_filter,
             'store': store_filter,
+            'detail': '1' if show_detail_columns else '',
         },
         'sort': sort_by.replace('-', ''),
         'order': sort_order,
@@ -315,13 +318,15 @@ def finance_credit_edit_list(request):
 @login_required
 def export_finance_statement_list_excel(request):
     """
-    Export Finance Statement List to Excel with all monthly columns
+    Export Finance Statement List to Excel.
+    If detail=1 in GET, includes 6 months + 6+ + 6++ columns; otherwise main columns only.
     """
     # Get filter parameters (same as list view)
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     salesmen_filter = [s.strip() for s in salesmen_filter if s and s.strip()]
-    store_filter = request.GET.get('store', '').strip()  # HO or Others
+    store_filter = request.GET.get('store', '').strip()
+    include_detail = request.GET.get('detail', '').strip().lower() in ('1', 'true', 'yes', 'on')  # HO or Others
     
     # Base queryset - only customers with finance data (non-zero balance or PDC)
     customers = Customer.objects.filter(
@@ -366,20 +371,21 @@ def export_finance_statement_list_excel(request):
             'Customer Code': customer.customer_code,
             'Customer Name': customer.customer_name,
             'Salesman': customer.salesman.salesman_name if customer.salesman else '',
-            monthly_labels[0]['label']: float(customer.month_pending_1 or 0),
-            monthly_labels[1]['label']: float(customer.month_pending_2 or 0),
-            monthly_labels[2]['label']: float(customer.month_pending_3 or 0),
-            monthly_labels[3]['label']: float(customer.month_pending_4 or 0),
-            monthly_labels[4]['label']: float(customer.month_pending_5 or 0),
-            monthly_labels[5]['label']: float(customer.month_pending_6 or 0),
-            '180+ Days': float(customer.old_months_pending or 0),
-            '360+ Days': float(getattr(customer, 'very_old_months_pending', 0) or 0),
-            'Balance Due': float(customer.total_outstanding or 0),
-            'PDC Received': float(customer.pdc_received or 0),
-            'Total with PDC': float(customer.total_outstanding_with_pdc or 0),
-            'Credit Limit': float(customer.credit_limit or 0),
-            'Payment Terms': customer.credit_days or '',
         }
+        if include_detail:
+            row_data[monthly_labels[0]['label']] = float(customer.month_pending_1 or 0)
+            row_data[monthly_labels[1]['label']] = float(customer.month_pending_2 or 0)
+            row_data[monthly_labels[2]['label']] = float(customer.month_pending_3 or 0)
+            row_data[monthly_labels[3]['label']] = float(customer.month_pending_4 or 0)
+            row_data[monthly_labels[4]['label']] = float(customer.month_pending_5 or 0)
+            row_data[monthly_labels[5]['label']] = float(customer.month_pending_6 or 0)
+            row_data['6+ (180+ Days)'] = float(customer.old_months_pending or 0)
+            row_data['6++ (360+ Days)'] = float(getattr(customer, 'very_old_months_pending', 0) or 0)
+        row_data['Balance Due'] = float(customer.total_outstanding or 0)
+        row_data['PDC in Hand'] = float(customer.pdc_received or 0)
+        row_data['Total with PDC'] = float(customer.total_outstanding_with_pdc or 0)
+        row_data['Credit Limit'] = float(customer.credit_limit or 0)
+        row_data['Payment Terms'] = customer.credit_days or ''
         data.append(row_data)
     
     # Create Excel file
