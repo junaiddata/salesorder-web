@@ -5,7 +5,7 @@ from django.http import HttpResponse, Http404
 from django.db.models import Q
 from django.core.paginator import Paginator
 from .models import SalesmanCard
-from .forms import ExcelUploadForm
+from .forms import ExcelUploadForm, SalesmanCardForm, SalesmanCardForm
 from .services import (
     validate_excel_file,
     import_excel_data,
@@ -142,20 +142,151 @@ def download_qr(request, slug):
     """Download QR code PNG"""
     card = get_object_or_404(SalesmanCard, slug=slug)
     
-    # Ensure QR code exists
-    qr_path = os.path.join(settings.MEDIA_ROOT, 'qr', f'{card.slug}.png')
+    # Get optional size parameter
+    size = request.GET.get('size', None)
+    if size:
+        try:
+            size = int(size)
+            size = max(200, min(3000, size))  # Clamp between 200-3000
+        except:
+            size = None
     
-    if not os.path.exists(qr_path):
-        # Generate QR code if it doesn't exist
-        generate_qr_code(card, request=request)
+    # Generate QR code with current settings
+    qr_path = generate_qr_code(
+        card, 
+        request=request,
+        size=size
+    )
     
     if os.path.exists(qr_path):
         with open(qr_path, 'rb') as f:
             response = HttpResponse(f.read(), content_type='image/png')
-            response['Content-Disposition'] = f'attachment; filename="{card.slug}-qr.png"'
+            filename = f"{card.slug}-qr.png"
+            if size:
+                filename = f"{card.slug}-qr-{size}px.png"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
     else:
         raise Http404("QR code not found")
+
+
+@login_required
+def customize_qr(request, slug):
+    """Customize QR code design"""
+    card = get_object_or_404(SalesmanCard, slug=slug)
+    
+    if request.method == 'POST':
+        # Update QR settings
+        card.qr_foreground_color = request.POST.get('qr_foreground_color', card.qr_foreground_color)
+        card.qr_background_color = request.POST.get('qr_background_color', card.qr_background_color)
+        card.qr_size = int(request.POST.get('qr_size', card.qr_size))
+        card.qr_embed_logo = request.POST.get('qr_embed_logo') == 'on'
+        card.qr_logo_size_percent = int(request.POST.get('qr_logo_size_percent', card.qr_logo_size_percent))
+        card.qr_frame_style = request.POST.get('qr_frame_style', card.qr_frame_style)
+        card.qr_frame_text = request.POST.get('qr_frame_text', '') or None
+        card.qr_frame_text_color = request.POST.get('qr_frame_text_color', card.qr_frame_text_color)
+        card.save()
+        
+        # Regenerate QR code
+        try:
+            generate_qr_code(card, request=request)
+            messages.success(request, "QR code updated successfully!")
+        except Exception as e:
+            messages.error(request, f"Error generating QR code: {str(e)}")
+        
+        return redirect('businesscards:customize_qr', slug=card.slug)
+    
+    # Generate preview QR code
+    qr_path = os.path.join(settings.MEDIA_ROOT, 'qr', f'{card.slug}.png')
+    if not os.path.exists(qr_path):
+        generate_qr_code(card, request=request)
+    qr_url = card.get_qr_code_url()
+    
+    context = {
+        'card': card,
+        'qr_url': qr_url,
+    }
+    
+    return render(request, 'businesscards/customize_qr.html', context)
+
+
+@login_required
+def add_salesman(request):
+    """Add a new salesman card manually"""
+    if request.method == 'POST':
+        form = SalesmanCardForm(request.POST, request.FILES)
+        if form.is_valid():
+            card = form.save(commit=False)
+            card.created_by = request.user
+            card.save()
+            
+            # Generate QR code
+            try:
+                generate_qr_code(card, request=request)
+            except Exception as e:
+                messages.warning(request, f"Card created but QR code generation failed: {str(e)}")
+            
+            messages.success(request, f"Salesman card for {card.name} created successfully!")
+            return redirect('businesscards:salesman_detail', slug=card.slug)
+    else:
+        form = SalesmanCardForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Salesman',
+        'action': 'Add'
+    }
+    
+    return render(request, 'businesscards/salesman_form.html', context)
+
+
+@login_required
+def edit_salesman(request, slug):
+    """Edit an existing salesman card"""
+    card = get_object_or_404(SalesmanCard, slug=slug)
+    
+    if request.method == 'POST':
+        form = SalesmanCardForm(request.POST, request.FILES, instance=card)
+        if form.is_valid():
+            card = form.save()
+            
+            # Regenerate QR code after update
+            try:
+                generate_qr_code(card, request=request)
+            except Exception as e:
+                messages.warning(request, f"Card updated but QR code regeneration failed: {str(e)}")
+            
+            messages.success(request, f"Salesman card for {card.name} updated successfully!")
+            return redirect('businesscards:salesman_detail', slug=card.slug)
+    else:
+        form = SalesmanCardForm(instance=card)
+    
+    context = {
+        'form': form,
+        'card': card,
+        'title': f'Edit {card.name}',
+        'action': 'Update'
+    }
+    
+    return render(request, 'businesscards/salesman_form.html', context)
+
+
+@login_required
+def delete_salesman(request, slug):
+    """Delete a salesman card"""
+    card = get_object_or_404(SalesmanCard, slug=slug)
+    
+    if request.method == 'POST':
+        name = card.name
+        card.delete()
+        messages.success(request, f"Salesman card for {name} deleted successfully!")
+        return redirect('businesscards:salesmen_list')
+    
+    context = {
+        'card': card,
+    }
+    
+    return render(request, 'businesscards/salesman_confirm_delete.html', context)
 
 
 # Public views (no authentication required)

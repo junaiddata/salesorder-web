@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Designer - {{ card.name }}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --success: #10b981;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header-section h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-section p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+
+        .preview-section {
+            background: var(--gray-50);
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid var(--gray-200);
+        }
+
+        .preview-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .qr-preview-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+        }
+
+        .qr-preview-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .preview-info {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        .download-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            width: 100%;
+            margin-top: 1.5rem;
+        }
+
+        .btn-download {
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            border: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-download-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-download-primary:hover {
+            background: var(--primary-dark);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .size-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+
+        .size-btn {
+            padding: 0.5rem;
+            background: white;
+            border: 2px solid var(--gray-200);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--gray-700);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .size-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .customize-section {
+            padding: 3rem;
+            background: white;
+            overflow-y: auto;
+            max-height: calc(100vh - 200px);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title i {
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+            display: block;
+            font-size: 0.875rem;
+        }
+
+        .color-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .color-picker {
+            width: 60px;
+            height: 60px;
+            border: 3px solid var(--gray-200);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .color-picker:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .color-text-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+
+        .form-control, .form-select {
+            padding: 0.75rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .frame-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .frame-option {
+            padding: 1rem;
+            border: 2px solid var(--gray-200);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .frame-option:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+        }
+
+        .frame-option.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .frame-option-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--gray-600);
+        }
+
+        .frame-option.active .frame-option-icon {
+            color: var(--primary);
+        }
+
+        .frame-option-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .form-check-input {
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+        }
+
+        .form-check-label {
+            margin-left: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--gray-200);
+        }
+
+        .btn-primary-custom {
+            flex: 1;
+            padding: 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary-custom:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-secondary-custom {
+            padding: 1rem 2rem;
+            background: white;
+            color: var(--gray-700);
+            border: 2px solid var(--gray-200);
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary-custom:hover {
+            border-color: var(--gray-400);
+            background: var(--gray-50);
+        }
+
+        .info-box {
+            background: var(--gray-50);
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .info-box-text {
+            font-size: 0.75rem;
+            color: var(--gray-600);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 992px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+
+            .preview-section {
+                border-right: none;
+                border-bottom: 1px solid var(--gray-200);
+            }
+
+            .frame-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-4">
+        <div class="main-container">
+            <!-- Header -->
+            <div class="header-section">
+                <h1><i class="fas fa-qrcode me-2"></i>QR Code Designer</h1>
+                <p>Create beautiful, branded QR codes for {{ card.name }}</p>
+            </div>
+
+            <!-- Messages -->
+            {% if messages %}
+                <div class="px-4 pt-4">
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="content-wrapper">
+                <!-- Preview Section -->
+                <div class="preview-section">
+                    <div class="preview-card">
+                        <div class="qr-preview-container">
+                            <div class="loading-spinner" id="loadingSpinner">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                            <img src="{{ qr_url }}" alt="QR Code Preview" id="qrPreview" style="display: none;">
+                        </div>
+                        <div class="preview-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Scan with any QR code reader to test
+                        </div>
+
+                        <div class="download-buttons">
+                            <a href="{% url 'businesscards:download_qr' card.slug %}" class="btn btn-download btn-download-primary" id="downloadBtn">
+                                <i class="fas fa-download"></i>
+                                Download QR Code
+                            </a>
+                            <div class="size-buttons">
+                                <a href="{% url 'businesscards:download_qr' card.slug %}?size=500" class="size-btn">500px</a>
+                                <a href="{% url 'businesscards:download_qr' card.slug %}?size=1000" class="size-btn">1000px</a>
+                                <a href="{% url 'businesscards:download_qr' card.slug %}?size=1500" class="size-btn">1500px</a>
+                                <a href="{% url 'businesscards:download_qr' card.slug %}?size=2000" class="size-btn">2000px</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customization Section -->
+                <div class="customize-section">
+                    <form method="post" id="qrCustomizeForm">
+                        {% csrf_token %}
+
+                        <!-- Colors -->
+                        <div class="section-title">
+                            <i class="fas fa-palette"></i>
+                            Colors
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Foreground Color</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" 
+                                       name="qr_foreground_color" 
+                                       value="{{ card.qr_foreground_color }}"
+                                       class="color-picker"
+                                       id="foregroundColor">
+                                <input type="text" 
+                                       value="{{ card.qr_foreground_color }}"
+                                       class="color-text-input"
+                                       id="foregroundColorText"
+                                       readonly>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Background Color</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" 
+                                       name="qr_background_color" 
+                                       value="{{ card.qr_background_color }}"
+                                       class="color-picker"
+                                       id="backgroundColor">
+                                <input type="text" 
+                                       value="{{ card.qr_background_color }}"
+                                       class="color-text-input"
+                                       id="backgroundColorText"
+                                       readonly>
+                            </div>
+                        </div>
+
+                        <!-- Size -->
+                        <div class="section-title">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                            Size
+                        </div>
+
+                        <div class="form-group">
+                            <label for="qr_size" class="form-label">QR Code Size (pixels)</label>
+                            <input type="number" 
+                                   name="qr_size" 
+                                   id="qr_size"
+                                   value="{{ card.qr_size }}"
+                                   min="200" 
+                                   max="3000" 
+                                   step="50"
+                                   class="form-control">
+                            <div class="info-box">
+                                <div class="info-box-title">Size Recommendations</div>
+                                <div class="info-box-text">
+                                    • 500px: Web & Email<br>
+                                    • 1000px: Social Media<br>
+                                    • 1500px: Print Materials<br>
+                                    • 2000px: High-Quality Print
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Logo -->
+                        <div class="section-title">
+                            <i class="fas fa-image"></i>
+                            Logo
+                        </div>
+
+                        <div class="form-group">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       name="qr_embed_logo" 
+                                       id="qr_embed_logo"
+                                       {% if card.qr_embed_logo %}checked{% endif %}>
+                                <label class="form-check-label" for="qr_embed_logo">
+                                    Embed Company Logo in Center
+                                </label>
+                            </div>
+                            {% if not card.company_logo %}
+                                <div class="info-box">
+                                    <div class="info-box-text">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        No company logo uploaded. Upload logo in card settings to enable this feature.
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group" id="logoSizeGroup" {% if not card.qr_embed_logo %}style="display: none;"{% endif %}>
+                            <label for="qr_logo_size_percent" class="form-label">Logo Size (% of QR code)</label>
+                            <input type="number" 
+                                   name="qr_logo_size_percent" 
+                                   id="qr_logo_size_percent"
+                                   value="{{ card.qr_logo_size_percent }}"
+                                   min="10" 
+                                   max="40" 
+                                   step="5"
+                                   class="form-control">
+                            <div class="info-box">
+                                <div class="info-box-text">
+                                    Recommended: 20-30% for best scanability. Higher percentages may reduce QR code reliability.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Frame -->
+                        <div class="section-title">
+                            <i class="fas fa-border-style"></i>
+                            Frame
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Frame Style</label>
+                            <div class="frame-grid" id="frameGrid">
+                                <div class="frame-option {% if card.qr_frame_style == 'none' %}active{% endif %}" data-value="none">
+                                    <div class="frame-option-icon"><i class="fas fa-times-circle"></i></div>
+                                    <div class="frame-option-label">No Frame</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'simple' %}active{% endif %}" data-value="simple">
+                                    <div class="frame-option-icon"><i class="fas fa-square"></i></div>
+                                    <div class="frame-option-label">Simple</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'rounded' %}active{% endif %}" data-value="rounded">
+                                    <div class="frame-option-icon"><i class="fas fa-circle"></i></div>
+                                    <div class="frame-option-label">Rounded</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'double' %}active{% endif %}" data-value="double">
+                                    <div class="frame-option-icon"><i class="fas fa-square-full"></i></div>
+                                    <div class="frame-option-label">Double</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'dashed' %}active{% endif %}" data-value="dashed">
+                                    <div class="frame-option-icon"><i class="fas fa-square-dashed"></i></div>
+                                    <div class="frame-option-label">Dashed</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'banner' %}active{% endif %}" data-value="banner">
+                                    <div class="frame-option-icon"><i class="fas fa-flag"></i></div>
+                                    <div class="frame-option-label">Banner</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'badge' %}active{% endif %}" data-value="badge">
+                                    <div class="frame-option-icon"><i class="fas fa-certificate"></i></div>
+                                    <div class="frame-option-label">Badge</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'card' %}active{% endif %}" data-value="card">
+                                    <div class="frame-option-icon"><i class="fas fa-id-card"></i></div>
+                                    <div class="frame-option-label">Card</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'modern' %}active{% endif %}" data-value="modern">
+                                    <div class="frame-option-icon"><i class="fas fa-gem"></i></div>
+                                    <div class="frame-option-label">Modern</div>
+                                </div>
+                                <div class="frame-option {% if card.qr_frame_style == 'classic' %}active{% endif %}" data-value="classic">
+                                    <div class="frame-option-icon"><i class="fas fa-scroll"></i></div>
+                                    <div class="frame-option-label">Classic</div>
+                                </div>
+                            </div>
+                            <input type="hidden" name="qr_frame_style" id="qr_frame_style" value="{{ card.qr_frame_style }}">
+                        </div>
+
+                        <div class="form-group" id="frameTextGroup" {% if card.qr_frame_style == 'none' %}style="display: none;"{% endif %}>
+                            <label for="qr_frame_text" class="form-label">Frame Text (Optional)</label>
+                            <input type="text" 
+                                   name="qr_frame_text" 
+                                   id="qr_frame_text"
+                                   value="{{ card.qr_frame_text|default:'' }}"
+                                   class="form-control"
+                                   placeholder="e.g., Scan Me!, Escaneame!, Contact Us">
+                            <div class="info-box">
+                                <div class="info-box-text">
+                                    Add custom text to display with your QR code frame. Leave empty for no text.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="frameTextColorGroup" {% if card.qr_frame_style == 'none' or not card.qr_frame_text %}style="display: none;"{% endif %}>
+                            <label class="form-label">Frame Text Color</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" 
+                                       name="qr_frame_text_color" 
+                                       value="{{ card.qr_frame_text_color|default:'#000000' }}"
+                                       class="color-picker"
+                                       id="frameTextColor">
+                                <input type="text" 
+                                       value="{{ card.qr_frame_text_color|default:'#000000' }}"
+                                       class="color-text-input"
+                                       id="frameTextColorText"
+                                       readonly>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="action-buttons">
+                            <button type="submit" class="btn btn-primary-custom">
+                                <i class="fas fa-save me-2"></i>Update QR Code
+                            </button>
+                            <a href="{% url 'businesscards:salesman_detail' card.slug %}" class="btn btn-secondary-custom">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Color picker sync
+        document.getElementById('foregroundColor').addEventListener('input', function(e) {
+            document.getElementById('foregroundColorText').value = e.target.value;
+        });
+        document.getElementById('backgroundColor').addEventListener('input', function(e) {
+            document.getElementById('backgroundColorText').value = e.target.value;
+        });
+        document.getElementById('frameTextColor').addEventListener('input', function(e) {
+            document.getElementById('frameTextColorText').value = e.target.value;
+        });
+
+        // Frame selection
+        document.querySelectorAll('.frame-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('qr_frame_style').value = this.dataset.value;
+                
+                // Show/hide frame text fields
+                const frameTextGroup = document.getElementById('frameTextGroup');
+                const frameTextColorGroup = document.getElementById('frameTextColorGroup');
+                if (this.dataset.value === 'none') {
+                    frameTextGroup.style.display = 'none';
+                    frameTextColorGroup.style.display = 'none';
+                } else {
+                    frameTextGroup.style.display = 'block';
+                    const frameText = document.getElementById('qr_frame_text').value;
+                    frameTextColorGroup.style.display = frameText ? 'block' : 'none';
+                }
+            });
+        });
+
+        // Show/hide logo size based on embed checkbox
+        document.getElementById('qr_embed_logo').addEventListener('change', function() {
+            document.getElementById('logoSizeGroup').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Show/hide frame text color based on text input
+        document.getElementById('qr_frame_text').addEventListener('input', function() {
+            const frameTextColorGroup = document.getElementById('frameTextColorGroup');
+            const frameStyle = document.getElementById('qr_frame_style').value;
+            if (this.value && frameStyle !== 'none') {
+                frameTextColorGroup.style.display = 'block';
+            } else {
+                frameTextColorGroup.style.display = 'none';
+            }
+        });
+
+        // Form submission with loading
+        document.getElementById('qrCustomizeForm').addEventListener('submit', function(e) {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('qrPreview').style.display = 'none';
+        });
+
+        // Load preview image
+        window.addEventListener('load', function() {
+            const img = document.getElementById('qrPreview');
+            img.onload = function() {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                this.style.display = 'block';
+            };
+            img.src = '{{ qr_url }}?v=' + new Date().getTime();
+        });
+    </script>
+</body>
+</html>

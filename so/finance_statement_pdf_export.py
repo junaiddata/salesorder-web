@@ -982,6 +982,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     )
 
     # ── Compute data (business logic unchanged) ──
+    from calendar import monthrange
     today = datetime.now().date()
     month_names = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -993,13 +994,61 @@ def export_finance_statement_detail_pdf(request, customer_id):
         customer.month_pending_3, customer.month_pending_4,
         customer.month_pending_5, customer.month_pending_6,
     ]
+    
+    # Generate month labels with date ranges
     for i in range(6):
         months_ago = 5 - i
-        month_date = today - timedelta(days=30 * months_ago)
+        # Calculate the actual month date (first day of that month)
+        if months_ago == 0:
+            month_start = today.replace(day=1)
+        else:
+            year = today.year
+            month = today.month - months_ago
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_start = datetime(year, month, 1).date()
+        
+        # Get last day of that month
+        last_day = monthrange(month_start.year, month_start.month)[1]
+        month_end = datetime(month_start.year, month_start.month, last_day).date()
+        
+        # Format dates as DD-MM-YY
+        start_str = month_start.strftime('%d-%m-%y')
+        end_str = month_end.strftime('%d-%m-%y')
+        month_name = month_names[month_start.month - 1]
+        
         monthly_data.append({
-            'month': f"{month_names[month_date.month - 1]} {month_date.year}",
+            'month': f"{month_name} {month_start.year}",
+            'month_name': month_name,
+            'date_range': f"({start_str} to {end_str})",
+            'start_date': month_start,
+            'end_date': month_end,
             'amount': month_amounts[i] or 0,
         })
+    
+    # Calculate 6+ months end date (end of month before Month 1)
+    if monthly_data:
+        # Month 1 is 5 months ago
+        months_ago = 5
+        year = today.year
+        month = today.month - months_ago
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_1_start = datetime(year, month, 1).date()
+        
+        # Go back one month from Month 1 start
+        year = month_1_start.year
+        month = month_1_start.month - 1
+        if month <= 0:
+            month = 12
+            year -= 1
+        last_day_6plus = monthrange(year, month)[1]
+        six_plus_end = datetime(year, month, last_day_6plus).date()
+        six_plus_end_str = six_plus_end.strftime('%d-%m-%y')
+    else:
+        six_plus_end_str = ""
 
     total_monthly = sum(m['amount'] for m in monthly_data)
     total_outstanding = customer.total_outstanding or 0
@@ -1007,6 +1056,26 @@ def export_finance_statement_detail_pdf(request, customer_id):
     total_with_pdc = customer.total_outstanding_with_pdc or 0
     old_months = customer.old_months_pending or 0
     very_old_months = getattr(customer, 'very_old_months_pending', 0) or 0
+    
+    # Calculate 90+ and 120+ aging buckets
+    # 90+ = months 1, 2 (before last 4 months, so if current is Feb, till Oct 31)
+    # 120+ = month 1 only (before last 5 months, so if current is Feb, till Sep 30)
+    pending_90_plus = sum(month_amounts[i] for i in [0, 1])  # months 1, 2
+    pending_120_plus = month_amounts[0]  # month 1 only
+    
+    # Calculate end dates for 90+ and 120+
+    if monthly_data:
+        # 90+ ends at end of month 2
+        month_2_end = monthly_data[1]['end_date']
+        end_90_str = month_2_end.strftime('%d-%m-%y')
+        
+        # 120+ ends at end of month 1
+        month_1_end = monthly_data[0]['end_date']
+        end_120_str = month_1_end.strftime('%d-%m-%y')
+    else:
+        end_90_str = ""
+        end_120_str = ""
+    
     credit_limit = customer.credit_limit or 0
     has_over_limit = total_with_pdc > credit_limit and credit_limit > 0
 
@@ -1151,7 +1220,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
         # Highlight non-zero amounts
         amt_style = styles['cell_bold_r'] if amt > 0 else styles['cell_r']
         month_rows.append([
-            Paragraph(m['month'], styles['cell']),
+            Paragraph(f"{m['month_name']} {m['date_range']}", styles['cell']),
             Paragraph(_fmt(amt), amt_style),
         ])
     month_rows.append([
@@ -1170,21 +1239,35 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(_build_section_header('Aged Pending', styles, usable_width))
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
-    aged_col_widths = [2.2 * inch, 1.6 * inch]
+    aged_col_widths = [2.8 * inch, 1.6 * inch]
     aged_rows = [
         [
             Paragraph('Aging Bucket', styles['header_cell']),
             Paragraph('Amount (AED)', styles['header_cell_r']),
         ],
         [
-            Paragraph('180+ Days (6+ months)', styles['cell']),
+            Paragraph(f'90+ Days Pending (till {end_90_str})', styles['cell']),
+            Paragraph(
+                _fmt(pending_90_plus),
+                styles['cell_bold_r'] if pending_90_plus > 0 else styles['cell_r'],
+            ),
+        ],
+        [
+            Paragraph(f'120+ Days Pending (till {end_120_str})', styles['cell']),
+            Paragraph(
+                _fmt(pending_120_plus),
+                styles['cell_bold_r'] if pending_120_plus > 0 else styles['cell_r'],
+            ),
+        ],
+        [
+            Paragraph(f'180+ Days Pending (6+ months, till {six_plus_end_str})', styles['cell']),
             Paragraph(
                 _fmt(old_months),
                 styles['cell_bold_r'] if old_months > 0 else styles['cell_r'],
             ),
         ],
         [
-            Paragraph('360+ Days (12+ months)', styles['cell']),
+            Paragraph('360+ Days Pending (6++ months)', styles['cell']),
             Paragraph(
                 _fmt(very_old_months),
                 styles['cell_bold_r'] if very_old_months > 0 else styles['cell_r'],
@@ -1225,7 +1308,15 @@ def export_finance_statement_detail_pdf(request, customer_id):
             Paragraph(_fmt(total_monthly), styles['cell_bold_r']),
         ],
         [
-            Paragraph('180+ Days Pending', styles['cell']),
+            Paragraph(f'90+ Days Pending (till {end_90_str})', styles['cell']),
+            Paragraph(_fmt(pending_90_plus), styles['cell_r']),
+        ],
+        [
+            Paragraph(f'120+ Days Pending (till {end_120_str})', styles['cell']),
+            Paragraph(_fmt(pending_120_plus), styles['cell_r']),
+        ],
+        [
+            Paragraph(f'180+ Days Pending (till {six_plus_end_str})', styles['cell']),
             Paragraph(_fmt(old_months), styles['cell_r']),
         ],
         [

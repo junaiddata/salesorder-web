@@ -57,6 +57,58 @@ class SalesmanCard(models.Model):
         blank=True,
         related_name='created_cards'
     )
+    
+    # QR Code Customization Settings
+    qr_foreground_color = models.CharField(
+        max_length=7,
+        default='#1B2A4A',
+        help_text="QR code foreground color (hex code, e.g., #1B2A4A)"
+    )
+    qr_background_color = models.CharField(
+        max_length=7,
+        default='#FFFFFF',
+        help_text="QR code background color (hex code, e.g., #FFFFFF)"
+    )
+    qr_size = models.IntegerField(
+        default=500,
+        help_text="QR code size in pixels (recommended: 500-2000)"
+    )
+    qr_embed_logo = models.BooleanField(
+        default=True,
+        help_text="Embed company logo in QR code center"
+    )
+    qr_logo_size_percent = models.IntegerField(
+        default=30,
+        help_text="Logo size as percentage of QR code (10-40%)"
+    )
+    qr_frame_style = models.CharField(
+        max_length=50,
+        default='none',
+        choices=[
+            ('none', 'No Frame'),
+            ('simple', 'Simple Border'),
+            ('rounded', 'Rounded Border'),
+            ('double', 'Double Border'),
+            ('dashed', 'Dashed Border'),
+            ('banner', 'Banner Style'),
+            ('badge', 'Badge Style'),
+            ('card', 'Card Style'),
+            ('modern', 'Modern Frame'),
+            ('classic', 'Classic Frame'),
+        ],
+        help_text="Frame style for QR code"
+    )
+    qr_frame_text = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Optional text to display with frame (e.g., 'Scan Me!')"
+    )
+    qr_frame_text_color = models.CharField(
+        max_length=7,
+        default='#000000',
+        help_text="Color for frame text"
+    )
 
     class Meta:
         verbose_name = "Salesman Card"

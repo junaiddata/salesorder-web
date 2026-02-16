@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.http import HttpResponse, HttpResponseForbidden
 from decimal import Decimal
 from datetime import datetime, timedelta
+from calendar import monthrange
 import pandas as pd
 from io import BytesIO
 from so.models import Customer, Salesman, FinanceCreditEditLog
@@ -150,16 +151,56 @@ def finance_statement_detail(request, customer_id):
         customer.month_pending_6,  # Month 6 = current month
     ]
     
-    # Generate month labels (Month 1 = oldest, Month 6 = current)
+    # Generate month labels with date ranges (Month 1 = oldest, Month 6 = current)
+    from calendar import monthrange
     for i in range(6):
         months_ago = 5 - i  # Month 1 = 5 months ago, Month 6 = 0 months ago (current)
-        month_date = today - timedelta(days=30 * months_ago)
+        # Calculate the actual month date (first day of that month)
+        if months_ago == 0:
+            month_start = today.replace(day=1)
+        else:
+            # Go back months_ago months
+            year = today.year
+            month = today.month - months_ago
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_start = datetime(year, month, 1).date()
+        
+        # Get last day of that month
+        last_day = monthrange(month_start.year, month_start.month)[1]
+        month_end = datetime(month_start.year, month_start.month, last_day).date()
+        
+        # Format dates as DD-MM-YY
+        start_str = month_start.strftime('%d-%m-%y')
+        end_str = month_end.strftime('%d-%m-%y')
+        month_name = month_names[month_start.month - 1]
+        
         monthly_data.append({
-            'month': f"{month_names[month_date.month - 1]} {month_date.year}",
+            'month': f"{month_name} {month_start.year}",
             'month_label': f"Month {i+1}",
+            'month_name': month_name,
+            'date_range': f"({start_str} to {end_str})",
+            'start_date': month_start,
+            'end_date': month_end,
             'amount': month_amounts[i],
             'field': f'month_pending_{i+1}'
         })
+    
+    # Calculate 6+ months end date (end of month before Month 1)
+    if monthly_data:
+        month_1_start = monthly_data[0]['start_date']
+        # Go back one month from Month 1 start
+        year = month_1_start.year
+        month = month_1_start.month - 1
+        if month <= 0:
+            month = 12
+            year -= 1
+        last_day_6plus = monthrange(year, month)[1]
+        six_plus_end = datetime(year, month, last_day_6plus).date()
+        six_plus_end_str = six_plus_end.strftime('%d-%m-%y')
+    else:
+        six_plus_end_str = ""
     
     # Calculate totals
     total_monthly = sum(m['amount'] for m in monthly_data)
@@ -168,6 +209,62 @@ def finance_statement_detail(request, customer_id):
     total_with_pdc = customer.total_outstanding_with_pdc or 0
     old_months_pending = customer.old_months_pending or 0  # 180+ days (6+)
     very_old_months_pending = getattr(customer, 'very_old_months_pending', 0) or 0  # 360+ days (6++)
+    
+    # Calculate 90+ and 120+ aging buckets
+    # 90+ = before last 3 months (so if current is Feb, last 3 months are Feb, Jan, Dec, so 90+ = till Nov 30)
+    # But user says: if current is Feb, 90+ should be till Oct 31 (so before last 4 months)
+    # Actually: 90+ = months 1, 2, 3, 4 (oldest 4 months, excluding current and last month)
+    # 120+ = months 1, 2, 3 (oldest 3 months, excluding current, last month, and 2 months ago)
+    
+    # If current is Feb (month 6), last month is Jan (month 5)
+    # 90+ should be till Oct 31 = end of month that is 3 months before current
+    # Current = Feb, 3 months before = Nov, but they want Oct 31, so 4 months before current
+    # Let me recalculate: if current is Feb, 90+ till Oct 31 means before Nov 1
+    # So 90+ = everything before Nov = months before Nov = months 1, 2, 3, 4 (Sep, Oct, Nov, Dec? No)
+    
+    # Re-reading: "90+ means current month should be from last month"
+    # If current is Feb, last month is Jan
+    # 90+ till Oct 31 means: everything before Nov 1
+    # So 90+ = months that are Nov and older = months 1, 2, 3, 4? No wait
+    
+    # Let me think: Month 6 = Feb (current), Month 5 = Jan, Month 4 = Dec, Month 3 = Nov, Month 2 = Oct, Month 1 = Sep
+    # If 90+ should be till Oct 31, that means everything before Nov 1
+    # So 90+ = Nov, Dec, Jan, Feb? No that doesn't make sense
+    
+    # Actually: 90+ = months 1, 2, 3, 4 (Sep, Oct, Nov, Dec) = till Oct 31? No
+    
+    # Let me recalculate based on "before last 3 months":
+    # If current is Feb, last 3 months are: Feb, Jan, Dec
+    # So 90+ = before Dec 1 = till Nov 30
+    # But user wants till Oct 31, which is before Nov 1
+    
+    # So: 90+ = before last 4 months
+    # If current is Feb, last 4 months are: Feb, Jan, Dec, Nov
+    # So 90+ = before Nov 1 = till Oct 31 ✓
+    
+    # 90+ = months 1, 2 (Sep, Oct) = till Oct 31 ✓
+    # 120+ = months 1 (Sep) = till Sep 30? Or till Oct 31?
+    
+    # Based on user's example: 90+ till Oct 31 when current is Feb
+    # Month 6 = Feb, Month 5 = Jan, Month 4 = Dec, Month 3 = Nov, Month 2 = Oct, Month 1 = Sep
+    # 90+ till Oct 31 = months 1, 2 (Sep, Oct) ✓
+    # 120+ till Sep 30 = month 1 (Sep) ✓
+    
+    pending_90_plus = sum(month_amounts[i] for i in [0, 1])  # months 1, 2 (before last 4 months)
+    pending_120_plus = month_amounts[0]  # month 1 only (before last 5 months)
+    
+    # Calculate end dates for 90+ and 120+
+    if monthly_data:
+        # 90+ ends at end of month 2 (Oct in the example)
+        month_2_end = monthly_data[1]['end_date']
+        end_90_str = month_2_end.strftime('%d-%m-%y')
+        
+        # 120+ ends at end of month 1 (Sep in the example)
+        month_1_end = monthly_data[0]['end_date']
+        end_120_str = month_1_end.strftime('%d-%m-%y')
+    else:
+        end_90_str = ""
+        end_120_str = ""
     
     # Credit limit check
     has_over_limit = total_with_pdc > customer.credit_limit if customer.credit_limit > 0 else False
@@ -191,6 +288,11 @@ def finance_statement_detail(request, customer_id):
         'total_with_pdc': total_with_pdc,
         'old_months_pending': old_months_pending,  # 180+ days (6+)
         'very_old_months_pending': very_old_months_pending,  # 360+ days (6++)
+        'six_plus_end_str': six_plus_end_str,
+        'pending_90_plus': pending_90_plus,
+        'pending_120_plus': pending_120_plus,
+        'end_90_str': end_90_str,
+        'end_120_str': end_120_str,
         'credit_limit': customer.credit_limit or 0,
         'credit_days': customer.credit_days or '0',
         'has_over_limit': has_over_limit,

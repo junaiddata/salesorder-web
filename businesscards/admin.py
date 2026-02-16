@@ -35,6 +35,10 @@ class SalesmanCardAdmin(admin.ModelAdmin):
         ('Company Information', {
             'fields': ('company_name', 'company_logo')
         }),
+        ('QR Code Design', {
+            'fields': ('qr_foreground_color', 'qr_background_color', 'qr_size', 'qr_embed_logo', 'qr_logo_size_percent'),
+            'classes': ('collapse',)
+        }),
         ('System Information', {
             'fields': ('slug', 'created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)

@@ -77,11 +77,20 @@
                         <a href="{% url 'businesscards:card_public' card.slug %}" class="btn btn-primary" target="_blank">
                             <i class="fas fa-eye me-2"></i>View Public Card
                         </a>
-                        <a href="{% url 'businesscards:download_qr' card.slug %}" class="btn btn-success">
-                            <i class="fas fa-qrcode me-2"></i>Download QR Code
+                        <a href="{% url 'businesscards:edit_salesman' card.slug %}" class="btn btn-warning">
+                            <i class="fas fa-edit me-2"></i>Edit Card
+                        </a>
+                        <a href="{% url 'businesscards:customize_qr' card.slug %}" class="btn btn-success">
+                            <i class="fas fa-palette me-2"></i>Customize QR Code
+                        </a>
+                        <a href="{% url 'businesscards:download_qr' card.slug %}" class="btn btn-outline-success">
+                            <i class="fas fa-download me-2"></i>Download QR Code
                         </a>
                         <a href="{% url 'businesscards:vcard_download' card.slug %}" class="btn btn-info">
                             <i class="fas fa-address-card me-2"></i>Download vCard
+                        </a>
+                        <a href="{% url 'businesscards:delete_salesman' card.slug %}" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Delete Card
                         </a>
                     </div>
                 </div>

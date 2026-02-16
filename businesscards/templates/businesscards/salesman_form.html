@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Business Cards</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f1f5f9;
+            padding: 2rem 0;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .form-section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .preview-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            border: 2px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="mb-0">{{ title }}</h1>
+                <p class="text-muted">{% if card %}Edit salesman card information{% else %}Create a new salesman card{% endif %}</p>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="form-card">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Personal Information -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-user me-2"></i>Personal Information
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    Name <span class="text-danger">*</span>
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                {{ form.email }}
+                                {% if form.email.errors %}
+                                    <div class="text-danger small">{{ form.email.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.phone.id_for_label }}" class="form-label">
+                                    Phone <span class="text-danger">*</span>
+                                </label>
+                                {{ form.phone }}
+                                {% if form.phone.errors %}
+                                    <div class="text-danger small">{{ form.phone.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.photo.id_for_label }}" class="form-label">
+                                    Photo
+                                </label>
+                                {{ form.photo }}
+                                {% if form.photo.help_text %}
+                                    <div class="form-text">{{ form.photo.help_text }}</div>
+                                {% endif %}
+                                {% if card and card.photo %}
+                                    <div>
+                                        <img src="{{ card.photo.url }}" alt="Current photo" class="preview-image">
+                                    </div>
+                                {% endif %}
+                                {% if form.photo.errors %}
+                                    <div class="text-danger small">{{ form.photo.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Professional Information -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-briefcase me-2"></i>Professional Information
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.designation.id_for_label }}" class="form-label">
+                                    Designation <span class="text-danger">*</span>
+                                </label>
+                                {{ form.designation }}
+                                {% if form.designation.errors %}
+                                    <div class="text-danger small">{{ form.designation.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.department.id_for_label }}" class="form-label">
+                                    Department <span class="text-danger">*</span>
+                                </label>
+                                {{ form.department }}
+                                {% if form.department.errors %}
+                                    <div class="text-danger small">{{ form.department.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Company Information -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-building me-2"></i>Company Information
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.company_name.id_for_label }}" class="form-label">
+                                    Company Name
+                                </label>
+                                {{ form.company_name }}
+                                {% if form.company_name.errors %}
+                                    <div class="text-danger small">{{ form.company_name.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.company_logo.id_for_label }}" class="form-label">
+                                    Company Logo
+                                </label>
+                                {{ form.company_logo }}
+                                {% if form.company_logo.help_text %}
+                                    <div class="form-text">{{ form.company_logo.help_text }}</div>
+                                {% endif %}
+                                {% if card and card.company_logo %}
+                                    <div>
+                                        <img src="{{ card.company_logo.url }}" alt="Current logo" class="preview-image">
+                                    </div>
+                                {% endif %}
+                                {% if form.company_logo.errors %}
+                                    <div class="text-danger small">{{ form.company_logo.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- QR Code Settings -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-qrcode me-2"></i>QR Code Design
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.qr_foreground_color.id_for_label }}" class="form-label">
+                                        Foreground Color
+                                    </label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {{ form.qr_foreground_color }}
+                                        <input type="text" 
+                                               value="{{ form.qr_foreground_color.value|default:'#1B2A4A' }}"
+                                               class="form-control"
+                                               readonly
+                                               style="max-width: 120px;">
+                                    </div>
+                                    {% if form.qr_foreground_color.help_text %}
+                                        <div class="form-text">{{ form.qr_foreground_color.help_text }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.qr_background_color.id_for_label }}" class="form-label">
+                                        Background Color
+                                    </label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {{ form.qr_background_color }}
+                                        <input type="text" 
+                                               value="{{ form.qr_background_color.value|default:'#FFFFFF' }}"
+                                               class="form-control"
+                                               readonly
+                                               style="max-width: 120px;">
+                                    </div>
+                                    {% if form.qr_background_color.help_text %}
+                                        <div class="form-text">{{ form.qr_background_color.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.qr_size.id_for_label }}" class="form-label">
+                                    QR Code Size (pixels)
+                                </label>
+                                {{ form.qr_size }}
+                                {% if form.qr_size.help_text %}
+                                    <div class="form-text">{{ form.qr_size.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    {{ form.qr_embed_logo }}
+                                    <label class="form-check-label" for="{{ form.qr_embed_logo.id_for_label }}">
+                                        Embed Company Logo in QR Code
+                                    </label>
+                                </div>
+                                {% if form.qr_embed_logo.help_text %}
+                                    <div class="form-text">{{ form.qr_embed_logo.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3" id="logoSizePercentGroup">
+                                <label for="{{ form.qr_logo_size_percent.id_for_label }}" class="form-label">
+                                    Logo Size (%)
+                                </label>
+                                {{ form.qr_logo_size_percent }}
+                                {% if form.qr_logo_size_percent.help_text %}
+                                    <div class="form-text">{{ form.qr_logo_size_percent.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.qr_frame_style.id_for_label }}" class="form-label">
+                                    Frame Style
+                                </label>
+                                {{ form.qr_frame_style }}
+                                {% if form.qr_frame_style.help_text %}
+                                    <div class="form-text">{{ form.qr_frame_style.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3" id="frameTextGroup">
+                                <label for="{{ form.qr_frame_text.id_for_label }}" class="form-label">
+                                    Frame Text (Optional)
+                                </label>
+                                {{ form.qr_frame_text }}
+                                {% if form.qr_frame_text.help_text %}
+                                    <div class="form-text">{{ form.qr_frame_text.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3" id="frameTextColorGroup">
+                                <label for="{{ form.qr_frame_text_color.id_for_label }}" class="form-label">
+                                    Frame Text Color
+                                </label>
+                                <div class="d-flex align-items-center gap-2">
+                                    {{ form.qr_frame_text_color }}
+                                    <input type="text" 
+                                           value="{{ form.qr_frame_text_color.value|default:'#000000' }}"
+                                           class="form-control"
+                                           readonly
+                                           style="max-width: 120px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Slug (if editing) -->
+                        {% if form.slug %}
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-link me-2"></i>URL Information
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.slug.id_for_label }}" class="form-label">Slug</label>
+                                {{ form.slug }}
+                                {% if form.slug.help_text %}
+                                    <div class="form-text">{{ form.slug.help_text }}</div>
+                                {% endif %}
+                                {% if card %}
+                                    <div class="form-text">
+                                        <a href="{% url 'businesscards:card_public' card.slug %}" target="_blank">
+                                            View public card <i class="fas fa-external-link-alt"></i>
+                                        </a>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>{{ action }}
+                            </button>
+                            <a href="{% if card %}{% url 'businesscards:salesman_detail' card.slug %}{% else %}{% url 'businesscards:salesmen_list' %}{% endif %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="form-card">
+                    <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>Information</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Fields marked with <span class="text-danger">*</span> are required
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-link text-info me-2"></i>
+                            Slug will be auto-generated from name
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-qrcode text-primary me-2"></i>
+                            QR code will be generated automatically
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-image text-warning me-2"></i>
+                            Photos and logos are optional
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Sync color pickers with text inputs
+        const fgColorPicker = document.getElementById('{{ form.qr_foreground_color.id_for_label }}');
+        const bgColorPicker = document.getElementById('{{ form.qr_background_color.id_for_label }}');
+        
+        if (fgColorPicker) {
+            fgColorPicker.addEventListener('input', function() {
+                this.nextElementSibling.value = this.value;
+            });
+        }
+        if (bgColorPicker) {
+            bgColorPicker.addEventListener('input', function() {
+                this.nextElementSibling.value = this.value;
+            });
+        }
+
+        // Show/hide logo size based on embed checkbox
+        const embedCheckbox = document.getElementById('{{ form.qr_embed_logo.id_for_label }}');
+        const logoSizeGroup = document.getElementById('logoSizePercentGroup');
+        if (embedCheckbox && logoSizeGroup) {
+            embedCheckbox.addEventListener('change', function() {
+                logoSizeGroup.style.display = this.checked ? 'block' : 'none';
+            });
+            // Set initial state
+            logoSizeGroup.style.display = embedCheckbox.checked ? 'block' : 'none';
+        }
+
+        // Show/hide frame text based on frame style
+        const frameStyleSelect = document.getElementById('{{ form.qr_frame_style.id_for_label }}');
+        const frameTextGroup = document.getElementById('frameTextGroup');
+        const frameTextColorGroup = document.getElementById('frameTextColorGroup');
+        if (frameStyleSelect && frameTextGroup) {
+            frameStyleSelect.addEventListener('change', function() {
+                if (this.value === 'none') {
+                    frameTextGroup.style.display = 'none';
+                    frameTextColorGroup.style.display = 'none';
+                } else {
+                    frameTextGroup.style.display = 'block';
+                }
+            });
+        }
+
+        // Sync frame text color picker
+        const frameTextColorPicker = document.getElementById('{{ form.qr_frame_text_color.id_for_label }}');
+        if (frameTextColorPicker) {
+            frameTextColorPicker.addEventListener('input', function() {
+                this.nextElementSibling.value = this.value;
+            });
+        }
+    </script>
+</body>
+</html>
