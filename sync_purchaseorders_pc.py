@@ -10,7 +10,7 @@ WORKFLOW:
 3. VPS updates its database
 
 Usage:
-    python sync_purchaseorders_pc.py           # Runs every 7 minutes (background service)
+    python sync_purchaseorders_pc.py           # Runs every 30 minutes (background service)
     python sync_purchaseorders_pc.py --once    # Single run (for testing)
 """
 
@@ -39,7 +39,7 @@ VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')
 VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')
 
 # Sync interval in minutes
-SYNC_INTERVAL_MINUTES = 7
+SYNC_INTERVAL_MINUTES = 30
 
 # Log file path (in logs directory)
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
@@ -257,8 +257,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python sync_purchaseorders_pc.py         # Runs every 7 minutes (service mode)
-  python sync_purchaseorders_pc.py --once  # Single run
+  python sync_purchaseorders_pc.py           # Runs every 30 minutes (service mode)
+  python sync_purchaseorders_pc.py --once    # Single run
+  python sync_purchaseorders_pc.py --interval 15  # Run every 15 minutes
         """
     )
     parser.add_argument(

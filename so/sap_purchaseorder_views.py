@@ -38,6 +38,16 @@ def _open_row_status_q_po() -> Q:
     return Q(row_status__iexact="open") | Q(row_status__iexact="o") | Q(row_status__iexact="OPEN") | Q(row_status__iexact="O")
 
 
+def _user_can_see_price(request) -> bool:
+    """True if user is admin (staff, superuser, or Role Admin) and can see prices."""
+    if request.user.is_staff or request.user.is_superuser:
+        return True
+    try:
+        return hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    except Exception:
+        return False
+
+
 def _dec2(x) -> Decimal:
     """Convert to Decimal with 2 decimal places; treat None/NaN as 0.00."""
     try:
@@ -394,7 +404,7 @@ def purchaseorder_list(request):
     )
     purchasers = [p for p in purchasers if p]
 
-    show_price = request.user.is_staff or request.user.is_superuser
+    show_price = _user_can_see_price(request)
 
     return render(request, 'purchaseorders/purchaseorder_list.html', {
         'page_obj': page_obj,
@@ -456,7 +466,7 @@ def purchaseorder_detail(request, po_number):
         row_total = it.row_total or Decimal("0")
         it.unit_price = (row_total / qty).quantize(Decimal("0.01")) if qty else Decimal("0.00")
 
-    show_price = request.user.is_staff or request.user.is_superuser
+    show_price = _user_can_see_price(request)
 
     context = {
         'purchaseorder': purchaseorder,
@@ -580,7 +590,7 @@ def purchaseorder_search(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    show_price = request.user.is_staff or request.user.is_superuser
+    show_price = _user_can_see_price(request)
     rows_html = render_to_string('purchaseorders/_purchaseorder_rows.html', {'page_obj': page_obj, 'show_price': show_price}, request=request)
     pagination_html = render_to_string('purchaseorders/_pagination.html', {'page_obj': page_obj}, request=request)
 
@@ -598,7 +608,7 @@ def export_sap_purchaseorder_pdf(request, po_number):
     """Generate PDF for a single SAP Purchase Order. Price columns only for admin."""
     purchaseorder = get_object_or_404(SAPPurchaseOrder, po_number=po_number)
     items_qs = purchaseorder.items.all().order_by('id')
-    show_price = request.user.is_staff or request.user.is_superuser
+    show_price = _user_can_see_price(request)
 
     response = HttpResponse(content_type='application/pdf')
     date_str = purchaseorder.posting_date.strftime('%Y%m%d') if purchaseorder.posting_date else 'NA'
@@ -811,7 +821,7 @@ def export_sap_purchaseorder_open_items_pdf(request, po_number):
     """Export only OPEN line items for a single Purchase Order. Price columns only for admin."""
     purchaseorder = get_object_or_404(SAPPurchaseOrder, po_number=po_number)
     items_qs = purchaseorder.items.all().filter(_open_row_status_q_po()).order_by("id")
-    show_price = request.user.is_staff or request.user.is_superuser
+    show_price = _user_can_see_price(request)
 
     response = HttpResponse(content_type="application/pdf")
     date_str = purchaseorder.posting_date.strftime("%Y%m%d") if purchaseorder.posting_date else "NA"
@@ -1004,7 +1014,7 @@ def export_purchaseorder_list_excel(request):
     qs = _purchaseorder_items_qs()
     qs = _apply_purchaseorder_list_filters(qs, request)
 
-    is_admin = request.user.is_staff or request.user.is_superuser
+    is_admin = _user_can_see_price(request)
     show_price = is_admin and request.GET.get('show_price') == '1'
 
     data = []

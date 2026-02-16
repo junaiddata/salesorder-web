@@ -18,6 +18,7 @@ from django.db.models import DecimalField
 from so.sap_purchaseorder_views import (
     _purchaseorder_items_qs,
     _apply_purchaseorder_list_filters,
+    _user_can_see_price,
 )
 from so.finance_statement_pdf_export import (
     _build_styles,
@@ -50,7 +51,7 @@ def export_purchaseorder_list_pdf(request):
     qs = _purchaseorder_items_qs()
     qs = _apply_purchaseorder_list_filters(qs, request)
 
-    is_admin = request.user.is_staff or request.user.is_superuser
+    is_admin = _user_can_see_price(request)
     show_price = is_admin and request.GET.get('show_price') == '1'
 
     # Aggregates for KPI bar
