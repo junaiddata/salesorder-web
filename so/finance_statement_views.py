@@ -242,6 +242,23 @@ def save_finance_credit_edit(request, customer_id):
 
 
 @login_required
+def save_finance_internal_remarks(request, customer_id):
+    """
+    Save manager internal remarks for this customer (for salesman).
+    Manager only.
+    """
+    if request.user.username != 'manager':
+        return HttpResponseForbidden("Only manager can save internal remarks.")
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required.")
+    customer = get_object_or_404(Customer, id=customer_id)
+    customer.internal_remarks = (request.POST.get('internal_remarks') or '').strip() or None
+    customer.save(update_fields=['internal_remarks'])
+    messages.success(request, "Internal remarks saved.")
+    return redirect('finance_statement_detail', customer_id=customer_id)
+
+
+@login_required
 def finance_credit_edit_list(request):
     """
     Consolidated manager credit edit list with date range filter.

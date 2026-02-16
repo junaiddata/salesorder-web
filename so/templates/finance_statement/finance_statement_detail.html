@@ -289,7 +289,11 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Export Excel
         </a>
-        <a href="{% url 'export_finance_statement_detail_pdf' customer.id %}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
+        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem; color: var(--text-secondary);">
+          <input type="checkbox" id="include-internal-remarks-pdf">
+          Include internal remarks in PDF
+        </label>
+        <a href="{% url 'export_finance_statement_detail_pdf' customer.id %}" id="pdf-export-link" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
           Export PDF
         </a>
@@ -396,6 +400,24 @@
       </div>
     </div>
     {% endif %}
+
+    <!-- Internal remarks (manager can edit; visible to all) -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Internal remarks </h2>
+      </div>
+      <div class="card-body">
+        {% if is_manager %}
+        <form method="post" action="{% url 'save_finance_internal_remarks' customer.id %}">
+          {% csrf_token %}
+          <textarea name="internal_remarks" rows="3" placeholder="Remarks for salesman (e.g. follow-up, actions). Optional: include in PDF when exporting." style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: inherit; resize: vertical;">{{ customer.internal_remarks|default:'' }}</textarea>
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Save internal remarks</button>
+        </form>
+        {% else %}
+        <p style="color: var(--text-secondary);">{{ customer.internal_remarks|default:"No internal remarks." }}</p>
+        {% endif %}
+      </div>
+    </div>
 
     <!-- Outstanding Summary -->
     <div class="card">
@@ -523,5 +545,15 @@
       </div>
     </div>
   </div>
+  <script>
+    document.getElementById('pdf-export-link').addEventListener('click', function(e) {
+      e.preventDefault();
+      var url = this.getAttribute('href');
+      if (document.getElementById('include-internal-remarks-pdf').checked) {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'include_internal_remarks=1';
+      }
+      window.location = url;
+    });
+  </script>
 </body>
 </html>

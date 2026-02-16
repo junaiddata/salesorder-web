@@ -3,6 +3,7 @@ Finance Statement PDF Export - Customer Finance Summary
 Refactored for enterprise-grade visual quality using ReportLab only.
 Logo source: https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp
 """
+import html as html_module
 import os
 from io import BytesIO
 from decimal import Decimal
@@ -637,6 +638,17 @@ def export_finance_statement_detail_pdf(request, customer_id):
         subtitle_text='Customer Finance Details',
         page_width=usable_width,
     ))
+
+    # ── 1b. Internal Remarks (top of PDF when requested) ──
+    include_internal_remarks = request.GET.get('include_internal_remarks', '').strip().lower() in ('1', 'true', 'yes', 'on')
+    internal_remarks_text = getattr(customer, 'internal_remarks', None) if hasattr(customer, 'internal_remarks') else None
+    if include_internal_remarks and internal_remarks_text:
+        elements.append(_build_section_header('Remarks From MD:', styles, usable_width))
+        elements.append(Spacer(1, SP_AFTER_HEADER))
+        safe_text = html_module.escape(internal_remarks_text).replace('\n', '<br/>')
+        remarks_para = Paragraph(safe_text, styles['cell'])
+        elements.append(remarks_para)
+        elements.append(Spacer(1, SP_SECTION))
 
     # ── 2. Customer Information Section ──
     elements.append(_build_section_header('Customer Information', styles, usable_width))

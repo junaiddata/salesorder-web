@@ -41,25 +41,69 @@ VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')  # Must match VPS
 # Sync interval in minutes
 SYNC_INTERVAL_MINUTES = 60  # 1 hour
 
-# Log file path (in logs directory)
+# Log file path (in logs directory); fallback to user temp if project log dir not writable
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "sync_customer_finance.log")
+# Fallback: user temp dir (works when script runs as scheduled task / different user)
+_FALLBACK_LOG_DIR = os.path.join(os.environ.get("TEMP", os.environ.get("TMP", ".")), "salesorder_sync")
+_LOG_FILE_RESOLVED = None  # Set on first successful open
+_LOG_WARNED = False  # Only warn once when file logging fails
+
+
+def _get_log_file():
+    """Return log file path that we can write to (project logs or fallback)."""
+    global _LOG_FILE_RESOLVED, _LOG_WARNED
+    if _LOG_FILE_RESOLVED is not None:
+        return _LOG_FILE_RESOLVED
+    # Try project logs first
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        test_path = os.path.join(LOG_DIR, "sync_customer_finance.log")
+        with open(test_path, "a", encoding="utf-8"):
+            pass
+        _LOG_FILE_RESOLVED = test_path
+        return _LOG_FILE_RESOLVED
+    except (OSError, PermissionError):
+        pass
+    # Fallback: temp dir
+    try:
+        os.makedirs(_FALLBACK_LOG_DIR, exist_ok=True)
+        fallback = os.path.join(_FALLBACK_LOG_DIR, "sync_customer_finance.log")
+        with open(fallback, "a", encoding="utf-8"):
+            pass
+        _LOG_FILE_RESOLVED = fallback
+        if not _LOG_WARNED:
+            _LOG_WARNED = True
+            print(f"Log file (project dir not writable): using {fallback}", flush=True)
+        return _LOG_FILE_RESOLVED
+    except (OSError, PermissionError):
+        pass
+    _LOG_FILE_RESOLVED = False  # No file logging
+    if not _LOG_WARNED:
+        _LOG_WARNED = True
+        print("Logging to file disabled (permission denied). Output to console only.", flush=True)
+    return None
 
 
 def log_message(message: str, also_print: bool = True, level: str = "INFO"):
-    """Write message to log file and optionally print to console."""
+    """Write message to log file (if writable) and optionally print to console."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] [{level}] {message}\n"
-    
-    try:
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
-    except Exception as e:
-        print(f"Logging error: {e}")
-    
+    log_path = _get_log_file()
+    if log_path:
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except (OSError, PermissionError):
+            pass  # Already warned once; avoid spamming
     if also_print:
         print(message, flush=True)
+
+
+def get_log_file_path_for_display():
+    """Return the path where logs are written, or None if console-only. Call after at least one log_message."""
+    _get_log_file()
+    return _LOG_FILE_RESOLVED if _LOG_FILE_RESOLVED else None
 
 
 def sync_customer_finance() -> Dict[str, Any]:
@@ -74,6 +118,8 @@ def sync_customer_finance() -> Dict[str, Any]:
     log_message("=" * 70)
     log_message("SAP Customer Finance Summary Sync (PC -> VPS via HTTP)")
     log_message("=" * 70)
+    _log_path = get_log_file_path_for_display()
+    log_message("Log file: " + (_log_path if _log_path else "console only (no file)"))
     log_message(f"Started at: {sync_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     log_message(f"Local API: http://192.168.1.103/IntegrationApi/api/FinanceSummary")
     log_message(f"VPS URL: {VPS_BASE_URL}")
@@ -83,6 +129,7 @@ def sync_customer_finance() -> Dict[str, Any]:
     if VPS_API_KEY == 'test':
         error_msg = 'ERROR: Please configure VPS_API_KEY!'
         log_message(error_msg, level="ERROR")
+        log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
         return {"success": False, "stats": {}, "error": error_msg}
     
     try:
@@ -112,18 +159,22 @@ def sync_customer_finance() -> Dict[str, Any]:
         except requests.exceptions.Timeout:
             error_msg = f"API request timeout after {timeout}s"
             log_message(f"  ✗ {error_msg}", level="ERROR")
+            log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
             return {"success": False, "stats": {}, "error": error_msg}
         except requests.exceptions.RequestException as e:
             error_msg = f"API request error: {e}"
             log_message(f"  ✗ {error_msg}", level="ERROR")
+            log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
             return {"success": False, "stats": {}, "error": error_msg}
         except Exception as e:
             error_msg = f"Unexpected error fetching from API: {e}"
             log_message(f"  ✗ {error_msg}", level="ERROR")
+            log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
             return {"success": False, "stats": {}, "error": error_msg}
         
         if not finance_data:
             log_message("  No finance data received from API", level="WARNING")
+            log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
             return {"success": False, "stats": {}, "error": "No data received from API"}
         
         # Step 2: Send to VPS
@@ -168,7 +219,8 @@ def sync_customer_finance() -> Dict[str, Any]:
             log_message(f"Created: {created}")
             log_message(f"Updated: {updated}")
             log_message("=" * 70)
-            
+            _path = get_log_file_path_for_display()
+            log_message(">>> RESULT: SUCCESS. Full log: " + (_path if _path else "console only"))
             return {
                 "success": True,
                 "stats": {
@@ -181,6 +233,7 @@ def sync_customer_finance() -> Dict[str, Any]:
             }
         else:
             log_message(f"  ✗ VPS sync failed: {error}", level="ERROR")
+            log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
             return {"success": False, "stats": {}, "error": error}
             
     except requests.HTTPError as e:
@@ -196,11 +249,13 @@ def sync_customer_finance() -> Dict[str, Any]:
         log_message(f"  ✗ {error_msg}", level="ERROR")
         if resp_text:
             log_message(f"  VPS response (truncated): {resp_text[:1000]}", level="ERROR")
+        log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
         return {"success": False, "stats": {}, "error": error_msg}
         
     except requests.RequestException as e:
         error_msg = f"Failed to send to VPS: {str(e)}"
         log_message(f"  ✗ {error_msg}", level="ERROR")
+        log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
         return {"success": False, "stats": {}, "error": error_msg}
         
     except Exception as e:
@@ -214,6 +269,7 @@ def sync_customer_finance() -> Dict[str, Any]:
         log_message(f"Duration: {sync_duration:.2f} seconds", level="ERROR")
         log_message("=" * 70, level="ERROR")
         log_message(traceback.format_exc(), level="ERROR")
+        log_message(">>> RESULT: FAILED. Full log: " + (get_log_file_path_for_display() or "console only"), level="ERROR")
         
         return {"success": False, "stats": {}, "error": str(e)}
 

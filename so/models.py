@@ -69,7 +69,11 @@ class Customer(models.Model):
     total_outstanding = models.FloatField(default=0.0)
     pdc_received = models.FloatField(default=0.0)
     total_outstanding_with_pdc = models.FloatField(default=0.0)
-
+    internal_remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Manager internal remarks for salesman (optional; shown on PDF when 'include internal remarks' is on)",
+    )
 
     def __str__(self):
         return self.customer_name
