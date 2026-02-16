@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework.authtoken',
     'tradelicense',
+    'businesscards',
 
     'django.contrib.humanize',
     

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1B2A4A">
+    <title>{{ card.name }} - Digital Business Card</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .card-container {
+            background: white;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .company-logo {
+            max-width: 120px;
+            max-height: 60px;
+            margin-bottom: 30px;
+            object-fit: contain;
+        }
+
+        .photo-container {
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 30px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 4px solid #f0f0f0;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 48px;
+            font-weight: 600;
+        }
+
+        .name {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+
+        .designation {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .department {
+            font-size: 16px;
+            color: #999;
+            margin-bottom: 30px;
+        }
+
+        .company-name {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .btn-call {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-call:hover {
+            background: #059669;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-email {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-email:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-contact {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-contact:hover {
+            background: #4f46e5;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .action-btn i {
+            font-size: 20px;
+        }
+
+        @media (max-width: 480px) {
+            .card-container {
+                padding: 30px 20px;
+                border-radius: 20px;
+            }
+
+            .name {
+                font-size: 28px;
+            }
+
+            .photo-container {
+                width: 120px;
+                height: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="card-container">
+        {% if card.company_logo %}
+            <img src="{{ card.company_logo.url }}" alt="{{ card.company_name }}" class="company-logo">
+        {% endif %}
+
+        <div class="photo-container">
+            {% if card.photo %}
+                <img src="{{ card.photo.url }}" alt="{{ card.name }}">
+            {% else %}
+                <div class="photo-placeholder">
+                    {{ card.name|first|upper }}
+                </div>
+            {% endif %}
+        </div>
+
+        <h1 class="name">{{ card.name }}</h1>
+        <div class="designation">{{ card.designation }}</div>
+        <div class="department">{{ card.department }}</div>
+        <div class="company-name">{{ card.company_name }}</div>
+
+        <div class="actions">
+            <a href="tel:{{ card.phone }}" class="action-btn btn-call">
+                <i class="fas fa-phone"></i>
+                <span>Call</span>
+            </a>
+            <a href="mailto:{{ card.email }}" class="action-btn btn-email">
+                <i class="fas fa-envelope"></i>
+                <span>Email</span>
+            </a>
+            <a href="{% url 'businesscards:vcard_download' card.slug %}" class="action-btn btn-contact">
+                <i class="fas fa-address-card"></i>
+                <span>Save Contact</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</body>
+</html>

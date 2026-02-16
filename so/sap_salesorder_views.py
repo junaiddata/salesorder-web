@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404, JsonResponse
-from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField
+from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField, F
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
@@ -9059,3 +9059,263 @@ def export_item_analysis_pdf(request):
     response.write(pdf_value)
     
     return response
+
+
+@login_required
+def item_classification_summary(request):
+    """
+    Item Classification Summary View
+    Shows items with Last Sale Date (excluding today), Second Last Sale Date, Days Between Sales,
+    Total Sales quantities by year (2025, 2026), Current Stock, Total Open PO quantity, and Total Open SO quantity.
+    """
+    from so.models import SAPPurchaseOrderItem, SAPSalesorderItem
+    from so.sap_purchaseorder_views import _open_row_status_q_po
+    
+    today = date.today()
+    
+    # Get base querysets with salesman scope
+    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    
+    # Filter to exclude today's sales for last sale date calculation
+    invoices_before_today = invoice_qs.filter(posting_date__lt=today)
+    creditmemos_before_today = creditmemo_qs.filter(posting_date__lt=today)
+    
+    # Get search filter
+    search_query = request.GET.get('q', '').strip()
+    
+    # Get all invoice items (excluding today for date calculation, but include today for sales totals)
+    invoice_items_all = SAPARInvoiceItem.objects.filter(
+        invoice__in=invoice_qs
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('invoice')
+    
+    creditmemo_items_all = SAPARCreditMemoItem.objects.filter(
+        credit_memo__in=creditmemo_qs
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('credit_memo')
+    
+    # Apply search filter
+    if search_query:
+        invoice_items_all = invoice_items_all.filter(
+            Q(item_code__icontains=search_query) | 
+            Q(item_description__icontains=search_query)
+        )
+        creditmemo_items_all = creditmemo_items_all.filter(
+            Q(item_code__icontains=search_query) | 
+            Q(item_description__icontains=search_query)
+        )
+    
+    # Get invoice items for date calculation (excluding today)
+    invoice_items_for_dates = SAPARInvoiceItem.objects.filter(
+        invoice__in=invoices_before_today
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('invoice')
+    
+    creditmemo_items_for_dates = SAPARCreditMemoItem.objects.filter(
+        credit_memo__in=creditmemos_before_today
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('credit_memo')
+    
+    # Apply search filter to date items too
+    if search_query:
+        invoice_items_for_dates = invoice_items_for_dates.filter(
+            Q(item_code__icontains=search_query) | 
+            Q(item_description__icontains=search_query)
+        )
+        creditmemo_items_for_dates = creditmemo_items_for_dates.filter(
+            Q(item_code__icontains=search_query) | 
+            Q(item_description__icontains=search_query)
+        )
+    
+    # Build item data dictionary
+    item_data = {}
+    
+    # Process invoice items for dates
+    for item in invoice_items_for_dates:
+        item_code = item.item_code
+        posting_date = item.invoice.posting_date
+        
+        if item_code not in item_data:
+            item_data[item_code] = {
+                'item_code': item_code,
+                'item_description': item.item_description,
+                'sale_dates': [],
+            }
+        
+        if posting_date:
+            item_data[item_code]['sale_dates'].append(posting_date)
+    
+    # Process credit memo items for dates
+    for item in creditmemo_items_for_dates:
+        item_code = item.item_code
+        posting_date = item.credit_memo.posting_date
+        
+        if item_code not in item_data:
+            item_data[item_code] = {
+                'item_code': item_code,
+                'item_description': item.item_description,
+                'sale_dates': [],
+            }
+        
+        if posting_date:
+            item_data[item_code]['sale_dates'].append(posting_date)
+    
+    # Calculate last and second last sale dates
+    for item_code, data in item_data.items():
+        # Get unique dates, sorted descending
+        unique_dates = sorted(set(data['sale_dates']), reverse=True)
+        
+        if len(unique_dates) >= 1:
+            data['last_sale_date'] = unique_dates[0]
+        else:
+            data['last_sale_date'] = None
+        
+        if len(unique_dates) >= 2:
+            data['second_last_sale_date'] = unique_dates[1]
+            # Calculate days between
+            data['days_between'] = (unique_dates[0] - unique_dates[1]).days
+        else:
+            data['second_last_sale_date'] = None
+            data['days_between'] = None
+    
+    # Aggregate sales quantities by year (2025, 2026) - include today's sales
+    sales_2025_invoice = invoice_items_all.filter(
+        invoice__posting_date__year=2025
+    ).values('item_code').annotate(
+        total_qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    
+    sales_2026_invoice = invoice_items_all.filter(
+        invoice__posting_date__year=2026
+    ).values('item_code').annotate(
+        total_qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    
+    sales_2025_credit = creditmemo_items_all.filter(
+        credit_memo__posting_date__year=2025
+    ).values('item_code').annotate(
+        total_qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    
+    sales_2026_credit = creditmemo_items_all.filter(
+        credit_memo__posting_date__year=2026
+    ).values('item_code').annotate(
+        total_qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    
+    # Combine invoice and credit memo quantities (subtract credit memos)
+    sales_2025_dict = {}
+    for row in sales_2025_invoice:
+        item_code = row['item_code']
+        sales_2025_dict[item_code] = float(row['total_qty'] or 0)
+    
+    for row in sales_2025_credit:
+        item_code = row['item_code']
+        if item_code in sales_2025_dict:
+            sales_2025_dict[item_code] -= float(row['total_qty'] or 0)
+        else:
+            sales_2025_dict[item_code] = -float(row['total_qty'] or 0)
+    
+    sales_2026_dict = {}
+    for row in sales_2026_invoice:
+        item_code = row['item_code']
+        sales_2026_dict[item_code] = float(row['total_qty'] or 0)
+    
+    for row in sales_2026_credit:
+        item_code = row['item_code']
+        if item_code in sales_2026_dict:
+            sales_2026_dict[item_code] -= float(row['total_qty'] or 0)
+        else:
+            sales_2026_dict[item_code] = -float(row['total_qty'] or 0)
+    
+    # Get stock data from Items table
+    all_item_codes = set(item_data.keys())
+    if all_item_codes:
+        items_stock = Items.objects.filter(item_code__in=all_item_codes).values('item_code', 'item_description', 'total_available_stock')
+        stock_dict = {item['item_code']: float(item['total_available_stock'] or 0) for item in items_stock}
+        # Update descriptions from Items table if available
+        for item in items_stock:
+            item_code = item['item_code']
+            if item_code in item_data and item.get('item_description'):
+                item_data[item_code]['item_description'] = item['item_description']
+    else:
+        stock_dict = {}
+    
+    # Get open PO quantities
+    open_po_qty = SAPPurchaseOrderItem.objects.filter(
+        _open_row_status_q_po()
+    ).exclude(item_no__isnull=True).exclude(item_no='').values('item_no').annotate(
+        total_qty=Sum(Coalesce(F('remaining_open_quantity'), F('quantity'), Value(0, output_field=DecimalField())))
+    )
+    open_po_dict = {row['item_no']: float(row['total_qty'] or 0) for row in open_po_qty}
+    
+    # Get open SO quantities
+    open_so_qty = SAPSalesorderItem.objects.filter(
+        _open_row_status_q()
+    ).exclude(item_no__isnull=True).exclude(item_no='').values('item_no').annotate(
+        total_qty=Sum(Coalesce(F('remaining_open_quantity'), F('quantity'), Value(0, output_field=DecimalField())))
+    )
+    open_so_dict = {row['item_no']: float(row['total_qty'] or 0) for row in open_so_qty}
+    
+    # Combine all data
+    items_list = []
+    for item_code, data in item_data.items():
+        items_list.append({
+            'item_code': item_code,
+            'item_description': data.get('item_description', ''),
+            'last_sale_date': data.get('last_sale_date'),
+            'second_last_sale_date': data.get('second_last_sale_date'),
+            'days_between': data.get('days_between'),
+            'total_sales_2025': sales_2025_dict.get(item_code, 0),
+            'total_sales_2026': sales_2026_dict.get(item_code, 0),
+            'current_stock': stock_dict.get(item_code, 0),
+            'total_open_po': open_po_dict.get(item_code, 0),
+            'total_open_so': open_so_dict.get(item_code, 0),
+        })
+    
+    # Get sort parameters
+    sort_by = request.GET.get('sort', 'total_sales_2025')
+    sort_order = request.GET.get('order', 'desc')
+    
+    # Define sort key function
+    def get_sort_key(x):
+        value = x.get(sort_by)
+        # Handle None values - always put them at the end
+        if value is None:
+            # Use tuple with priority 1 so None always sorts after priority 0 values
+            # Secondary value ensures consistent ordering among None values
+            if sort_by in ['last_sale_date', 'second_last_sale_date']:
+                return (1, date.min)  # Dates: None goes last regardless of order
+            elif sort_by in ['total_sales_2025', 'total_sales_2026', 'current_stock', 'total_open_po', 'total_open_so', 'days_between']:
+                return (1, float('-inf'))  # Numbers: None goes last regardless of order
+            else:
+                return (1, '')  # Strings: None goes last
+        
+        # Return value with priority 0 (sorts before None values)
+        if isinstance(value, date):
+            return (0, value)
+        elif isinstance(value, (int, float)):
+            return (0, value)
+        else:
+            return (0, str(value).lower())
+    
+    # Sort items
+    items_list.sort(key=get_sort_key, reverse=(sort_order == 'desc'))
+    
+    # Get distinct salesmen for filter dropdown (if needed in future)
+    invoice_salesmen = (
+        SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+    
+    context = {
+        'items': items_list,
+        'search_query': search_query,
+        'all_salesmen': list(invoice_salesmen),
+        'total_items': len(items_list),
+        'sort_by': sort_by,
+        'sort_order': sort_order,
+    }
+    
+    return render(request, 'salesorders/item_classification.html', context)

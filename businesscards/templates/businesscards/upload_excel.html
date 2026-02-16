@@ -1,0 +1,152 @@
+{% load businesscards_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Excel - Business Cards</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f1f5f9;
+            padding: 2rem 0;
+        }
+
+        .upload-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .preview-table {
+            font-size: 0.9rem;
+        }
+
+        .preview-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="mb-0">Upload Excel File</h1>
+                <p class="text-muted">Upload an Excel file with salesman data to create digital business cards</p>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Upload Form -->
+        <div class="upload-card">
+            <h5 class="mb-3"><i class="fas fa-file-excel me-2"></i>Excel File Upload</h5>
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="{{ form.excel_file.id_for_label }}" class="form-label">Excel File</label>
+                    {{ form.excel_file }}
+                    {% if form.excel_file.help_text %}
+                        <div class="form-text">{{ form.excel_file.help_text }}</div>
+                    {% endif %}
+                    {% if form.excel_file.errors %}
+                        <div class="text-danger">{{ form.excel_file.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.company_name.id_for_label }}" class="form-label">Company Name</label>
+                    {{ form.company_name }}
+                    {% if form.company_name.help_text %}
+                        <div class="form-text">{{ form.company_name.help_text }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" name="preview" class="btn btn-outline-primary">
+                        <i class="fas fa-eye me-2"></i>Preview
+                    </button>
+                    {% if preview_data %}
+                        <button type="submit" name="import" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Import Data
+                        </button>
+                    {% endif %}
+                    <a href="{% url 'businesscards:dashboard' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Preview Table -->
+        {% if preview_data %}
+            <div class="upload-card">
+                <h5 class="mb-3"><i class="fas fa-table me-2"></i>Preview (First 10 Rows)</h5>
+                <p class="text-muted">Total rows: {{ validation_result.total_rows }}</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped preview-table">
+                        <thead>
+                            <tr>
+                                {% for col in validation_result.columns %}
+                                    <th>{{ col|title }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                                <tr>
+                                    {% for col in validation_result.columns %}
+                                        <td>{{ row|get_item:col|default:"—" }}</td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Required columns:</strong> name, phone, email, designation, department<br>
+                    <strong>Optional columns:</strong> photo_filename, company_name
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Instructions -->
+        <div class="upload-card">
+            <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>Instructions</h5>
+            <ul>
+                <li>Excel file must contain columns: <code>name</code>, <code>phone</code>, <code>email</code>, <code>designation</code>, <code>department</code></li>
+                <li>Optional columns: <code>photo_filename</code>, <code>company_name</code></li>
+                <li>Click "Preview" to validate and see a preview of your data</li>
+                <li>Click "Import Data" to create/update business cards</li>
+                <li>Existing records (by email) will be updated, new ones will be created</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

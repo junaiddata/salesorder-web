@@ -47,6 +47,7 @@ CLR_BORDER_HEAVY = HexColor('#9CA3AF')  # Outer box — slightly darker
 CLR_TEXT = HexColor('#1F2937')          # Body text — near-black
 CLR_TEXT_MUTED = HexColor('#6B7280')    # Labels, secondary text
 CLR_DANGER = HexColor('#DC2626')        # Over-limit warning
+CLR_REMARKS_HIGHLIGHT = HexColor('#FFF3CD')  # Light yellow highlight for remarks
 CLR_WHITE = colors.white
 
 # Typography sizes
@@ -116,6 +117,7 @@ CLR_TEXT         = HexColor('#1F2937')
 CLR_TEXT_MUTED   = HexColor('#6B7280')
 CLR_TEXT_FAINT   = HexColor('#9CA3AF')
 CLR_DANGER       = HexColor('#DC2626')
+CLR_REMARKS_HIGHLIGHT = HexColor('#FFF3CD')  # Light yellow highlight for remarks
 CLR_SUCCESS      = HexColor('#059669')
 CLR_WHITE        = colors.white
 
@@ -232,6 +234,14 @@ def _build_styles():
             fontName='Helvetica-Bold', fontSize=FONT_BODY,
             textColor=CLR_DANGER, leading=FONT_BODY + 3,
             alignment=TA_RIGHT,
+        ),
+        'remarks_highlight': ParagraphStyle(
+            'PDFRemarksHighlight', parent=base,
+            fontName='Helvetica-Bold', fontSize=FONT_BODY,
+            textColor=CLR_DANGER, leading=FONT_BODY + 4,
+            backColor=CLR_REMARKS_HIGHLIGHT,
+            leftIndent=8, rightIndent=8,
+            topPadding=6, bottomPadding=6,
         ),
     }
 
@@ -1039,8 +1049,25 @@ def export_finance_statement_detail_pdf(request, customer_id):
         elements.append(_build_section_header('Remarks From MD:', styles, usable_width))
         elements.append(Spacer(1, SP_AFTER_HEADER))
         safe_text = html_module.escape(internal_remarks_text).replace('\n', '<br/>')
-        remarks_para = Paragraph(safe_text, styles['cell'])
-        elements.append(remarks_para)
+        # Create highlighted remarks box with red bold text
+        remarks_para = Paragraph(
+            f'<font color="#DC2626"><b>{safe_text}</b></font>',
+            styles['remarks_highlight']
+        )
+        # Wrap in table for background highlight
+        remarks_table = Table(
+            [[remarks_para]],
+            colWidths=[usable_width],
+        )
+        remarks_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), CLR_REMARKS_HIGHLIGHT),
+            ('BOX', (0, 0), (-1, -1), 1.5, CLR_DANGER),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(remarks_table)
         elements.append(Spacer(1, SP_SECTION))
 
     # ── 2. Customer Information Section ──
@@ -1362,9 +1389,16 @@ def export_finance_credit_edit_list_pdf(request):
             if edit.customer and edit.customer.salesman else '—'
         )
         edit_by = edit.edited_by.username if edit.edited_by else '—'
-        notes = edit.created_at.strftime('%d %b %Y %H:%M')
+        date_str = edit.created_at.strftime('%d %b %Y %H:%M')
         if edit.remarks:
-            notes = f"{notes} | {edit.remarks}"
+            # Highlight remarks in red and bold
+            safe_remarks = html_module.escape(edit.remarks)
+            notes_para = Paragraph(
+                f'{date_str} | <font color="#DC2626"><b>{safe_remarks}</b></font>',
+                styles['cell']
+            )
+        else:
+            notes_para = Paragraph(date_str, styles['cell'])
 
         table_data.append([
             Paragraph(str(idx), styles['cell']),
@@ -1374,7 +1408,7 @@ def export_finance_credit_edit_list_pdf(request):
             Paragraph(_fmt(edit.edited_credit_limit), styles['cell_r']),
             Paragraph(str(edit.edited_credit_days or '—'), styles['cell_r']),
             Paragraph(edit_by, styles['cell']),
-            Paragraph(notes, styles['cell']),
+            notes_para,
         ])
 
     if not edits.exists():

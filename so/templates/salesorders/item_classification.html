@@ -1,0 +1,546 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Item Classification Summary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    /* Filters Card */
+    .filters-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .field input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-family: inherit;
+      transition: border-color var(--transition);
+    }
+
+    .field input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    /* Table Card */
+    .table-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .table-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    thead {
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    td.text-right {
+      text-align: right;
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    .sticky-col {
+      position: sticky;
+      background: var(--surface);
+      z-index: 5;
+    }
+
+    .sticky-col:first-child {
+      left: 0;
+      z-index: 6;
+    }
+
+    tbody tr:hover .sticky-col {
+      background: var(--bg);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state p {
+      font-size: 1rem;
+    }
+
+    .num {
+      font-variant-numeric: tabular-nums;
+    }
+
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      padding-right: 24px;
+    }
+
+    th.sortable:hover {
+      background: #e0e7ff;
+      color: var(--primary-dark);
+    }
+
+    .sort-indicator {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.75rem;
+      color: var(--primary);
+      opacity: 0.6;
+    }
+
+    th.sortable.active .sort-indicator {
+      opacity: 1;
+      font-weight: bold;
+    }
+
+    th.sortable .sort-indicator i {
+      display: inline-block;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px 12px 40px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .filters-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .table-wrapper {
+        font-size: 0.813rem;
+      }
+
+      th, td {
+        padding: 8px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Item Classification Summary</h1>
+        <p>Item classification based on sales patterns, stock levels, and open orders</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'item_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-chart-line"></i>
+          Item Analysis
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="filters-card">
+      <form method="GET" action="{% url 'item_classification_summary' %}" id="filters-form">
+        <input type="hidden" name="sort" value="{{ sort_by }}">
+        <input type="hidden" name="order" value="{{ sort_order }}">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Item Code or Description">
+          </div>
+          <div class="field" style="display: flex; gap: 8px; align-self:end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
+            <button class="btn btn-primary" type="submit">Search</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Table Card -->
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <h3 class="table-title">Item Classification</h3>
+          <p style="font-size: 0.813rem; color: var(--text-secondary); margin-top: 4px;">
+            Showing {{ total_items }} item{{ total_items|pluralize }}
+            {% if search_query %}(filtered by "{{ search_query }}"){% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th class="sticky-col sortable {% if sort_by == 'item_code' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="item_code">
+                ItemCode
+                <span class="sort-indicator">
+                  {% if sort_by == 'item_code' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sticky-col sortable {% if sort_by == 'item_description' %}active{% endif %}" 
+                  style="min-width: 250px; left: 120px;" 
+                  data-sort="item_description">
+                Item Description
+                <span class="sort-indicator">
+                  {% if sort_by == 'item_description' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable {% if sort_by == 'last_sale_date' %}active{% endif %}" 
+                  style="min-width: 140px;" 
+                  data-sort="last_sale_date">
+                Last Sale Date
+                <span class="sort-indicator">
+                  {% if sort_by == 'last_sale_date' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable {% if sort_by == 'second_last_sale_date' %}active{% endif %}" 
+                  style="min-width: 140px;" 
+                  data-sort="second_last_sale_date">
+                Second Last Sale Date
+                <span class="sort-indicator">
+                  {% if sort_by == 'second_last_sale_date' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'days_between' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="days_between">
+                Days Between
+                <span class="sort-indicator">
+                  {% if sort_by == 'days_between' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'total_sales_2025' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="total_sales_2025">
+                Total Sales 2025
+                <span class="sort-indicator">
+                  {% if sort_by == 'total_sales_2025' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'total_sales_2026' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="total_sales_2026">
+                Total Sales 2026
+                <span class="sort-indicator">
+                  {% if sort_by == 'total_sales_2026' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'current_stock' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="current_stock">
+                Current Stock
+                <span class="sort-indicator">
+                  {% if sort_by == 'current_stock' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'total_open_po' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="total_open_po">
+                Total Open PO
+                <span class="sort-indicator">
+                  {% if sort_by == 'total_open_po' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+              <th class="sortable text-right {% if sort_by == 'total_open_so' %}active{% endif %}" 
+                  style="min-width: 120px;" 
+                  data-sort="total_open_so">
+                Total Open SO
+                <span class="sort-indicator">
+                  {% if sort_by == 'total_open_so' %}
+                    {% if sort_order == 'asc' %}<i class="fas fa-arrow-up"></i>{% else %}<i class="fas fa-arrow-down"></i>{% endif %}
+                  {% else %}
+                    <i class="fas fa-sort" style="opacity: 0.3;"></i>
+                  {% endif %}
+                </span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if items %}
+              {% for item in items %}
+              <tr>
+                <td class="sticky-col" style="font-weight: 500;">{{ item.item_code }}</td>
+                <td class="sticky-col" style="left: 120px;">{{ item.item_description|default:"—" }}</td>
+                <td>{{ item.last_sale_date|date:"m/d/Y"|default:"—" }}</td>
+                <td>{{ item.second_last_sale_date|date:"m/d/Y"|default:"—" }}</td>
+                <td class="text-right num">{{ item.days_between|default:"—" }}</td>
+                <td class="text-right num">{{ item.total_sales_2025|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.total_sales_2026|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.current_stock|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.total_open_po|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.total_open_so|floatformat:0|intcomma }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="10" class="empty-state">
+                  <i class="fas fa-inbox"></i>
+                  <p>No items found{% if search_query %} matching "{{ search_query }}"{% endif %}</p>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Clear filters (preserve default sort)
+    document.getElementById('clear-filters').addEventListener('click', function() {
+      window.location.href = '{% url "item_classification_summary" %}?sort=total_sales_2025&order=desc';
+    });
+
+    // Sort functionality
+    document.querySelectorAll('th.sortable').forEach(function(header) {
+      header.addEventListener('click', function() {
+        const sortBy = this.getAttribute('data-sort');
+        const currentSort = '{{ sort_by }}';
+        const currentOrder = '{{ sort_order }}';
+        
+        // Determine new sort order
+        let newOrder = 'desc';
+        if (currentSort === sortBy && currentOrder === 'desc') {
+          newOrder = 'asc';
+        }
+        
+        // Build URL with current search query and new sort parameters
+        const url = new URL(window.location.href);
+        url.searchParams.set('sort', sortBy);
+        url.searchParams.set('order', newOrder);
+        
+        // Preserve search query if exists
+        {% if search_query %}
+        url.searchParams.set('q', '{{ search_query }}');
+        {% endif %}
+        
+        window.location.href = url.toString();
+      });
+    });
+  </script>
+</body>
+</html>
