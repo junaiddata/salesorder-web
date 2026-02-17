@@ -3034,13 +3034,13 @@ from django.http import Http404
 SALES_USER_MAP = {
     "muzain": ["B.MR.MUZAIN"],
     "dip": ["D.RETAIL CUST DIP"],
-    "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD"],
+    "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD", "A. RAFIQ ABU - RASHID"],
     "rashid": ["A.MR.RASHID", "A.MR.RASHID CONT"],
     "parthiban": ["B.MR.PARTHIBAN"],
     "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT"],
     "mr. nasheer": ["B.MR.NASHEER AHMAD"],
     "deira 2 store": ["R.DEIRA 2"],
-    "rafiq": ["A.MR.RAFIQ"],
+    "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
     "alabama": ["D. ALABAMA"],     # both entries for Meraj
     "anish": ["ANISH DIP"],
