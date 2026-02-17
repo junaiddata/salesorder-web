@@ -162,7 +162,7 @@ SAP_API_BASE_URL = "http://192.168.1.103/IntegrationApi/api/SalesOrder"
 SAP_QUOTATION_API_URL = "http://192.168.1.103/IntegrationApi/api/SalesQuotations"
 SAP_PURCHASE_ORDER_API_URL = "http://192.168.1.103/IntegrationApi/api/PurchaseOrder"
 SAP_API_TIMEOUT = 30
-SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders from last 3 days (today + 3 days = 4 days total)
+SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orderc+ 3 days = 4 days total)
 
 # VPS API Configuration (for PC script to send data to VPS)
 VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL
