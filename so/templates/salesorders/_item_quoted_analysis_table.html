@@ -2,89 +2,106 @@
 {% if items %}
   {% for item in items %}
   <tr class="item-row" data-search="{{ item.item_code|lower }} {{ item.item_description|lower }} {{ item.upc_code|lower }}">
-    <td>
-      <span class="expand-icon">▶</span>
+    <td class="expand-cell">
+      <button type="button" class="expand-btn" aria-label="Expand row">
+        <i class="fas fa-chevron-right"></i>
+      </button>
     </td>
-    <td>
-      <div class="item-code">{{ item.item_code|default:"—" }}</div>
-    </td>
-    <td class="item-description" title="{{ item.item_description|default:'Unknown' }}">{{ item.item_description|default:"Unknown"|truncatewords:8 }}</td>
-    <td style="font-size: 0.7rem; color: var(--text-muted);">{{ item.upc_code|default:"—" }}</td>
-    <td class="text-right">
-      {% if item.qty_quoted_2025 > 0 %}
-        <span class="badge badge-primary">{{ item.qty_quoted_2025|floatformat:0|intcomma }}</span>
+    <td class="item-code">{{ item.item_code|default:"—" }}</td>
+    <td class="item-description" title="{{ item.item_description|default:'Unknown' }}">{{ item.item_description|default:"Unknown" }}</td>
+    <td class="upc-code">{{ item.upc_code|default:"—" }}</td>
+    <td class="text-right num">
+      {% if item.total_stock > 0 %}
+        <span class="badge badge-blue">{{ item.total_stock|floatformat:0|intcomma }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
     </td>
-    <td class="text-right">
+    <td class="text-right num">
+      {% if item.qty_quoted_2025 > 0 %}
+        <span class="badge badge-blue">{{ item.qty_quoted_2025|floatformat:0|intcomma }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    <td class="text-right num">
       {% if item.qty_quoted_2026 > 0 %}
-        <span class="badge badge-success">{{ item.qty_quoted_2026|floatformat:0|intcomma }}</span>
+        <span class="badge badge-green">{{ item.qty_quoted_2026|floatformat:0|intcomma }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
     </td>
     <td class="text-center">
       {% if item.total_quotations_2025 > 0 %}
-        <span class="badge badge-primary">{{ item.total_quotations_2025 }}</span>
+        <span class="badge badge-blue">{{ item.total_quotations_2025 }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
     <td class="text-center">
       {% if item.total_quotations_2026 > 0 %}
-        <span class="badge badge-success">{{ item.total_quotations_2026 }}</span>
+        <span class="badge badge-purple">{{ item.total_quotations_2026 }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
     <td class="text-center">
       {% if item.customer_quoted_count > 0 %}
-        <span class="badge badge-primary" style="cursor: pointer;" title="Click row to see customer details">{{ item.customer_quoted_count }}</span>
+        <span class="badge badge-green" style="cursor: pointer;" title="Click row to see customer details">{{ item.customer_quoted_count }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
   </tr>
   <tr class="customer-details">
-    <td colspan="9">
-      <div style="padding: 10px;">
-        <h4 style="font-size: 0.8rem; font-weight: 600; margin-bottom: 10px; color: var(--text);">
-          Customer Details ({{ item.customers|length }} customer{{ item.customers|length|pluralize }})
-        </h4>
-        {% for customer in item.customers %}
-          <div class="customer-info">
-            <div class="customer-name">{{ customer.customer_name }}</div>
-            {% if customer.customer_code %}
-            <div class="customer-meta">Code: {{ customer.customer_code }}</div>
-            {% endif %}
+    <td colspan="10">
+      <div class="detail-inner">
+        <div class="detail-grid">
+          {% for customer in item.customers %}
+          <div class="customer-card">
+            <div class="customer-card-header">
+              <div class="customer-name">
+                <i class="fas fa-user"></i>
+                {{ customer.customer_name }}
+              </div>
+            </div>
             <div class="customer-meta">
-              Qty Quoted: <strong>{{ customer.qty_quoted|floatformat:0|intcomma }}</strong>
+              {% if customer.customer_code %}
+              <span class="customer-meta-item">
+                <i class="fas fa-hashtag"></i> Code: {{ customer.customer_code }}
+              </span>
+              {% endif %}
+              <span class="customer-meta-item">
+                <i class="fas fa-box"></i> Qty: {{ customer.qty_quoted|floatformat:0|intcomma }}
+              </span>
               {% if customer.quotation_count > 0 %}
-                • Quotations: <strong>{{ customer.quotation_count }}</strong>
+              <span class="customer-meta-item">
+                <i class="fas fa-file-alt"></i> Quotes: {{ customer.quotation_count }}
+              </span>
               {% endif %}
               {% if customer.quotation_numbers %}
-                <div style="margin-top: 2px; font-size: 0.7rem; color: var(--text-secondary);">
-                  Quote Numbers: <strong>{{ customer.quotation_numbers|join:", " }}</strong>
-                  {% if customer.quotation_count > 10 %}
-                    <span style="color: var(--text-muted);">(showing first 10 of {{ customer.quotation_count }})</span>
-                  {% endif %}
-                </div>
+              <div style="margin-top: 6px; font-size: 0.7rem; color: var(--text-secondary); width: 100%;">
+                <strong>Quote Numbers:</strong> {{ customer.quotation_numbers|join:", " }}
+                {% if customer.quotation_count > 10 %}
+                  <span style="color: var(--text-muted);">(showing first 10 of {{ customer.quotation_count }})</span>
+                {% endif %}
+              </div>
               {% endif %}
             </div>
           </div>
-        {% empty %}
-          <div style="padding: 8px; color: var(--text-muted); font-style: italic; font-size: 0.7rem;">
-            No customer details available for this item
+          {% empty %}
+          <div style="color:var(--text-muted); font-size:0.8125rem; padding:8px;">
+            No customer details available.
           </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
       </div>
     </td>
   </tr>
   {% endfor %}
 {% else %}
   <tr>
-    <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">
+    <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">
       <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
       <p>No quotation data available</p>
     </td>

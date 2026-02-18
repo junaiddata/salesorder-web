@@ -145,13 +145,14 @@ def item_quoted_analysis(request):
     )
     customer_count_dict = {row['item_no']: row['customer_count'] for row in customer_count_agg}
     
-    # Get item descriptions and UPC from Items model
+    # Get item descriptions, UPC, and total stock from Items model
     items_info = {}
     for item in items_qs:
         if item.item_code not in items_info:
             items_info[item.item_code] = {
                 'description': item.item_description or '',
                 'upc': item.item_upvc or '',
+                'total_stock': safe_float(item.total_available_stock) if hasattr(item, 'total_available_stock') else 0.0,
             }
     
     # Also get descriptions from quotation items as fallback
@@ -160,6 +161,7 @@ def item_quoted_analysis(request):
             items_info[qi.item_no] = {
                 'description': qi.description or '',
                 'upc': '',
+                'total_stock': 0.0,
             }
     
     # Build items list - include all items from selected firms (even if no quotes)
@@ -173,12 +175,13 @@ def item_quoted_analysis(request):
         quot_count_2026 = quotations_2026_dict.get(item_code, 0)
         cust_count = customer_count_dict.get(item_code, 0)
         
-        item_info = items_info.get(item_code, {'description': '', 'upc': ''})
+        item_info = items_info.get(item_code, {'description': '', 'upc': '', 'total_stock': 0.0})
         
         items_list.append({
             'item_code': item_code,
             'item_description': item_info['description'],
             'upc_code': item_info['upc'],
+            'total_stock': item_info['total_stock'],
             'qty_quoted_2025': qty_2025,
             'qty_quoted_2026': qty_2026,
             'total_quotations_2025': quot_count_2025,
