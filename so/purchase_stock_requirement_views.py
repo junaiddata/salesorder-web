@@ -241,8 +241,8 @@ def _build_items_data(request, firms):
         # Stock After 3 months = Total Stock - Stock reqt in 3 months
         stock_after_3m = total_stock - stock_reqt_3m
 
-        # Final Stock Reqt (6 month) = stock_reqt_3m if stock_after_3m > 0 else 0
-        final_stock_reqt_6m = stock_reqt_3m if stock_after_3m > 0 else 0.0
+        # Final Stock Reqt (6 month) = stock_reqt_3m if stock_after_3m < 0 else 0
+        final_stock_reqt_6m = stock_reqt_3m if stock_after_3m < 0 else 0.0
 
         desc_with_upc = item.item_description or ''
         if item.item_upvc:
