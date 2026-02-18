@@ -2216,10 +2216,10 @@ THEMES = {
             'https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp',
         ],
         'logo_local': [
-        
             'media/footer-logo1.png',
             'static/images/footer-logo.png',
         ],
+        'ramdan_local': 'media/ramdan.png',
         'terms_prefix': 'Junaid Trading',
     },
     'alabama': {
@@ -2246,6 +2246,7 @@ THEMES = {
             'static/images/alabama-logo.png',
             'media/alabama-logo.png',
         ],
+        'ramdan_local': 'media/ramdan.png',
         'terms_prefix': 'Alabama Systems',
     },
 }
@@ -2411,6 +2412,27 @@ def _build_styles(theme):
 # SHARED HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _get_ramdan_logo_path(theme=None):
+    """Return absolute path to media/ramdan.png — same path as division logos."""
+    # Use theme's ramdan_local (identical to logo_local path style) for Junaid and Alabama
+    if theme and theme.get('ramdan_local'):
+        full_path = os.path.join(settings.BASE_DIR, theme['ramdan_local'])
+        full_path = os.path.normpath(os.path.abspath(full_path))
+        if os.path.isfile(full_path):
+            return full_path
+    # Fallback: same construction as _load_logo
+    base = str(getattr(settings, 'BASE_DIR', ''))
+    full_path = os.path.abspath(os.path.join(base, 'media', 'ramdan.png'))
+    if os.path.isfile(full_path):
+        return full_path
+    media_dir = os.path.join(base, 'media')
+    if os.path.isdir(media_dir):
+        for f in os.listdir(media_dir):
+            if f.lower() == 'ramdan.png':
+                return os.path.abspath(os.path.join(media_dir, f))
+    return None
+
+
 def _load_logo(theme):
     """
     Try local files first (faster, no network dependency), then URL fallback.
@@ -2451,14 +2473,42 @@ def _fmt(num):
 def _build_header(theme, styles, usable_width):
     """
     Build the document header block:
-    Logo centered → Title → Accent line → Subtitle with date.
+    Division logo and Ramdan logo on same row → Title → Accent line → Subtitle with date.
     """
     elements = []
     logo = _load_logo(theme)
+    ramdan_img = None
+    ramdan_path = _get_ramdan_logo_path(theme)
+    if ramdan_path:
+        try:
+            ramdan_img = Image(str(ramdan_path), width=RAMDAN_LOGO_WIDTH, height=RAMDAN_LOGO_HEIGHT)
+        except Exception as e:
+            logger.warning("Ramdan logo could not be added to PDF: %s (path: %s)", e, ramdan_path)
 
-    if logo:
+    if logo and ramdan_img:
+        # Same row: division logo centered on page, Ramdan at right; minimal spacing
+        side_w = (usable_width - LOGO_WIDTH) / 2
+        logo_row = Table(
+            [['', logo, ramdan_img]],
+            colWidths=[side_w, LOGO_WIDTH, side_w],
+        )
+        logo_row.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(logo_row)
+        elements.append(Spacer(1, 2))
+    elif logo:
         logo.hAlign = 'CENTER'
         elements.append(logo)
+        elements.append(Spacer(1, 4))
+    elif ramdan_img:
+        ramdan_img.hAlign = 'RIGHT'
+        elements.append(ramdan_img)
         elements.append(Spacer(1, 4))
 
     # Title
@@ -2779,9 +2829,13 @@ def _build_terms_block(theme, styles):
     return elements
 
 
+RAMDAN_LOGO_WIDTH = 1.0 * inch
+RAMDAN_LOGO_HEIGHT = 0.6 * inch
+
+
 def _page_footer_factory(theme):
     """
-    Return an onPage callback that draws a branded footer on every page.
+    Return an onPage callback that draws a branded footer and ramdan logo on every page.
     """
     def _draw_footer(canvas, doc):
         canvas.saveState()
