@@ -9,6 +9,7 @@ from . import finance_statement_views
 from . import finance_statement_pdf_export
 from . import customer_analysis_views
 from . import credit_memo_analysis_views
+from . import purchase_stock_requirement_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -147,6 +148,8 @@ urlpatterns += [
     path('saparinvoices/analysis/', sap_salesorder_views.sales_analysis_dashboard, name='sales_analysis_dashboard'),
     path('saparinvoices/item-analysis/', sap_salesorder_views.item_analysis, name='item_analysis'),
     path('saparinvoices/item-classification/', sap_salesorder_views.item_classification_summary, name='item_classification_summary'),
+    path('saparinvoices/purchase-stock-requirement/', purchase_stock_requirement_views.purchase_stock_requirement, name='purchase_stock_requirement'),
+    path('saparinvoices/purchase-stock-requirement/export-excel/', purchase_stock_requirement_views.export_purchase_stock_requirement_excel, name='export_purchase_stock_requirement_excel'),
     path('saparinvoices/quotation-conversion/', sap_salesorder_views.quotation_conversion_analysis, name='quotation_conversion_analysis'),
     path('saparinvoices/item-analysis/export-pdf/', sap_salesorder_views.export_item_analysis_pdf, name='export_item_analysis_pdf'),
     path('saparinvoices/customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),

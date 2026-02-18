@@ -1,0 +1,1250 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Purchase Stock Requirement</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #f8fafc;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --text-placeholder: #a0aec0;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #dbeafe;
+      --primary-ghost: #eff6ff;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.04);
+      --transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* ─── Container ─── */
+    .container {
+      max-width: 2400px;
+      margin: 0 auto;
+      padding: 28px 24px 80px;
+    }
+
+    /* ─── Header ─── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .header-left h1 {
+      font-size: 1.625rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* ─── Buttons ─── */
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    .btn-primary:hover { background: var(--primary-hover); box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3); }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--surface-hover); color: var(--text); border-color: #cbd5e1; }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+      box-shadow: 0 1px 2px rgba(5, 150, 105, 0.2);
+    }
+    .btn-success:hover { background: #047857; }
+
+    .btn-toggle {
+      background: var(--surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-toggle:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-toggle.active {
+      background: var(--primary-ghost);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .btn-loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .btn-loading .btn-text { visibility: hidden; }
+    .btn-loading::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Filters Card ─── */
+    .filters-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border-light);
+    }
+
+    .filters-grid {
+      display: flex;
+      align-items: end;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .field label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    /* ─── Multi-Select Dropdown ─── */
+    .multi-select {
+      position: relative;
+      width: 320px;
+      min-width: 220px;
+    }
+
+    .select-box {
+      padding: 9px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.875rem;
+      font-family: var(--font);
+      transition: all var(--transition);
+      min-height: 42px;
+    }
+
+    .select-box:hover { border-color: #94a3b8; }
+    .select-box.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+    .select-box-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .select-box-text.placeholder { color: var(--text-placeholder); }
+
+    .select-box-badges {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .select-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .select-badge-count {
+      background: var(--primary);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .select-box-chevron {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      transition: transform var(--transition);
+      flex-shrink: 0;
+    }
+
+    .select-box.active .select-box-chevron { transform: rotate(180deg); }
+
+    .select-box-clear {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      flex-shrink: 0;
+      transition: all var(--transition);
+    }
+    .select-box-clear:hover { background: var(--danger-light); color: var(--danger); }
+    .select-box-clear.visible { display: inline-flex; }
+
+    .options-container {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      display: none;
+      overflow: hidden;
+      animation: dropdownIn 0.15s ease;
+    }
+
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .options-container.active { display: block; }
+
+    .options-header {
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .options-search {
+      width: 100%;
+      padding: 8px 10px 8px 32px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-xs);
+      font-size: 0.8125rem;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color var(--transition);
+    }
+    .options-search:focus { outline: none; border-color: var(--primary); }
+
+    .options-search-wrap {
+      position: relative;
+    }
+    .options-search-wrap i {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .options-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .options-action-btn {
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--font);
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      transition: all var(--transition);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .options-action-btn:hover { background: var(--primary-ghost); }
+    .options-action-btn.danger { color: var(--danger); }
+    .options-action-btn.danger:hover { background: var(--danger-light); }
+
+    .options-list {
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      transition: background var(--transition);
+      color: var(--text);
+      user-select: none;
+    }
+    .option-label:hover { background: var(--bg); }
+    .option-label.option-hidden { display: none; }
+
+    /* Custom checkbox */
+    .option-label input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      transition: all var(--transition);
+    }
+    .option-label input[type="checkbox"]:checked {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .option-label input[type="checkbox"]:checked::after {
+      content: '\f00c';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      font-size: 0.55rem;
+      color: white;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .option-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .options-empty {
+      padding: 20px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
+
+    /* ─── Search Bar ─── */
+    .search-bar-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .search-bar-wrap i.search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      pointer-events: none;
+    }
+
+    .search-bar {
+      width: 100%;
+      padding: 9px 36px 9px 36px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      font-family: var(--font);
+      background: var(--surface);
+      transition: all var(--transition);
+    }
+    .search-bar:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    .search-bar::placeholder { color: var(--text-placeholder); }
+
+    .search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 2px;
+      display: none;
+      transition: color var(--transition);
+    }
+    .search-clear:hover { color: var(--danger); }
+    .search-clear.visible { display: block; }
+
+    /* ─── Table Card ─── */
+    .table-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid var(--border-light);
+    }
+
+    .table-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .table-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .table-subtitle {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .count-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .table-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 75vh;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+
+    /* ─── Table Head ─── */
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    th {
+      padding: 10px 10px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.675rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: #f8fafc;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+
+    th.text-right { text-align: right; }
+
+    th.col-group-sales {
+      background: #fefce8;
+    }
+
+    /* ─── Table Body ─── */
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text);
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+
+    td.text-right { text-align: right; }
+
+    tbody tr { transition: background var(--transition); }
+    tbody tr:hover { background: #f8fafc; }
+    tbody tr:hover .sticky-col { background: #f8fafc !important; }
+
+    /* Zebra striping */
+    tbody tr:nth-child(even) { background: #fafbfc; }
+    tbody tr:nth-child(even) .sticky-col { background: #fafbfc !important; }
+    tbody tr:nth-child(even):hover { background: #f8fafc; }
+    tbody tr:nth-child(even):hover .sticky-col { background: #f8fafc !important; }
+
+    /* ─── Sticky Columns ─── */
+    .sticky-col {
+      position: sticky;
+      background: var(--surface);
+      z-index: 10;
+    }
+
+    .sticky-col-0 {
+      left: 0;
+      z-index: 11;
+      min-width: 90px;
+      max-width: 90px;
+    }
+
+    .sticky-col-1 {
+      left: 90px;
+      z-index: 11;
+      min-width: 200px;
+      max-width: 260px;
+      border-right: 2px solid var(--border);
+    }
+
+    thead .sticky-col-0 {
+      z-index: 25;
+      background: #f8fafc;
+    }
+
+    thead .sticky-col-1 {
+      z-index: 25;
+      background: #f8fafc;
+      border-right: 2px solid var(--border);
+    }
+
+    .col-desc {
+      white-space: normal;
+      word-wrap: break-word;
+      line-height: 1.3;
+      font-size: 0.75rem;
+    }
+
+    /* ─── Numeric cells ─── */
+    .num {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: 'tnum';
+    }
+
+    .num-negative { color: var(--danger); }
+    .num-positive { color: var(--success); }
+
+    /* ─── Sales Columns Toggle ─── */
+    table.cols-sales-hidden th.col-group-sales,
+    table.cols-sales-hidden td.col-group-sales { display: none; }
+
+    td.col-group-sales { background: #fffef5; }
+    tbody tr:hover td.col-group-sales { background: #fefce8; }
+    tbody tr:nth-child(even) td.col-group-sales { background: #fefef5; }
+
+    /* ─── Final Stock Requirement Column ─── */
+    th.col-final-reqt {
+      background: #dbeafe !important;
+      color: var(--primary-hover);
+      font-weight: 700;
+    }
+
+    td.col-final-reqt {
+      background: #eff6ff;
+      font-weight: 700;
+      color: var(--primary-hover);
+    }
+
+    tbody tr:hover td.col-final-reqt { background: #dbeafe; }
+
+    /* ─── Empty State ─── */
+    .empty-state {
+      text-align: center;
+      padding: 80px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      background: var(--bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-state-icon i {
+      font-size: 1.75rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 0.875rem;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    /* ─── Visible rows counter ─── */
+    .visible-count {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 8px 22px 14px;
+      display: none;
+    }
+    .visible-count.active { display: block; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 768px) {
+      .container { padding: 16px 12px 40px; }
+      .header { flex-direction: column; align-items: flex-start; }
+      .filters-grid { flex-direction: column; }
+      .multi-select { width: 100%; min-width: 0; }
+      .search-bar-wrap { max-width: 100%; }
+      .table-actions { width: 100%; }
+      .table-header { flex-direction: column; align-items: flex-start; }
+      th, td { padding: 6px 8px; }
+    }
+
+    @media (max-width: 480px) {
+      .header-left h1 { font-size: 1.25rem; }
+      .header-right { width: 100%; }
+      .header-right .btn { flex: 1; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ─── Page Header ─── -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Purchase Stock Requirement</h1>
+        <p>Stock planning: DIP Stock, LPO Given, Open SO & calculated requirements</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'item_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-chart-bar"></i> Item Analysis
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+      </div>
+    </div>
+
+    <!-- ─── Filters ─── -->
+    <div class="filters-card">
+      <form method="GET" action="{% url 'purchase_stock_requirement' %}" id="filters-form">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Firm</label>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+                <span class="select-box-text placeholder" id="firm-display">Select firm(s)…</span>
+                <button type="button" class="select-box-clear" id="firm-clear" title="Clear all" aria-label="Clear selection">
+                  <i class="fas fa-times"></i>
+                </button>
+                <i class="fas fa-chevron-down select-box-chevron"></i>
+              </div>
+              <div class="options-container" id="firm-options" role="listbox" aria-label="Select firms">
+                <div class="options-header">
+                  <div class="options-search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="firm-search" class="options-search" placeholder="Search firms…" autocomplete="off" aria-label="Search firms">
+                  </div>
+                  <div class="options-actions">
+                    <button type="button" class="options-action-btn" id="firm-select-all">Select All</button>
+                    <button type="button" class="options-action-btn danger" id="firm-clear-all">Clear All</button>
+                  </div>
+                </div>
+                <div class="options-list" id="firm-options-list" role="group">
+                  {% for f in firms %}
+                  <label class="option-label" data-value="{{ f }}" role="option">
+                    <input type="checkbox" name="firm" value="{{ f }}" {% if f in selected_firms %}checked{% endif %}>
+                    <span class="option-text">{{ f }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+                <div class="options-empty" id="firm-no-results" style="display:none;">
+                  No firms found
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field" style="align-self: end;">
+            <button class="btn btn-primary" type="submit" id="load-btn">
+              <i class="fas fa-search"></i>
+              <span class="btn-text">Load Report</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- ─── Table Card ─── -->
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <h3 class="table-title">
+            {% if selected_firms %}
+              {% if selected_firms|length == 1 %}
+                {{ selected_firms.0 }} — Stock Requirement
+              {% else %}
+                {{ selected_firms|length }} Firms — Stock Requirement
+              {% endif %}
+            {% else %}
+              Purchase Stock Requirement
+            {% endif %}
+          </h3>
+          <p class="table-subtitle">
+            {% if selected_firms %}
+              Showing <span class="count-badge">{{ total_items }}</span> item{{ total_items|pluralize }}
+              <span id="search-result-info"></span>
+            {% else %}
+              Select firm(s) to view items
+            {% endif %}
+          </p>
+        </div>
+        {% if selected_firms and items %}
+        <div class="table-actions">
+          <div class="search-bar-wrap">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="table-search" class="search-bar" placeholder="Search items…" autocomplete="off">
+            <button type="button" class="search-clear" id="table-search-clear" aria-label="Clear search">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <button type="button" id="toggle-sales-cols" class="btn btn-toggle" title="Toggle Sales Columns visibility">
+            <i class="fas fa-chart-line"></i>
+            <span id="toggle-sales-label">Sales Cols</span>
+          </button>
+          <a href="{% url 'export_purchase_stock_requirement_excel' %}?{% for f in selected_firms %}firm={{ f|urlencode }}&{% endfor %}" class="btn btn-success">
+            <i class="fas fa-file-excel"></i>
+            Export
+          </a>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if not selected_firms %}
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i class="fas fa-building"></i>
+          </div>
+          <h3>No Firm Selected</h3>
+          <p>Choose one or more firms from the dropdown above to generate the stock requirement report.</p>
+        </div>
+
+      {% elif not items %}
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i class="fas fa-inbox"></i>
+          </div>
+          <h3>No Items Found</h3>
+          <p>No stock items were found for the selected firm(s).</p>
+        </div>
+
+      {% else %}
+        <div class="table-wrapper">
+          <table id="stock-reqt-table" class="cols-sales-hidden">
+            <thead>
+              <tr>
+                <th class="sticky-col sticky-col-0">Item Code</th>
+                <th class="sticky-col sticky-col-1">Description / UPC</th>
+                <th class="text-right">DIP<br>Stock</th>
+                <th class="text-right">Total<br>Stock</th>
+                <th class="text-right col-group-sales">Sold Qty<br>2024</th>
+                <th class="text-right col-group-sales">Proj Sold<br>2025</th>
+                <th class="text-right col-group-sales">Trading Sold<br>2025</th>
+                <th class="text-right col-group-sales">Total Sold<br>2025</th>
+                <th class="text-right col-group-sales">Avg 3M<br>Sales</th>
+                <th class="text-right col-group-sales">Sufficiency<br>Months</th>
+                <th class="text-right">LPO<br>Given</th>
+                <th class="text-right">Open<br>SO</th>
+                <th class="text-right">Stock Reqt<br>Calc</th>
+                <th class="text-right">Stock<br>Reqt</th>
+                <th class="text-right">6M<br>Sale</th>
+                <th class="text-right">Reqt in<br>3 Months</th>
+                <th class="text-right">Stock After<br>3 Months</th>
+                <th class="text-right col-final-reqt">Final Reqt<br>(6 Month)</th>
+              </tr>
+            </thead>
+            <tbody id="stock-tbody">
+              {% for item in items %}
+              <tr data-search="{{ item.item_code|lower }} {{ item.item_description_with_upc|lower }}">
+                <td class="sticky-col sticky-col-0 num">{{ item.item_code }}</td>
+                <td class="sticky-col sticky-col-1 col-desc">{{ item.item_description_with_upc }}</td>
+                <td class="text-right num">{{ item.dip_stock|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.total_stock|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.sold_qty_2024|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.project_sold_qty_2025|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.trading_sold_qty_2025|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.total_sold_qty_2025|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.avg_3_month_sales|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-group-sales">{{ item.stock_sufficiency_month|intcomma }}</td>
+                <td class="text-right num">{{ item.lpo_given|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.open_so|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.stock_reqt_calculation|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{% if item.stock_requirement is not None %}{{ item.stock_requirement|floatformat:0|intcomma }}{% else %}—{% endif %}</td>
+                <td class="text-right num">{{ item.last_6_month_sale|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.stock_reqt_in_3_months|floatformat:0|intcomma }}</td>
+                <td class="text-right num">{{ item.stock_after_3_months|floatformat:0|intcomma }}</td>
+                <td class="text-right num col-final-reqt">{{ item.final_stock_reqt_6_month|floatformat:0|intcomma }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="visible-count" id="visible-count"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // ════════════════════════════════════════════
+    //  MULTI-SELECT DROPDOWN
+    // ════════════════════════════════════════════
+    var firmWrapper   = document.getElementById('firm-wrapper');
+    var firmTrigger   = document.getElementById('firm-trigger');
+    var firmOptions   = document.getElementById('firm-options');
+    var firmList      = document.getElementById('firm-options-list');
+    var firmDisplay   = document.getElementById('firm-display');
+    var firmSearch    = document.getElementById('firm-search');
+    var firmClearBtn  = document.getElementById('firm-clear');
+    var firmSelectAll = document.getElementById('firm-select-all');
+    var firmClearAll  = document.getElementById('firm-clear-all');
+    var firmNoResults = document.getElementById('firm-no-results');
+
+    if (!firmWrapper || !firmTrigger || !firmOptions || !firmList) return;
+
+    function getCheckboxes() {
+      return firmList.querySelectorAll('input[type="checkbox"]');
+    }
+
+    function getLabels() {
+      return Array.from(firmList.querySelectorAll('.option-label'));
+    }
+
+    function getVisibleLabels() {
+      return getLabels().filter(function(l) { return !l.classList.contains('option-hidden'); });
+    }
+
+    // Sort: checked items first
+    function sortLabels() {
+      var labels = getLabels();
+      var checked = [];
+      var unchecked = [];
+      labels.forEach(function(l) {
+        var cb = l.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) checked.push(l);
+        else unchecked.push(l);
+      });
+      var frag = document.createDocumentFragment();
+      checked.forEach(function(l) { frag.appendChild(l); });
+      unchecked.forEach(function(l) { frag.appendChild(l); });
+      firmList.appendChild(frag);
+    }
+
+    function updateDisplay() {
+      var boxes = Array.from(getCheckboxes());
+      var checked = boxes.filter(function(c) { return c.checked; });
+      var count = checked.length;
+
+      // Clear button visibility
+      if (firmClearBtn) {
+        firmClearBtn.classList.toggle('visible', count > 0);
+      }
+
+      if (count === 0) {
+        firmDisplay.className = 'select-box-text placeholder';
+        firmDisplay.textContent = 'Select firm(s)…';
+      } else if (count === 1) {
+        firmDisplay.className = 'select-box-text';
+        firmDisplay.innerHTML = '';
+        var badge = document.createElement('span');
+        badge.className = 'select-badge';
+        badge.textContent = checked[0].value;
+        firmDisplay.appendChild(badge);
+      } else if (count <= 2) {
+        firmDisplay.className = 'select-box-text';
+        firmDisplay.innerHTML = '';
+        var container = document.createElement('span');
+        container.className = 'select-box-badges';
+        checked.forEach(function(cb) {
+          var badge = document.createElement('span');
+          badge.className = 'select-badge';
+          badge.textContent = cb.value;
+          container.appendChild(badge);
+        });
+        firmDisplay.innerHTML = '';
+        firmDisplay.appendChild(container);
+      } else {
+        firmDisplay.className = 'select-box-text';
+        firmDisplay.innerHTML = '';
+        var container = document.createElement('span');
+        container.className = 'select-box-badges';
+        var badge = document.createElement('span');
+        badge.className = 'select-badge';
+        badge.textContent = checked[0].value;
+        container.appendChild(badge);
+        var more = document.createElement('span');
+        more.className = 'select-badge-count';
+        more.textContent = '+' + (count - 1) + ' more';
+        container.appendChild(more);
+        firmDisplay.appendChild(container);
+      }
+    }
+
+    function openDropdown() {
+      firmOptions.classList.add('active');
+      firmTrigger.classList.add('active');
+      firmTrigger.setAttribute('aria-expanded', 'true');
+      sortLabels();
+      setTimeout(function() { if (firmSearch) firmSearch.focus(); }, 50);
+    }
+
+    function closeDropdown() {
+      firmOptions.classList.remove('active');
+      firmTrigger.classList.remove('active');
+      firmTrigger.setAttribute('aria-expanded', 'false');
+      // Reset search
+      if (firmSearch) firmSearch.value = '';
+      getLabels().forEach(function(l) { l.classList.remove('option-hidden'); });
+      if (firmNoResults) firmNoResults.style.display = 'none';
+    }
+
+    function toggleDropdown() {
+      if (firmOptions.classList.contains('active')) closeDropdown();
+      else openDropdown();
+    }
+
+    // Trigger click
+    firmTrigger.addEventListener('click', function(e) {
+      // Don't toggle if clicking the clear button
+      if (e.target.closest('.select-box-clear')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleDropdown();
+    });
+
+    // Keyboard support
+    firmTrigger.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleDropdown();
+      }
+    });
+
+    // Prevent dropdown from closing when interacting inside it
+    firmOptions.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+
+    // Clear button
+    if (firmClearBtn) {
+      firmClearBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        getCheckboxes().forEach(function(cb) { cb.checked = false; });
+        updateDisplay();
+      });
+    }
+
+    // Select All / Clear All
+    if (firmSelectAll) {
+      firmSelectAll.addEventListener('click', function() {
+        var visible = getVisibleLabels();
+        visible.forEach(function(l) {
+          var cb = l.querySelector('input[type="checkbox"]');
+          if (cb) cb.checked = true;
+        });
+        updateDisplay();
+        sortLabels();
+      });
+    }
+    if (firmClearAll) {
+      firmClearAll.addEventListener('click', function() {
+        getCheckboxes().forEach(function(cb) { cb.checked = false; });
+        updateDisplay();
+        sortLabels();
+      });
+    }
+
+    // Checkbox change
+    firmList.addEventListener('change', function(e) {
+      if (e.target.type === 'checkbox') {
+        updateDisplay();
+      }
+    });
+
+    // Search within dropdown
+    if (firmSearch) {
+      firmSearch.addEventListener('input', function() {
+        var term = this.value.toLowerCase().trim();
+        var labels = getLabels();
+        var visibleCount = 0;
+
+        labels.forEach(function(label) {
+          var text = label.getAttribute('data-value').toLowerCase();
+          var optText = (label.querySelector('.option-text') || {}).textContent || '';
+          var match = term === '' || text.includes(term) || optText.toLowerCase().includes(term);
+          label.classList.toggle('option-hidden', !match);
+          if (match) visibleCount++;
+        });
+
+        if (firmNoResults) {
+          firmNoResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+      });
+
+      firmSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
+    // Close on outside click
+    document.addEventListener('click', function(e) {
+      if (!firmWrapper.contains(e.target)) {
+        closeDropdown();
+      }
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    });
+
+    // Initialize display
+    updateDisplay();
+
+    // ════════════════════════════════════════════
+    //  FORM LOADING STATE
+    // ════════════════════════════════════════════
+    var form = document.getElementById('filters-form');
+    var loadBtn = document.getElementById('load-btn');
+    if (form && loadBtn) {
+      form.addEventListener('submit', function() {
+        loadBtn.disabled = true;
+        loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…';
+        loadBtn.style.opacity = '0.7';
+      });
+    }
+
+    // ════════════════════════════════════════════
+    //  SALES COLUMNS TOGGLE
+    // ════════════════════════════════════════════
+    var STORAGE_KEY = 'psr_sales_cols';
+    var table = document.getElementById('stock-reqt-table');
+    var toggleBtn = document.getElementById('toggle-sales-cols');
+    var toggleLabel = document.getElementById('toggle-sales-label');
+
+    if (table && toggleBtn) {
+      function isSalesVisible() {
+        return !table.classList.contains('cols-sales-hidden');
+      }
+
+      function setSalesVisible(show) {
+        table.classList.toggle('cols-sales-hidden', !show);
+        toggleBtn.classList.toggle('active', show);
+        if (toggleLabel) toggleLabel.textContent = show ? 'Hide Sales' : 'Sales Cols';
+        try { localStorage.setItem(STORAGE_KEY, show ? '1' : '0'); } catch(e) {}
+      }
+
+      // Restore state
+      try {
+        var saved = localStorage.getItem(STORAGE_KEY);
+        if (saved === '1') setSalesVisible(true);
+      } catch(e) {}
+
+      toggleBtn.addEventListener('click', function() {
+        setSalesVisible(!isSalesVisible());
+      });
+    }
+
+    // ════════════════════════════════════════════
+    //  TABLE SEARCH (DEBOUNCED)
+    // ════════════════════════════════════════════
+    var tableSearch = document.getElementById('table-search');
+    var searchClear = document.getElementById('table-search-clear');
+    var visibleCountEl = document.getElementById('visible-count');
+    var searchInfo = document.getElementById('search-result-info');
+    var tbody = document.getElementById('stock-tbody');
+
+    if (tableSearch && tbody) {
+      var debounceTimer = null;
+
+      function doSearch() {
+        var term = tableSearch.value.toLowerCase().trim();
+        var rows = tbody.querySelectorAll('tr');
+        var shown = 0;
+        var total = rows.length;
+
+        rows.forEach(function(row) {
+          var searchData = row.getAttribute('data-search') || '';
+          var match = term === '' || searchData.includes(term);
+          row.style.display = match ? '' : 'none';
+          if (match) shown++;
+        });
+
+        // Show/hide clear button
+        if (searchClear) {
+          searchClear.classList.toggle('visible', term.length > 0);
+        }
+
+        // Update visible count
+        if (term.length > 0) {
+          if (visibleCountEl) {
+            visibleCountEl.textContent = shown + ' of ' + total + ' items match "' + tableSearch.value.trim() + '"';
+            visibleCountEl.classList.add('active');
+          }
+          if (searchInfo) {
+            searchInfo.textContent = '(' + shown + ' matching)';
+          }
+        } else {
+          if (visibleCountEl) visibleCountEl.classList.remove('active');
+          if (searchInfo) searchInfo.textContent = '';
+        }
+      }
+
+      tableSearch.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(doSearch, 150);
+      });
+
+      if (searchClear) {
+        searchClear.addEventListener('click', function() {
+          tableSearch.value = '';
+          doSearch();
+          tableSearch.focus();
+        });
+      }
+    }
+
+  })();
+  </script>
+</body>
+</html>
