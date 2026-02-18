@@ -427,7 +427,7 @@
       <div class="card-body">
         <div class="info-grid">
           <div class="info-item">
-            <span class="info-label">Balance Due</span>
+            <span class="info-label">balance Outstanding</span>
             <span class="info-value large">{{ total_outstanding|floatformat:2|intcomma }} AED</span>
           </div>
           <div class="info-item">
@@ -523,27 +523,9 @@
               <td class="text-right"><strong>{{ total_monthly|floatformat:2|intcomma }} AED</strong></td>
             </tr>
             <tr>
-              <td><strong>90+ Days Pending (till {{ end_90_str }})</strong></td>
-              <td class="text-right {% if pending_90_plus > 0 %}amount-danger{% endif %}">
-                <strong>{{ pending_90_plus|floatformat:2|intcomma }} AED</strong>
-              </td>
-            </tr>
-            <tr>
-              <td><strong>120+ Days Pending (till {{ end_120_str }})</strong></td>
-              <td class="text-right {% if pending_120_plus > 0 %}amount-danger{% endif %}">
-                <strong>{{ pending_120_plus|floatformat:2|intcomma }} AED</strong>
-              </td>
-            </tr>
-            <tr>
               <td><strong>180+ Days Pending (6+ months, till {{ six_plus_end_str }})</strong></td>
               <td class="text-right {% if old_months_pending > 0 %}amount-danger{% endif %}">
                 <strong>{{ old_months_pending|floatformat:2|intcomma }} AED</strong>
-              </td>
-            </tr>
-            <tr>
-              <td><strong>360+ Days Pending (6++ months)</strong></td>
-              <td class="text-right {% if very_old_months_pending > 0 %}amount-danger{% endif %}">
-                <strong>{{ very_old_months_pending|floatformat:2|intcomma }} AED</strong>
               </td>
             </tr>
             <tr style="border-top: 2px solid var(--border);">

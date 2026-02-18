@@ -69,7 +69,7 @@ def _build_items_data(request, firms):
     if not firm_list:
         return items_list, []
 
-    items_qs = Items.objects.filter(item_firm__in=firm_list).order_by('item_firm', 'item_code')
+    items_qs = Items.objects.filter(item_firm__in=firm_list)
     item_codes = list(items_qs.values_list('item_code', flat=True))
 
     if not item_codes:
@@ -268,6 +268,10 @@ def _build_items_data(request, firms):
             'stock_after_3_months': stock_after_3m,
             'final_stock_reqt_6_month': final_stock_reqt_6m,
         })
+
+    # Sort by Final Stock Reqt (6 month) descending
+    # Ensure we're sorting by numeric value (handle any edge cases)
+    items_list.sort(key=lambda x: float(x.get('final_stock_reqt_6_month', 0) or 0), reverse=True)
 
     return items_list, firm_list
 

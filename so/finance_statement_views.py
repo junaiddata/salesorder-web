@@ -250,8 +250,10 @@ def finance_statement_detail(request, customer_id):
     # 90+ till Oct 31 = months 1, 2 (Sep, Oct) ✓
     # 120+ till Sep 30 = month 1 (Sep) ✓
     
-    pending_90_plus = sum(month_amounts[i] for i in [0, 1])  # months 1, 2 (before last 4 months)
-    pending_120_plus = month_amounts[0]  # month 1 only (before last 5 months)
+    # 90+ includes months 1, 2 + 180+ (cumulative, 180+ already includes 360+)
+    pending_90_plus = sum(month_amounts[i] for i in [0, 1]) + old_months_pending
+    # 120+ includes month 1 + 180+ (cumulative, 180+ already includes 360+)
+    pending_120_plus = month_amounts[0] + old_months_pending
     
     # Calculate end dates for 90+ and 120+
     if monthly_data:
@@ -483,7 +485,7 @@ def export_finance_statement_list_excel(request):
             row_data[monthly_labels[5]['label']] = float(customer.month_pending_6 or 0)
             row_data['6+ (180+ Days)'] = float(customer.old_months_pending or 0)
             row_data['6++ (360+ Days)'] = float(getattr(customer, 'very_old_months_pending', 0) or 0)
-        row_data['Balance Due'] = float(customer.total_outstanding or 0)
+        row_data['balance Outstanding'] = float(customer.total_outstanding or 0)
         row_data['PDC in Hand'] = float(customer.pdc_received or 0)
         row_data['Total with PDC'] = float(customer.total_outstanding_with_pdc or 0)
         row_data['Credit Limit'] = float(customer.credit_limit or 0)
@@ -574,7 +576,7 @@ def export_finance_statement_detail_excel(request, customer_id):
     data.append({'Field': '', 'Value': ''})  # Empty row
     
     # Summary
-    data.append({'Field': 'Balance Due', 'Value': float(customer.total_outstanding or 0)})
+    data.append({'Field': 'balance Outstanding', 'Value': float(customer.total_outstanding or 0)})
     data.append({'Field': 'PDC Received', 'Value': float(customer.pdc_received or 0)})
     data.append({'Field': 'Total Outstanding (with PDC)', 'Value': float(customer.total_outstanding_with_pdc or 0)})
     

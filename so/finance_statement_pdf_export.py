@@ -1057,11 +1057,11 @@ def export_finance_statement_detail_pdf(request, customer_id):
     old_months = customer.old_months_pending or 0
     very_old_months = getattr(customer, 'very_old_months_pending', 0) or 0
     
-    # Calculate 90+ and 120+ aging buckets
-    # 90+ = months 1, 2 (before last 4 months, so if current is Feb, till Oct 31)
-    # 120+ = month 1 only (before last 5 months, so if current is Feb, till Sep 30)
-    pending_90_plus = sum(month_amounts[i] for i in [0, 1])  # months 1, 2
-    pending_120_plus = month_amounts[0]  # month 1 only
+    # Calculate 90+ and 120+ aging buckets (cumulative)
+    # 90+ = months 1, 2 + 180+ (180+ already includes 360+)
+    # 120+ = month 1 + 180+ (180+ already includes 360+)
+    pending_90_plus = sum(month_amounts[i] for i in [0, 1]) + old_months
+    pending_120_plus = month_amounts[0] + old_months
     
     # Calculate end dates for 90+ and 120+
     if monthly_data:
@@ -1197,7 +1197,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
     outstanding_kpis = [
-        ('Balance Due', _fmt(total_outstanding) + ' AED'),
+        ('balance Outstanding', _fmt(total_outstanding) + ' AED'),
         ('PDC Received in Hand', _fmt(pdc_received) + ' AED'),
         ('Net Outstanding', _fmt(total_with_pdc) + ' AED'),
     ]
@@ -1308,20 +1308,8 @@ def export_finance_statement_detail_pdf(request, customer_id):
             Paragraph(_fmt(total_monthly), styles['cell_bold_r']),
         ],
         [
-            Paragraph(f'90+ Days Pending (till {end_90_str})', styles['cell']),
-            Paragraph(_fmt(pending_90_plus), styles['cell_r']),
-        ],
-        [
-            Paragraph(f'120+ Days Pending (till {end_120_str})', styles['cell']),
-            Paragraph(_fmt(pending_120_plus), styles['cell_r']),
-        ],
-        [
             Paragraph(f'180+ Days Pending (till {six_plus_end_str})', styles['cell']),
             Paragraph(_fmt(old_months), styles['cell_r']),
-        ],
-        [
-            Paragraph('360+ Days Pending', styles['cell']),
-            Paragraph(_fmt(very_old_months), styles['cell_r']),
         ],
         [
             Paragraph('<b>Total Outstanding</b>', styles['cell_bold']),
