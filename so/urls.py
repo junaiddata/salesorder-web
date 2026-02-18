@@ -10,6 +10,7 @@ from . import finance_statement_pdf_export
 from . import customer_analysis_views
 from . import credit_memo_analysis_views
 from . import purchase_stock_requirement_views
+from . import quotation_item_analysis_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -155,6 +156,7 @@ urlpatterns += [
     path('saparinvoices/customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),
     path('saparinvoices/customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
     path('saparinvoices/credit-memo-analysis/', credit_memo_analysis_views.itemwise_credit_memo_analysis, name='credit_memo_analysis'),
+    path('saparinvoices/item-quoted-analysis/', quotation_item_analysis_views.item_quoted_analysis, name='item_quoted_analysis'),
     path('saparinvoices/combined/export-excel/', sap_salesorder_views.export_combined_sales_invoices_excel, name='export_combined_sales_invoices_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),
     path('saparinvoices/', sap_salesorder_views.arinvoice_list, name='arinvoice_list'),
