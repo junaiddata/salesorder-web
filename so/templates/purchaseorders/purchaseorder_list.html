@@ -63,6 +63,13 @@
     .options-container.active { display: block; }
     .option-label { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 0.875rem; }
     .option-label input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); }
+    .option-label.option-hidden { display: none; }
+    .search-box-container { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 1; }
+    .search-box { width: 100%; padding: 6px 10px; font-size: 0.813rem; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+    .search-box:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44, 85, 48, 0.12); }
+    .search-box::placeholder { color: var(--text-muted); }
+    .filters-row-firm { padding: 0 18px 14px; border-top: 1px solid var(--border-light); }
+    .filters-row-firm .field { max-width: 320px; }
     .table-card { overflow: hidden; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 1000px; }
@@ -124,22 +131,6 @@
           <input class="input" type="text" name="item" value="{{ filters.item }}" placeholder="Item code or description">
         </div>
         <div class="field">
-          <label>Firm</label>
-          <div class="multi-select" id="firm-wrapper">
-            <div class="select-box" id="firm-trigger">
-              <span id="firm-text">All Firms</span>
-            </div>
-            <div class="options-container" id="firm-options">
-              {% for firm in firms %}
-                <label class="option-label">
-                  <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm_filter %}checked{% endif %}>
-                  {{ firm }}
-                </label>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-        <div class="field">
           <label>Purchaser</label>
           <div class="multi-select" id="purchaser-wrapper">
             <div class="select-box" id="purchaser-trigger">
@@ -179,10 +170,34 @@
           <label>Per Page</label>
           <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}" style="width:70px;">
         </div>
-        <div class="field" style="align-self:end;">
+        <div class="field" style="align-self:end; display: flex; gap: 8px;">
+          <button class="btn btn-secondary" type="button" id="btn-clear-filters">Clear</button>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
       </form>
+      <div class="filters-row-firm">
+        <div class="field">
+          <label>Firm</label>
+          <div class="multi-select" id="firm-wrapper">
+            <div class="select-box" id="firm-trigger">
+              <span id="firm-text">All Firms</span>
+            </div>
+            <div class="options-container" id="firm-options">
+              <div class="search-box-container">
+                <input type="text" id="firm-search" class="search-box" placeholder="Search firms..." autocomplete="off">
+              </div>
+              <div class="options-list" id="firm-options-list">
+                {% for firm in firms %}
+                  <label class="option-label" data-value="{{ firm }}">
+                    <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm_filter %}checked{% endif %}>
+                    <span class="option-text">{{ firm }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {% if show_price %}
       <div class="stats-bar">
@@ -275,6 +290,12 @@
     }
 
     form.addEventListener('submit', function(e) { e.preventDefault(); load(collectParams({ page: 1 })); });
+    var btnClear = document.getElementById('btn-clear-filters');
+    if (btnClear) {
+      btnClear.addEventListener('click', function() {
+        window.location.href = '{% url "purchaseorder_list" %}';
+      });
+    }
     form.querySelector('input[name="q"]').addEventListener('input', debounce(function() {
       if (form.querySelector('input[name="q"]').value.length === 0 || form.querySelector('input[name="q"]').value.length >= 2) {
         load(collectParams({ page: 1 }));
@@ -318,7 +339,7 @@
     const textSpan = document.getElementById(id + '-text');
     if (!trigger || !options || !textSpan) return;
 
-    trigger.addEventListener('click', e => { e.stopPropagation(); options.classList.toggle('active'); });
+    trigger.addEventListener('click', e => { e.stopPropagation(); options.classList.toggle('active'); if (id === 'firm' && options.classList.contains('active')) { setTimeout(function() { var s = document.getElementById('firm-search'); if (s) s.focus(); }, 50); } });
     options.addEventListener('click', e => e.stopPropagation());
 
     function updateLabel() {
@@ -334,11 +355,24 @@
         document.getElementById('filters').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       });
     });
-    document.addEventListener('click', e => { if (!wrapper.contains(e.target)) options.classList.remove('active'); });
+    document.addEventListener('click', e => { if (!wrapper.contains(e.target)) { options.classList.remove('active'); if (id === 'firm') { var s = document.getElementById('firm-search'); if (s) s.value = ''; var list = document.getElementById('firm-options-list'); if (list) list.querySelectorAll('.option-label').forEach(function(l) { l.classList.remove('option-hidden'); }); } } });
   }
   document.addEventListener("DOMContentLoaded", function() {
     initMultiSelect('firm', 'All Firms');
     initMultiSelect('purchaser', 'All Purchasers');
+
+    var firmSearch = document.getElementById('firm-search');
+    var firmOptionsList = document.getElementById('firm-options-list');
+    if (firmSearch && firmOptionsList) {
+      firmSearch.addEventListener('input', function() {
+        var term = this.value.toLowerCase().trim();
+        firmOptionsList.querySelectorAll('.option-label').forEach(function(label) {
+          var text = (label.querySelector('.option-text') || label).textContent.toLowerCase();
+          label.classList.toggle('option-hidden', term !== '' && text.indexOf(term) === -1);
+        });
+      });
+      firmSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
   });
 </script>
 </body>
