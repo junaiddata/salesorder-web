@@ -744,10 +744,14 @@ def view_sales_orders(request):
     else:
         sales_orders = SalesOrder.objects.all()
 
-    # Salesman restriction
+    # Salesman restriction (source: SALES_USER_MAP by username)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-        salesman_name = request.user.first_name
-        sales_orders = sales_orders.filter(salesman__salesman_name=salesman_name)
+        current_username = (request.user.username or "").strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            sales_orders = sales_orders.filter(salesman__salesman_name__in=allowed_names)
+        else:
+            sales_orders = sales_orders.none()
     elif salesman_filter and salesman_filter != 'All':
         # Apply salesman filter if it's not "All" and the user is not a salesman
         sales_orders = sales_orders.filter(salesman__salesman_name=salesman_filter)
@@ -3093,6 +3097,7 @@ SALES_USER_MAP = {
     "parthiban": ["B.MR.PARTHIBAN"],
     "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT"],
     "mr. nasheer": ["B.MR.NASHEER AHMAD"],
+    "abul": ["R.ABUDHABI"],
     "deira 2 store": ["R.DEIRA 2"],
     "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
