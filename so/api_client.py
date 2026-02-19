@@ -452,8 +452,15 @@ class SAPAPIClient:
                 except (ValueError, TypeError):
                     logger.warning(f"Could not parse U_Lpdate: {lp_date_str}")
         # Extract NFRef from TaxExtension
-        tax_extension = api_order.get('TaxExtension', {})
-        nf_ref = str(tax_extension.get('NFRef', '')).strip() if tax_extension.get('NFRef') else ''
+        tax_extension = api_order.get('TaxExtension') or {}
+        nf_ref = ''
+        if isinstance(tax_extension, dict):
+            nf_ref_raw = tax_extension.get('NFRef')
+            if nf_ref_raw:
+                nf_ref = str(nf_ref_raw).strip()
+        # Log if NFRef is missing (for debugging)
+        if not nf_ref and logger:
+            logger.debug(f"SO {api_order.get('DocNum')}: No NFRef found in TaxExtension")
         doc_total = api_order.get('DocTotal', 0) or 0
         vat_sum = api_order.get('VatSum', 0) or 0
         total_discount = api_order.get('TotalDiscount', 0) or 0
