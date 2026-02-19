@@ -3090,24 +3090,24 @@ from django.http import Http404
 # Map usernames -> the exact salesman_name values they are allowed to see.
 # Use lowercase keys for usernames.
 SALES_USER_MAP = {
-    "muzain": ["B.MR.MUZAIN"],
-    "dip": ["D.RETAIL CUST DIP"],
-    "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD", "A. RAFIQ ABU - RASHID"],
+    "muzain": ["B.MR.MUZAIN", "MUZAIN"],
+    "dip": ["D.RETAIL CUST DIP", "DIP"],
+    "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD", "A. RAFIQ ABU - RASHID", "ABU BAQAR"],
     "rashid": ["A.MR.RASHID", "A.MR.RASHID CONT"],
-    "parthiban": ["B.MR.PARTHIBAN"],
-    "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT"],
-    "mr. nasheer": ["B.MR.NASHEER AHMAD"],
-    "abul": ["R.ABUDHABI"],
+    "parthiban": ["B.MR.PARTHIBAN", "PARTHIBAN"],
+    "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT", "SIYAB"],
+    "mr. nasheer": ["B.MR.NASHEER AHMAD", "NASHEER SIR"],
+    "abul": ["R.ABUDHABI," "ABUL"],
     "deira 2 store": ["R.DEIRA 2"],
-    "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID"],
+    "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID", "RAFIQ"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
-    "alabama": ["D. ALABAMA"],     # both entries for Meraj
-    "anish": ["ANISH DIP"],
-    "musharaf": ["A.MUSHARAF"],
+    "alabama": ["D. ALABAMA", "ALABAMA"],     # both entries for Meraj
+    "anish": ["ANISH DIP","ANISH"],
+    "musharaf": ["A.MUSHARAF", "MUSHARAF"],
     "ibrahim": ["A.IBRAHIM"],
-    "adil": ["A.DIP ADIL"],
-    "kadar": ["A.DIP KADAR"],
-    "stephy": ["A.DIP STEFFY"],
+    "adil": ["A.DIP ADIL", "ADIL"],
+    "kadar": ["A.DIP KADAR", "KADAR"],
+    "stephy": ["A.DIP STEFFY", "STEPHY"],
     "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR","A.DIP ADIL","D.RETAIL CUST DIP" ],
     "retail": ["R.NAH","R.ABUDHABI" ,"R.AJMAN","R.QUSAIS","R.STORES","E.DEIRA 1","R.DEIRA 2"],
     "retailabudhabi": ["R.ABUDHABI"],
