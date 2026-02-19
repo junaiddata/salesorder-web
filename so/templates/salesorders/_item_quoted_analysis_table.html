@@ -52,7 +52,7 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
-    {% if include_conversion %}
+    <!-- {% if include_conversion %}
     <td class="text-right num">
       {% if item.so_qty_from_converted_2025 > 0 %}
         <span class="badge badge-purple">{{ item.so_qty_from_converted_2025|floatformat:0|intcomma }}</span>
@@ -99,7 +99,7 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
     </td>
-    {% endif %}
+    {% endif %} -->
   </tr>
   <tr class="customer-details">
     <td colspan="{% if include_conversion %}16{% else %}10{% endif %}">
