@@ -259,7 +259,7 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
     # Filter to only items on current page
     filtered_items = quotation_items_qs.filter(item_no__in=item_codes)
     
-    # Aggregate by item_no and customer_code
+    # Aggregate by item_no and customer_code (qty and quotation count split by year 2025/2026)
     customer_aggs = list(
         filtered_items
         .exclude(quotation__customer_code__isnull=True)
@@ -267,6 +267,10 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
         .values('item_no', 'quotation__customer_code')
         .annotate(
             total_quantity=Sum('quantity'),
+            qty_2025=Coalesce(Sum('quantity', filter=Q(quotation__posting_date__year=2025)), Value(0, output_field=DecimalField())),
+            qty_2026=Coalesce(Sum('quantity', filter=Q(quotation__posting_date__year=2026)), Value(0, output_field=DecimalField())),
+            quotation_count_2025=Count('quotation', distinct=True, filter=Q(quotation__posting_date__year=2025)),
+            quotation_count_2026=Count('quotation', distinct=True, filter=Q(quotation__posting_date__year=2026)),
             customer_name=Max('quotation__customer_name'),
         )
     )
@@ -305,8 +309,12 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
             'customer_code': customer_code,
             'customer_name': agg['customer_name'] or 'Unknown',
             'qty_quoted': qty,
-            'quotation_numbers': quotation_numbers[:10],  # Limit to 10 quotes per customer
+            'qty_quoted_2025': safe_float(agg.get('qty_2025', 0)),
+            'qty_quoted_2026': safe_float(agg.get('qty_2026', 0)),
             'quotation_count': len(quotation_numbers_lookup[item_code][customer_code]),
+            'quotation_count_2025': agg.get('quotation_count_2025', 0) or 0,
+            'quotation_count_2026': agg.get('quotation_count_2026', 0) or 0,
+            'quotation_numbers': quotation_numbers[:10],  # Limit to 10 quotes per customer
         })
     
     # Sort each item's customers by qty quoted descending

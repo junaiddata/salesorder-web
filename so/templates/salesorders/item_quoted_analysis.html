@@ -627,11 +627,11 @@
 
     .item-description {
       max-width: 220px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
       color: var(--text-secondary);
-      font-size: 0.8125rem;
+      font-size: 0.7rem;
+      line-height: 1.35;
+      white-space: normal;
+      word-break: break-word;
     }
 
     .upc-code {
@@ -973,12 +973,18 @@
               <i class="fas fa-times"></i>
             </button>
           </div>
-          {% comment %}
-          Add export button if you have the URL:
-          <a href="{% url 'export_item_quoted_excel' %}?{% for f in selected_firms %}firm={{ f|urlencode }}&{% endfor %}" class="btn btn-success btn-sm">
-            <i class="fas fa-file-excel"></i> Export
-          </a>
-          {% endcomment %}
+          <form method="GET" action="{% url 'export_item_quoted_analysis_pdf' %}" target="_blank" class="export-pdf-form" style="display: inline-flex; align-items: center; gap: 12px;">
+            {% for f in selected_firms %}
+            <input type="hidden" name="firm" value="{{ f }}">
+            {% endfor %}
+            <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" name="include_customers" value="1" id="pdf-include-customers" style="cursor: pointer;">
+              <span>Include customer details</span>
+            </label>
+            <button type="submit" class="btn btn-success btn-sm">
+              <i class="fas fa-file-pdf"></i> Export PDF
+            </button>
+          </form>
         </div>
         {% endif %}
       </div>

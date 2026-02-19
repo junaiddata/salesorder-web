@@ -72,13 +72,17 @@
               </span>
               {% endif %}
               <span class="customer-meta-item">
-                <i class="fas fa-box"></i> Qty: {{ customer.qty_quoted|floatformat:0|intcomma }}
+                <i class="fas fa-box"></i> Qty 2025: {% if customer.qty_quoted_2025 %}{{ customer.qty_quoted_2025|floatformat:0|intcomma }}{% else %}—{% endif %}
               </span>
-              {% if customer.quotation_count > 0 %}
               <span class="customer-meta-item">
-                <i class="fas fa-file-alt"></i> Quotes: {{ customer.quotation_count }}
+                <i class="fas fa-box"></i> Qty 2026: {% if customer.qty_quoted_2026 %}{{ customer.qty_quoted_2026|floatformat:0|intcomma }}{% else %}—{% endif %}
               </span>
-              {% endif %}
+              <span class="customer-meta-item">
+                <i class="fas fa-file-alt"></i> Quotes 2025: {% if customer.quotation_count_2025 %}{{ customer.quotation_count_2025 }}{% else %}—{% endif %}
+              </span>
+              <span class="customer-meta-item">
+                <i class="fas fa-file-alt"></i> Quotes 2026: {% if customer.quotation_count_2026 %}{{ customer.quotation_count_2026 }}{% else %}—{% endif %}
+              </span>
               {% if customer.quotation_numbers %}
               <div style="margin-top: 6px; font-size: 0.7rem; color: var(--text-secondary); width: 100%;">
                 <strong>Quote Numbers:</strong> {{ customer.quotation_numbers|join:", " }}
