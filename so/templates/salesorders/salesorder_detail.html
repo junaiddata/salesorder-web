@@ -476,6 +476,17 @@
               <span class="info-label">BP Reference No</span>
               <span class="info-value">{{ salesorder.bp_reference_no|default:"—" }}</span>
             </div>
+            {% if salesorder.related_quotation_number %}
+            <div class="info-item">
+              <span class="info-label">Related Quotation</span>
+              <span class="info-value">
+                <a href="{% url 'quotation_detail' salesorder.related_quotation_number %}" 
+                   style="color: var(--primary); text-decoration: none;">
+                  {{ salesorder.related_quotation_number }}
+                </a>
+              </span>
+            </div>
+            {% endif %}
             <div class="info-item">
               <span class="info-label">Status</span>
               <span class="info-value">{{ status_label }}</span>

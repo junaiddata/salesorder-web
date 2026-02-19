@@ -451,6 +451,9 @@ class SAPAPIClient:
                     sap_pi_lpo_date = datetime.strptime(lp_date_str, '%Y/%m/%d').date()
                 except (ValueError, TypeError):
                     logger.warning(f"Could not parse U_Lpdate: {lp_date_str}")
+        # Extract NFRef from TaxExtension
+        tax_extension = api_order.get('TaxExtension', {})
+        nf_ref = str(tax_extension.get('NFRef', '')).strip() if tax_extension.get('NFRef') else ''
         doc_total = api_order.get('DocTotal', 0) or 0
         vat_sum = api_order.get('VatSum', 0) or 0
         total_discount = api_order.get('TotalDiscount', 0) or 0
@@ -548,6 +551,7 @@ class SAPAPIClient:
             'closing_remarks': closing_remarks,  # ClosingRemarks from API
             'is_sap_pi': is_sap_pi,  # True if U_PROFORMAINVOICE=Y
             'sap_pi_lpo_date': sap_pi_lpo_date,  # From API field U_Lpdate (date or None)
+            'nf_ref': nf_ref,  # NFRef from TaxExtension - quotation reference
             'document_total': pending_total,  # Pending total = sum of OpenAmount
             'row_total_sum': row_total_sum,  # Subtotal (calculated from items)
             'discount_percentage': discount_percent_exact,  # Exact value for calculations

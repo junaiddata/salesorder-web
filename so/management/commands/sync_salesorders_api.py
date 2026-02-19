@@ -28,6 +28,8 @@ from so.api_client import SAPAPIClient
 from django.conf import settings
 import logging
 from logging.handlers import RotatingFileHandler
+import pandas as pd
+from decimal import Decimal
 
 # Configuration - EDIT THESE
 VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL

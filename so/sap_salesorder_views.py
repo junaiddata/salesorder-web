@@ -718,6 +718,7 @@ def sync_salesorders_from_api(request):
                         "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
                         "closing_remarks": mapped.get('closing_remarks', '') or '',  # ClosingRemarks from API
                         "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
+                        "nf_ref": mapped.get('nf_ref', '') or '',  # NFRef from TaxExtension
                         "last_synced_at": datetime.now(),  # Track sync time
                     }
                     
@@ -1081,6 +1082,7 @@ def sync_salesorders_api_receive(request):
                     "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
                     "closing_remarks": mapped.get('closing_remarks', '') or '',  # ClosingRemarks from API
                     "is_sap_pi": mapped.get('is_sap_pi', False),  # True if U_PROFORMAINVOICE=Y
+                    "nf_ref": mapped.get('nf_ref', '') or '',  # NFRef from TaxExtension
                 }
                 
                 # Add last_synced_at only if field exists in model (after migration)

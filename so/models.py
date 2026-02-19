@@ -413,9 +413,27 @@ class SAPSalesorder(models.Model):
     customer_address = models.TextField(blank=True, null=True, help_text="Customer address from SAP API (Address field)")
     customer_phone = models.CharField(max_length=50, blank=True, null=True, help_text="Customer phone from SAP API (BusinessPartner.Phone1)")
     closing_remarks = models.TextField(blank=True, null=True, help_text="Closing remarks from SAP API (ClosingRemarks field) - used as default remarks for SAP PIs")
+    nf_ref = models.CharField(max_length=500, blank=True, null=True, help_text="NFRef from TaxExtension - quotation reference")
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
     bill_to = models.TextField(blank=True, null=True)
+
+    def extract_quotation_number(self):
+        """Extract quotation number from NFRef string.
+        Example: "Based On Sales Quotations 126001023." -> "126001023"
+        Returns None if no match found.
+        """
+        if not self.nf_ref:
+            return None
+        import re
+        # Pattern: find number after "Quotations" or "Quotation" (case-insensitive)
+        match = re.search(r'(?:Quotations?|Q)\s+(\d+)', self.nf_ref, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    @property
+    def related_quotation_number(self):
+        """Property to get extracted quotation number for easy access."""
+        return self.extract_quotation_number()
 
     def __str__(self):
         return f"{self.so_number} - {self.customer_name}"
@@ -426,6 +444,7 @@ class SAPSalesorder(models.Model):
             models.Index(fields=["salesman_name"]),
             models.Index(fields=["customer_name"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["nf_ref"]),  # For fast filtering of SOs with quotation references
         ]
 
 

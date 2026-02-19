@@ -23,8 +23,10 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
 )
 
-from .models import Items, SAPQuotation, SAPQuotationItem
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder
 from .views import salesman_scope_q
+import re
+from collections import defaultdict
 
 # Shared design system
 from .finance_statement_pdf_export import (
@@ -252,7 +254,127 @@ def _build_analysis_table_style(num_rows, customer_row_indices=None):
 # DATA FETCHING (business logic unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_items_data(request, include_customers=False):
+def _get_conversion_metrics_pdf(item_codes, quotation_items_qs):
+    """Calculate conversion metrics for PDF export - split by year (same logic as view)."""
+    sos_with_nfref = SAPSalesorder.objects.filter(
+        nf_ref__isnull=False
+    ).exclude(nf_ref='').values('id', 'nf_ref', 'posting_date')
+    
+    quotation_to_so_data = defaultdict(list)
+    for so in sos_with_nfref:
+        nf_ref = so['nf_ref']
+        if not nf_ref:
+            continue
+        match = re.search(r'(?:Quotations?|Q)\s+(\d+)', nf_ref, re.IGNORECASE)
+        if match:
+            quotation_number = match.group(1)
+            quotation_to_so_data[quotation_number].append((so['id'], so['posting_date']))
+    
+    if not quotation_to_so_data:
+        return {item_code: {
+            'so_qty_from_converted_2025': 0.0,
+            'so_qty_from_converted_2026': 0.0,
+            'converted_quotation_count_2025': 0,
+            'converted_quotation_count_2026': 0,
+            'conversion_rate_2025': 0.0,
+            'conversion_rate_2026': 0.0,
+        } for item_code in item_codes}
+    
+    converted_quotation_numbers = set(quotation_to_so_data.keys())
+    all_so_ids = []
+    for so_data_list in quotation_to_so_data.values():
+        all_so_ids.extend([so_id for so_id, _ in so_data_list])
+    
+    from .models import SAPSalesorderItem
+    so_items = SAPSalesorderItem.objects.filter(
+        salesorder_id__in=all_so_ids,
+        item_no__in=item_codes
+    ).exclude(item_no__isnull=True).exclude(item_no='').select_related('salesorder').values(
+        'item_no', 'quantity', 'salesorder_id', 'salesorder__posting_date'
+    )
+    
+    so_id_to_data = {}
+    for quotation_number, so_data_list in quotation_to_so_data.items():
+        for so_id, posting_date in so_data_list:
+            so_id_to_data[so_id] = (quotation_number, posting_date)
+    
+    so_qty_by_item_2025 = defaultdict(float)
+    so_qty_by_item_2026 = defaultdict(float)
+    converted_quotations_by_item_2025 = defaultdict(set)
+    converted_quotations_by_item_2026 = defaultdict(set)
+    
+    for so_item in so_items:
+        item_code = so_item['item_no']
+        so_id = so_item['salesorder_id']
+        posting_date = so_item['salesorder__posting_date']
+        data = so_id_to_data.get(so_id)
+        
+        if item_code and data:
+            quotation_number, _ = data
+            qty = _safe_float(so_item['quantity'])
+            
+            if posting_date:
+                year = posting_date.year if hasattr(posting_date, 'year') else (posting_date.year if hasattr(posting_date, 'year') else None)
+                if year == 2025:
+                    so_qty_by_item_2025[item_code] += qty
+                    converted_quotations_by_item_2025[item_code].add(quotation_number)
+                elif year == 2026:
+                    so_qty_by_item_2026[item_code] += qty
+                    converted_quotations_by_item_2026[item_code].add(quotation_number)
+    
+    converted_quotation_items_2025 = quotation_items_qs.filter(
+        quotation__q_number__in=converted_quotation_numbers,
+        quotation__posting_date__year=2025
+    ).exclude(quotation__posting_date__isnull=True)
+    
+    converted_quotation_items_2026 = quotation_items_qs.filter(
+        quotation__q_number__in=converted_quotation_numbers,
+        quotation__posting_date__year=2026
+    ).exclude(quotation__posting_date__isnull=True)
+    
+    converted_qty_by_item_2025 = defaultdict(float)
+    converted_qty_by_item_2026 = defaultdict(float)
+    
+    for qi in converted_quotation_items_2025:
+        item_code = qi.item_no
+        if item_code and item_code in item_codes:
+            converted_qty_by_item_2025[item_code] += _safe_float(qi.quantity)
+    
+    for qi in converted_quotation_items_2026:
+        item_code = qi.item_no
+        if item_code and item_code in item_codes:
+            converted_qty_by_item_2026[item_code] += _safe_float(qi.quantity)
+    
+    result = {}
+    for item_code in item_codes:
+        so_qty_2025 = so_qty_by_item_2025.get(item_code, 0.0)
+        so_qty_2026 = so_qty_by_item_2026.get(item_code, 0.0)
+        converted_count_2025 = len(converted_quotations_by_item_2025.get(item_code, set()))
+        converted_count_2026 = len(converted_quotations_by_item_2026.get(item_code, set()))
+        quoted_qty_2025 = converted_qty_by_item_2025.get(item_code, 0.0)
+        quoted_qty_2026 = converted_qty_by_item_2026.get(item_code, 0.0)
+        
+        conversion_rate_2025 = 0.0
+        if quoted_qty_2025 > 0:
+            conversion_rate_2025 = (so_qty_2025 / quoted_qty_2025) * 100.0
+        
+        conversion_rate_2026 = 0.0
+        if quoted_qty_2026 > 0:
+            conversion_rate_2026 = (so_qty_2026 / quoted_qty_2026) * 100.0
+        
+        result[item_code] = {
+            'so_qty_from_converted_2025': so_qty_2025,
+            'so_qty_from_converted_2026': so_qty_2026,
+            'converted_quotation_count_2025': converted_count_2025,
+            'converted_quotation_count_2026': converted_count_2026,
+            'conversion_rate_2025': conversion_rate_2025,
+            'conversion_rate_2026': conversion_rate_2026,
+        }
+    
+    return result
+
+
+def _get_items_data(request, include_customers=False, include_conversion=False):
     """
     Build items list for PDF export.
     Same logic as item_quoted_analysis view but without pagination.
@@ -367,6 +489,17 @@ def _get_items_data(request, include_customers=False):
         customer_details = _get_customer_details_for_items(quotation_items_qs, item_codes_all)
         for item in items_list:
             item['customers'] = customer_details.get(item['item_code'], [])
+    
+    if include_conversion and items_list:
+        item_codes_all = [i['item_code'] for i in items_list]
+        conversion_metrics = _get_conversion_metrics_pdf(item_codes_all, quotation_items_qs)
+        for item in items_list:
+            metrics = conversion_metrics.get(item['item_code'], {
+                'so_qty_from_converted': 0.0,
+                'converted_quotation_count': 0,
+                'conversion_rate': 0.0
+            })
+            item.update(metrics)
 
     return items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_customers
 
@@ -433,13 +566,14 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
 def export_item_quoted_analysis_pdf(request):
     """
     Export Item Quoted Analysis to PDF.
-    Query params: firm (multi), include_customers (1/true/yes/on).
+    Query params: firm (multi), include_customers (1/true/yes/on), include_conversion (1/true/yes/on).
     Default: summary table only.
     """
     include_customers = request.GET.get('include_customers', '').strip().lower() in ('1', 'true', 'yes', 'on')
+    include_conversion = request.GET.get('include_conversion', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
     items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_customers = _get_items_data(
-        request, include_customers=include_customers,
+        request, include_customers=include_customers, include_conversion=include_conversion,
     )
 
     # ── PDF setup ──
@@ -517,11 +651,12 @@ def export_item_quoted_analysis_pdf(request):
 
     # ── 4. Column layout ──
     #
-    # 10 columns on landscape A4 (~806pt usable at 18pt margins)
+    # 10 columns (or 13 with conversion) on landscape A4 (~806pt usable at 18pt margins)
     #
     # Fixed columns:
     #   # = 20  |  Code = 62  |  UPC = 58  |  Stock = 50
     #   Qty2025 = 56  |  Qty2026 = 56  |  Q#25 = 42  |  Q#26 = 42  |  Cust = 40
+    #   [+ SO Qty = 50 | Conv Quotes = 38 | Conv Rate = 45 if include_conversion]
     # Flexible: Description absorbs remainder
 
     W_NUM     = 20
@@ -531,9 +666,16 @@ def export_item_quoted_analysis_pdf(request):
     W_QTY     = 56     # Qty 2025 / 2026
     W_QUOTES  = 42     # Quote count columns
     W_CUST    = 40
+    W_SO_QTY  = 45     # SO Qty from converted (split by year)
+    W_CONV_Q  = 35     # Converted quotes count (split by year)
+    W_CONV_R  = 40     # Conversion rate % (split by year)
 
-    fixed_total = W_NUM + W_CODE + W_UPC + W_STOCK + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST
-    W_DESC = max(140, usable_width - fixed_total)
+    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST
+    if include_conversion:
+        fixed_total = base_fixed + (2 * W_SO_QTY) + (2 * W_CONV_Q) + (2 * W_CONV_R)
+    else:
+        fixed_total = base_fixed
+    W_DESC = max(120, usable_width - fixed_total)
 
     col_widths = [
         W_NUM,       # 0: #
@@ -547,6 +689,15 @@ def export_item_quoted_analysis_pdf(request):
         W_QUOTES,    # 8: Quotes 2026
         W_CUST,      # 9: Customers
     ]
+    if include_conversion:
+        col_widths.extend([
+            W_SO_QTY,   # 10: SO Qty 2025
+            W_SO_QTY,   # 11: SO Qty 2026
+            W_CONV_Q,   # 12: Conv Quotes 2025
+            W_CONV_Q,   # 13: Conv Quotes 2026
+            W_CONV_R,   # 14: Conv % 2025
+            W_CONV_R,   # 15: Conv % 2026
+        ])
 
     # ── 5. Header row ──
     hdr = [
@@ -561,6 +712,15 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph("Q's 26",     ts['th_r']),
         Paragraph('Cust.',       ts['th_c']),
     ]
+    if include_conversion:
+        hdr.extend([
+            Paragraph('SO 25',       ts['th_r']),
+            Paragraph('SO 26',       ts['th_r']),
+            Paragraph('CQ 25',       ts['th_c']),
+            Paragraph('CQ 26',       ts['th_c']),
+            Paragraph('% 25',        ts['th_r']),
+            Paragraph('% 26',        ts['th_r']),
+        ])
     table_data = [hdr]
     customer_row_indices = set()   # Track which rows are customer sub-rows
 
@@ -570,7 +730,7 @@ def export_item_quoted_analysis_pdf(request):
         row_num += 1
         desc_text = (item['item_description'] or '—')[:50]
 
-        table_data.append([
+        row = [
             Paragraph(str(idx), ts['td_c']),
             Paragraph(item['item_code'] or '—', ts['td_bold']),
             Paragraph(desc_text, ts['td']),
@@ -581,7 +741,17 @@ def export_item_quoted_analysis_pdf(request):
             _fmt_int(item['total_quotations_2025'], ts['td_r'], ts['td_muted']),
             _fmt_int(item['total_quotations_2026'], ts['td_r'], ts['td_muted']),
             _fmt_int(item['customer_quoted_count'], ts['td_c'], ts['td_muted_c']),
-        ])
+        ]
+        if include_conversion:
+            row.extend([
+                _fmt_val(item.get('so_qty_from_converted_2025', 0), ts['td_bold_r'], ts['td_muted']),
+                _fmt_val(item.get('so_qty_from_converted_2026', 0), ts['td_bold_r'], ts['td_muted']),
+                _fmt_int(item.get('converted_quotation_count_2025', 0), ts['td_c'], ts['td_muted_c']),
+                _fmt_int(item.get('converted_quotation_count_2026', 0), ts['td_c'], ts['td_muted_c']),
+                _fmt_val(item.get('conversion_rate_2025', 0), ts['td_bold_r'], ts['td_muted']),
+                _fmt_val(item.get('conversion_rate_2026', 0), ts['td_bold_r'], ts['td_muted']),
+            ])
+        table_data.append(row)
 
         # Customer sub-rows (indented, muted styling)
         if include_customers and item.get('customers'):
@@ -592,7 +762,7 @@ def export_item_quoted_analysis_pdf(request):
                 cust_display = f"↳ {cust['customer_name'][:32]}"
                 cust_code_display = cust['customer_code'] or ''
 
-                table_data.append([
+                cust_row = [
                     Paragraph('', ts['td']),                                               # #
                     Paragraph(cust_code_display, ts['cust_code']),                         # Code col → customer code
                     Paragraph(cust_display, ts['cust_name']),                              # Desc col → customer name
@@ -603,14 +773,24 @@ def export_item_quoted_analysis_pdf(request):
                     _fmt_int(cust.get('quotation_count_2025', 0), ts['cust_val'], ts['td_muted']),
                     _fmt_int(cust.get('quotation_count_2026', 0), ts['cust_val'], ts['td_muted']),
                     Paragraph('', ts['td']),                                               # Cust
-                ])
+                ]
+                if include_conversion:
+                    cust_row.extend([
+                        Paragraph('', ts['td']),                                            # SO 25
+                        Paragraph('', ts['td']),                                            # SO 26
+                        Paragraph('', ts['td']),                                            # CQ 25
+                        Paragraph('', ts['td']),                                            # CQ 26
+                        Paragraph('', ts['td']),                                            # % 25
+                        Paragraph('', ts['td']),                                            # % 26
+                    ])
+                table_data.append(cust_row)
 
     # ── 7. Totals row ──
     total_stock = sum(i['total_stock'] for i in items_list)
     total_q25 = sum(i['total_quotations_2025'] for i in items_list)
     total_q26 = sum(i['total_quotations_2026'] for i in items_list)
 
-    table_data.append([
+    total_row = [
         Paragraph('', ts['td']),
         Paragraph('TOTAL', ts['td_bold']),
         Paragraph(f'{len(items_list)} items', ts['total_label']),
@@ -621,7 +801,21 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph(str(total_q25), ts['td_bold_r']),
         Paragraph(str(total_q26), ts['td_bold_r']),
         Paragraph(str(grand_total_customers), ts['td_bold']),
-    ])
+    ]
+    if include_conversion:
+        total_so_qty_2025 = sum(i.get('so_qty_from_converted_2025', 0) for i in items_list)
+        total_so_qty_2026 = sum(i.get('so_qty_from_converted_2026', 0) for i in items_list)
+        total_conv_quotes_2025 = sum(i.get('converted_quotation_count_2025', 0) for i in items_list)
+        total_conv_quotes_2026 = sum(i.get('converted_quotation_count_2026', 0) for i in items_list)
+        total_row.extend([
+            Paragraph(_fmt(total_so_qty_2025), ts['td_bold_r']),
+            Paragraph(_fmt(total_so_qty_2026), ts['td_bold_r']),
+            Paragraph(str(total_conv_quotes_2025), ts['td_bold']),
+            Paragraph(str(total_conv_quotes_2026), ts['td_bold']),
+            Paragraph('', ts['td']),  # Conversion rate totals not meaningful
+            Paragraph('', ts['td']),
+        ])
+    table_data.append(total_row)
 
     # ── 8. Build table with style ──
     data_table = Table(table_data, colWidths=col_widths, repeatRows=1)

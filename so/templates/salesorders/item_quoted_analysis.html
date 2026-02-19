@@ -563,9 +563,9 @@
 
     thead th {
       background: #f8fafc;
-      padding: 10px 12px;
+      padding: 7px 8px;
       text-align: left;
-      font-size: 0.6875rem;
+      font-size: 0.65rem;
       font-weight: 600;
       color: var(--text-secondary);
       text-transform: uppercase;
@@ -575,9 +575,9 @@
     }
 
     tbody td {
-      padding: 10px 12px;
+      padding: 7px 8px;
       border-bottom: 1px solid var(--border-light);
-      font-size: 0.8125rem;
+      font-size: 0.75rem;
       vertical-align: middle;
     }
 
@@ -621,21 +621,21 @@
     .item-code {
       font-weight: 600;
       color: var(--text);
-      font-size: 0.8125rem;
+      font-size: 0.75rem;
       font-variant-numeric: tabular-nums;
     }
 
     .item-description {
-      max-width: 220px;
+      max-width: 200px;
       color: var(--text-secondary);
-      font-size: 0.7rem;
-      line-height: 1.35;
+      font-size: 0.6875rem;
+      line-height: 1.3;
       white-space: normal;
       word-break: break-word;
     }
 
     .upc-code {
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
     }
@@ -973,18 +973,32 @@
               <i class="fas fa-times"></i>
             </button>
           </div>
-          <form method="GET" action="{% url 'export_item_quoted_analysis_pdf' %}" target="_blank" class="export-pdf-form" style="display: inline-flex; align-items: center; gap: 12px;">
-            {% for f in selected_firms %}
-            <input type="hidden" name="firm" value="{{ f }}">
-            {% endfor %}
-            <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
-              <input type="checkbox" name="include_customers" value="1" id="pdf-include-customers" style="cursor: pointer;">
-              <span>Include customer details</span>
-            </label>
-            <button type="submit" class="btn btn-success btn-sm">
-              <i class="fas fa-file-pdf"></i> Export PDF
-            </button>
-          </form>
+          <div style="display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <form method="GET" action="{% url 'item_quoted_analysis' %}" id="conversion-toggle-form" style="display: inline-flex; align-items: center; gap: 6px;">
+              {% for f in selected_firms %}
+              <input type="hidden" name="firm" value="{{ f }}">
+              {% endfor %}
+              <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                <input type="checkbox" name="include_conversion" value="true" id="conversion-toggle" {% if include_conversion %}checked{% endif %} style="cursor: pointer;" onchange="this.form.submit()">
+                <span>Show Conversion Metrics</span>
+              </label>
+            </form>
+            <form method="GET" action="{% url 'export_item_quoted_analysis_pdf' %}" target="_blank" class="export-pdf-form" style="display: inline-flex; align-items: center; gap: 12px;">
+              {% for f in selected_firms %}
+              <input type="hidden" name="firm" value="{{ f }}">
+              {% endfor %}
+              {% if include_conversion %}
+              <input type="hidden" name="include_conversion" value="true">
+              {% endif %}
+              <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                <input type="checkbox" name="include_customers" value="1" id="pdf-include-customers" style="cursor: pointer;">
+                <span>Include customer details</span>
+              </label>
+              <button type="submit" class="btn btn-success btn-sm">
+                <i class="fas fa-file-pdf"></i> Export PDF
+              </button>
+            </form>
+          </div>
         </div>
         {% endif %}
       </div>
@@ -1026,11 +1040,19 @@
                 <th style="min-width:180px;">Description</th>
                 <th style="min-width:80px;">UPC</th>
                 <th class="text-right" style="min-width:100px;">Total Stock</th>
-                <th class="text-right" style="min-width:100px;">Qty 2025</th>
-                <th class="text-right" style="min-width:100px;">Qty 2026</th>
-                <th class="text-center" style="min-width:80px;">Quotes 2025</th>
-                <th class="text-center" style="min-width:80px;">Quotes 2026</th>
-                <th class="text-center" style="min-width:80px;">Customers</th>
+                <th class="text-right" style="min-width:75px;">Qty 2025</th>
+                <th class="text-right" style="min-width:75px;">Qty 2026</th>
+                <th class="text-center" style="min-width:65px;">Q's 25</th>
+                <th class="text-center" style="min-width:65px;">Q's 26</th>
+                <th class="text-center" style="min-width:70px;">Cust.</th>
+                {% if include_conversion %}
+                <th class="text-right" style="min-width:70px;">SO 25</th>
+                <th class="text-right" style="min-width:70px;">SO 26</th>
+                <th class="text-center" style="min-width:60px;">CQ 25</th>
+                <th class="text-center" style="min-width:60px;">CQ 26</th>
+                <th class="text-right" style="min-width:65px;">% 25</th>
+                <th class="text-right" style="min-width:65px;">% 26</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody id="analysis-tbody">

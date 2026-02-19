@@ -52,9 +52,57 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
+    {% if include_conversion %}
+    <td class="text-right num">
+      {% if item.so_qty_from_converted_2025 > 0 %}
+        <span class="badge badge-purple">{{ item.so_qty_from_converted_2025|floatformat:0|intcomma }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    <td class="text-right num">
+      {% if item.so_qty_from_converted_2026 > 0 %}
+        <span class="badge badge-purple">{{ item.so_qty_from_converted_2026|floatformat:0|intcomma }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    <td class="text-center">
+      {% if item.converted_quotation_count_2025 > 0 %}
+        <span class="badge badge-amber">{{ item.converted_quotation_count_2025 }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
+      {% endif %}
+    </td>
+    <td class="text-center">
+      {% if item.converted_quotation_count_2026 > 0 %}
+        <span class="badge badge-amber">{{ item.converted_quotation_count_2026 }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
+      {% endif %}
+    </td>
+    <td class="text-right num">
+      {% if item.conversion_rate_2025 > 0 %}
+        <span class="badge {% if item.conversion_rate_2025 >= 50 %}badge-success{% elif item.conversion_rate_2025 >= 25 %}badge-warning{% else %}badge-danger{% endif %}">
+          {{ item.conversion_rate_2025|floatformat:1 }}%
+        </span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    <td class="text-right num">
+      {% if item.conversion_rate_2026 > 0 %}
+        <span class="badge {% if item.conversion_rate_2026 >= 50 %}badge-success{% elif item.conversion_rate_2026 >= 25 %}badge-warning{% else %}badge-danger{% endif %}">
+          {{ item.conversion_rate_2026|floatformat:1 }}%
+        </span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    {% endif %}
   </tr>
   <tr class="customer-details">
-    <td colspan="10">
+    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}">
       <div class="detail-inner">
         <div class="detail-grid">
           {% for customer in item.customers %}
@@ -105,7 +153,7 @@
   {% endfor %}
 {% else %}
   <tr>
-    <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">
+    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}" style="text-align: center; padding: 40px; color: var(--text-muted);">
       <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
       <p>No quotation data available</p>
     </td>
