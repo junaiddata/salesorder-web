@@ -138,6 +138,20 @@
               <span class="customer-meta-item">
                 <i class="fas fa-file-alt"></i> Quotes 2026: {% if customer.quotation_count_2026 %}{{ customer.quotation_count_2026 }}{% else %}—{% endif %}
               </span>
+              {% if include_conversion %}
+              <span class="customer-meta-item">
+                <i class="fas fa-shopping-cart"></i> SO Qty 25: {% if customer.so_qty_2025 %}{{ customer.so_qty_2025|floatformat:0|intcomma }}{% else %}—{% endif %}
+              </span>
+              <span class="customer-meta-item">
+                <i class="fas fa-shopping-cart"></i> SO Qty 26: {% if customer.so_qty_2026 %}{{ customer.so_qty_2026|floatformat:0|intcomma }}{% else %}—{% endif %}
+              </span>
+              <span class="customer-meta-item">
+                <i class="fas fa-check-circle"></i> Convt Quotes 25: {% if customer.converted_quotation_count_2025 %}{{ customer.converted_quotation_count_2025 }}{% else %}0{% endif %}
+              </span>
+              <span class="customer-meta-item">
+                <i class="fas fa-check-circle"></i> Convt Quotes 26: {% if customer.converted_quotation_count_2026 %}{{ customer.converted_quotation_count_2026 }}{% else %}0{% endif %}
+              </span>
+              {% endif %}
               {% if customer.quotation_numbers %}
               <div style="margin-top: 6px; font-size: 0.7rem; color: var(--text-secondary); width: 100%;">
                 <strong>Quote Numbers:</strong> {{ customer.quotation_numbers|join:", " }}

@@ -100,8 +100,8 @@ def _get_conversion_metrics(item_codes, quotation_items_qs):
             quotation_to_so_data[quotation_number].append((so['id'], so['posting_date']))
     
     if not quotation_to_so_data:
-        # No conversions found, return empty metrics
-        return {item_code: {
+        # No conversions found, return empty metrics and empty detail
+        empty_metrics = {item_code: {
             'so_qty_from_converted_2025': 0.0,
             'so_qty_from_converted_2026': 0.0,
             'converted_quotation_count_2025': 0,
@@ -109,6 +109,8 @@ def _get_conversion_metrics(item_codes, quotation_items_qs):
             'conversion_rate_2025': 0.0,
             'conversion_rate_2026': 0.0,
         } for item_code in item_codes}
+        empty_detail = {'so_qty_by_item_quotation': {}, 'converted_quotations_by_item_2025': {}, 'converted_quotations_by_item_2026': {}}
+        return empty_metrics, empty_detail
     
     # Get quotation numbers that were converted to SOs
     converted_quotation_numbers = set(quotation_to_so_data.keys())
@@ -134,10 +136,12 @@ def _get_conversion_metrics(item_codes, quotation_items_qs):
             so_id_to_data[so_id] = (quotation_number, posting_date)
     
     # Aggregate SO quantities by item_code and year
+    # Also build per (item_code, quotation_number) SO qty by year for customer-level detail
     so_qty_by_item_2025 = defaultdict(float)
     so_qty_by_item_2026 = defaultdict(float)
     converted_quotations_by_item_2025 = defaultdict(set)
     converted_quotations_by_item_2026 = defaultdict(set)
+    so_qty_by_item_quotation = defaultdict(lambda: {2025: 0.0, 2026: 0.0})
     
     for so_item in so_items:
         item_code = so_item['item_no']
@@ -155,9 +159,11 @@ def _get_conversion_metrics(item_codes, quotation_items_qs):
                 if year == 2025:
                     so_qty_by_item_2025[item_code] += qty
                     converted_quotations_by_item_2025[item_code].add(quotation_number)
+                    so_qty_by_item_quotation[(item_code, quotation_number)][2025] += qty
                 elif year == 2026:
                     so_qty_by_item_2026[item_code] += qty
                     converted_quotations_by_item_2026[item_code].add(quotation_number)
+                    so_qty_by_item_quotation[(item_code, quotation_number)][2026] += qty
     
     # Get quoted quantities for converted quotations split by year (for conversion rate calculation)
     converted_quotation_items_2025 = quotation_items_qs.filter(
@@ -211,7 +217,13 @@ def _get_conversion_metrics(item_codes, quotation_items_qs):
             'conversion_rate_2026': conversion_rate_2026,
         }
     
-    return result
+    # Extra data for per-customer conversion detail (SO qty and converted count per customer)
+    conversion_detail = {
+        'so_qty_by_item_quotation': dict(so_qty_by_item_quotation),
+        'converted_quotations_by_item_2025': dict(converted_quotations_by_item_2025),
+        'converted_quotations_by_item_2026': dict(converted_quotations_by_item_2026),
+    }
+    return result, conversion_detail
 
 
 @login_required
@@ -404,23 +416,12 @@ def item_quoted_analysis(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # Load customer details ONLY for current page items
-    page_item_codes = [item['item_code'] for item in page_obj]
-    
-    if page_item_codes:
-        customer_details = _get_customer_details_for_items(
-            quotation_items_qs, page_item_codes
-        )
-        
-        # Attach customer details to page items
-        for item in page_obj:
-            item['customers'] = customer_details.get(item['item_code'], [])
-    
     # Load conversion metrics ONLY if requested (optional/conditional loading)
     include_conversion = request.GET.get('include_conversion', 'false').lower() == 'true'
     conversion_metrics = {}
+    conversion_detail = None
     if include_conversion:
-        conversion_metrics = _get_conversion_metrics(item_codes, quotation_items_qs)
+        conversion_metrics, conversion_detail = _get_conversion_metrics(item_codes, quotation_items_qs)
         # Attach conversion metrics to items
         for item in items_list:
             item_code = item['item_code']
@@ -431,6 +432,18 @@ def item_quoted_analysis(request):
             })
             item.update(metrics)
     
+    # Load customer details ONLY for current page items (with optional conversion detail per customer)
+    page_item_codes = [item['item_code'] for item in page_obj]
+    
+    if page_item_codes:
+        customer_details = _get_customer_details_for_items(
+            quotation_items_qs, page_item_codes, conversion_data=conversion_detail
+        )
+        
+        # Attach customer details to page items
+        for item in page_obj:
+            item['customers'] = customer_details.get(item['item_code'], [])
+    
     # Check if AJAX request
     is_ajax = (
         request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
@@ -438,7 +451,7 @@ def item_quoted_analysis(request):
     )
     
     if is_ajax:
-        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list))
+        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list), include_conversion)
     
     context = {
         'firms': firms,
@@ -455,10 +468,13 @@ def item_quoted_analysis(request):
     return render(request, 'salesorders/item_quoted_analysis.html', context)
 
 
-def _get_customer_details_for_items(quotation_items_qs, item_codes):
+def _get_customer_details_for_items(quotation_items_qs, item_codes, conversion_data=None):
     """
     Get customer details for specific items only.
     Returns dict: {item_code: [customer_details]}
+    
+    If conversion_data is provided (when include_conversion=True), each customer gets:
+    so_qty_2025, so_qty_2026, converted_quotation_count_2025, converted_quotation_count_2026.
     
     OPTIMIZED: Single query for all customer aggregates
     """
@@ -498,6 +514,10 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
                 row['quotation__q_number']
             )
     
+    so_qty_by_item_quotation = (conversion_data or {}).get('so_qty_by_item_quotation', {})
+    converted_2025 = (conversion_data or {}).get('converted_quotations_by_item_2025', {})
+    converted_2026 = (conversion_data or {}).get('converted_quotations_by_item_2026', {})
+    
     # Build result
     result = defaultdict(list)
     
@@ -511,7 +531,7 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
         
         quotation_numbers = sorted(quotation_numbers_lookup[item_code][customer_code])
         
-        result[item_code].append({
+        cust = {
             'customer_code': customer_code,
             'customer_name': agg['customer_name'] or 'Unknown',
             'qty_quoted': qty,
@@ -521,7 +541,31 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
             'quotation_count_2025': agg.get('quotation_count_2025', 0) or 0,
             'quotation_count_2026': agg.get('quotation_count_2026', 0) or 0,
             'quotation_numbers': quotation_numbers[:10],  # Limit to 10 quotes per customer
-        })
+        }
+        
+        if conversion_data:
+            so_2025 = so_2026 = 0.0
+            conv_2025 = conv_2026 = 0
+            set_2025 = converted_2025.get(item_code, set())
+            set_2026 = converted_2026.get(item_code, set())
+            for q_num in quotation_numbers:
+                q_key = str(q_num).strip() if q_num is not None else ''
+                if not q_key:
+                    continue
+                by_year = so_qty_by_item_quotation.get((item_code, q_num)) or so_qty_by_item_quotation.get((item_code, q_key))
+                if by_year:
+                    so_2025 += by_year.get(2025, 0.0)
+                    so_2026 += by_year.get(2026, 0.0)
+                if q_key in set_2025:
+                    conv_2025 += 1
+                if q_key in set_2026:
+                    conv_2026 += 1
+            cust['so_qty_2025'] = so_2025
+            cust['so_qty_2026'] = so_2026
+            cust['converted_quotation_count_2025'] = conv_2025
+            cust['converted_quotation_count_2026'] = conv_2026
+        
+        result[item_code].append(cust)
     
     # Sort each item's customers by qty quoted descending
     for item_code in result:
@@ -530,12 +574,12 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
     return dict(result)
 
 
-def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count):
+def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count, include_conversion=False):
     """Render AJAX JSON response."""
     try:
         table_html = render_to_string(
             'salesorders/_item_quoted_analysis_table.html',
-            {'items': page_obj},
+            {'items': page_obj, 'include_conversion': include_conversion},
             request=request
         )
         
