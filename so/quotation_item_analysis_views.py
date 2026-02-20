@@ -14,10 +14,12 @@ from decimal import Decimal
 from collections import defaultdict
 import logging
 
-from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity
 from .views import salesman_scope_q
 import re
 import requests
+import json
+from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +222,7 @@ def item_quoted_analysis(request):
     Item Quoted Analysis - Firm-wise report showing Qty Quoted 2025, 2026, and Customer Count.
     """
     selected_firms = request.GET.getlist('firm')
+    search_term = request.GET.get('search', '').strip()
     
     # Get all firms for dropdown
     firms = list(
@@ -383,6 +386,16 @@ def item_quoted_analysis(request):
     # Sort by total quoted (2025 + 2026) descending, then by customer count
     items_list.sort(key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']), reverse=True)
     
+    # Apply backend search filter if provided
+    if search_term:
+        search_lower = search_term.lower()
+        items_list = [
+            item for item in items_list
+            if (search_lower in item['item_code'].lower() or
+                search_lower in (item['item_description'] or '').lower() or
+                search_lower in (item['upc_code'] or '').lower())
+        ]
+    
     # Calculate grand totals
     grand_total_2025 = sum(item['qty_quoted_2025'] for item in items_list)
     grand_total_2026 = sum(item['qty_quoted_2026'] for item in items_list)
@@ -431,6 +444,19 @@ def item_quoted_analysis(request):
             })
             item.update(metrics)
     
+    # Load proposed quantities for current user
+    proposed_qty_dict = {}
+    if request.user.is_authenticated and page_item_codes:
+        proposed_qty_objs = ProposedQuantity.objects.filter(
+            user=request.user,
+            item_code__in=page_item_codes
+        )
+        proposed_qty_dict = {pq.item_code: float(pq.proposed_qty) for pq in proposed_qty_objs}
+    
+    # Attach proposed quantities to page items
+    for item in page_obj:
+        item['proposed_qty'] = proposed_qty_dict.get(item['item_code'], 0.0)
+    
     # Check if AJAX request
     is_ajax = (
         request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
@@ -438,7 +464,7 @@ def item_quoted_analysis(request):
     )
     
     if is_ajax:
-        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list))
+        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list), include_conversion, search_term)
     
     context = {
         'firms': firms,
@@ -450,6 +476,7 @@ def item_quoted_analysis(request):
         'grand_total_2026': grand_total_2026,
         'grand_total_customers': grand_total_customers,
         'include_conversion': include_conversion,
+        'search_term': search_term,
     }
     
     return render(request, 'salesorders/item_quoted_analysis.html', context)
@@ -530,11 +557,23 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
     return dict(result)
 
 
-def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count):
+def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count, include_conversion=False, search_term=''):
     """Render AJAX JSON response."""
     try:
-        # include_conversion from request so table partial can show conversion columns
-        include_conversion = request.GET.get('include_conversion', 'false').lower() == 'true'
+        # Load proposed quantities for AJAX response
+        page_item_codes = [item['item_code'] for item in page_obj]
+        proposed_qty_dict = {}
+        if request.user.is_authenticated and page_item_codes:
+            proposed_qty_objs = ProposedQuantity.objects.filter(
+                user=request.user,
+                item_code__in=page_item_codes
+            )
+            proposed_qty_dict = {pq.item_code: float(pq.proposed_qty) for pq in proposed_qty_objs}
+        
+        # Attach proposed quantities to page items
+        for item in page_obj:
+            item['proposed_qty'] = proposed_qty_dict.get(item['item_code'], 0.0)
+        
         table_html = render_to_string(
             'salesorders/_item_quoted_analysis_table.html',
             {'items': page_obj, 'include_conversion': include_conversion},
@@ -568,4 +607,104 @@ def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_
         })
     except Exception as e:
         logger.error(f"Error rendering AJAX response: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_proposed_quantity(request):
+    """AJAX endpoint to save proposed quantity for an item."""
+    try:
+        data = json.loads(request.body)
+        item_code = data.get('item_code', '').strip()
+        proposed_qty = data.get('proposed_qty', 0)
+        
+        if not item_code:
+            return JsonResponse({'success': False, 'error': 'Item code is required'}, status=400)
+        
+        try:
+            proposed_qty = float(proposed_qty)
+            if proposed_qty < 0:
+                proposed_qty = 0.0
+        except (TypeError, ValueError):
+            proposed_qty = 0.0
+        
+        # Get or create ProposedQuantity
+        proposed_qty_obj, created = ProposedQuantity.objects.get_or_create(
+            user=request.user,
+            item_code=item_code,
+            defaults={'proposed_qty': proposed_qty}
+        )
+        
+        if not created:
+            proposed_qty_obj.proposed_qty = proposed_qty
+            proposed_qty_obj.save()
+        
+        return JsonResponse({
+            'success': True,
+            'item_code': item_code,
+            'proposed_qty': float(proposed_qty_obj.proposed_qty),
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def reset_proposed_quantities(request):
+    """AJAX endpoint to reset (delete) all proposed quantities for items in current filter."""
+    try:
+        data = json.loads(request.body)
+        firms = data.get('firms', [])
+        search_term = data.get('search', '').strip()
+        
+        if not firms or not isinstance(firms, list):
+            return JsonResponse({'success': False, 'error': 'Firms list is required'}, status=400)
+        
+        # Get item codes for selected firms (same logic as main view)
+        from .models import Items
+        firm_list = list(dict.fromkeys([f.strip() for f in firms if f and str(f).strip()]))
+        if not firm_list:
+            return JsonResponse({'success': False, 'error': 'No valid firms provided'}, status=400)
+        
+        items_qs = Items.objects.filter(item_firm__in=firm_list)
+        item_codes = list(items_qs.values_list('item_code', flat=True).distinct())
+        
+        # Apply search filter if provided
+        if search_term and item_codes:
+            search_lower = search_term.lower()
+            # Get descriptions and UPCs for filtering
+            items_with_desc = Items.objects.filter(item_code__in=item_codes).values('item_code', 'item_description', 'item_upvc')
+            filtered_codes = []
+            for item in items_with_desc:
+                code = item['item_code'] or ''
+                desc = (item['item_description'] or '').lower()
+                upc = (item['item_upvc'] or '').lower()
+                if (search_lower in code.lower() or search_lower in desc or search_lower in upc):
+                    filtered_codes.append(code)
+            item_codes = filtered_codes
+        
+        if not item_codes:
+            return JsonResponse({
+                'success': True,
+                'deleted_count': 0,
+                'message': 'No items found matching the filter'
+            })
+        
+        # Delete ProposedQuantity records for current user and filtered item codes
+        deleted_count = ProposedQuantity.objects.filter(
+            user=request.user,
+            item_code__in=item_codes
+        ).delete()[0]
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Reset {deleted_count} proposed quantit{"y" if deleted_count == 1 else "ies"}'
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

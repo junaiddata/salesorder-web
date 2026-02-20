@@ -969,7 +969,11 @@
           <p class="table-subtitle">
             {% if selected_firms %}
               Showing <span class="count-badge">{{ total_items }}</span> item{{ total_items|pluralize }}
-              <span id="search-result-info"></span>
+              {% if search_term %}
+                <span id="search-result-info" style="color: var(--primary); font-weight: 500;">(filtered by "{{ search_term }}")</span>
+              {% else %}
+                <span id="search-result-info"></span>
+              {% endif %}
             {% else %}
               Select firm(s) to view items
             {% endif %}
@@ -977,13 +981,22 @@
         </div>
         {% if selected_firms and items %}
         <div class="table-actions">
-          <div class="search-bar-wrap">
-            <i class="fas fa-search search-icon"></i>
-            <input type="text" id="table-search" class="search-bar" placeholder="Search code, description, UPC…" autocomplete="off">
-            <button type="button" class="search-clear" id="table-search-clear" aria-label="Clear search">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
+          <form method="GET" action="{% url 'item_quoted_analysis' %}" id="search-form" style="display: inline-flex; align-items: center; gap: 8px;">
+            {% for f in selected_firms %}
+            <input type="hidden" name="firm" value="{{ f }}">
+            {% endfor %}
+            {% if include_conversion %}
+            <input type="hidden" name="include_conversion" value="true">
+            {% endif %}
+            <div class="search-bar-wrap">
+              <i class="fas fa-search search-icon"></i>
+              <input type="text" name="search" id="table-search" class="search-bar" placeholder="Search code, description, UPC…" autocomplete="off" value="{{ search_term|default:'' }}">
+              <button type="button" class="search-clear" id="table-search-clear" aria-label="Clear search">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="display:none;" id="search-submit-btn">Search</button>
+          </form>
           <div style="display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
             <form method="GET" action="{% url 'item_quoted_analysis' %}" id="conversion-toggle-form" style="display: inline-flex; align-items: center; gap: 6px;">
               {% for f in selected_firms %}
@@ -1000,6 +1013,9 @@
               {% endfor %}
               {% if include_conversion %}
               <input type="hidden" name="include_conversion" value="true">
+              {% endif %}
+              {% if search_term %}
+              <input type="hidden" name="search" value="{{ search_term }}">
               {% endif %}
               <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
                 <input type="checkbox" name="include_customers" value="1" id="pdf-include-customers" style="cursor: pointer;">
@@ -1038,6 +1054,9 @@
             <button type="button" class="toolbar-btn" id="collapse-all-btn" style="display:none;">
               <i class="fas fa-chevron-down"></i> Collapse All
             </button>
+            <button type="button" class="toolbar-btn" id="reset-proposed-btn" style="background: #fee2e2; color: #dc2626; border-color: #fecaca;">
+              <i class="fas fa-undo"></i> Reset Proposed
+            </button>
             <span class="text-muted" style="font-size:0.7rem;">Click any row to see customer details</span>
           </div>
         </div>
@@ -1065,6 +1084,7 @@
                 <!-- <th class="text-right" style="min-width:65px;">% 25</th>
                 <th class="text-right" style="min-width:65px;">% 26</th> -->
                 {% endif %}
+                <th class="text-right" style="min-width:100px; background: #fef3c7; color: #d97706; font-weight: 700;">Proposed<br>Quantity</th>
               </tr>
             </thead>
             <tbody id="analysis-tbody">
@@ -1098,6 +1118,10 @@
     if (tbody) {
       // Delegate click to item rows
       tbody.addEventListener('click', function(e) {
+        // Don't expand if clicking on proposed quantity input or its container
+        if (e.target.closest('.proposed-qty-input') || e.target.classList.contains('proposed-qty-input')) {
+          return;
+        }
         var row = e.target.closest('.item-row');
         if (!row) return;
         row.classList.toggle('expanded');
@@ -1332,83 +1356,285 @@
     }
 
     // ════════════════════════════════════════════
-    //  TABLE SEARCH (DEBOUNCED)
+    //  TABLE SEARCH (BACKEND - FORM SUBMISSION)
     // ════════════════════════════════════════════
     var tableSearch = document.getElementById('table-search');
     var searchClear = document.getElementById('table-search-clear');
+    var searchForm = document.getElementById('search-form');
     var searchInfo  = document.getElementById('search-result-info');
-    var visibleCountEl = document.getElementById('visible-count');
 
-    if (tableSearch && tbody) {
+    if (tableSearch && searchForm) {
       var debounce = null;
 
-      function doSearch() {
-        var term = tableSearch.value.toLowerCase().trim();
-        var rows = getAllItemRows();
-        var shown = 0;
-        var total = rows.length;
-
-        rows.forEach(function(row) {
-          var data = row.getAttribute('data-search') || '';
-          var match = !term || data.includes(term);
-          row.style.display = match ? '' : 'none';
-
-          // Handle detail row
-          var next = row.nextElementSibling;
-          if (next && next.classList.contains('customer-details')) {
-            if (!match) {
-              next.style.display = 'none';
-              row.classList.remove('expanded');
-            } else {
-              // Restore: let CSS handle based on expanded class
-              next.style.display = '';
-            }
-          }
-
-          if (match) shown++;
-        });
-
-        // Clear btn
-        if (searchClear) searchClear.classList.toggle('visible', term.length > 0);
-
-        // Count info
-        if (term) {
-          if (visibleCountEl) {
-            visibleCountEl.textContent = shown + ' of ' + total + ' items match "' + tableSearch.value.trim() + '"';
-            visibleCountEl.classList.add('active');
-          }
-          if (searchInfo) searchInfo.textContent = ' (' + shown + ' matching)';
-        } else {
-          if (visibleCountEl) visibleCountEl.classList.remove('active');
-          if (searchInfo) searchInfo.textContent = '';
-        }
-
-        updateBulkBtnState();
+      function submitSearch() {
+        searchForm.submit();
       }
 
+      // Debounced form submission on input
       tableSearch.addEventListener('input', function() {
         clearTimeout(debounce);
-        debounce = setTimeout(doSearch, 180);
+        debounce = setTimeout(submitSearch, 500);
       });
 
+      // Enter key submits immediately
+      tableSearch.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          clearTimeout(debounce);
+          submitSearch();
+        }
+      });
+
+      // Clear button
       if (searchClear) {
         searchClear.addEventListener('click', function() {
           tableSearch.value = '';
-          doSearch();
-          tableSearch.focus();
+          submitSearch();
         });
+        
+        // Show/hide clear button
+        if (tableSearch.value) {
+          searchClear.classList.add('visible');
+        }
       }
 
       // Keyboard shortcut: Ctrl+F or / to focus search
       document.addEventListener('keydown', function(e) {
         if ((e.key === '/' || (e.ctrlKey && e.key === 'f')) && document.activeElement !== tableSearch) {
-          // Only override / not Ctrl+F (browser default)
           if (e.key === '/') {
             e.preventDefault();
             tableSearch.focus();
             tableSearch.select();
           }
         }
+      });
+    }
+
+    // ════════════════════════════════════════════
+    //  PAGINATION (PRESERVE SEARCH AND FILTERS)
+    // ════════════════════════════════════════════
+    var pagination = document.querySelector('.pagination');
+    if (pagination) {
+      pagination.addEventListener('click', function(e) {
+        var link = e.target.closest('a[data-page]');
+        if (!link) return;
+        e.preventDefault();
+        var page = link.getAttribute('data-page');
+        if (!page) return;
+        
+        // Build URL with all current filters
+        var url = new URL(window.location.href);
+        url.searchParams.set('page', page);
+        
+        // Preserve search term
+        var searchInput = document.getElementById('table-search');
+        if (searchInput && searchInput.value.trim()) {
+          url.searchParams.set('search', searchInput.value.trim());
+        } else {
+          url.searchParams.delete('search');
+        }
+        
+        // Preserve conversion toggle
+        var conversionToggle = document.getElementById('conversion-toggle');
+        if (conversionToggle && conversionToggle.checked) {
+          url.searchParams.set('include_conversion', 'true');
+        } else {
+          url.searchParams.delete('include_conversion');
+        }
+        
+        window.location.href = url.toString();
+      });
+    }
+
+    // ════════════════════════════════════════════
+    //  PROPOSED QUANTITY INPUT (REAL-TIME SAVE)
+    // ════════════════════════════════════════════
+    function getCookie(name) {
+      var cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+          var cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    var csrftoken = getCookie('csrftoken');
+    
+    function initProposedQuantityInputs() {
+      var proposedQtyInputs = document.querySelectorAll('.proposed-qty-input');
+      var saveTimers = {};
+      
+      proposedQtyInputs.forEach(function(input) {
+        var itemCode = input.getAttribute('data-item-code');
+        if (!itemCode) return;
+        
+        // Stop click propagation to prevent row expansion
+        input.addEventListener('click', function(e) {
+          e.stopPropagation();
+        });
+        
+        input.addEventListener('mousedown', function(e) {
+          e.stopPropagation();
+        });
+        
+        // Style on focus
+        input.addEventListener('focus', function() {
+          this.style.borderColor = 'var(--primary)';
+          this.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
+        });
+        
+        input.addEventListener('blur', function() {
+          this.style.borderColor = '#e2e8f0';
+          this.style.boxShadow = 'none';
+        });
+        
+        // Debounced save on input change
+        input.addEventListener('input', function() {
+          var value = this.value.trim();
+          var qty = value === '' ? 0 : parseFloat(value);
+          if (isNaN(qty) || qty < 0) qty = 0;
+          
+          // Update display immediately
+          this.value = qty === 0 ? '' : qty.toString();
+          
+          // Clear existing timer for this input
+          if (saveTimers[itemCode]) {
+            clearTimeout(saveTimers[itemCode]);
+          }
+          
+          // Show saving indicator
+          var originalBg = this.style.background;
+          this.style.background = '#fef3c7';
+          
+          // Save after 500ms of no typing
+          saveTimers[itemCode] = setTimeout(function() {
+            fetch('{% url "save_proposed_quantity" %}', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+              },
+              body: JSON.stringify({
+                item_code: itemCode,
+                proposed_qty: qty
+              })
+            })
+            .then(function(response) {
+              return response.json();
+            })
+            .then(function(data) {
+              if (data.success) {
+                input.style.background = '#d1fae5';
+                setTimeout(function() {
+                  input.style.background = originalBg;
+                }, 300);
+              } else {
+                input.style.background = '#fee2e2';
+                setTimeout(function() {
+                  input.style.background = originalBg;
+                }, 1000);
+              }
+            })
+            .catch(function(error) {
+              console.error('Error saving proposed quantity:', error);
+              input.style.background = '#fee2e2';
+              setTimeout(function() {
+                input.style.background = originalBg;
+              }, 1000);
+            });
+          }, 500);
+        });
+      });
+    }
+    
+    // Initialize on page load
+    initProposedQuantityInputs();
+    
+    // Re-initialize after AJAX table updates
+    var originalAjaxHandler = null;
+    if (typeof window.handleAjaxResponse === 'function') {
+      originalAjaxHandler = window.handleAjaxResponse;
+    }
+    window.handleAjaxResponse = function(response) {
+      if (originalAjaxHandler) originalAjaxHandler(response);
+      setTimeout(initProposedQuantityInputs, 100);
+    };
+
+    // ════════════════════════════════════════════
+    //  RESET PROPOSED QUANTITIES
+    // ════════════════════════════════════════════
+    var resetProposedBtn = document.getElementById('reset-proposed-btn');
+    if (resetProposedBtn) {
+      resetProposedBtn.addEventListener('click', function() {
+        if (!confirm('Reset all proposed quantities for items in current filter? This cannot be undone.')) {
+          return;
+        }
+        
+        // Get firms and search term from current filter
+        var firms = [];
+        var firmInputs = document.querySelectorAll('input[name="firm"]:checked');
+        firmInputs.forEach(function(input) {
+          firms.push(input.value);
+        });
+        
+        var searchTerm = '';
+        var searchInput = document.getElementById('table-search');
+        if (searchInput && searchInput.value.trim()) {
+          searchTerm = searchInput.value.trim();
+        }
+        
+        if (firms.length === 0) {
+          alert('No firms selected.');
+          return;
+        }
+        
+        // Disable button and show loading
+        resetProposedBtn.disabled = true;
+        var originalText = resetProposedBtn.innerHTML;
+        resetProposedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
+        
+        // Call API
+        fetch('{% url "reset_proposed_quantities" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify({
+            firms: firms,
+            search: searchTerm
+          })
+        })
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
+          if (data.success) {
+            // Clear all input values
+            var inputs = document.querySelectorAll('.proposed-qty-input');
+            inputs.forEach(function(input) {
+              input.value = '';
+            });
+            alert(data.message || 'Proposed quantities reset successfully.');
+            // Optionally reload page to reflect changes
+            window.location.reload();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to reset proposed quantities'));
+            resetProposedBtn.disabled = false;
+            resetProposedBtn.innerHTML = originalText;
+          }
+        })
+        .catch(function(error) {
+          console.error('Error resetting proposed quantities:', error);
+          alert('Error resetting proposed quantities. Please try again.');
+          resetProposedBtn.disabled = false;
+          resetProposedBtn.innerHTML = originalText;
+        });
       });
     }
 

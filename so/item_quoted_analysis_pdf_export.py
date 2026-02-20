@@ -23,7 +23,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
 )
 
-from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity
 from .views import salesman_scope_q
 import re
 import requests
@@ -104,20 +104,23 @@ def _build_analysis_styles():
         return ParagraphStyle(name, parent=base, **kw)
 
     return {
-        # Table header cells
+        # Table header cells - wordWrap for wrapping long column names
         'th': _ps('AthL',
             fontName='Helvetica-Bold', fontSize=FONT_TH,
             textColor=CLR_WHITE, leading=FONT_TH + 2,
+            wordWrap='CJK',
         ),
         'th_r': _ps('AthR',
             fontName='Helvetica-Bold', fontSize=FONT_TH,
             textColor=CLR_WHITE, leading=FONT_TH + 2,
             alignment=TA_RIGHT,
+            wordWrap='CJK',
         ),
         'th_c': _ps('AthC',
             fontName='Helvetica-Bold', fontSize=FONT_TH,
             textColor=CLR_WHITE, leading=FONT_TH + 2,
             alignment=TA_CENTER,
+            wordWrap='CJK',
         ),
 
         # Standard data cells
@@ -240,9 +243,9 @@ def _build_analysis_table_style(num_rows, customer_row_indices=None):
         ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
         ('LINEBELOW', (0, 0), (-1, 0), 1, CLR_BORDER_HEAVY),
 
-        # Cell padding — compact
-        ('TOPPADDING', (0, 0), (-1, 0), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+        # Cell padding — header row slightly taller for wrapped column names
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('TOPPADDING', (0, 1), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
@@ -404,6 +407,7 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
     Same logic as item_quoted_analysis view but without pagination.
     """
     selected_firms = request.GET.getlist('firm')
+    search_term = request.GET.get('search', '').strip()
     firm_list = list(dict.fromkeys([f.strip() for f in selected_firms if f and str(f).strip()]))
     if not firm_list:
         return [], [], 0, 0, 0
@@ -503,6 +507,16 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
         key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']),
         reverse=True,
     )
+    
+    # Apply backend search filter if provided (same as view)
+    if search_term:
+        search_lower = search_term.lower()
+        items_list = [
+            item for item in items_list
+            if (search_lower in item['item_code'].lower() or
+                search_lower in (item['item_description'] or '').lower() or
+                search_lower in (item['upc_code'] or '').lower())
+        ]
 
     grand_total_2025 = sum(i['qty_quoted_2025'] for i in items_list)
     grand_total_2026 = sum(i['qty_quoted_2026'] for i in items_list)
@@ -529,6 +543,20 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
                 'conversion_rate': 0.0
             })
             item.update(metrics)
+    
+    # Load proposed quantities for current user
+    proposed_qty_dict = {}
+    if request.user.is_authenticated and items_list:
+        item_codes_all = [i['item_code'] for i in items_list]
+        proposed_qty_objs = ProposedQuantity.objects.filter(
+            user=request.user,
+            item_code__in=item_codes_all
+        )
+        proposed_qty_dict = {pq.item_code: float(pq.proposed_qty) for pq in proposed_qty_objs}
+    
+    # Attach proposed quantities to items
+    for item in items_list:
+        item['proposed_qty'] = proposed_qty_dict.get(item['item_code'], 0.0)
 
     return items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_customers
 
@@ -680,79 +708,61 @@ def export_item_quoted_analysis_pdf(request):
 
     # ── 4. Column layout ──
     #
-    # 10 columns (or 13 with conversion) on landscape A4 (~806pt usable at 18pt margins)
+    # Ensure total width <= usable_width to prevent cutoff.
+    # Use compact widths and wrap headers. Description gets remainder.
     #
-    # Fixed columns:
-    #   # = 20  |  Code = 62  |  UPC = 58  |  Stock = 50
-    #   Qty2025 = 56  |  Qty2026 = 56  |  Q#25 = 42  |  Q#26 = 42  |  Cust = 40
-    #   [+ SO Qty = 50 | Conv Quotes = 38 | Conv Rate = 45 if include_conversion]
-    # Flexible: Description absorbs remainder
+    W_NUM     = 18
+    W_CODE    = 52
+    W_UPC     = 48
+    W_STOCK   = 42
+    W_IMPORT  = 42
+    W_QTY     = 46
+    W_QUOTES  = 36
+    W_CUST    = 36
+    W_SO_QTY  = 40
+    W_CONV_Q  = 32
+    W_CONV_R  = 36
+    W_PROPOSED = 42
 
-    W_NUM     = 20
-    W_CODE    = 62
-    W_UPC     = 58
-    W_STOCK   = 50
-    W_IMPORT  = 50     # Import Ordered
-    W_QTY     = 56     # Qty 2025 / 2026
-    W_QUOTES  = 42     # Quote count columns
-    W_CUST    = 40
-    W_SO_QTY  = 45     # SO Qty from converted (split by year)
-    W_CONV_Q  = 35     # Converted quotes count (split by year)
-    W_CONV_R  = 40     # Conversion rate % (split by year)
-
-    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + W_IMPORT + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST
+    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + W_IMPORT + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST + W_PROPOSED
     if include_conversion:
         fixed_total = base_fixed + (2 * W_SO_QTY) + (2 * W_CONV_Q) + (2 * W_CONV_R)
     else:
         fixed_total = base_fixed
-    W_DESC = max(120, usable_width - fixed_total)
+    W_DESC = max(100, usable_width - fixed_total)
 
     col_widths = [
-        W_NUM,       # 0: #
-        W_CODE,      # 1: Item Code
-        W_DESC,      # 2: Description
-        W_UPC,       # 3: UPC
-        W_STOCK,     # 4: Stock
-        W_IMPORT,    # 5: Import Ordered
-        W_QTY,       # 6: Qty 2025
-        W_QTY,       # 7: Qty 2026
-        W_QUOTES,    # 8: Quotes 2025
-        W_QUOTES,    # 9: Quotes 2026
-        W_CUST,      # 10: Customers
+        W_NUM, W_CODE, W_DESC, W_UPC, W_STOCK, W_IMPORT,
+        W_QTY, W_QTY, W_QUOTES, W_QUOTES, W_CUST,
     ]
     if include_conversion:
-        col_widths.extend([
-            W_SO_QTY,   # 11: SO Qty 2025
-            W_SO_QTY,   # 12: SO Qty 2026
-            W_CONV_Q,   # 12: Conv Quotes 2025
-            W_CONV_Q,   # 13: Conv Quotes 2026
-            W_CONV_R,   # 14: Conv % 2025
-            W_CONV_R,   # 15: Conv % 2026
-        ])
+        col_widths.extend([W_SO_QTY, W_SO_QTY, W_CONV_Q, W_CONV_Q, W_CONV_R, W_CONV_R])
+    col_widths.append(W_PROPOSED)
 
-    # ── 5. Header row ──
+    # ── 5. Header row (wrapped column names for narrow columns) ──
     hdr = [
-        Paragraph('#',           ts['th_c']),
-        Paragraph('Item Code',   ts['th']),
+        Paragraph('#', ts['th_c']),
+        Paragraph('Item<br/>Code', ts['th_c']),
         Paragraph('Description', ts['th']),
-        Paragraph('UPC',         ts['th']),
-            Paragraph('Stock',       ts['th_r']),
-            Paragraph('Import Ord.', ts['th_r']),
-        Paragraph('Qty 2025',    ts['th_r']),
-        Paragraph('Qty 2026',    ts['th_r']),
-        Paragraph("Q's 25",     ts['th_r']),
-        Paragraph("Q's 26",     ts['th_r']),
-        Paragraph('Cust.',       ts['th_c']),
+        Paragraph('UPC', ts['th']),
+        Paragraph('Stock', ts['th_r']),
+        Paragraph('Import<br/>Ord.', ts['th_c']),
+        Paragraph('Qty<br/>2025', ts['th_c']),
+        Paragraph('Qty<br/>2026', ts['th_c']),
+        Paragraph("Q's<br/>25", ts['th_c']),
+        Paragraph("Q's<br/>26", ts['th_c']),
+        Paragraph('Cust.', ts['th_c']),
     ]
     if include_conversion:
         hdr.extend([
-            Paragraph('SO 25',       ts['th_r']),
-            Paragraph('SO 26',       ts['th_r']),
-            Paragraph('CQ 25',       ts['th_c']),
-            Paragraph('CQ 26',       ts['th_c']),
-            Paragraph('% 25',        ts['th_r']),
-            Paragraph('% 26',        ts['th_r']),
+            Paragraph('SO<br/>25', ts['th_c']),
+            Paragraph('SO<br/>26', ts['th_c']),
+            Paragraph('CQ<br/>25', ts['th_c']),
+            Paragraph('CQ<br/>26', ts['th_c']),
+            Paragraph('%<br/>25', ts['th_c']),
+            Paragraph('%<br/>26', ts['th_c']),
         ])
+    hdr.append(Paragraph('Proposed<br/>Qty', ts['th_c']))
     table_data = [hdr]
     customer_row_indices = set()   # Track which rows are customer sub-rows
 
@@ -775,6 +785,8 @@ def export_item_quoted_analysis_pdf(request):
             _fmt_int(item['total_quotations_2026'], ts['td_r'], ts['td_muted']),
             _fmt_int(item['customer_quoted_count'], ts['td_c'], ts['td_muted_c']),
         ]
+        if not include_conversion:
+            row.append(_fmt_val(item.get('proposed_qty', 0), ts['td_bold_r'], ts['td_muted']))
         if include_conversion:
             row.extend([
                 _fmt_val(item.get('so_qty_from_converted_2025', 0), ts['td_bold_r'], ts['td_muted']),
@@ -784,6 +796,7 @@ def export_item_quoted_analysis_pdf(request):
                 _fmt_val(item.get('conversion_rate_2025', 0), ts['td_bold_r'], ts['td_muted']),
                 _fmt_val(item.get('conversion_rate_2026', 0), ts['td_bold_r'], ts['td_muted']),
             ])
+        row.append(_fmt_val(item.get('proposed_qty', 0), ts['td_bold_r'], ts['td_muted']))
         table_data.append(row)
 
         # Customer sub-rows (indented, muted styling)
@@ -808,6 +821,8 @@ def export_item_quoted_analysis_pdf(request):
                     _fmt_int(cust.get('quotation_count_2026', 0), ts['cust_val'], ts['td_muted']),
                     Paragraph('', ts['td']),                                               # Cust
                 ]
+                if not include_conversion:
+                    cust_row.append(Paragraph('', ts['td']))  # Proposed Qty
                 if include_conversion:
                     cust_row.extend([
                         Paragraph('', ts['td']),                                            # SO 25
@@ -817,6 +832,7 @@ def export_item_quoted_analysis_pdf(request):
                         Paragraph('', ts['td']),                                            # % 25
                         Paragraph('', ts['td']),                                            # % 26
                     ])
+                cust_row.append(Paragraph('', ts['td']))  # Proposed Qty
                 table_data.append(cust_row)
 
     # ── 7. Totals row ──
@@ -851,6 +867,8 @@ def export_item_quoted_analysis_pdf(request):
             Paragraph('', ts['td']),  # Conversion rate totals not meaningful
             Paragraph('', ts['td']),
         ])
+    total_proposed_qty = sum(i.get('proposed_qty', 0) for i in items_list)
+    total_row.append(Paragraph(_fmt(total_proposed_qty), ts['td_bold_r']))
     table_data.append(total_row)
 
     # ── 8. Build table with style ──

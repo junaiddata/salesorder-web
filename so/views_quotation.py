@@ -246,10 +246,15 @@ def view_quotations(request):
         # else: so/manager see all quotations - no additional filter
 
 
-    # Salesman restriction (same logic as SalesOrder)
+    # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-        salesman_name = request.user.first_name
-        quotations = quotations.filter(salesman__salesman_name=salesman_name)
+        from .views import SALES_USER_MAP
+        current_username = (request.user.username or "").strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            quotations = quotations.filter(salesman__salesman_name__in=allowed_names)
+        else:
+            quotations = quotations.none()
     elif salesman_filter and salesman_filter != 'All':
         quotations = quotations.filter(salesman__salesman_name=salesman_filter)
 
@@ -352,9 +357,15 @@ def view_quotations_ajax(request):
             quotations = quotations.filter(division='JUNAID')
         # else: so/manager see all quotations - no additional filter
 
+    # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-        salesman_name = request.user.first_name
-        quotations = quotations.filter(salesman__salesman_name=salesman_name)
+        from .views import SALES_USER_MAP
+        current_username = (request.user.username or "").strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            quotations = quotations.filter(salesman__salesman_name__in=allowed_names)
+        else:
+            quotations = quotations.none()
     elif salesman_filter and salesman_filter != 'All':
         quotations = quotations.filter(salesman__salesman_name=salesman_filter)
 

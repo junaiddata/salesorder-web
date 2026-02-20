@@ -925,3 +925,20 @@ class TrustedDevice(models.Model):
     def __str__(self):
         status = "✅" if self.is_approved else "⏳"
         return f"{status} {self.user.username} - {self.device_name}"
+
+
+class ProposedQuantity(models.Model):
+    """Store proposed quantities for purchase stock requirement planning."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='proposed_quantities')
+    item_code = models.CharField(max_length=50, db_index=True)
+    proposed_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [['user', 'item_code']]
+        indexes = [
+            models.Index(fields=['user', 'item_code']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.item_code}: {self.proposed_qty}"

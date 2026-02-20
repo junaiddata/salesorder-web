@@ -68,7 +68,7 @@
     .search-box { width: 100%; padding: 6px 10px; font-size: 0.813rem; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
     .search-box:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44, 85, 48, 0.12); }
     .search-box::placeholder { color: var(--text-muted); }
-    .filters-row-firm { padding: 0 18px 14px; border-top: 1px solid var(--border-light); }
+    .filters-row-firm { grid-column: 1 / -1; padding: 0 18px 14px; border-top: 1px solid var(--border-light); }
     .filters-row-firm .field { max-width: 320px; }
     .table-card { overflow: hidden; }
     .table-wrap { overflow-x: auto; }
@@ -174,17 +174,16 @@
           <button class="btn btn-secondary" type="button" id="btn-clear-filters">Clear</button>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
-      </form>
       <div class="filters-row-firm">
         <div class="field">
-          <label>Firm</label>
+          <label>Brand (from Item Master)</label>
           <div class="multi-select" id="firm-wrapper">
             <div class="select-box" id="firm-trigger">
-              <span id="firm-text">All Firms</span>
+              <span id="firm-text">All Brands</span>
             </div>
             <div class="options-container" id="firm-options">
               <div class="search-box-container">
-                <input type="text" id="firm-search" class="search-box" placeholder="Search firms..." autocomplete="off">
+                <input type="text" id="firm-search" class="search-box" placeholder="Search brands..." autocomplete="off">
               </div>
               <div class="options-list" id="firm-options-list">
                 {% for firm in firms %}
@@ -198,6 +197,7 @@
           </div>
         </div>
       </div>
+      </form>
 
       {% if show_price %}
       <div class="stats-bar">
@@ -358,7 +358,7 @@
     document.addEventListener('click', e => { if (!wrapper.contains(e.target)) { options.classList.remove('active'); if (id === 'firm') { var s = document.getElementById('firm-search'); if (s) s.value = ''; var list = document.getElementById('firm-options-list'); if (list) list.querySelectorAll('.option-label').forEach(function(l) { l.classList.remove('option-hidden'); }); } } });
   }
   document.addEventListener("DOMContentLoaded", function() {
-    initMultiSelect('firm', 'All Firms');
+    initMultiSelect('firm', 'All Brands');
     initMultiSelect('purchaser', 'All Purchasers');
 
     var firmSearch = document.getElementById('firm-search');

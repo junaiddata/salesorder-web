@@ -222,8 +222,12 @@ def _build_items_data(request, firms):
         # Avg 3 Month Sales = Total Sold 2025 / 3
         avg_3m = tot_25 / 3.0 if tot_25 else 0.0
 
+        # Avg 15 days Sales 
+        
+
         # Stock Sufficiency Month = DIP Stock / (Total Sold 2025/5), rounded to int
         divisor = tot_25 / 5.0 if tot_25 else 0.0
+     
         if divisor > 0:
             stock_suff_month = int(round(dip_stock / divisor))
         else:

@@ -107,6 +107,18 @@
       {% endif %}
     </td> -->
     {% endif %}
+    <td class="text-right" style="background: #fffef5;">
+      <input 
+        type="number" 
+        class="proposed-qty-input" 
+        data-item-code="{{ item.item_code }}"
+        value="{% if item.proposed_qty %}{{ item.proposed_qty|floatformat:0 }}{% endif %}"
+        placeholder="0"
+        min="0"
+        step="1"
+        style="width: 70px; padding: 4px 6px; border: 1.5px solid #e2e8f0; border-radius: 6px; font-size: 0.8125rem; text-align: right; font-family: var(--font); background: white; transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);"
+      />
+    </td>
   </tr>
   <tr class="customer-details">
     <td colspan="{% if include_conversion %}16{% else %}10{% endif %}">

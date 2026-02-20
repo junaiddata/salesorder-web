@@ -288,15 +288,18 @@ def purchaseorder_list(request):
     total_range = request.GET.get('total', '').strip()
 
     if firm_filter:
-        clean_firms = [f for f in firm_filter if f.strip()]
+        clean_firms = [f.strip() for f in firm_filter if f and f.strip()]
         if clean_firms:
-            firm_item_codes = set(
-                Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            # Brand/Firm from Item Master: filter PO items whose item_no matches Items.item_code
+            # and whose Items.item_firm is in the selected brands.
+            qs = qs.filter(
+                Exists(
+                    Items.objects.filter(
+                        item_code=OuterRef('item_no'),
+                        item_firm__in=clean_firms
+                    )
+                )
             )
-            if firm_item_codes:
-                qs = qs.filter(item_no__in=firm_item_codes)
-            else:
-                qs = qs.none()
 
     if purchaser_filter:
         clean = [p for p in purchaser_filter if p.strip()]
@@ -499,15 +502,18 @@ def purchaseorder_search(request):
     total_range = request.GET.get('total', '').strip()
 
     if firm_filter:
-        clean_firms = [f for f in firm_filter if f.strip()]
+        clean_firms = [f.strip() for f in firm_filter if f and f.strip()]
         if clean_firms:
-            firm_item_codes = set(
-                Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            # Brand/Firm from Item Master: filter PO items whose item_no matches Items.item_code
+            # and whose Items.item_firm is in the selected brands.
+            qs = qs.filter(
+                Exists(
+                    Items.objects.filter(
+                        item_code=OuterRef('item_no'),
+                        item_firm__in=clean_firms
+                    )
+                )
             )
-            if firm_item_codes:
-                qs = qs.filter(item_no__in=firm_item_codes)
-            else:
-                qs = qs.none()
 
     if purchaser_filter:
         clean = [p for p in purchaser_filter if p.strip()]
@@ -923,15 +929,18 @@ def _apply_purchaseorder_list_filters(qs, request):
     total_range = request.GET.get('total', '').strip()
 
     if firm_filter:
-        clean_firms = [f for f in firm_filter if f.strip()]
+        clean_firms = [f.strip() for f in firm_filter if f and f.strip()]
         if clean_firms:
-            firm_item_codes = set(
-                Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+            # Brand/Firm from Item Master: filter PO items whose item_no matches Items.item_code
+            # and whose Items.item_firm is in the selected brands.
+            qs = qs.filter(
+                Exists(
+                    Items.objects.filter(
+                        item_code=OuterRef('item_no'),
+                        item_firm__in=clean_firms
+                    )
+                )
             )
-            if firm_item_codes:
-                qs = qs.filter(item_no__in=firm_item_codes)
-            else:
-                qs = qs.none()
 
     if purchaser_filter:
         clean = [p for p in purchaser_filter if p.strip()]

@@ -117,7 +117,7 @@ def export_purchaseorder_list_pdf(request):
     if item_filter:
         active_filters.append(f'Item: "{item_filter}"')
     if firm_filter:
-        active_filters.append(f'Firm: {", ".join(firm_filter[:3])}{"…" if len(firm_filter) > 3 else ""}')
+        active_filters.append(f'Brand: {", ".join(firm_filter[:3])}{"…" if len(firm_filter) > 3 else ""}')
     if purchaser_filter:
         active_filters.append(f'Purchaser: {", ".join(purchaser_filter[:3])}{"…" if len(purchaser_filter) > 3 else ""}')
     if start:
