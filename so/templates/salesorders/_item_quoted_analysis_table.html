@@ -19,7 +19,7 @@
     </td>
     <td class="text-right num">
       {% if item.import_ordered > 0 %}
-        <span class="badge badge-amber">{{ item.import_ordered|floatformat:0|intcomma }}</span>
+        <span class="badge badge-red">{{ item.import_ordered|floatformat:0|intcomma }}</span>
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
