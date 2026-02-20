@@ -661,6 +661,16 @@
     .badge-purple { background: var(--purple-light); color: var(--purple); }
     .badge-red { background: var(--danger-light); color: var(--danger); }
 
+    /* Conversion block: light yellow background + separator */
+    .conversion-th,
+    .conversion-cell {
+      background: #fffbeb !important; /* very light yellow */
+    }
+    .conversion-th-first,
+    .conversion-cell-first {
+      border-left: 1px solid var(--border);
+    }
+
     /* ═══════════════════════════════════════════════
        CUSTOMER DETAIL ROW
        ═══════════════════════════════════════════════ */
@@ -1048,10 +1058,10 @@
                 <th class="text-center" style="min-width:65px;">Q's 26</th>
                 <th class="text-center" style="min-width:70px;">Cust.</th>
                 {% if include_conversion %}
-                <th class="text-right" style="min-width:70px;">SO Qty 25</th>
-                <th class="text-right" style="min-width:70px;">SO Qty 26</th>
-                <th class="text-center" style="min-width:60px;">Convt Quotes 25</th>
-                <th class="text-center" style="min-width:60px;">Convt Quotes 26</th>
+                <th class="text-right conversion-th conversion-th-first" style="min-width:70px;">SO Qty 25</th>
+                <th class="text-right conversion-th" style="min-width:70px;">SO Qty 26</th>
+                <th class="text-center conversion-th" style="min-width:60px;">Convt Quotes 25</th>
+                <th class="text-center conversion-th" style="min-width:60px;">Convt Quotes 26</th>
                 <!-- <th class="text-right" style="min-width:65px;">% 25</th>
                 <th class="text-right" style="min-width:65px;">% 26</th> -->
                 {% endif %}
