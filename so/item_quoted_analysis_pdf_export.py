@@ -26,7 +26,31 @@ from reportlab.platypus import (
 from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder
 from .views import salesman_scope_q
 import re
+import requests
 from collections import defaultdict
+
+IMPORT_ORDERED_API_URL = 'https://purchase.junaidworld.com/api/item-totals/'
+
+
+def _get_import_ordered_lookup_pdf(item_codes):
+    """Fetch totalqty_ordered per item from purchase API for PDF export."""
+    lookup = {code: 0 for code in item_codes}
+    try:
+        resp = requests.get(IMPORT_ORDERED_API_URL, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list):
+            return lookup
+        for row in data:
+            itemcode = (row.get('itemcode') or row.get('item_code') or '').strip()
+            if itemcode in lookup:
+                try:
+                    lookup[itemcode] = int(row.get('totalqty_ordered', 0) or 0)
+                except (TypeError, ValueError):
+                    pass
+    except Exception:
+        pass
+    return lookup
 
 # Shared design system
 from .finance_statement_pdf_export import (
@@ -462,6 +486,7 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
             'item_description': item_info['description'],
             'upc_code': item_info['upc'],
             'total_stock': item_info['total_stock'],
+            'import_ordered': 0,
             'qty_quoted_2025': quoted_2025_dict.get(item_code, 0.0),
             'qty_quoted_2026': quoted_2026_dict.get(item_code, 0.0),
             'total_quotations_2025': quotations_2025_dict.get(item_code, 0),
@@ -469,6 +494,10 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
             'customer_quoted_count': customer_count_dict.get(item_code, 0),
             'customers': [],
         })
+
+    import_ordered_lookup = _get_import_ordered_lookup_pdf(item_codes)
+    for item in items_list:
+        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0)
 
     items_list.sort(
         key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']),
@@ -663,6 +692,7 @@ def export_item_quoted_analysis_pdf(request):
     W_CODE    = 62
     W_UPC     = 58
     W_STOCK   = 50
+    W_IMPORT  = 50     # Import Ordered
     W_QTY     = 56     # Qty 2025 / 2026
     W_QUOTES  = 42     # Quote count columns
     W_CUST    = 40
@@ -670,7 +700,7 @@ def export_item_quoted_analysis_pdf(request):
     W_CONV_Q  = 35     # Converted quotes count (split by year)
     W_CONV_R  = 40     # Conversion rate % (split by year)
 
-    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST
+    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + W_IMPORT + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST
     if include_conversion:
         fixed_total = base_fixed + (2 * W_SO_QTY) + (2 * W_CONV_Q) + (2 * W_CONV_R)
     else:
@@ -683,16 +713,17 @@ def export_item_quoted_analysis_pdf(request):
         W_DESC,      # 2: Description
         W_UPC,       # 3: UPC
         W_STOCK,     # 4: Stock
-        W_QTY,       # 5: Qty 2025
-        W_QTY,       # 6: Qty 2026
-        W_QUOTES,    # 7: Quotes 2025
-        W_QUOTES,    # 8: Quotes 2026
-        W_CUST,      # 9: Customers
+        W_IMPORT,    # 5: Import Ordered
+        W_QTY,       # 6: Qty 2025
+        W_QTY,       # 7: Qty 2026
+        W_QUOTES,    # 8: Quotes 2025
+        W_QUOTES,    # 9: Quotes 2026
+        W_CUST,      # 10: Customers
     ]
     if include_conversion:
         col_widths.extend([
-            W_SO_QTY,   # 10: SO Qty 2025
-            W_SO_QTY,   # 11: SO Qty 2026
+            W_SO_QTY,   # 11: SO Qty 2025
+            W_SO_QTY,   # 12: SO Qty 2026
             W_CONV_Q,   # 12: Conv Quotes 2025
             W_CONV_Q,   # 13: Conv Quotes 2026
             W_CONV_R,   # 14: Conv % 2025
@@ -705,7 +736,8 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph('Item Code',   ts['th']),
         Paragraph('Description', ts['th']),
         Paragraph('UPC',         ts['th']),
-        Paragraph('Stock',       ts['th_r']),
+            Paragraph('Stock',       ts['th_r']),
+            Paragraph('Import Ord.', ts['th_r']),
         Paragraph('Qty 2025',    ts['th_r']),
         Paragraph('Qty 2026',    ts['th_r']),
         Paragraph("Q's 25",     ts['th_r']),
@@ -736,6 +768,7 @@ def export_item_quoted_analysis_pdf(request):
             Paragraph(desc_text, ts['td']),
             Paragraph((item['upc_code'] or '—')[:16], ts['td']),
             _fmt_val(item['total_stock'], ts['td_r'], ts['td_muted']),
+            _fmt_val(item.get('import_ordered', 0), ts['td_r'], ts['td_muted']),
             _fmt_val(item['qty_quoted_2025'], ts['td_bold_r'], ts['td_muted']),
             _fmt_val(item['qty_quoted_2026'], ts['td_bold_r'], ts['td_muted']),
             _fmt_int(item['total_quotations_2025'], ts['td_r'], ts['td_muted']),
@@ -768,6 +801,7 @@ def export_item_quoted_analysis_pdf(request):
                     Paragraph(cust_display, ts['cust_name']),                              # Desc col → customer name
                     Paragraph('', ts['td']),                                               # UPC
                     Paragraph('', ts['td']),                                               # Stock
+                    Paragraph('', ts['td']),                                               # Import Ordered
                     _fmt_val(cust.get('qty_quoted_2025', 0), ts['cust_val_bold'], ts['td_muted']),
                     _fmt_val(cust.get('qty_quoted_2026', 0), ts['cust_val_bold'], ts['td_muted']),
                     _fmt_int(cust.get('quotation_count_2025', 0), ts['cust_val'], ts['td_muted']),
@@ -787,6 +821,7 @@ def export_item_quoted_analysis_pdf(request):
 
     # ── 7. Totals row ──
     total_stock = sum(i['total_stock'] for i in items_list)
+    total_import_ordered = sum(i.get('import_ordered', 0) for i in items_list)
     total_q25 = sum(i['total_quotations_2025'] for i in items_list)
     total_q26 = sum(i['total_quotations_2026'] for i in items_list)
 
@@ -796,6 +831,7 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph(f'{len(items_list)} items', ts['total_label']),
         Paragraph('', ts['td']),
         Paragraph(_fmt(total_stock), ts['td_bold_r']),
+        Paragraph(_fmt(total_import_ordered), ts['td_bold_r']),
         Paragraph(_fmt(grand_total_2025), ts['td_bold_r']),
         Paragraph(_fmt(grand_total_2026), ts['td_bold_r']),
         Paragraph(str(total_q25), ts['td_bold_r']),

@@ -17,8 +17,36 @@ import logging
 from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder
 from .views import salesman_scope_q
 import re
+import requests
 
 logger = logging.getLogger(__name__)
+
+# Purchase system API for import ordered quantities
+IMPORT_ORDERED_API_URL = 'https://purchase.junaidworld.com/api/item-totals/'
+
+
+def _get_import_ordered_lookup(item_codes):
+    """
+    Fetch totalqty_ordered per item from purchase API.
+    Returns dict: item_code -> totalqty_ordered (int). Missing items get 0.
+    """
+    lookup = {code: 0 for code in item_codes}
+    try:
+        resp = requests.get(IMPORT_ORDERED_API_URL, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list):
+            return lookup
+        for row in data:
+            itemcode = (row.get('itemcode') or row.get('item_code') or '').strip()
+            if itemcode and itemcode in lookup:
+                try:
+                    lookup[itemcode] = int(row.get('totalqty_ordered', 0) or 0)
+                except (TypeError, ValueError):
+                    pass
+    except Exception as e:
+        logger.warning(f"Could not fetch import ordered from {IMPORT_ORDERED_API_URL}: {e}")
+    return lookup
 
 
 def safe_float(x):
@@ -338,6 +366,7 @@ def item_quoted_analysis(request):
             'item_description': item_info['description'],
             'upc_code': item_info['upc'],
             'total_stock': item_info['total_stock'],
+            'import_ordered': 0,  # Filled below from purchase API
             'qty_quoted_2025': qty_2025,
             'qty_quoted_2026': qty_2026,
             'total_quotations_2025': quot_count_2025,
@@ -345,6 +374,11 @@ def item_quoted_analysis(request):
             'customer_quoted_count': cust_count,
             'customers': [],  # Will be loaded lazily for current page only
         })
+    
+    # Fetch import ordered from purchase API (single request)
+    import_ordered_lookup = _get_import_ordered_lookup(item_codes)
+    for item in items_list:
+        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0)
     
     # Sort by total quoted (2025 + 2026) descending, then by customer count
     items_list.sort(key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']), reverse=True)
