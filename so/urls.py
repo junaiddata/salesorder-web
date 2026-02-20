@@ -123,6 +123,7 @@ urlpatterns += [
 
     # SAP Salesorder URLs
     path('sapsalesorders/upload/', sap_salesorder_views.upload_salesorders, name='upload_salesorders'),
+    path('sapsalesorders/upload-nfref/', sap_salesorder_views.upload_nfref_excel, name='upload_nfref_excel'),
     path('sapsalesorders/sync-api/', sap_salesorder_views.sync_salesorders_from_api, name='sync_salesorders_api'),
     path('sapsalesorders/sync-api-receive/', sap_salesorder_views.sync_salesorders_api_receive, name='sync_salesorders_api_receive'),
     path('sappurchaseorders/sync-api-receive/', sap_purchaseorder_views.sync_purchaseorders_api_receive, name='sync_purchaseorders_api_receive'),

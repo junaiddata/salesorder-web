@@ -969,6 +969,84 @@ def sync_salesorders_from_api(request):
 
 
 # =====================
+# Salesorder: Upload NFRef Excel (one-time update)
+# =====================
+@login_required
+def upload_nfref_excel(request):
+    """Upload Excel file to bulk-update NFRef on existing sales orders."""
+    if request.method != 'POST':
+        return render(request, 'salesorders/upload_nfref_excel.html', {})
+    
+    excel_file = request.FILES.get('file')
+    if not excel_file:
+        messages.error(request, 'Please select an Excel file.')
+        return redirect('upload_nfref_excel')
+    
+    if not excel_file.name.lower().endswith(('.xlsx', '.xls')):
+        messages.error(request, 'File must be Excel (.xlsx or .xls).')
+        return redirect('upload_nfref_excel')
+    
+    try:
+        df = pd.read_excel(excel_file, header=0)
+    except Exception as e:
+        messages.error(request, f'Could not read Excel file: {str(e)}')
+        return redirect('upload_nfref_excel')
+    
+    # Auto-detect columns
+    so_column = None
+    for col in ['so_number', 'so number', 'so', 'document number', 'docnum']:
+        if col in [c.lower() for c in df.columns]:
+            so_column = [c for c in df.columns if c.lower() == col][0]
+            break
+    if not so_column:
+        so_column = df.columns[0]
+    
+    nfref_column = None
+    for col in ['nfref', 'nf_ref', 'nf ref', 'quotation reference']:
+        if col in [c.lower() for c in df.columns]:
+            nfref_column = [c for c in df.columns if c.lower() == col][0]
+            break
+    if not nfref_column and len(df.columns) > 1:
+        nfref_column = df.columns[1]
+    
+    if not nfref_column:
+        messages.error(request, 'Could not find NFRef column. Use headers: SO number, NFRef')
+        return redirect('upload_nfref_excel')
+    
+    updates = []
+    not_found = []
+    for idx, row in df.iterrows():
+        so_number = str(row[so_column]).strip() if pd.notna(row[so_column]) else None
+        nf_ref = str(row[nfref_column]).strip() if pd.notna(row[nfref_column]) else None
+        if not so_number or so_number.lower() in ['nan', 'none', '']:
+            continue
+        if not nf_ref or nf_ref.lower() in ['nan', 'none', '']:
+            continue
+        try:
+            so = SAPSalesorder.objects.get(so_number=so_number)
+            updates.append({'so': so, 'nf_ref': nf_ref})
+        except SAPSalesorder.DoesNotExist:
+            not_found.append(so_number)
+        except SAPSalesorder.MultipleObjectsReturned:
+            not_found.append(so_number)
+    
+    updated_count = 0
+    if updates:
+        with transaction.atomic():
+            for u in updates:
+                u['so'].nf_ref = u['nf_ref']
+                u['so'].save(update_fields=['nf_ref'])
+                updated_count += 1
+    
+    messages.success(
+        request,
+        f'Updated NFRef for {updated_count} sales order(s). '
+        + (f'{len(not_found)} SO number(s) not found in database.' if not_found else '')
+    )
+    return redirect('upload_nfref_excel')
+
+
+# =====================
 # Salesorder: API Sync Receive (from PC script)
 # =====================
 from django.views.decorators.csrf import csrf_exempt

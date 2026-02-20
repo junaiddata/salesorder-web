@@ -59,7 +59,7 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
-    <!-- {% if include_conversion %}
+    {% if include_conversion %}
     <td class="text-right num">
       {% if item.so_qty_from_converted_2025 > 0 %}
         <span class="badge badge-purple">{{ item.so_qty_from_converted_2025|floatformat:0|intcomma }}</span>
@@ -88,7 +88,7 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">0</span>
       {% endif %}
     </td>
-    <td class="text-right num">
+    <!-- <td class="text-right num">
       {% if item.conversion_rate_2025 > 0 %}
         <span class="badge {% if item.conversion_rate_2025 >= 50 %}badge-success{% elif item.conversion_rate_2025 >= 25 %}badge-warning{% else %}badge-danger{% endif %}">
           {{ item.conversion_rate_2025|floatformat:1 }}%
@@ -105,11 +105,11 @@
       {% else %}
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
-    </td>
-    {% endif %} -->
+    </td> -->
+    {% endif %}
   </tr>
   <tr class="customer-details">
-    <td colspan="{% if include_conversion %}17{% else %}11{% endif %}">
+    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}">
       <div class="detail-inner">
         <div class="detail-grid">
           {% for customer in item.customers %}
@@ -160,7 +160,7 @@
   {% endfor %}
 {% else %}
   <tr>
-    <td colspan="{% if include_conversion %}17{% else %}11{% endif %}" style="text-align: center; padding: 40px; color: var(--text-muted);">
+    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}" style="text-align: center; padding: 40px; color: var(--text-muted);">
       <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
       <p>No quotation data available</p>
     </td>
