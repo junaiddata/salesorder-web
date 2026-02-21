@@ -7,6 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 
 import pandas as pd
+import requests
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, Value, DecimalField, F
@@ -28,6 +29,36 @@ from .sap_purchaseorder_views import _open_row_status_q_po
 
 # Firms that use 15-day metrics instead of 3-month (name must start with one of these)
 FIRMS_15DAY_PREFIXES = ('COSMO', 'RAKTHERM', 'HEPWORTH', 'GF', 'ULTRAFLOW', 'MULTIFLOW', 'GROHE')
+
+# API for import/purchase order totals to add to LPO given
+ITEM_TOTALS_API_URL = 'https://purchase.junaidworld.com/api/item-totals/'
+
+
+def _get_item_totals_api_lookup(item_codes):
+    """
+    Fetch totalqty_ordered per item from purchase API.
+    Returns dict item_code -> totalqty_ordered (only for codes in item_codes).
+    On any error returns empty dict.
+    """
+    codes_set = set(item_codes) if item_codes else set()
+    lookup = {}
+    try:
+        resp = requests.get(ITEM_TOTALS_API_URL, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list):
+            return lookup
+        for row in data:
+            itemcode = (row.get('itemcode') or row.get('item_code') or '').strip()
+            if itemcode in codes_set:
+                try:
+                    qty = int(row.get('totalqty_ordered', 0) or 0)
+                    lookup[itemcode] = lookup.get(itemcode, 0) + qty
+                except (TypeError, ValueError):
+                    pass
+    except Exception:
+        pass
+    return lookup
 
 
 def _is_15day_firm(firm_name):
@@ -207,6 +238,11 @@ def _build_items_data(request, firms):
         total_qty=Sum(Coalesce(F('remaining_open_quantity'), F('quantity'), Value(0, output_field=DecimalField())))
     )
     lpo_dict = {row['item_no']: safe_float(row['total_qty']) for row in open_po_qty}
+
+    # Add item-totals from purchase API (import orders) to LPO given
+    api_item_totals = _get_item_totals_api_lookup(item_codes)
+    for code, qty in api_item_totals.items():
+        lpo_dict[code] = lpo_dict.get(code, 0) + float(qty)
 
     # Open SO
     open_so_qty = SAPSalesorderItem.objects.filter(
