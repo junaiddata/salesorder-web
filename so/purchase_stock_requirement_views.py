@@ -281,7 +281,7 @@ def _build_items_data(request, firms):
             stock_reqt_period = ((last_6m_sale / 6.0) * 3.0 if last_6m_sale else 0.0)
 
         stock_after_period = total_stock - stock_reqt_period
-        final_reqt = (stock_reqt_period + open_so) if stock_after_period < 0 else 0.0
+        final_reqt = (stock_reqt_period ) if stock_after_period < 0 else 0.0
 
         # Stock Reqt Calculation = (Avg period sale + Open SO) - (Total Stock + LPO given)
         reqt_calc = (avg_period + open_so) - (total_stock + lpo_given)
