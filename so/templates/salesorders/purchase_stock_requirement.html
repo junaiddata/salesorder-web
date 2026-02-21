@@ -872,22 +872,22 @@
               <tr>
                 <th class="sticky-col sticky-col-0">Item Code</th>
                 <th class="sticky-col sticky-col-1">Description / UPC</th>
+                <th>Period</th>
                 <th class="text-right">DIP<br>Stock</th>
                 <th class="text-right">Total<br>Stock</th>
                 <th class="text-right col-group-sales">Sold Qty<br>2024</th>
                 <th class="text-right col-group-sales">Proj Sold<br>2025</th>
                 <th class="text-right col-group-sales">Trading Sold<br>2025</th>
                 <th class="text-right col-group-sales">Total Sold<br>2025</th>
-                <th class="text-right col-group-sales">Avg 3M<br>Sales</th>
-                <th class="text-right col-group-sales">Sufficiency<br>Months</th>
+                <th class="text-right col-group-sales">Avg Sales<br>(3M/15d)</th>
                 <th class="text-right">LPO<br>Given</th>
                 <th class="text-right">Open<br>SO</th>
                 <th class="text-right">Stock Reqt<br>Calc</th>
                 <th class="text-right">Stock<br>Reqt</th>
                 <th class="text-right">6M<br>Sale</th>
-                <th class="text-right">Reqt in<br>3 Months</th>
-                <th class="text-right">Stock After<br>3 Months</th>
-                <th class="text-right col-final-reqt">Final Reqt<br>(6 Month)</th>
+                <th class="text-right">Reqt<br>(3M/15d)</th>
+                <th class="text-right">Stock After<br>(3M/15d)</th>
+                <th class="text-right col-final-reqt">Final Reqt<br>(3M/15d)</th>
               </tr>
             </thead>
             <tbody id="stock-tbody">
@@ -895,6 +895,7 @@
               <tr data-search="{{ item.item_code|lower }} {{ item.item_description_with_upc|lower }}">
                 <td class="sticky-col sticky-col-0 num">{{ item.item_code }}</td>
                 <td class="sticky-col sticky-col-1 col-desc">{{ item.item_description_with_upc }}</td>
+                <td>{% if item.use_15day_calc %}15 days{% else %}3 months{% endif %}</td>
                 <td class="text-right num">{{ item.dip_stock|floatformat:0|intcomma }}</td>
                 <td class="text-right num">{{ item.total_stock|floatformat:0|intcomma }}</td>
                 <td class="text-right num col-group-sales">{{ item.sold_qty_2024|floatformat:0|intcomma }}</td>
@@ -902,7 +903,6 @@
                 <td class="text-right num col-group-sales">{{ item.trading_sold_qty_2025|floatformat:0|intcomma }}</td>
                 <td class="text-right num col-group-sales">{{ item.total_sold_qty_2025|floatformat:0|intcomma }}</td>
                 <td class="text-right num col-group-sales">{{ item.avg_3_month_sales|floatformat:0|intcomma }}</td>
-                <td class="text-right num col-group-sales">{{ item.stock_sufficiency_month|intcomma }}</td>
                 <td class="text-right num">{{ item.lpo_given|floatformat:0|intcomma }}</td>
                 <td class="text-right num">{{ item.open_so|floatformat:0|intcomma }}</td>
                 <td class="text-right num">{{ item.stock_reqt_calculation|floatformat:0|intcomma }}</td>

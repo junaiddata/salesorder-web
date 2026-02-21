@@ -26,6 +26,17 @@ from .models import (
 from .sap_salesorder_views import salesman_scope_q_salesorder, get_business_category, _open_row_status_q
 from .sap_purchaseorder_views import _open_row_status_q_po
 
+# Firms that use 15-day metrics instead of 3-month (name must start with one of these)
+FIRMS_15DAY_PREFIXES = ('COSMO', 'RAKTHERM', 'HEPWORTH', 'GF', 'ULTRAFLOW', 'MULTIFLOW', 'GROHE')
+
+
+def _is_15day_firm(firm_name):
+    """Return True if firm_name starts with any of FIRMS_15DAY_PREFIXES (case-insensitive)."""
+    if not firm_name:
+        return False
+    name = (firm_name or '').strip().upper()
+    return any(name.startswith(prefix) for prefix in FIRMS_15DAY_PREFIXES)
+
 
 @login_required
 def purchase_stock_requirement(request):
@@ -219,34 +230,27 @@ def _build_items_data(request, firms):
         open_so = open_so_dict.get(code, 0)
         last_6m_sale = last_6m.get(code, 0)
 
-        # Avg 3 Month Sales = Total Sold 2025 / 3
-        avg_3m = tot_25 / 3.0 if tot_25 else 0.0
+        use_15day = _is_15day_firm(item.item_firm or '')
 
-        # Avg 15 days Sales 
-        
-
-        # Stock Sufficiency Month = DIP Stock / (Total Sold 2025/5), rounded to int
-        divisor = tot_25 / 5.0 if tot_25 else 0.0
-     
-        if divisor > 0:
-            stock_suff_month = int(round(dip_stock / divisor))
+        if use_15day:
+            # Avg 15 days = Total Sold 2025 / 22
+            avg_period = tot_25 / 22.0 if tot_25 else 0.0
+            # Stock reqt for 15 days = (Last 6 month sale / 6) * 0.5
+            stock_reqt_period = (last_6m_sale / 6.0) * 0.5 if last_6m_sale else 0.0
         else:
-            stock_suff_month = 0
+            # Avg 3 Month Sales = Total Sold 2025 / 3
+            avg_period = tot_25 / 3.0 if tot_25 else 0.0
+            # Stock reqt in 3 months = (Last 6 month sale / 6) * 3
+            stock_reqt_period = (last_6m_sale / 6.0) * 3.0 if last_6m_sale else 0.0
 
-        # Stock Reqt Calculation = (Avg 3 month sale + Open SO) - (Total Stock + LPO given)
-        reqt_calc = (avg_3m + open_so) - (total_stock + lpo_given)
+        stock_after_period = total_stock - stock_reqt_period
+        final_reqt = stock_reqt_period if stock_after_period < 0 else 0.0
+
+        # Stock Reqt Calculation = (Avg period sale + Open SO) - (Total Stock + LPO given)
+        reqt_calc = (avg_period + open_so) - (total_stock + lpo_given)
 
         # Stock Requirement = reqt_calc if +ve else '-'
         stock_reqt = reqt_calc if reqt_calc > 0 else None
-
-        # Stock reqt in 3 months = (Last 6 month sale / 6) * 3
-        stock_reqt_3m = (last_6m_sale / 6.0) * 3.0 if last_6m_sale else 0.0
-
-        # Stock After 3 months = Total Stock - Stock reqt in 3 months
-        stock_after_3m = total_stock - stock_reqt_3m
-
-        # Final Stock Reqt (6 month) = stock_reqt_3m if stock_after_3m < 0 else 0
-        final_stock_reqt_6m = stock_reqt_3m if stock_after_3m < 0 else 0.0
 
         desc_with_upc = item.item_description or ''
         if item.item_upvc:
@@ -261,16 +265,16 @@ def _build_items_data(request, firms):
             'project_sold_qty_2025': proj_25,
             'trading_sold_qty_2025': trd_25,
             'total_sold_qty_2025': tot_25,
-            'avg_3_month_sales': avg_3m,
-            'stock_sufficiency_month': stock_suff_month,
+            'avg_3_month_sales': avg_period,
             'lpo_given': lpo_given,
             'open_so': open_so,
             'stock_reqt_calculation': reqt_calc,
             'stock_requirement': stock_reqt,
             'last_6_month_sale': last_6m_sale,
-            'stock_reqt_in_3_months': stock_reqt_3m,
-            'stock_after_3_months': stock_after_3m,
-            'final_stock_reqt_6_month': final_stock_reqt_6m,
+            'stock_reqt_in_3_months': stock_reqt_period,
+            'stock_after_3_months': stock_after_period,
+            'final_stock_reqt_6_month': final_reqt,
+            'use_15day_calc': use_15day,
         })
 
     # Sort by Final Stock Reqt (6 month) descending
@@ -307,25 +311,26 @@ def export_purchase_stock_requirement_excel(request):
 
     data = []
     for item in items_list:
+        period_label = '15 days' if item.get('use_15day_calc') else '3 months'
         row_data = {
             'Item Code': item['item_code'],
             'Item Description (with UPC Code)': item['item_description_with_upc'],
+            'Period': period_label,
             'DIP Stock': round_int(item['dip_stock']),
             'Total Stock': round_int(item['total_stock']),
             'Sold Qty 2024': round_int(item['sold_qty_2024']),
             'Project Sold Qty 2025': round_int(item['project_sold_qty_2025']),
             'Trading Sold Qty 2025': round_int(item['trading_sold_qty_2025']),
             'Total Sold Qty 2025': round_int(item['total_sold_qty_2025']),
-            'Avg 3 Month Sales': round_int(item['avg_3_month_sales']),
-            'Stock Sufficiency Month': round_int(item['stock_sufficiency_month']),
+            'Avg Sales (3M/15d)': round_int(item['avg_3_month_sales']),
             'LPO Given': round_int(item['lpo_given']),
             'Open SO': round_int(item['open_so']),
             'Stock Requirement Calculation': round_int(item['stock_reqt_calculation']),
             'Stock Requirement': round_int(item['stock_requirement']),
             'Last 6 Month Sale': round_int(item['last_6_month_sale']),
-            'Stock Reqt in 3 months': round_int(item['stock_reqt_in_3_months']),
-            'Stock After 3 months': round_int(item['stock_after_3_months']),
-            'Final Stock Reqt as per 6 month': round_int(item['final_stock_reqt_6_month']),
+            'Stock Reqt (3M/15d)': round_int(item['stock_reqt_in_3_months']),
+            'Stock After (3M/15d)': round_int(item['stock_after_3_months']),
+            'Final Stock Reqt (3M/15d)': round_int(item['final_stock_reqt_6_month']),
         }
         data.append(row_data)
 
