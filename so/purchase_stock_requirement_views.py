@@ -239,7 +239,8 @@ def _build_items_data(request, firms):
     )
     lpo_dict = {row['item_no']: safe_float(row['total_qty']) for row in open_po_qty}
 
-    # Add item-totals from purchase API (import orders) to LPO given
+    # Add item-totals from purchase API (import orders) to LPO given.
+    # All downstream calculations (Stock Reqt Calc, Stock Requirement, etc.) use this updated LPO.
     api_item_totals = _get_item_totals_api_lookup(item_codes)
     for code, qty in api_item_totals.items():
         lpo_dict[code] = lpo_dict.get(code, 0) + float(qty)
