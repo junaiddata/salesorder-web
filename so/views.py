@@ -3117,6 +3117,9 @@ SALES_USER_MAP = {
     "exportdeira1": ["E.DEIRA 1"],
     "retaildeira2": ["R.DEIRA 2"],
     "retailnah": ["R.NAH"],
+    "alabamaadmin": ["KADER","MUSHARAF","AIJAZ","CASH"],
+    "alabamakadhar": ["KADER"],
+    "alabamamusharaf": ["MUSHARAF"],
     
 }
 
