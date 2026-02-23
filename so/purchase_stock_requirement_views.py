@@ -273,12 +273,12 @@ def _build_items_data(request, firms):
             # Avg 15 days = Total Sold 2025 / 22
             avg_period = tot_25 / 22.0 if tot_25 else 0.0
             # Stock reqt for 15 days = (Last 6 month sale / 6) * 0.5
-            stock_reqt_period = ((last_6m_sale / 6.0) * 0.5 if last_6m_sale else 0.0)-lpo_given
+            stock_reqt_period = ((last_6m_sale / 6.0) * 0.5 if last_6m_sale else 0.0)-lpo_given + open_so
         else:
             # Avg 3 Month Sales = Total Sold 2025 / 3
             avg_period = tot_25 / 3.0 if tot_25 else 0.0
             # Stock reqt in 3 months = (Last 6 month sale / 6) * 3
-            stock_reqt_period = ((last_6m_sale / 6.0) * 3.0 if last_6m_sale else 0.0)-lpo_given
+            stock_reqt_period = ((last_6m_sale / 6.0) * 3.0 if last_6m_sale else 0.0)-lpo_given + open_so
 
         stock_after_period = total_stock - stock_reqt_period
         final_reqt = (stock_reqt_period ) if stock_after_period < 0 else 0.0
