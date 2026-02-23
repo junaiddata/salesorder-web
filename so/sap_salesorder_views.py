@@ -23,7 +23,8 @@ from reportlab.lib import colors
 from reportlab.lib.colors import HexColor, white
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, KeepTogether, SimpleDocTemplate, Image, BaseDocTemplate, Frame, PageTemplate
 from reportlab.graphics.shapes import Drawing, Line
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
 from django.conf import settings
 import requests
 import logging
@@ -2011,12 +2012,14 @@ def export_sap_salesorder_pdf(request, so_number):
         subtotal += row_total
 
         desc_para = Paragraph(it.description or '—', styles['ItemDescription'])
+        qty_str = f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0"
+        qty_para = Paragraph(qty_str, ParagraphStyle('QtyCell', fontSize=7, alignment=TA_CENTER))
 
         items_data.append([
             str(idx),
             it.item_no or '—',
             desc_para,
-            f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0",
+            qty_para,
             f"AED {price:,.2f}",
             f"AED {row_total:,.2f}",
         ])
@@ -2045,6 +2048,7 @@ def export_sap_salesorder_pdf(request, so_number):
         ('ALIGN', (0, 1), (1, -1), 'CENTER'),
         ('ALIGN', (3, 1), (3, -1), 'CENTER'),
         ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+        ('FONTSIZE', (3, 1), (3, -1), 7),  # Shrink Qty column so 4+ digit numbers fit
     ]))
 
     elements.append(items_table)
