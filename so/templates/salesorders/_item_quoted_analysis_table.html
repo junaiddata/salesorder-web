@@ -38,6 +38,20 @@
         <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
       {% endif %}
     </td>
+    <td class="text-right num">
+      {% if item.total_amount_2025 > 0 %}
+        <span class="badge badge-blue">{{ item.total_amount_2025|floatformat:2|intcomma }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
+    <td class="text-right num">
+      {% if item.total_amount_2026 > 0 %}
+        <span class="badge badge-green">{{ item.total_amount_2026|floatformat:2|intcomma }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: 0.7rem;">—</span>
+      {% endif %}
+    </td>
     <td class="text-center">
       {% if item.total_quotations_2025 > 0 %}
         <span class="badge badge-blue">{{ item.total_quotations_2025 }}</span>
@@ -121,7 +135,7 @@
     </td>
   </tr>
   <tr class="customer-details">
-    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}">
+    <td colspan="{% if include_conversion %}18{% else %}12{% endif %}">
       <div class="detail-inner">
         <div class="detail-grid">
           {% for customer in item.customers %}
@@ -172,7 +186,7 @@
   {% endfor %}
 {% else %}
   <tr>
-    <td colspan="{% if include_conversion %}16{% else %}10{% endif %}" style="text-align: center; padding: 40px; color: var(--text-muted);">
+    <td colspan="{% if include_conversion %}18{% else %}12{% endif %}" style="text-align: center; padding: 40px; color: var(--text-muted);">
       <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
       <p>No quotation data available</p>
     </td>

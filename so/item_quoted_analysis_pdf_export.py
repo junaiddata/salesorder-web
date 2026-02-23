@@ -5,11 +5,11 @@ Uses shared design elements from finance_statement_pdf_export.
 Supports include_customers toggle: default off (summary only); on = customer details per item.
 """
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum, Count, Max, Value, DecimalField
+from django.db.models import Q, Sum, Count, Max, Value, DecimalField, F
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 
@@ -23,7 +23,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
 )
 
-from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity, SAPPurchaseOrderItem
 from .views import salesman_scope_q
 import re
 import requests
@@ -51,6 +51,29 @@ def _get_import_ordered_lookup_pdf(item_codes):
     except Exception:
         pass
     return lookup
+
+
+def _open_po_row_status_q_pdf():
+    """Q for open line status on SAPPurchaseOrderItem."""
+    return Q(row_status__iexact="open") | Q(row_status__iexact="o") | Q(row_status__iexact="OPEN") | Q(row_status__iexact="O")
+
+
+def _get_open_po_lookup_pdf(item_codes):
+    """Open PO qty per item (last 6 months). Returns dict item_code -> total_qty (float)."""
+    if not item_codes:
+        return {}
+    six_months_ago = date.today() - timedelta(days=180)
+    qs = (
+        SAPPurchaseOrderItem.objects.filter(_open_po_row_status_q_pdf())
+        .filter(purchaseorder__posting_date__gte=six_months_ago)
+        .filter(item_no__in=item_codes)
+        .values('item_no')
+        .annotate(
+            total_qty=Sum(Coalesce(F('remaining_open_quantity'), F('quantity'), Value(0, output_field=DecimalField())))
+        )
+    )
+    return {row['item_no']: _safe_float(row['total_qty']) for row in qs}
+
 
 # Shared design system
 from .finance_statement_pdf_export import (
@@ -439,6 +462,21 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
     )
     quoted_2026_dict = {row['item_no']: _safe_float(row['qty_quoted']) for row in quoted_2026_agg}
 
+    amount_2025_agg = list(
+        quotation_items_qs.filter(quotation__posting_date__year=2025)
+        .exclude(quotation__posting_date__isnull=True)
+        .values('item_no')
+        .annotate(total_amt=Sum(Coalesce(F('row_total'), F('quantity') * F('price'))))
+    )
+    amount_2025_dict = {row['item_no']: _safe_float(row['total_amt']) for row in amount_2025_agg}
+    amount_2026_agg = list(
+        quotation_items_qs.filter(quotation__posting_date__year=2026)
+        .exclude(quotation__posting_date__isnull=True)
+        .values('item_no')
+        .annotate(total_amt=Sum(Coalesce(F('row_total'), F('quantity') * F('price'))))
+    )
+    amount_2026_dict = {row['item_no']: _safe_float(row['total_amt']) for row in amount_2026_agg}
+
     quotations_2025_agg = list(
         quotation_items_qs.filter(quotation__posting_date__year=2025)
         .exclude(quotation__posting_date__isnull=True)
@@ -493,6 +531,8 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
             'import_ordered': 0,
             'qty_quoted_2025': quoted_2025_dict.get(item_code, 0.0),
             'qty_quoted_2026': quoted_2026_dict.get(item_code, 0.0),
+            'total_amount_2025': amount_2025_dict.get(item_code, 0.0),
+            'total_amount_2026': amount_2026_dict.get(item_code, 0.0),
             'total_quotations_2025': quotations_2025_dict.get(item_code, 0),
             'total_quotations_2026': quotations_2026_dict.get(item_code, 0),
             'customer_quoted_count': customer_count_dict.get(item_code, 0),
@@ -500,8 +540,9 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
         })
 
     import_ordered_lookup = _get_import_ordered_lookup_pdf(item_codes)
+    open_po_lookup = _get_open_po_lookup_pdf(item_codes)
     for item in items_list:
-        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0)
+        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0) + open_po_lookup.get(item['item_code'], 0.0)
 
     items_list.sort(
         key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']),
@@ -520,6 +561,8 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
 
     grand_total_2025 = sum(i['qty_quoted_2025'] for i in items_list)
     grand_total_2026 = sum(i['qty_quoted_2026'] for i in items_list)
+    grand_total_amt_2025 = sum(i['total_amount_2025'] for i in items_list)
+    grand_total_amt_2026 = sum(i['total_amount_2026'] for i in items_list)
     grand_total_customers = len(
         quotation_items_qs.exclude(quotation__customer_code__isnull=True)
         .exclude(quotation__customer_code='')
@@ -558,7 +601,7 @@ def _get_items_data(request, include_customers=False, include_conversion=False):
     for item in items_list:
         item['proposed_qty'] = proposed_qty_dict.get(item['item_code'], 0.0)
 
-    return items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_customers
+    return items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_amt_2025, grand_total_amt_2026, grand_total_customers
 
 
 def _get_customer_details_for_items(quotation_items_qs, item_codes):
@@ -629,7 +672,7 @@ def export_item_quoted_analysis_pdf(request):
     include_customers = request.GET.get('include_customers', '').strip().lower() in ('1', 'true', 'yes', 'on')
     include_conversion = request.GET.get('include_conversion', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
-    items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_customers = _get_items_data(
+    items_list, firm_list, grand_total_2025, grand_total_2026, grand_total_amt_2025, grand_total_amt_2026, grand_total_customers = _get_items_data(
         request, include_customers=include_customers, include_conversion=include_conversion,
     )
 
@@ -717,6 +760,7 @@ def export_item_quoted_analysis_pdf(request):
     W_STOCK   = 42
     W_IMPORT  = 42
     W_QTY     = 46
+    W_AMT     = 52
     W_QUOTES  = 36
     W_CUST    = 36
     W_SO_QTY  = 40
@@ -724,7 +768,7 @@ def export_item_quoted_analysis_pdf(request):
     W_CONV_R  = 36
     W_PROPOSED = 42
 
-    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + W_IMPORT + (2 * W_QTY) + (2 * W_QUOTES) + W_CUST + W_PROPOSED
+    base_fixed = W_NUM + W_CODE + W_UPC + W_STOCK + W_IMPORT + (2 * W_QTY) + (2 * W_AMT) + (2 * W_QUOTES) + W_CUST + W_PROPOSED
     if include_conversion:
         fixed_total = base_fixed + (2 * W_SO_QTY) + (2 * W_CONV_Q) + (2 * W_CONV_R)
     else:
@@ -733,7 +777,7 @@ def export_item_quoted_analysis_pdf(request):
 
     col_widths = [
         W_NUM, W_CODE, W_DESC, W_UPC, W_STOCK, W_IMPORT,
-        W_QTY, W_QTY, W_QUOTES, W_QUOTES, W_CUST,
+        W_QTY, W_QTY, W_AMT, W_AMT, W_QUOTES, W_QUOTES, W_CUST,
     ]
     if include_conversion:
         col_widths.extend([W_SO_QTY, W_SO_QTY, W_CONV_Q, W_CONV_Q, W_CONV_R, W_CONV_R])
@@ -746,9 +790,11 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph('Description', ts['th']),
         Paragraph('UPC', ts['th']),
         Paragraph('Stock', ts['th_r']),
-        Paragraph('Import<br/>Ord.', ts['th_c']),
+        Paragraph('Import<br/>+ LPO', ts['th_c']),
         Paragraph('Qty<br/>2025', ts['th_c']),
         Paragraph('Qty<br/>2026', ts['th_c']),
+        Paragraph('Amt<br/>2025', ts['th_c']),
+        Paragraph('Amt<br/>2026', ts['th_c']),
         Paragraph("Q's<br/>25", ts['th_c']),
         Paragraph("Q's<br/>26", ts['th_c']),
         Paragraph('Cust.', ts['th_c']),
@@ -781,6 +827,8 @@ def export_item_quoted_analysis_pdf(request):
             _fmt_val(item.get('import_ordered', 0), ts['td_r'], ts['td_muted']),
             _fmt_val(item['qty_quoted_2025'], ts['td_bold_r'], ts['td_muted']),
             _fmt_val(item['qty_quoted_2026'], ts['td_bold_r'], ts['td_muted']),
+            _fmt_val(item.get('total_amount_2025', 0), ts['td_bold_r'], ts['td_muted']),
+            _fmt_val(item.get('total_amount_2026', 0), ts['td_bold_r'], ts['td_muted']),
             _fmt_int(item['total_quotations_2025'], ts['td_r'], ts['td_muted']),
             _fmt_int(item['total_quotations_2026'], ts['td_r'], ts['td_muted']),
             _fmt_int(item['customer_quoted_count'], ts['td_c'], ts['td_muted_c']),
@@ -814,9 +862,11 @@ def export_item_quoted_analysis_pdf(request):
                     Paragraph(cust_display, ts['cust_name']),                              # Desc col → customer name
                     Paragraph('', ts['td']),                                               # UPC
                     Paragraph('', ts['td']),                                               # Stock
-                    Paragraph('', ts['td']),                                               # Import Ordered
+                    Paragraph('', ts['td']),                                               # Import + LPO
                     _fmt_val(cust.get('qty_quoted_2025', 0), ts['cust_val_bold'], ts['td_muted']),
                     _fmt_val(cust.get('qty_quoted_2026', 0), ts['cust_val_bold'], ts['td_muted']),
+                    Paragraph('', ts['td']),                                               # Amt 2025
+                    Paragraph('', ts['td']),                                               # Amt 2026
                     _fmt_int(cust.get('quotation_count_2025', 0), ts['cust_val'], ts['td_muted']),
                     _fmt_int(cust.get('quotation_count_2026', 0), ts['cust_val'], ts['td_muted']),
                     Paragraph('', ts['td']),                                               # Cust
@@ -850,6 +900,8 @@ def export_item_quoted_analysis_pdf(request):
         Paragraph(_fmt(total_import_ordered), ts['td_bold_r']),
         Paragraph(_fmt(grand_total_2025), ts['td_bold_r']),
         Paragraph(_fmt(grand_total_2026), ts['td_bold_r']),
+        Paragraph(_fmt(grand_total_amt_2025), ts['td_bold_r']),
+        Paragraph(_fmt(grand_total_amt_2026), ts['td_bold_r']),
         Paragraph(str(total_q25), ts['td_bold_r']),
         Paragraph(str(total_q26), ts['td_bold_r']),
         Paragraph(str(grand_total_customers), ts['td_bold']),

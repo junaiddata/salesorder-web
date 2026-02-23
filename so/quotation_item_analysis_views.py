@@ -6,15 +6,16 @@ Uses Credit Memo Analysis design pattern with expandable rows for customer drill
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.db.models import Q, Sum, Count, Max, Value, DecimalField
+from django.db.models import Q, Sum, Count, Max, Value, DecimalField, F
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.template.loader import render_to_string
 from decimal import Decimal
 from collections import defaultdict
+from datetime import date, timedelta
 import logging
 
-from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity, SAPPurchaseOrderItem
 from .views import salesman_scope_q
 import re
 import requests
@@ -49,6 +50,31 @@ def _get_import_ordered_lookup(item_codes):
     except Exception as e:
         logger.warning(f"Could not fetch import ordered from {IMPORT_ORDERED_API_URL}: {e}")
     return lookup
+
+
+def _open_po_row_status_q():
+    """Q for open line status on SAPPurchaseOrderItem (same logic as sap_purchaseorder_views)."""
+    return Q(row_status__iexact="open") | Q(row_status__iexact="o") | Q(row_status__iexact="OPEN") | Q(row_status__iexact="O")
+
+
+def _get_open_po_lookup(item_codes):
+    """
+    Fetch open PO qty per item from SAP Purchase Order lines (last 6 months).
+    Returns dict: item_code -> total_qty (float). Missing items get 0.
+    """
+    if not item_codes:
+        return {}
+    six_months_ago = date.today() - timedelta(days=180)
+    qs = (
+        SAPPurchaseOrderItem.objects.filter(_open_po_row_status_q())
+        .filter(purchaseorder__posting_date__gte=six_months_ago)
+        .filter(item_no__in=item_codes)
+        .values('item_no')
+        .annotate(
+            total_qty=Sum(Coalesce(F('remaining_open_quantity'), F('quantity'), Value(0, output_field=DecimalField())))
+        )
+    )
+    return {row['item_no']: safe_float(row['total_qty']) for row in qs}
 
 
 def safe_float(x):
@@ -304,6 +330,22 @@ def item_quoted_analysis(request):
     )
     quoted_2026_dict = {row['item_no']: safe_float(row['qty_quoted']) for row in quoted_2026_agg}
     
+    # Total amount quoted by item_no and year (row_total or quantity * price)
+    amount_2025_agg = list(
+        quotation_items_qs.filter(quotation__posting_date__year=2025)
+        .exclude(quotation__posting_date__isnull=True)
+        .values('item_no')
+        .annotate(total_amt=Sum(Coalesce(F('row_total'), F('quantity') * F('price'))))
+    )
+    amount_2025_dict = {row['item_no']: safe_float(row['total_amt']) for row in amount_2025_agg}
+    amount_2026_agg = list(
+        quotation_items_qs.filter(quotation__posting_date__year=2026)
+        .exclude(quotation__posting_date__isnull=True)
+        .values('item_no')
+        .annotate(total_amt=Sum(Coalesce(F('row_total'), F('quantity') * F('price'))))
+    )
+    amount_2026_dict = {row['item_no']: safe_float(row['total_amt']) for row in amount_2026_agg}
+    
     # Total Quotations 2025 (distinct quotation count per item)
     quotations_2025_agg = list(
         quotation_items_qs.filter(quotation__posting_date__year=2025)
@@ -358,6 +400,8 @@ def item_quoted_analysis(request):
     for item_code in all_item_codes:
         qty_2025 = quoted_2025_dict.get(item_code, 0.0)
         qty_2026 = quoted_2026_dict.get(item_code, 0.0)
+        amt_2025 = amount_2025_dict.get(item_code, 0.0)
+        amt_2026 = amount_2026_dict.get(item_code, 0.0)
         quot_count_2025 = quotations_2025_dict.get(item_code, 0)
         quot_count_2026 = quotations_2026_dict.get(item_code, 0)
         cust_count = customer_count_dict.get(item_code, 0)
@@ -372,16 +416,19 @@ def item_quoted_analysis(request):
             'import_ordered': 0,  # Filled below from purchase API
             'qty_quoted_2025': qty_2025,
             'qty_quoted_2026': qty_2026,
+            'total_amount_2025': amt_2025,
+            'total_amount_2026': amt_2026,
             'total_quotations_2025': quot_count_2025,
             'total_quotations_2026': quot_count_2026,
             'customer_quoted_count': cust_count,
             'customers': [],  # Will be loaded lazily for current page only
         })
     
-    # Fetch import ordered from purchase API (single request)
+    # Fetch import ordered from purchase API + open PO qty (IMPORT + LPO)
     import_ordered_lookup = _get_import_ordered_lookup(item_codes)
+    open_po_lookup = _get_open_po_lookup(item_codes)
     for item in items_list:
-        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0)
+        item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0) + open_po_lookup.get(item['item_code'], 0.0)
     
     # Sort by total quoted (2025 + 2026) descending, then by customer count
     items_list.sort(key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']), reverse=True)
