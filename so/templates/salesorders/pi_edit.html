@@ -288,12 +288,12 @@
                 <tbody>
                   {% for item_data in items_with_data %}
                     {% with item=item_data.item allocated_qty=item_data.allocated_qty current_pi_qty=item_data.current_pi_qty available_for_edit=item_data.available_for_edit unit_price=item_data.unit_price is_in_pi=item_data.is_in_pi %}
-                      <tr class="item-row {% if available_for_edit == 0 %}disabled{% endif %}" data-line-id="{{ item.id }}" data-available="{{ available_for_edit }}">
+                      <tr class="item-row {% if available_for_edit == 0 %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-available="{{ available_for_edit }}">
                         <td>
                           <input 
                             type="checkbox" 
                             name="line_ids" 
-                            value="{{ item.id }}" 
+                            value="{{ item.line_no }}" 
                             class="line-checkbox"
                             {% if is_in_pi %}checked{% endif %}
                             {% if available_for_edit == 0 %}disabled{% endif %}
@@ -319,7 +319,7 @@
                         <td class="num">
                           <input 
                             type="number" 
-                            name="qty_{{ item.id }}" 
+                            name="qty_{{ item.line_no }}" 
                             class="qty-input"
                             step="0.01"
                             min="0"
@@ -330,7 +330,7 @@
                             data-unit-price="{{ unit_price }}"
                           >
                         </td>
-                        <td class="num line-total" data-line-id="{{ item.id }}" data-current-qty="{{ current_pi_qty }}" data-unit-price="{{ unit_price }}">
+                        <td class="num line-total" data-line-id="{{ item.line_no }}" data-current-qty="{{ current_pi_qty }}" data-unit-price="{{ unit_price }}">
                           <span class="line-total-display">0.00</span>
                         </td>
                       </tr>

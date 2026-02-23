@@ -288,12 +288,12 @@
                 <tbody>
                   {% for item_data in items_with_remaining %}
                     {% with item=item_data.item allocated_qty=item_data.allocated_qty remaining_qty=item_data.remaining_qty unit_price=item_data.unit_price %}
-                      <tr class="item-row {% if remaining_qty == 0 %}disabled{% endif %}" data-line-id="{{ item.id }}" data-remaining="{{ remaining_qty }}">
+                      <tr class="item-row {% if remaining_qty == 0 %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-remaining="{{ remaining_qty }}">
                         <td>
                           <input 
                             type="checkbox" 
                             name="line_ids" 
-                            value="{{ item.id }}" 
+                            value="{{ item.line_no }}" 
                             class="line-checkbox"
                             {% if remaining_qty == 0 %}disabled{% endif %}
                             onchange="toggleQuantityInput(this)"
@@ -311,7 +311,7 @@
                         <td class="num">
                           <input 
                             type="number" 
-                            name="qty_{{ item.id }}" 
+                            name="qty_{{ item.line_no }}" 
                             class="qty-input"
                             step="0.01"
                             min="0"
@@ -322,7 +322,7 @@
                             data-unit-price="{{ unit_price }}"
                           >
                         </td>
-                        <td class="num line-total" data-line-id="{{ item.id }}">0.00</td>
+                        <td class="num line-total" data-line-id="{{ item.line_no }}">0.00</td>
                       </tr>
                     {% endwith %}
                   {% endfor %}

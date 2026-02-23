@@ -2419,21 +2419,22 @@ def create_pi(request, so_number):
         })
     
     if request.method == 'POST':
-        # Validate and create PI
+        # Validate and create PI (use line_no instead of item.id so form survives API sync during edit)
         selected_lines = request.POST.getlist('line_ids')
         quantities = {}
         
         errors = []
         
-        for line_id in selected_lines:
-            qty_str = request.POST.get(f'qty_{line_id}', '0').strip()
+        for line_no_str in selected_lines:
+            qty_str = request.POST.get(f'qty_{line_no_str}', '0').strip()
             try:
                 qty = Decimal(qty_str)
                 if qty <= 0:
                     continue
-                quantities[int(line_id)] = qty
+                line_no = int(line_no_str)
+                quantities[line_no] = qty
             except (ValueError, TypeError):
-                errors.append(f"Invalid quantity for line {line_id}")
+                errors.append(f"Invalid quantity for line {line_no_str}")
         
         if errors:
             messages.error(request, "; ".join(errors))
@@ -2450,12 +2451,12 @@ def create_pi(request, so_number):
             # Recalculate allocated quantities after locking (to avoid race conditions)
             allocated = _get_allocated_quantities(so_number)
             
-            # Validate quantities don't exceed remaining (using fresh allocations)
-            items_map = {item.id: item for item in salesorder.items.all()}
-            for line_id, qty in quantities.items():
-                item = items_map.get(line_id)
+            # Validate quantities don't exceed remaining (use line_no - stable across sync)
+            items_map = {item.line_no: item for item in salesorder.items.all()}
+            for line_no, qty in quantities.items():
+                item = items_map.get(line_no)
                 if not item:
-                    errors.append(f"Line {line_id} not found")
+                    errors.append(f"Line {line_no} not found")
                     continue
                 allocated_qty = allocated.get(item.id, Decimal("0"))
                 remaining_qty = max(Decimal("0"), item.quantity - allocated_qty)
@@ -2552,10 +2553,12 @@ def create_pi(request, so_number):
                 action="created",
             )
             
-            # Create PI lines
+            # Create PI lines (look up by line_no - stable when sync replaces items)
             pi_lines = []
-            for line_id, qty in quantities.items():
-                item = SAPSalesorderItem.objects.get(id=line_id, salesorder=salesorder)
+            for line_no, qty in quantities.items():
+                item = SAPSalesorderItem.objects.filter(salesorder=salesorder, line_no=line_no).first()
+                if not item:
+                    continue  # Skip if line removed during sync (rare)
                 pi_lines.append(
                     SAPProformaInvoiceLine(
                         pi=pi,
@@ -4973,8 +4976,8 @@ def edit_pi(request, pi_number):
     salesorder = pi.salesorder
     items = salesorder.items.all().order_by('line_no', 'id')
     
-    # Get current PI lines
-    current_pi_lines = {line.so_item_id: line for line in pi.lines.all() if line.so_item_id}
+    # Get current PI lines keyed by line_no (stable across API sync; so_item_id can become null)
+    current_pi_lines = {line.line_no: line for line in pi.lines.all()}
     
     # Calculate allocated and remaining quantities per line (excluding current PI)
     allocated = _get_allocated_quantities(salesorder.so_number)
@@ -4992,8 +4995,8 @@ def edit_pi(request, pi_number):
         # Remaining after OTHER PIs (excluding current PI)
         remaining_qty = max(Decimal("0"), item.quantity - allocated_qty)
         
-        # Get current PI quantity for this item
-        current_pi_line = current_pi_lines.get(item.id)
+        # Get current PI quantity for this item (match by line_no)
+        current_pi_line = current_pi_lines.get(item.line_no)
         current_pi_qty = current_pi_line.quantity if current_pi_line else Decimal("0")
         
         # Available for editing = SO Qty - (allocated from other PIs)
@@ -5017,21 +5020,22 @@ def edit_pi(request, pi_number):
         })
     
     if request.method == 'POST':
-        # Validate and update PI
+        # Validate and update PI (use line_no instead of item.id so form survives API sync during edit)
         selected_lines = request.POST.getlist('line_ids')
         quantities = {}
         
         errors = []
         
-        for line_id in selected_lines:
-            qty_str = request.POST.get(f'qty_{line_id}', '0').strip()
+        for line_no_str in selected_lines:
+            qty_str = request.POST.get(f'qty_{line_no_str}', '0').strip()
             try:
                 qty = Decimal(qty_str)
                 if qty <= 0:
                     continue
-                quantities[int(line_id)] = qty
+                line_no = int(line_no_str)
+                quantities[line_no] = qty
             except (ValueError, TypeError):
-                errors.append(f"Invalid quantity for line {line_id}")
+                errors.append(f"Invalid quantity for line {line_no_str}")
         
         if errors:
             messages.error(request, "; ".join(errors))
@@ -5053,18 +5057,21 @@ def edit_pi(request, pi_number):
             
             # Recalculate allocated quantities after locking
             allocated = _get_allocated_quantities(salesorder.so_number)
-            # Subtract current PI quantities
+            # Subtract current PI quantities (so_item_id can be null after sync; fall back to line_no lookup)
+            so_items_by_line = {item.line_no: item for item in salesorder.items.all()}
             for line in pi.lines.all():
-                if line.so_item_id:
-                    item_id = line.so_item_id
-                    if item_id in allocated:
-                        allocated[item_id] = max(Decimal("0"), allocated[item_id] - line.quantity)
+                item_id = line.so_item_id
+                if not item_id:
+                    item = so_items_by_line.get(line.line_no)
+                    item_id = item.id if item else None
+                if item_id and item_id in allocated:
+                    allocated[item_id] = max(Decimal("0"), allocated[item_id] - line.quantity)
             
-            items_map = {item.id: item for item in salesorder.items.all()}
-            for line_id, qty in quantities.items():
-                item = items_map.get(line_id)
+            items_map = {item.line_no: item for item in salesorder.items.all()}
+            for line_no, qty in quantities.items():
+                item = items_map.get(line_no)
                 if not item:
-                    errors.append(f"Line {line_id} not found")
+                    errors.append(f"Line {line_no} not found")
                     continue
                 # allocated already excludes current PI, so this is the max we can allocate
                 allocated_qty = allocated.get(item.id, Decimal("0"))
@@ -5098,10 +5105,12 @@ def edit_pi(request, pi_number):
             # Delete existing PI lines
             pi.lines.all().delete()
             
-            # Create new PI lines
+            # Create new PI lines (look up by line_no - stable when sync replaces items)
             pi_lines = []
-            for line_id, qty in quantities.items():
-                item = SAPSalesorderItem.objects.get(id=line_id, salesorder=salesorder)
+            for line_no, qty in quantities.items():
+                item = SAPSalesorderItem.objects.filter(salesorder=salesorder, line_no=line_no).first()
+                if not item:
+                    continue  # Skip if line removed during sync (rare)
                 pi_lines.append(
                     SAPProformaInvoiceLine(
                         pi=pi,
