@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings - SAP Sync</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5; }
+    .container { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
+    .header { margin-bottom: 32px; }
+    .header h1 { font-size: 1.75rem; font-weight: 700; color: var(--text); }
+    .header p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 8px; }
+    .back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--primary); text-decoration: none; font-size: 0.875rem; margin-bottom: 24px; }
+    .back-link:hover { color: var(--primary-dark); }
+    .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
+    .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+    .sync-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .sync-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; font-size: 0.875rem; font-weight: 600; font-family: inherit; border-radius: 8px; border: none; cursor: pointer; background: var(--success); color: white; width: 100%; text-decoration: none; transition: all 0.15s; }
+    .sync-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .sync-btn i { font-size: 1rem; }
+    form { display: inline; }
+    .messages { list-style: none; margin-bottom: 20px; }
+    .messages li { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; }
+    .messages .success { background: #d1fae5; color: #065f46; }
+    .messages .error { background: #fee2e2; color: #991b1b; }
+    .messages .warning { background: #fef3c7; color: #92400e; }
+    .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 0.875rem; color: #1e40af; }
+    .sync-form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+    .sync-form-row label { display: block; font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .sync-form-row select, .sync-form-row input[type="date"], .sync-form-row input[type="number"] {
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.938rem; min-width: 140px;
+    }
+    .sync-form-row input[type="number"] { width: 80px; }
+    .sync-now-btn { padding: 10px 20px; font-size: 0.938rem; font-weight: 600; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; }
+    .sync-now-btn:hover { background: var(--primary-dark); }
+    .sync-hint { font-size: 0.813rem; color: var(--text-secondary); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="{% url 'home' %}" class="back-link">
+      <i class="fas fa-arrow-left"></i> Back to Dashboard
+    </a>
+
+    <div class="header">
+      <h1><i class="fas fa-cog"></i> Settings</h1>
+      <p>Manual SAP sync from API. Requires SSH tunnel (localhost:8443) when running on VPS.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages">
+      {% for m in messages %}
+      <li class="{{ m.tags }}">{{ m }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="info-box">
+      <strong>Note:</strong> Ensure the SSH tunnel is active from your local PC:
+      <code>ssh -N -R 8443:192.168.1.103:80 root@31.97.75.196</code>
+    </div>
+
+    <div class="card">
+      <h2>SAP Data Sync</h2>
+      <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 0.875rem;">
+        Select what to sync. Use <strong>last days</strong> for recent data, or <strong>only this date</strong> to sync a single day.
+      </p>
+
+      <form method="post" action="/settings/sync/" id="sync-form">
+        {% csrf_token %}
+        <div class="sync-form-row">
+          <div>
+            <label for="sync_type">Sync</label>
+            <select name="sync_type" id="sync_type" required>
+              <option value="salesorders">Sales Orders</option>
+              <option value="quotations">Quotations</option>
+              <option value="arinvoices">AR Invoices</option>
+              <option value="arcreditmemos">AR Credit Memos</option>
+              <option value="purchaseorders">Purchase Orders</option>
+            </select>
+          </div>
+          <div id="days-row">
+            <label for="days_back">Last days</label>
+            <input type="number" name="days_back" id="days_back" value="3" min="1" max="90">
+          </div>
+          <div id="date-row">
+            <label for="sync_date">Or only this date</label>
+            <input type="date" name="sync_date" id="sync_date">
+          </div>
+          <div>
+            <button type="submit" class="sync-now-btn"><i class="fas fa-sync-alt"></i> Sync</button>
+          </div>
+        </div>
+        <p class="sync-hint" id="sync-hint">Use days (e.g. 3 = last 3 days) or pick a date to sync just that day.</p>
+      </form>
+
+      <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border);">
+
+      <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.875rem;">Quick actions:</p>
+      <div class="sync-grid">
+        <form method="post" action="{% url 'sync_all_sales_data' %}">
+          {% csrf_token %}
+          <input type="hidden" name="days_back" value="3">
+          <button type="submit" class="sync-btn" style="background: var(--primary);">
+            <i class="fas fa-sync-alt"></i> Sync All (Invoices + Credit Memos)
+          </button>
+        </form>
+        <form method="post" action="{% url 'sync_customer_finance_form' %}">
+          {% csrf_token %}
+          <button type="submit" class="sync-btn"><i class="fas fa-users"></i> Customer Finance</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('sync_type').addEventListener('change', function() {
+        var isPO = this.value === 'purchaseorders';
+        document.getElementById('date-row').style.display = isPO ? 'none' : 'block';
+        document.getElementById('days-row').style.display = isPO ? 'none' : 'block';
+        document.getElementById('sync-hint').textContent = isPO
+          ? 'Purchase Orders fetches all open POs (no date filter).'
+          : 'Use days (e.g. 3 = last 3 days) or pick a date to sync just that day.';
+      });
+    </script>
+  </div>
+</body>
+</html>

@@ -1,14 +1,38 @@
 """
 Django management command to sync customer finance summary from FinanceSummary API
 """
+import sys
+from datetime import datetime
+from pathlib import Path
+
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from django.db import transaction
 from so.api_client import SAPAPIClient
 from so.models import Customer, Salesman
 from so.salesman_mapping import map_salesman_name
 import logging
+from logging.handlers import RotatingFileHandler
 
-logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).parent.parent.parent.parent
+LOG_DIR = BASE_DIR / 'logs'
+LOG_FILE = LOG_DIR / 'sync_finance.log'
+LOG_MAX_BYTES = 10 * 1024 * 1024
+LOG_BACKUP_COUNT = 5
+
+LOG_DIR.mkdir(exist_ok=True)
+
+logger = logging.getLogger('sync_customer_finance')
+logger.setLevel(logging.INFO)
+logger.handlers = []
+
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT, encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+logger.addHandler(file_handler)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter('%(message)s'))
+logger.addHandler(console_handler)
 
 
 def sync_customer_finance_summary():
@@ -230,22 +254,33 @@ class Command(BaseCommand):
     help = 'Sync customer finance summary from FinanceSummary API'
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.SUCCESS('Starting customer finance summary sync...'))
-        
+        sync_start = datetime.now()
+
+        logger.info('=' * 70)
+        logger.info('SAP Customer Finance Sync (VPS)')
+        logger.info('=' * 70)
+        logger.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+        logger.info(f'API: {getattr(settings, "SAP_FINANCE_SUMMARY_API_URL", "")}')
+        logger.info(f'Log file: {LOG_FILE}')
+        logger.info('-' * 70)
+
         try:
             stats = sync_customer_finance_summary()
-            
-            self.stdout.write(self.style.SUCCESS(f'\nSync completed successfully!'))
-            self.stdout.write(f'Created: {stats["created"]} customers')
-            self.stdout.write(f'Updated: {stats["updated"]} customers')
-            
-            if stats['errors']:
-                self.stdout.write(self.style.WARNING(f'\nErrors encountered: {len(stats["errors"])}'))
-                for error in stats['errors'][:10]:  # Show first 10 errors
-                    self.stdout.write(self.style.ERROR(f'  - {error}'))
-                if len(stats['errors']) > 10:
-                    self.stdout.write(self.style.WARNING(f'  ... and {len(stats["errors"]) - 10} more errors'))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'\nError during sync: {str(e)}'))
-            logger.exception("Error during sync")
-            raise
+            logger.exception('Error during sync')
+            raise SystemExit(1)
+
+        sync_end = datetime.now()
+        duration = (sync_end - sync_start).total_seconds()
+
+        if stats['errors']:
+            logger.warning(f"Errors encountered: {len(stats['errors'])}")
+            for err in stats['errors'][:10]:
+                logger.warning(f"  - {err}")
+            if len(stats['errors']) > 10:
+                logger.warning(f"  ... and {len(stats['errors']) - 10} more")
+
+        logger.info('SYNC SUMMARY')
+        logger.info(f'Created: {stats["created"]} | Updated: {stats["updated"]}')
+        logger.info(f'Duration: {duration:.2f}s')
+        logger.info('=' * 70)

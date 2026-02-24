@@ -158,9 +158,14 @@ WHATSAPP_ACCESS_TOKEN = 'EAAQptligo50BPxZCBoRIIoopsfBzTeTBZCOrc1XGa9xC0tGikkpp5a
 WHATSAPP_PHONE_NUMBER_ID = '623707730818076'
 
 # SAP API Configuration
-SAP_API_BASE_URL = "http://192.168.1.103/IntegrationApi/api/SalesOrder"
-SAP_QUOTATION_API_URL = "http://192.168.1.103/IntegrationApi/api/SalesQuotations"
-SAP_PURCHASE_ORDER_API_URL = "http://192.168.1.103/IntegrationApi/api/PurchaseOrder"
+# On VPS with SSH tunnel: set SAP_API_BASE_HOST=http://localhost:8443
+SAP_API_BASE_HOST = os.getenv('SAP_API_BASE_HOST', 'http://192.168.1.103')
+SAP_API_BASE_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/SalesOrder"
+SAP_QUOTATION_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/SalesQuotations"
+SAP_PURCHASE_ORDER_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/PurchaseOrder"
+SAP_AR_INVOICE_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARInvoice"
+SAP_AR_CREDIT_MEMO_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARCreditMemo"
+SAP_FINANCE_SUMMARY_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/FinanceSummary"
 SAP_API_TIMEOUT = 30
 SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orderc+ 3 days = 4 days total)
 

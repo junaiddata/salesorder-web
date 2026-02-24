@@ -37,8 +37,13 @@ urlpatterns = [
     path('customers/add/', views.add_customer, name='add_customer'),
     path('customers/delete/<int:customer_id>/', views.delete_customer, name='delete_customer'),
     path('customers/sync-finance/', views.sync_customer_finance_summary, name='sync_customer_finance_summary'),
+    path('customers/sync-finance-form/', views.sync_customer_finance_form, name='sync_customer_finance_form'),
     path('customers/sync-finance-api-receive/', views.sync_customer_finance_api_receive, name='sync_customer_finance_api_receive'),
-    
+
+    path('settings/', views.sync_settings, name='sync_settings'),
+    path('settings/sync/', views.sync_settings_form, name='sync_settings_form'),
+    path('settings/sync-all/', views.sync_all_sales_data_form, name='sync_all_sales_data'),
+
     ############### FINANCE STATEMENT ##################
     path('finance-statement/', finance_statement_views.finance_statement_list, name='finance_statement_list'),
     path('finance-statement/<int:customer_id>/', finance_statement_views.finance_statement_detail, name='finance_statement_detail'),
@@ -126,6 +131,7 @@ urlpatterns += [
     path('sapsalesorders/upload-nfref/', sap_salesorder_views.upload_nfref_excel, name='upload_nfref_excel'),
     path('sapsalesorders/sync-api/', sap_salesorder_views.sync_salesorders_from_api, name='sync_salesorders_api'),
     path('sapsalesorders/sync-api-receive/', sap_salesorder_views.sync_salesorders_api_receive, name='sync_salesorders_api_receive'),
+    path('sappurchaseorders/sync-api/', sap_purchaseorder_views.sync_purchaseorders_from_api, name='sync_purchaseorders_api'),
     path('sappurchaseorders/sync-api-receive/', sap_purchaseorder_views.sync_purchaseorders_api_receive, name='sync_purchaseorders_api_receive'),
     path('sappurchaseorders/api/item-totals/', sap_purchaseorder_views.api_open_purchaseorder_item_totals, name='api_open_purchaseorder_item_totals'),
     path('sappurchaseorders/', sap_purchaseorder_views.purchaseorder_list, name='purchaseorder_list'),

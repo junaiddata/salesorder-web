@@ -4574,16 +4574,131 @@ def device_pending(request):
 
 
 @login_required
+def sync_settings(request):
+    """
+    Settings page with manual sync buttons for all SAP entities.
+    Requires SSH tunnel (SAP_API_BASE_HOST=http://localhost:8443) when running on VPS.
+    """
+    return render(request, 'so/sync_settings.html')
+
+
+@login_required
+@require_POST
+def sync_settings_form(request):
+    """
+    Form POST for manual sync from Settings: dropdown + date or days back.
+    Excludes Customer Finance. For non-tech users.
+    """
+    from django.contrib import messages
+    from so.sync_services import (
+        sync_salesorders_core,
+        sync_quotations_core,
+        sync_arinvoices_core,
+        sync_arcreditmemos_core,
+        sync_purchaseorders_core,
+    )
+
+    sync_type = request.POST.get('sync_type', '').strip()
+    sync_date = request.POST.get('sync_date', '').strip()
+    days_back = request.POST.get('days_back', '3').strip()
+    days_back = int(days_back) if days_back.isdigit() else 3
+
+    sync_map = {
+        'salesorders': ('Sales Orders', sync_salesorders_core, True),
+        'quotations': ('Quotations', sync_quotations_core, True),
+        'arinvoices': ('AR Invoices', sync_arinvoices_core, True),
+        'arcreditmemos': ('AR Credit Memos', sync_arcreditmemos_core, True),
+        'purchaseorders': ('Purchase Orders', sync_purchaseorders_core, False),
+    }
+
+    if sync_type not in sync_map:
+        messages.error(request, 'Invalid sync type selected.')
+        return redirect('sync_settings')
+
+    label, sync_func, uses_date = sync_map[sync_type]
+
+    try:
+        if sync_type == 'purchaseorders':
+            stats = sync_func()
+        elif sync_date:
+            # Use specific date
+            if sync_type == 'salesorders':
+                stats = sync_func(days_back=3, specific_date=sync_date, docnum=None)
+            elif sync_type == 'quotations':
+                stats = sync_func(days_back=3, specific_date=sync_date)
+            else:
+                stats = sync_func(days_back=3, specific_date=sync_date, docnum=None)
+        else:
+            # Use days back
+            if sync_type == 'salesorders':
+                stats = sync_func(days_back=days_back, specific_date=None, docnum=None)
+            elif sync_type == 'quotations':
+                stats = sync_func(days_back=days_back, specific_date=None)
+            else:
+                stats = sync_func(days_back=days_back, specific_date=None, docnum=None)
+
+        if stats.get('errors'):
+            messages.error(request, f'{label} sync completed with errors: {stats["errors"][-1]}')
+        else:
+            # Build summary from stats
+            if sync_type == 'purchaseorders':
+                msg = f'{label}: {stats.get("replaced", 0)} replaced, {stats.get("total_items", 0)} items'
+            elif sync_type == 'salesorders':
+                msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated, {stats.get("closed", 0)} closed'
+            elif sync_type == 'quotations':
+                msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated'
+            else:
+                msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated'
+            messages.success(request, msg)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f'Error syncing {label}')
+        messages.error(request, f'Error: {str(e)}')
+    return redirect('sync_settings')
+
+
+@login_required
+@require_POST
+def sync_all_sales_data_form(request):
+    """
+    Form POST endpoint for syncing AR Invoices and AR Credit Memos from Settings page.
+    Same as local sync_all_sales_data. Redirects back to Settings with message.
+    """
+    from django.contrib import messages
+    from django.core.management import call_command
+
+    days_back = int(request.POST.get('days_back', 3))
+
+    commands = [
+        ('sync_arinvoices_vps', {'days_back': days_back}, 'AR Invoices'),
+        ('sync_arcreditmemos_vps', {'days_back': days_back}, 'AR Credit Memos'),
+    ]
+
+    errors = []
+    for cmd_name, cmd_kwargs, label in commands:
+        try:
+            call_command(cmd_name, **cmd_kwargs)
+        except Exception as e:
+            errors.append(f'{label}: {str(e)}')
+
+    if errors:
+        messages.error(request, 'Sync completed with errors: ' + '; '.join(errors))
+    else:
+        messages.success(request, 'AR Invoices and AR Credit Memos sync completed.')
+    return redirect('sync_settings')
+
+
+@login_required
 def sync_customer_finance_summary(request):
     """
     View endpoint to sync customer finance summary from FinanceSummary API
     Returns JSON response with sync statistics
     """
     from so.management.commands.sync_customer_finance import sync_customer_finance_summary as sync_function
-    
+
     try:
         stats = sync_function()
-        
+
         return JsonResponse({
             'success': True,
             'stats': stats,
@@ -4597,6 +4712,30 @@ def sync_customer_finance_summary(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+@require_POST
+def sync_customer_finance_form(request):
+    """
+    Form POST endpoint for syncing customer finance from Settings page.
+    Runs sync and redirects back to Settings with message.
+    """
+    from so.management.commands.sync_customer_finance import sync_customer_finance_summary as sync_function
+    from django.contrib import messages
+
+    try:
+        stats = sync_function()
+        messages.success(
+            request,
+            f'Customer finance sync completed: {stats["created"]} created, {stats["updated"]} updated'
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Error syncing customer finance summary")
+        messages.error(request, f"Error syncing customer finance: {str(e)}")
+    return redirect('sync_settings')
 
 
 @csrf_exempt

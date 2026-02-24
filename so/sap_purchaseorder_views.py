@@ -29,6 +29,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 from .models import SAPPurchaseOrder, SAPPurchaseOrderItem, Items
 from .views_quotation import QuotationPDFTemplate, styles
+from .sync_services import sync_purchaseorders_core
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +178,31 @@ def save_purchaseorders_locally(purchase_orders, api_po_numbers):
         stats['total_items'] = sum(len(m.get('items', [])) for m in purchase_orders)
 
     return stats
+
+
+@login_required
+def sync_purchaseorders_from_api(request):
+    """
+    Sync open purchase orders from SAP API.
+    Fetches DocumentStatus=bost_Open and replaces local PO data.
+    """
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
+    if request.method == 'POST':
+        stats = sync_purchaseorders_core()
+
+        if stats['errors']:
+            messages.error(request, f"Error syncing purchase orders: {stats['errors'][-1]}")
+        elif stats['replaced'] == 0:
+            messages.warning(request, "No open purchase orders found from API.")
+        else:
+            messages.success(
+                request,
+                f"Synced {stats['replaced']} purchase orders. Total items: {stats['total_items']}."
+            )
+
+    return redirect('purchaseorder_list')
 
 
 @csrf_exempt
