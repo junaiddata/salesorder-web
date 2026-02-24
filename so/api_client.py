@@ -65,10 +65,13 @@ class SAPAPIClient:
                 
         except requests.exceptions.Timeout:
             logger.error(f"API request timeout after {self.timeout}s: {payload}, page: {page_number}")
-            return None
+            raise RuntimeError(f"SAP API timeout ({self.timeout}s). Check if SSH tunnel is connected.") from None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"API connection error: {e}, payload: {payload}, page: {page_number}")
+            raise RuntimeError("Cannot connect to SAP API. Is the SSH tunnel running? (ssh -N -R 8443:192.168.1.103:80 root@VPS)") from None
         except requests.exceptions.RequestException as e:
             logger.error(f"API request error: {e}, payload: {payload}, page: {page_number}")
-            return None
+            raise RuntimeError(f"SAP API error: {e}") from None
         except Exception as e:
             logger.error(f"Unexpected error in API request: {e}, payload: {payload}, page: {page_number}")
             return None
@@ -914,10 +917,13 @@ class SAPAPIClient:
                 
         except requests.exceptions.Timeout:
             logger.error(f"API request timeout after {self.timeout}s: {payload}, page: {page_number}, url: {base_url}")
-            return None
+            raise RuntimeError(f"SAP API timeout ({self.timeout}s). Check if SSH tunnel is connected.") from None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"API connection error: {e}, payload: {payload}, page: {page_number}, url: {base_url}")
+            raise RuntimeError("Cannot connect to SAP API. Is the SSH tunnel running? (ssh -N -R 8443:192.168.1.103:80 root@VPS)") from None
         except requests.exceptions.RequestException as e:
             logger.error(f"API request error: {e}, payload: {payload}, page: {page_number}, url: {base_url}")
-            return None
+            raise RuntimeError(f"SAP API error: {e}") from None
         except Exception as e:
             logger.error(f"Unexpected error in API request: {e}, payload: {payload}, page: {page_number}, url: {base_url}")
             return None
@@ -1628,10 +1634,13 @@ class SAPAPIClient:
                 
         except requests.exceptions.Timeout:
             logger.error(f"API request timeout after {self.timeout}s: {base_url}")
-            return []
+            raise RuntimeError(f"SAP API timeout ({self.timeout}s). Check if SSH tunnel is connected.") from None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"API connection error: {e}, url: {base_url}")
+            raise RuntimeError("Cannot connect to SAP API. Is the SSH tunnel running? (ssh -N -R 8443:192.168.1.103:80 root@VPS)") from None
         except requests.exceptions.RequestException as e:
             logger.error(f"API request error: {e}, url: {base_url}")
-            return []
+            raise RuntimeError(f"SAP API error: {e}") from None
         except Exception as e:
             logger.error(f"Unexpected error in finance summary API request: {e}, url: {base_url}")
             return []
