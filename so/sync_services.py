@@ -5,6 +5,7 @@ Extracted from sync-from-api views for reuse by crontab/Celery.
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 from django.db import transaction
@@ -23,7 +24,37 @@ from .models import (
     SAPARCreditMemoItem,
     Customer,
 )
+
 logger = logging.getLogger(__name__)
+
+# Per-entity file loggers (for Settings sync - same files as management commands)
+_LOG_DIR = Path(__file__).resolve().parent.parent / 'logs'
+_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_LOG_BACKUP_COUNT = 5
+_entity_loggers = {}
+
+
+def _get_sync_logger(entity_name):
+    """Return a logger that writes to logs/sync_{entity}.log (for Settings + crontab consistency)."""
+    if entity_name not in _entity_loggers:
+        _LOG_DIR.mkdir(exist_ok=True)
+        log = logging.getLogger(f'sync_services.{entity_name}')
+        log.setLevel(logging.INFO)
+        if not log.handlers:
+            from logging.handlers import RotatingFileHandler
+            h = RotatingFileHandler(
+                _LOG_DIR / f'sync_{entity_name}.log',
+                maxBytes=_LOG_MAX_BYTES,
+                backupCount=_LOG_BACKUP_COUNT,
+                encoding='utf-8'
+            )
+            h.setFormatter(logging.Formatter(
+                '%(asctime)s | %(levelname)-8s | %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            ))
+            log.addHandler(h)
+        _entity_loggers[entity_name] = log
+    return _entity_loggers[entity_name]
 
 
 def _dec2(x):
@@ -52,6 +83,20 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
     Fetch sales orders from SAP API and save to DB.
     Returns dict with created, updated, closed, total_orders, total_items, api_calls, errors.
     """
+    log = _get_sync_logger('salesorders')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP Sales Order Sync (VPS)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    if specific_date:
+        log.info(f'Date filter: {specific_date}')
+    elif docnum:
+        log.info(f'DocNum filter: {docnum}')
+    else:
+        log.info(f'Days back: {days_back}')
+    log.info('-' * 70)
+
     sync_stats = {
         'created': 0,
         'updated': 0,
@@ -88,7 +133,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
                 mapped = client._map_api_response_to_model(api_order)
                 mapped_orders.append(mapped)
             except Exception as e:
-                logger.error(f"Error mapping order {api_order.get('DocNum')}: {e}")
+                log.error(f"Error mapping order {api_order.get('DocNum')}: {e}")
                 sync_stats['errors'].append(f"Error mapping order {api_order.get('DocNum')}: {str(e)}")
 
         if not mapped_orders:
@@ -275,9 +320,9 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
                     if pi_lines_to_create:
                         SAPProformaInvoiceLine.objects.bulk_create(pi_lines_to_create, batch_size=1000)
                 except SAPSalesorder.DoesNotExist:
-                    logger.warning(f"Salesorder {so_no} not found when creating SAP PI")
+                    log.warning(f"Salesorder {so_no} not found when creating SAP PI")
                 except Exception as e:
-                    logger.error(f"Error creating SAP PI for {so_no}: {e}")
+                    log.error(f"Error creating SAP PI for {so_no}: {e}")
 
         for mapped in mapped_orders:
             customer_code = mapped.get('customer_code', '').strip()
@@ -302,10 +347,15 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
                         customer.vat_number = vat_num
                     customer.save()
                 except Exception as e:
-                    logger.warning(f"Error updating Customer {customer_code}: {e}")
+                    log.warning(f"Error updating Customer {customer_code}: {e}")
 
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Created: {sync_stats["created"]} | Updated: {sync_stats["updated"]} | Closed: {sync_stats["closed"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
     except Exception as e:
-        logger.exception("Error syncing sales orders from API")
+        log.exception("Error syncing sales orders from API")
         sync_stats['errors'].append(str(e))
     return sync_stats
 
@@ -318,6 +368,15 @@ def sync_quotations_core(days_back=3, specific_date=None):
     Fetch quotations from SAP API and save to DB.
     Returns dict with created, updated, closed, total_quotations, total_items, api_calls, errors.
     """
+    log = _get_sync_logger('quotations')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP Quotation Sync (VPS)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    log.info(f'Days back: {days_back}' + (f' | Date: {specific_date}' if specific_date else ''))
+    log.info('-' * 70)
+
     sync_stats = {
         'created': 0,
         'updated': 0,
@@ -345,7 +404,7 @@ def sync_quotations_core(days_back=3, specific_date=None):
                 mapped = client._map_quotation_api_response_to_model(api_quotation)
                 mapped_quotations.append(mapped)
             except Exception as e:
-                logger.error(f"Error mapping quotation {api_quotation.get('DocNum')}: {e}")
+                log.error(f"Error mapping quotation {api_quotation.get('DocNum')}: {e}")
                 sync_stats['errors'].append(f"Error mapping quotation {api_quotation.get('DocNum')}: {str(e)}")
 
         if not mapped_quotations:
@@ -448,8 +507,13 @@ def sync_quotations_core(days_back=3, specific_date=None):
                 closed_count += 1
             sync_stats['closed'] = closed_count
 
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Created: {sync_stats["created"]} | Updated: {sync_stats["updated"]} | Closed: {sync_stats["closed"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
     except Exception as e:
-        logger.exception("Error syncing quotations from API")
+        log.exception("Error syncing quotations from API")
         sync_stats['errors'].append(str(e))
     return sync_stats
 
@@ -475,6 +539,20 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
     Fetch AR invoices from SAP API and save to DB.
     Returns dict with created, updated, total_invoices, total_items, api_calls, errors.
     """
+    log = _get_sync_logger('arinvoices')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP AR Invoice Sync (VPS)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    if specific_date:
+        log.info(f'Date filter: {specific_date}')
+    elif docnum:
+        log.info(f'DocNum filter: {docnum}')
+    else:
+        log.info(f'Days back: {days_back}')
+    log.info('-' * 70)
+
     sync_stats = {
         'created': 0,
         'updated': 0,
@@ -513,7 +591,7 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
                 mapped = client._map_arinvoice_api_response(api_invoice)
                 mapped_invoices.append(mapped)
             except Exception as e:
-                logger.error(f"Error mapping invoice {api_invoice.get('DocNum')}: {e}")
+                log.error(f"Error mapping invoice {api_invoice.get('DocNum')}: {e}")
                 sync_stats['errors'].append(f"Error mapping invoice {api_invoice.get('DocNum')}: {str(e)}")
 
         if not mapped_invoices:
@@ -623,8 +701,13 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
                 SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
             sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_invoices)
 
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Created: {sync_stats["created"]} | Updated: {sync_stats["updated"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
     except Exception as e:
-        logger.exception("Error syncing AR invoices")
+        log.exception("Error syncing AR invoices")
         sync_stats['errors'].append(str(e))
     return sync_stats
 
@@ -637,6 +720,20 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
     Fetch AR credit memos from SAP API and save to DB.
     Returns dict with created, updated, total_creditmemos, total_items, api_calls, errors.
     """
+    log = _get_sync_logger('arcreditmemos')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP AR Credit Memo Sync (VPS)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    if specific_date:
+        log.info(f'Date filter: {specific_date}')
+    elif docnum:
+        log.info(f'DocNum filter: {docnum}')
+    else:
+        log.info(f'Days back: {days_back}')
+    log.info('-' * 70)
+
     sync_stats = {
         'created': 0,
         'updated': 0,
@@ -675,7 +772,7 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
                 mapped = client._map_arcreditmemo_api_response(api_creditmemo)
                 mapped_creditmemos.append(mapped)
             except Exception as e:
-                logger.error(f"Error mapping credit memo {api_creditmemo.get('DocNum')}: {e}")
+                log.error(f"Error mapping credit memo {api_creditmemo.get('DocNum')}: {e}")
                 sync_stats['errors'].append(f"Error mapping credit memo {api_creditmemo.get('DocNum')}: {str(e)}")
 
         if not mapped_creditmemos:
@@ -785,8 +882,13 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
                 SAPARCreditMemoItem.objects.bulk_create(items_to_create, batch_size=20000)
             sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_creditmemos)
 
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Created: {sync_stats["created"]} | Updated: {sync_stats["updated"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
     except Exception as e:
-        logger.exception("Error syncing AR credit memos")
+        log.exception("Error syncing AR credit memos")
         sync_stats['errors'].append(str(e))
     return sync_stats
 
@@ -799,6 +901,14 @@ def sync_purchaseorders_core():
     Fetch OPEN purchase orders from SAP API and save to DB (full replace).
     Returns dict with replaced, total_items, errors.
     """
+    log = _get_sync_logger('purchaseorders')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP Purchase Order Sync (VPS)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    log.info('-' * 70)
+
     sync_stats = {
         'replaced': 0,
         'total_items': 0,
@@ -824,7 +934,7 @@ def sync_purchaseorders_core():
                 mapped = client._map_purchaseorder_api_response(api_order)
                 mapped_orders.append(mapped)
             except Exception as e:
-                logger.error(f"Error mapping PO {api_order.get('DocNum')}: {e}")
+                log.error(f"Error mapping PO {api_order.get('DocNum')}: {e}")
                 sync_stats['errors'].append(f"Error mapping PO {api_order.get('DocNum')}: {str(e)}")
 
         if not mapped_orders:
@@ -837,7 +947,12 @@ def sync_purchaseorders_core():
         sync_stats['replaced'] = stats.get('replaced', 0)
         sync_stats['total_items'] = stats.get('total_items', 0)
 
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Replaced: {sync_stats["replaced"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
     except Exception as e:
-        logger.exception("Error syncing purchase orders from API")
+        log.exception("Error syncing purchase orders from API")
         sync_stats['errors'].append(str(e))
     return sync_stats

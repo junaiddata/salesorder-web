@@ -4587,6 +4587,7 @@ def sync_settings(request):
 def sync_settings_form(request):
     """
     Form POST for manual sync from Settings: dropdown + date or days back.
+    Calls core functions directly (fast) - logs written to logs/sync_*.log from sync_services.
     Excludes Customer Finance. For non-tech users.
     """
     from django.contrib import messages
@@ -4621,7 +4622,6 @@ def sync_settings_form(request):
         if sync_type == 'purchaseorders':
             stats = sync_func()
         elif sync_date:
-            # Use specific date
             if sync_type == 'salesorders':
                 stats = sync_func(days_back=3, specific_date=sync_date, docnum=None)
             elif sync_type == 'quotations':
@@ -4629,7 +4629,6 @@ def sync_settings_form(request):
             else:
                 stats = sync_func(days_back=3, specific_date=sync_date, docnum=None)
         else:
-            # Use days back
             if sync_type == 'salesorders':
                 stats = sync_func(days_back=days_back, specific_date=None, docnum=None)
             elif sync_type == 'quotations':
@@ -4640,13 +4639,12 @@ def sync_settings_form(request):
         if stats.get('errors'):
             messages.error(request, f'{label} sync completed with errors: {stats["errors"][-1]}')
         else:
-            # Build summary from stats
             if sync_type == 'purchaseorders':
                 msg = f'{label}: {stats.get("replaced", 0)} replaced, {stats.get("total_items", 0)} items'
             elif sync_type == 'salesorders':
                 msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated, {stats.get("closed", 0)} closed'
             elif sync_type == 'quotations':
-                msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated'
+                msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated, {stats.get("closed", 0)} closed'
             else:
                 msg = f'{label}: {stats.get("created", 0)} created, {stats.get("updated", 0)} updated'
             messages.success(request, msg)
