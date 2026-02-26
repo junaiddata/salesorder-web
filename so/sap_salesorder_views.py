@@ -6176,6 +6176,267 @@ def export_combined_sales_invoices_excel(request):
 
 
 @login_required
+def export_combined_itemwise_excel(request):
+    """
+    Export Combined Report as item-wise line items with Line Total and GP.
+    One row per line item (invoice line or credit memo line).
+    Respects same filters as combined_sales_invoices_list.
+    """
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from so.models import SAPARInvoiceItem, SAPARCreditMemoItem, Items
+
+    invoice_qs = SAPARInvoice.objects.all()
+    creditmemo_qs = SAPARCreditMemo.objects.all()
+
+    if not (request.user.is_superuser or request.user.is_staff):
+        invoice_qs = invoice_qs.filter(salesman_scope_q_salesorder(request.user))
+        creditmemo_qs = creditmemo_qs.filter(salesman_scope_q_salesorder(request.user))
+
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    cancel_status_filter = request.GET.get('cancel_status', '').strip()
+    store_filter = request.GET.get('store', '').strip()
+    document_type_filter = request.GET.get('document_type', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    total_range = request.GET.get('total', '').strip()
+
+    def apply_filters(qs, is_invoice=True):
+        if store_filter:
+            qs = qs.filter(store=store_filter)
+        if salesmen_filter:
+            clean_salesmen = [s for s in salesmen_filter if s.strip()]
+            if clean_salesmen:
+                qs = qs.filter(salesman_name__in=clean_salesmen)
+        if cancel_status_filter:
+            if cancel_status_filter == 'csNo':
+                qs = qs.filter(cancel_status='csNo')
+            elif cancel_status_filter == 'csYes':
+                qs = qs.filter(cancel_status='csYes')
+            elif cancel_status_filter == 'csCancellation':
+                qs = qs.filter(cancel_status='csCancellation')
+            elif cancel_status_filter != 'All':
+                qs = qs.filter(cancel_status=cancel_status_filter)
+        if total_range:
+            if total_range == "0-5000":
+                qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
+            elif total_range == "5001-10000":
+                qs = qs.filter(doc_total__gte=5001, doc_total__lte=10000)
+            elif total_range == "10001-25000":
+                qs = qs.filter(doc_total__gte=10001, doc_total__lte=25000)
+            elif total_range == "25001-50000":
+                qs = qs.filter(doc_total__gte=25001, doc_total__lte=50000)
+            elif total_range == "50001-100000":
+                qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
+            elif total_range == "100000+":
+                qs = qs.filter(doc_total__gt=100000)
+        if q:
+            if is_invoice:
+                if q.isdigit():
+                    qs = qs.filter(invoice_number__istartswith=q)
+                elif len(q) < 3:
+                    qs = qs.filter(
+                        Q(customer_name__istartswith=q) |
+                        Q(salesman_name__istartswith=q) |
+                        Q(bp_reference_no__istartswith=q)
+                    )
+                else:
+                    qs = qs.filter(
+                        Q(invoice_number__icontains=q) |
+                        Q(customer_name__icontains=q) |
+                        Q(salesman_name__icontains=q) |
+                        Q(bp_reference_no__icontains=q) |
+                        Q(customer_code__icontains=q)
+                    )
+            else:
+                if q.isdigit():
+                    qs = qs.filter(credit_memo_number__istartswith=q)
+                elif len(q) < 3:
+                    qs = qs.filter(
+                        Q(customer_name__istartswith=q) |
+                        Q(salesman_name__istartswith=q) |
+                        Q(bp_reference_no__istartswith=q)
+                    )
+                else:
+                    qs = qs.filter(
+                        Q(credit_memo_number__icontains=q) |
+                        Q(customer_name__icontains=q) |
+                        Q(salesman_name__icontains=q) |
+                        Q(bp_reference_no__icontains=q) |
+                        Q(customer_code__icontains=q)
+                    )
+        def parse_date(s):
+            if not s:
+                return None
+            try:
+                if len(s) == 7:
+                    return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+                return datetime.strptime(s, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+        start_date = parse_date(start)
+        end_date = parse_date(end)
+        if start_date:
+            qs = qs.filter(posting_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(posting_date__lte=end_date)
+        return qs
+
+    invoice_qs = apply_filters(invoice_qs, is_invoice=True)
+    creditmemo_qs = apply_filters(creditmemo_qs, is_invoice=False)
+
+    if document_type_filter == 'Invoice':
+        creditmemo_qs = creditmemo_qs.none()
+    elif document_type_filter == 'Credit Memo':
+        invoice_qs = invoice_qs.none()
+
+    invoice_qs = invoice_qs.order_by('-posting_date', '-invoice_number')
+    creditmemo_qs = creditmemo_qs.order_by('-posting_date', '-credit_memo_number')
+
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
+    )
+
+    data = []
+
+    invoice_items = SAPARInvoiceItem.objects.filter(
+        invoice__in=invoice_qs
+    ).select_related('invoice').order_by('-invoice__posting_date', '-invoice__invoice_number', 'line_no')
+    item_codes = list(invoice_items.exclude(item_code__isnull=True).exclude(item_code='').values_list('item_code', flat=True).distinct())
+    item_firm_map = dict(
+        Items.objects.filter(item_code__in=item_codes).values_list('item_code', 'item_firm')
+    ) if item_codes else {}
+
+    for inv_item in invoice_items:
+        inv = inv_item.invoice
+        line_total = inv_item.line_total_after_discount if (
+            inv_item.line_total_after_discount and inv_item.line_total_after_discount != 0
+        ) else inv_item.line_total
+        manufacturer = item_firm_map.get(inv_item.item_code or '', '') or ''
+        row = {
+            '_sort_date': inv.posting_date or datetime.min.date(),
+            'Document Type': 'A/R Invoice',
+            'Document Number': inv.invoice_number or '',
+            'Posting Date': inv.posting_date.strftime('%d/%m/%Y') if inv.posting_date else '',
+            'Customer Code': inv.customer_code or '',
+            'Customer Name': inv.customer_name or '',
+            'Sales Employee': inv.salesman_name or '',
+            'Item Code': inv_item.item_code or '',
+            'Item Description': inv_item.item_description or '',
+            'Item Manufacturer': manufacturer,
+            'Quantity': float(inv_item.quantity or 0),
+            'Net Sale': float(line_total or 0),
+        }
+        if is_admin:
+            row['Gross Profit'] = float(inv_item.gross_profit or 0)
+        data.append(row)
+
+    cm_item_codes = list(
+        SAPARCreditMemoItem.objects.filter(credit_memo__in=creditmemo_qs)
+        .exclude(item_code__isnull=True).exclude(item_code='')
+        .values_list('item_code', flat=True).distinct()
+    )
+    cm_item_firm_map = dict(
+        Items.objects.filter(item_code__in=cm_item_codes).values_list('item_code', 'item_firm')
+    ) if cm_item_codes else {}
+
+    creditmemo_items = SAPARCreditMemoItem.objects.filter(
+        credit_memo__in=creditmemo_qs
+    ).select_related('credit_memo').order_by('-credit_memo__posting_date', '-credit_memo__credit_memo_number', 'line_no')
+
+    for cm_item in creditmemo_items:
+        cm = cm_item.credit_memo
+        line_total = cm_item.line_total_after_discount if (
+            cm_item.line_total_after_discount and cm_item.line_total_after_discount != 0
+        ) else cm_item.line_total
+        manufacturer = cm_item_firm_map.get(cm_item.item_code or '', '') or ''
+        row = {
+            '_sort_date': cm.posting_date or datetime.min.date(),
+            'Document Type': 'A/R Credit Memo',
+            'Document Number': cm.credit_memo_number or '',
+            'Posting Date': cm.posting_date.strftime('%d/%m/%Y') if cm.posting_date else '',
+            'Customer Code': cm.customer_code or '',
+            'Customer Name': cm.customer_name or '',
+            'Sales Employee': cm.salesman_name or '',
+            'Item Code': cm_item.item_code or '',
+            'Item Description': cm_item.item_description or '',
+            'Item Manufacturer': manufacturer,
+            'Quantity': float(cm_item.quantity or 0),
+            'Net Sale': float(line_total or 0),
+        }
+        if is_admin:
+            row['Gross Profit'] = float(cm_item.gross_profit or 0)
+        data.append(row)
+
+    data.sort(key=lambda x: (x['_sort_date'], x['Document Number']), reverse=True)
+    for i, row in enumerate(data, 1):
+        row['#'] = i
+        del row['_sort_date']
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Combined Itemwise'
+
+    headers = ['#', 'Document Type', 'Document Number', 'Posting Date', 'Customer Code', 'Customer Name',
+              'Sales Employee', 'Item Code', 'Item Description', 'Item Manufacturer', 'Quantity', 'Net Sale']
+    if is_admin:
+        headers.append('Gross Profit')
+
+    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = thin_border
+
+    for row_idx, row_data in enumerate(data, 2):
+        for col_idx, h in enumerate(headers, 1):
+            val = row_data.get(h, '')
+            c = ws.cell(row=row_idx, column=col_idx, value=val)
+            c.border = thin_border
+            if h in ('Quantity', 'Net Sale', 'Gross Profit'):
+                c.alignment = Alignment(horizontal='right', vertical='center')
+                if isinstance(val, (int, float)):
+                    c.number_format = '#,##0.00'
+            elif h == '#':
+                c.alignment = Alignment(horizontal='center', vertical='center')
+            else:
+                c.alignment = Alignment(horizontal='left', vertical='center')
+
+    col_widths = [6, 18, 16, 12, 14, 40, 18, 12, 45, 25, 12, 14]
+    if is_admin:
+        col_widths.append(14)
+    for col, w in enumerate(col_widths, 1):
+        if col <= len(headers):
+            ws.column_dimensions[get_column_letter(col)].width = min(w, 50)
+    ws.row_dimensions[1].height = 22
+    ws.freeze_panes = 'B2'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f'combined_itemwise_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
 def combined_sales_invoices_list(request):
     """
     Combined view that merges AR Invoices and AR Credit Memos into a single list.
@@ -8425,6 +8686,358 @@ def export_item_analysis_pdf(request):
     buffer.close()
     response.write(pdf_value)
     
+    return response
+
+
+@login_required
+def export_item_analysis_excel(request):
+    """
+    Export Item Analysis to Excel with all current filters applied.
+    Produces a well-formatted Excel file with headers, totals row, number formatting, and auto column widths.
+    """
+    from django.http import HttpResponse
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from so.models import SAPARInvoiceItem, SAPARCreditMemoItem, Items
+    from django.db.models import Avg, Case, When, F, Q, Max
+
+    current_year = datetime.now().year
+    years = [2026, 2025, 2024]
+
+    # Get filters (same as item_analysis)
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    store_filter = request.GET.get('store', '').strip()
+    month_filter = request.GET.getlist('month')
+    start_date = request.GET.get('start', '').strip()
+    end_date = request.GET.get('end', '').strip()
+    category_filter = request.GET.get('category', 'All').strip()
+
+    invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
+    creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+
+    if category_filter and category_filter != 'All':
+        category_salesmen = get_salesmen_by_category(category_filter, invoice_qs)
+        if category_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=category_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=category_salesmen)
+        else:
+            invoice_qs = invoice_qs.none()
+            creditmemo_qs = creditmemo_qs.none()
+
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
+            creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
+
+    if store_filter:
+        invoice_qs = invoice_qs.filter(store=store_filter)
+        creditmemo_qs = creditmemo_qs.filter(store=store_filter)
+
+    if month_filter:
+        try:
+            month_nums = [int(m) for m in month_filter if m.strip()]
+            if month_nums:
+                invoice_qs = invoice_qs.filter(posting_date__month__in=month_nums)
+                creditmemo_qs = creditmemo_qs.filter(posting_date__month__in=month_nums)
+        except (ValueError, TypeError):
+            pass
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date_parsed = parse_date(start_date)
+    end_date_parsed = parse_date(end_date)
+    if start_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__gte=start_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__gte=start_date_parsed)
+    if end_date_parsed:
+        invoice_qs = invoice_qs.filter(posting_date__lte=end_date_parsed)
+        creditmemo_qs = creditmemo_qs.filter(posting_date__lte=end_date_parsed)
+
+    item_data = {}
+    is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
+
+    for year in years:
+        year_invoices = invoice_qs.filter(posting_date__year=year)
+        year_creditmemos = creditmemo_qs.filter(posting_date__year=year)
+
+        invoice_items = SAPARInvoiceItem.objects.filter(
+            invoice__in=year_invoices
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
+            total_sales=Sum(
+                Case(
+                    When(
+                        Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                        then=F('line_total_after_discount')
+                    ),
+                    default=F('line_total')
+                )
+            ),
+            total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+            total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('invoice__posting_date')
+        )
+        creditmemo_items = SAPARCreditMemoItem.objects.filter(
+            credit_memo__in=year_creditmemos
+        ).exclude(item_code__isnull=True).exclude(item_code='').values('item_code', 'upc_code').annotate(
+            total_sales=Sum(
+                Case(
+                    When(
+                        Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0),
+                        then=F('line_total_after_discount')
+                    ),
+                    default=F('line_total')
+                )
+            ),
+            total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+            total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+            avg_rate=Coalesce(Avg('price'), Value(0, output_field=DecimalField())),
+            latest_description=Max('item_description'),
+            latest_posting_date=Max('credit_memo__posting_date')
+        )
+
+        if search_query:
+            search_item_codes = Items.objects.filter(
+                Q(item_code__icontains=search_query) |
+                Q(item_description__icontains=search_query) |
+                Q(upc_code__icontains=search_query)
+            ).values_list('item_code', flat=True)
+            if search_item_codes:
+                invoice_items = invoice_items.filter(item_code__in=search_item_codes)
+                creditmemo_items = creditmemo_items.filter(item_code__in=search_item_codes)
+            else:
+                invoice_items = invoice_items.none()
+                creditmemo_items = creditmemo_items.none()
+
+        if firm_filter:
+            clean_firms = [f for f in firm_filter if f.strip()]
+            if clean_firms:
+                firm_item_codes = Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
+                if firm_item_codes:
+                    invoice_items = invoice_items.filter(item_code__in=firm_item_codes)
+                    creditmemo_items = creditmemo_items.filter(item_code__in=firm_item_codes)
+
+        invoice_items_list = list(invoice_items)
+        creditmemo_items_list = list(creditmemo_items)
+        all_item_codes = list(set(
+            [i['item_code'] for i in invoice_items_list + creditmemo_items_list if i.get('item_code')]
+        ))
+        item_desc_map = {}
+        item_upc_map = {}
+        if all_item_codes:
+            latest_items = SAPARInvoiceItem.objects.filter(
+                item_code__in=all_item_codes
+            ).exclude(item_code__isnull=True).exclude(item_code='').values(
+                'item_code', 'item_description', 'upc_code', 'invoice__posting_date'
+            ).order_by('item_code', '-invoice__posting_date', '-id')
+            for it in latest_items:
+                c = it['item_code']
+                if c and c not in item_desc_map:
+                    item_desc_map[c] = it.get('item_description') or 'Unknown'
+                    item_upc_map[c] = it.get('upc_code') or ''
+
+        for item in invoice_items_list + creditmemo_items_list:
+            code = item['item_code'] or ''
+            if not code:
+                continue
+            desc = item_desc_map.get(code, item.get('latest_description', 'Unknown'))
+            upc = item_upc_map.get(code, item.get('upc_code', ''))
+            key = code
+            if key not in item_data:
+                item_data[key] = {
+                    'item_code': code,
+                    'item_description': desc,
+                    'upc_code': upc,
+                    'years': {}
+                }
+            if year not in item_data[key]['years']:
+                item_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'total_quantity': Decimal('0'),
+                }
+            item_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
+            item_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
+            item_data[key]['years'][year]['total_quantity'] += item.get('total_quantity', Decimal('0'))
+
+    items_list = []
+    for key, data in item_data.items():
+        row = {
+            'item_code': data['item_code'],
+            'item_description': data['item_description'],
+            'upc_code': data.get('upc_code', ''),
+            'years_data': {}
+        }
+        for year in years:
+            yd = data['years'].get(year, {})
+            ts = yd.get('total_sales', Decimal('0'))
+            tg = yd.get('total_gp', Decimal('0'))
+            tq = yd.get('total_quantity', Decimal('0'))
+            gp_pct = (tg / ts * 100) if ts and ts != 0 else Decimal('0')
+            avg_rate = (ts / tq) if tq and tq != 0 else Decimal('0')
+            row['years_data'][year] = {
+                'total_sales': ts,
+                'total_gp': tg,
+                'gp_percent': gp_pct,
+                'avg_rate': avg_rate,
+                'total_quantity': tq,
+            }
+        items_list.append(row)
+    items_list = [i for i in items_list if i['item_code'] and i['item_code'].strip()]
+    items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
+
+    year_totals = {}
+    for year in years:
+        year_totals[year] = {
+            'total_sales': sum(i['years_data'][year]['total_sales'] for i in items_list),
+            'total_gp': sum(i['years_data'][year]['total_gp'] for i in items_list),
+            'total_quantity': sum(i['years_data'][year]['total_quantity'] for i in items_list),
+        }
+        tq = year_totals[year]['total_quantity']
+        ts = year_totals[year]['total_sales']
+        year_totals[year]['total_avg_rate'] = (ts / tq) if tq and tq != 0 else Decimal('0')
+        year_totals[year]['total_gp_percent'] = (year_totals[year]['total_gp'] / ts * 100) if ts and ts != 0 else Decimal('0')
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Item Analysis'
+
+    filter_parts = []
+    if store_filter:
+        filter_parts.append(f'Store: {store_filter}')
+    if category_filter != 'All':
+        filter_parts.append(f'Category: {category_filter}')
+    if salesmen_filter:
+        filter_parts.append(f'Salesmen: {", ".join(salesmen_filter[:3])}{"..." if len(salesmen_filter) > 3 else ""}')
+    if firm_filter:
+        filter_parts.append(f'Firms: {", ".join(firm_filter[:3])}{"..." if len(firm_filter) > 3 else ""}')
+    if month_filter:
+        filter_parts.append(f'Months: {", ".join(month_filter)}')
+    if start_date or end_date:
+        filter_parts.append(f'Date: {start_date or "Start"} to {end_date or "End"}')
+    if search_query:
+        filter_parts.append(f'Search: {search_query}')
+    filter_text = ' | '.join(filter_parts) if filter_parts else 'All filters (no restrictions)'
+    ws.cell(row=1, column=1, value=f'Item Analysis - Exported {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+    ws.cell(row=2, column=1, value=filter_text)
+    ws.cell(row=1, column=1).font = Font(bold=True, size=12)
+    ws.cell(row=2, column=1).font = Font(size=9, color='666666')
+    start_data_row = 4
+
+    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    totals_fill = PatternFill(start_color='E8F4FD', end_color='E8F4FD', fill_type='solid')
+    totals_font = Font(bold=True, size=10)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+
+    headers = ['Item Code', 'Description', 'UPC']
+    for year in years:
+        headers.append(f'{year} Sales')
+        if is_admin:
+            headers.append(f'{year} GP')
+            headers.append(f'{year} GP%')
+        headers.append(f'{year} Qty')
+        headers.append(f'{year} Avg Rate')
+
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=start_data_row, column=col, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = thin_border
+
+    totals_row = ['TOTAL', '', '']
+    for year in years:
+        t = year_totals[year]
+        totals_row.append(float(t['total_sales']))
+        if is_admin:
+            totals_row.append(float(t['total_gp']))
+            totals_row.append(float(t['total_gp_percent']))
+        totals_row.append(float(t['total_quantity']))
+        totals_row.append(float(t['total_avg_rate']))
+    for col, val in enumerate(totals_row, 1):
+        c = ws.cell(row=start_data_row + 1, column=col, value=val)
+        c.fill = totals_fill
+        c.font = totals_font
+        c.alignment = Alignment(horizontal='right' if col > 3 else 'left', vertical='center')
+        c.border = thin_border
+        if isinstance(val, (int, float)) and col > 3 and col <= len(headers):
+            h = headers[col - 1]
+            if 'GP%' in h:
+                c.number_format = '0.00"%"'
+            elif 'Qty' in h:
+                c.number_format = '#,##0'
+            else:
+                c.number_format = '#,##0.00'
+
+    for row_idx, item in enumerate(items_list, start_data_row + 2):
+        row_vals = [
+            item['item_code'],
+            item['item_description'] or 'Unknown',
+            item.get('upc_code', '') or '',
+        ]
+        for year in years:
+            yd = item['years_data'][year]
+            row_vals.append(float(yd['total_sales']))
+            if is_admin:
+                row_vals.append(float(yd['total_gp']))
+                row_vals.append(float(yd['gp_percent']))
+            row_vals.append(float(yd['total_quantity']))
+            row_vals.append(float(yd['avg_rate']))
+        for col, val in enumerate(row_vals, 1):
+            c = ws.cell(row=row_idx, column=col, value=val)
+            c.border = thin_border
+            c.alignment = Alignment(horizontal='right' if col > 3 else 'left', vertical='center')
+            if isinstance(val, (int, float)) and col > 3:
+                col_header = headers[col - 1] if col <= len(headers) else ''
+                if 'GP%' in col_header:
+                    c.number_format = '0.00"%"'
+                elif 'Qty' in col_header:
+                    c.number_format = '#,##0'
+                else:
+                    c.number_format = '#,##0.00'
+
+    col_widths = [14, 35, 14]
+    for _ in years:
+        col_widths.append(14)
+        if is_admin:
+            col_widths.extend([12, 10, 10, 12])
+        else:
+            col_widths.extend([10, 12])
+    for col, w in enumerate(col_widths, 1):
+        if col <= len(headers):
+            ws.column_dimensions[get_column_letter(col)].width = min(w, 50)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(headers))
+    ws.row_dimensions[start_data_row].height = 22
+    ws.freeze_panes = f'D{start_data_row + 1}'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"Item_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
 
