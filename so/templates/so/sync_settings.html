@@ -102,11 +102,19 @@
             <label for="sync_date">Or only this date</label>
             <input type="date" name="sync_date" id="sync_date">
           </div>
+          <div id="from-to-row">
+            <label for="from_date">From date</label>
+            <input type="date" name="from_date" id="from_date">
+          </div>
+          <div id="to-row">
+            <label for="to_date">To date</label>
+            <input type="date" name="to_date" id="to_date">
+          </div>
           <div>
             <button type="submit" class="sync-now-btn"><i class="fas fa-sync-alt"></i> Sync</button>
           </div>
         </div>
-        <p class="sync-hint" id="sync-hint">Use days (e.g. 3 = last 3 days) or pick a date to sync just that day.</p>
+        <p class="sync-hint" id="sync-hint">Use days (e.g. 3 = last 3 days), a single date, or From/To date range.</p>
       </form>
 
       <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border);">
@@ -128,14 +136,18 @@
     </div>
 
     <script>
-      document.getElementById('sync_type').addEventListener('change', function() {
-        var isPO = this.value === 'purchaseorders';
+      function updateSyncForm() {
+        var isPO = document.getElementById('sync_type').value === 'purchaseorders';
         document.getElementById('date-row').style.display = isPO ? 'none' : 'block';
         document.getElementById('days-row').style.display = isPO ? 'none' : 'block';
+        document.getElementById('from-to-row').style.display = 'block';
+        document.getElementById('to-row').style.display = 'block';
         document.getElementById('sync-hint').textContent = isPO
-          ? 'Purchase Orders fetches all open POs (no date filter).'
-          : 'Use days (e.g. 3 = last 3 days) or pick a date to sync just that day.';
-      });
+          ? 'Purchase Orders: use From/To date range, or leave empty for all open POs.'
+          : 'Use days (e.g. 3 = last 3 days), a single date, or From/To date range.';
+      }
+      document.getElementById('sync_type').addEventListener('change', updateSyncForm);
+      updateSyncForm();
     </script>
   </div>
 </body>

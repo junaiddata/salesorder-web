@@ -167,7 +167,8 @@ SAP_AR_INVOICE_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARInvoice"
 SAP_AR_CREDIT_MEMO_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARCreditMemo"
 SAP_FINANCE_SUMMARY_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/FinanceSummary"
 SAP_API_TIMEOUT = 30
-SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orderc+ 3 days = 4 days total)
+SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders + last 3 days = 4 days total
+# Optional: SAP_SYNC_FROM_DATE / SAP_SYNC_TO_DATE (YYYY-MM-DD) - used when From/To date range selected in Settings sync
 
 # VPS API Configuration (for PC script to send data to VPS)
 VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL

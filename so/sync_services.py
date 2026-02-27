@@ -78,7 +78,7 @@ def _dec_any(x):
 # =====================
 # Sales Orders
 # =====================
-def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
+def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_date=None, to_date=None):
     """
     Fetch sales orders from SAP API and save to DB.
     Returns dict with created, updated, closed, total_orders, total_items, api_calls, errors.
@@ -89,7 +89,9 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
     log.info('SAP Sales Order Sync (VPS)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
-    if specific_date:
+    if from_date and to_date:
+        log.info(f'Date range: {from_date} to {to_date}')
+    elif specific_date:
         log.info(f'Date filter: {specific_date}')
     elif docnum:
         log.info(f'DocNum filter: {docnum}')
@@ -114,6 +116,20 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
             orders = client.fetch_salesorders_by_docnum(int(docnum))
             all_orders.extend(orders)
             sync_stats['api_calls'] = 1
+        elif from_date and to_date:
+            start_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
+            end_dt = datetime.strptime(to_date, '%Y-%m-%d').date()
+            seen_docnums = set()
+            delta = (end_dt - start_dt).days
+            for i in range(max(0, delta) + 1):
+                d = (start_dt + timedelta(days=i)).strftime('%Y-%m-%d')
+                orders = client.fetch_salesorders_by_date(d)
+                for o in orders:
+                    docnum_val = o.get('DocNum')
+                    if docnum_val and docnum_val not in seen_docnums:
+                        all_orders.append(o)
+                        seen_docnums.add(docnum_val)
+                sync_stats['api_calls'] += 1
         elif specific_date:
             orders = client.fetch_salesorders_by_date(specific_date)
             all_orders.extend(orders)
@@ -363,7 +379,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None):
 # =====================
 # Quotations
 # =====================
-def sync_quotations_core(days_back=3, specific_date=None):
+def sync_quotations_core(days_back=3, specific_date=None, from_date=None, to_date=None):
     """
     Fetch quotations from SAP API and save to DB.
     Returns dict with created, updated, closed, total_quotations, total_items, api_calls, errors.
@@ -374,7 +390,12 @@ def sync_quotations_core(days_back=3, specific_date=None):
     log.info('SAP Quotation Sync (VPS)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
-    log.info(f'Days back: {days_back}' + (f' | Date: {specific_date}' if specific_date else ''))
+    if from_date and to_date:
+        log.info(f'Date range: {from_date} to {to_date}')
+    elif specific_date:
+        log.info(f'Date filter: {specific_date}')
+    else:
+        log.info(f'Days back: {days_back}')
     log.info('-' * 70)
 
     sync_stats = {
@@ -388,7 +409,10 @@ def sync_quotations_core(days_back=3, specific_date=None):
     }
     try:
         client = SAPAPIClient()
-        if specific_date:
+        if from_date and to_date:
+            all_quotations = client.fetch_quotations_by_date_range(from_date, to_date)
+            sync_stats['api_calls'] = 1
+        elif specific_date:
             all_quotations = client.fetch_quotations_by_date_range(specific_date, specific_date)
             sync_stats['api_calls'] = 1
         else:
@@ -534,7 +558,7 @@ def _parse_date(val):
     return val
 
 
-def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
+def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None, from_date=None, to_date=None):
     """
     Fetch AR invoices from SAP API and save to DB.
     Returns dict with created, updated, total_invoices, total_items, api_calls, errors.
@@ -545,7 +569,9 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
     log.info('SAP AR Invoice Sync (VPS)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
-    if specific_date:
+    if from_date and to_date:
+        log.info(f'Date range: {from_date} to {to_date}')
+    elif specific_date:
         log.info(f'Date filter: {specific_date}')
     elif docnum:
         log.info(f'DocNum filter: {docnum}')
@@ -573,6 +599,10 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
                 end_date.strftime('%Y-%m-%d')
             )
             all_invoices = [inv for inv in invoices if str(inv.get('DocNum', '')) == docnum]
+            sync_stats['api_calls'] = 1
+        elif from_date and to_date:
+            invoices = client.fetch_arinvoices_by_date_range(from_date, to_date)
+            all_invoices.extend(invoices)
             sync_stats['api_calls'] = 1
         elif specific_date:
             invoices = client.fetch_arinvoices_by_date_range(specific_date, specific_date)
@@ -715,7 +745,7 @@ def sync_arinvoices_core(days_back=3, specific_date=None, docnum=None):
 # =====================
 # AR Credit Memos
 # =====================
-def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
+def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None, from_date=None, to_date=None):
     """
     Fetch AR credit memos from SAP API and save to DB.
     Returns dict with created, updated, total_creditmemos, total_items, api_calls, errors.
@@ -726,7 +756,9 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
     log.info('SAP AR Credit Memo Sync (VPS)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
-    if specific_date:
+    if from_date and to_date:
+        log.info(f'Date range: {from_date} to {to_date}')
+    elif specific_date:
         log.info(f'Date filter: {specific_date}')
     elif docnum:
         log.info(f'DocNum filter: {docnum}')
@@ -754,6 +786,10 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
                 end_date.strftime('%Y-%m-%d')
             )
             all_creditmemos = [cm for cm in creditmemos if str(cm.get('DocNum', '')) == docnum]
+            sync_stats['api_calls'] = 1
+        elif from_date and to_date:
+            creditmemos = client.fetch_arcreditmemos_by_date_range(from_date, to_date)
+            all_creditmemos.extend(creditmemos)
             sync_stats['api_calls'] = 1
         elif specific_date:
             creditmemos = client.fetch_arcreditmemos_by_date_range(specific_date, specific_date)
@@ -896,9 +932,10 @@ def sync_arcreditmemos_core(days_back=3, specific_date=None, docnum=None):
 # =====================
 # Purchase Orders
 # =====================
-def sync_purchaseorders_core():
+def sync_purchaseorders_core(from_date=None, to_date=None):
     """
-    Fetch OPEN purchase orders from SAP API and save to DB (full replace).
+    Fetch purchase orders from SAP API and save to DB (full replace).
+    If from_date and to_date provided, fetch by date range; otherwise fetch all open POs.
     Returns dict with replaced, total_items, errors.
     """
     log = _get_sync_logger('purchaseorders')
@@ -907,6 +944,10 @@ def sync_purchaseorders_core():
     log.info('SAP Purchase Order Sync (VPS)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    if from_date and to_date:
+        log.info(f'Date range: {from_date} to {to_date}')
+    else:
+        log.info('Fetching all open POs')
     log.info('-' * 70)
 
     sync_stats = {
@@ -916,7 +957,10 @@ def sync_purchaseorders_core():
     }
     try:
         client = SAPAPIClient()
-        open_orders = client.fetch_open_purchaseorders()
+        if from_date and to_date:
+            open_orders = client.fetch_purchaseorders_by_date_range(from_date, to_date)
+        else:
+            open_orders = client.fetch_open_purchaseorders()
         seen_docnums = set()
         all_orders = []
         for order in open_orders:

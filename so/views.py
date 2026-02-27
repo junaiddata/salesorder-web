@@ -4601,6 +4601,8 @@ def sync_settings_form(request):
 
     sync_type = request.POST.get('sync_type', '').strip()
     sync_date = request.POST.get('sync_date', '').strip()
+    from_date = request.POST.get('from_date', '').strip()
+    to_date = request.POST.get('to_date', '').strip()
     days_back = request.POST.get('days_back', '3').strip()
     days_back = int(days_back) if days_back.isdigit() else 3
 
@@ -4620,7 +4622,14 @@ def sync_settings_form(request):
 
     try:
         if sync_type == 'purchaseorders':
-            stats = sync_func()
+            stats = sync_func(from_date=from_date or None, to_date=to_date or None)
+        elif from_date and to_date:
+            if sync_type == 'salesorders':
+                stats = sync_func(days_back=3, specific_date=None, docnum=None, from_date=from_date, to_date=to_date)
+            elif sync_type == 'quotations':
+                stats = sync_func(days_back=3, specific_date=None, from_date=from_date, to_date=to_date)
+            else:
+                stats = sync_func(days_back=3, specific_date=None, docnum=None, from_date=from_date, to_date=to_date)
         elif sync_date:
             if sync_type == 'salesorders':
                 stats = sync_func(days_back=3, specific_date=sync_date, docnum=None)
