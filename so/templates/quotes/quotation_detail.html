@@ -586,6 +586,7 @@
           <table aria-label="Quotation Items">
             <thead>
               <tr>
+                <th class="num">#</th>
                 <th>Item No</th>
                 <th>Description</th>
                 <th class="num">Qty</th>
@@ -596,6 +597,7 @@
             <tbody>
               {% for it in items %}
               <tr>
+                <td class="num">{{ forloop.counter }}</td>
                 <td>{{ it.item_no }}</td>
                 <td>{{ it.description }}</td>
                 <td class="num">{{ it.quantity|floatformat:2 }}</td>
@@ -604,7 +606,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="5" class="empty-state">No items</td>
+                <td colspan="6" class="empty-state">No items</td>
               </tr>
               {% endfor %}
             </tbody>

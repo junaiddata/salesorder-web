@@ -640,6 +640,7 @@
           <table>
             <thead>
               <tr>
+                <th class="num">#</th>
                 <th>Item No</th>
                 <th>Description</th>
                 <th>Manufacture</th>
@@ -658,6 +659,7 @@
             <tbody>
               {% for it in items %}
               <tr>
+                <td class="num">{{ forloop.counter }}</td>
                 <td><strong>{{ it.item_no }}</strong></td>
                 <td>{{ it.description }}</td>
                 <td>{{ it.manufacture|default:"—" }}</td>
@@ -680,7 +682,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="13" class="empty-state">No line items found</td>
+                <td colspan="14" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>

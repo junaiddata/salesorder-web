@@ -437,6 +437,7 @@
           <table>
             <thead>
               <tr>
+                <th class="num">#</th>
                 <th>Line</th>
                 <th>Item Code</th>
                 <th>UPC Code</th>
@@ -455,6 +456,7 @@
             <tbody>
               {% for item in items %}
               <tr>
+                <td class="num">{{ forloop.counter }}</td>
                 <td>{{ item.line_no }}</td>
                 <td><strong>{{ item.item_code }}</strong></td>
                 <td>{{ item.upc_code|default:"—" }}</td>
@@ -471,7 +473,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if user.is_staff or user.is_superuser %}12{% else %}10{% endif %}" class="empty-state">No line items found</td>
+                <td colspan="{% if user.is_staff or user.is_superuser %}13{% else %}11{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>
