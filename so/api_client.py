@@ -1553,9 +1553,11 @@ class SAPAPIClient:
         rounding_diff_amount = api_quotation.get('RoundingDiffAmount', 0) or 0
         discount_percent = self._clamp_percentage(api_quotation.get('DiscountPercent', 0) or 0, 'discount_percent')
         
-        # Calculate document_total as Subtotal without VAT
-        # Formula: document_total = DocTotal - VatSum - RoundingDiffAmount - TotalDiscount
-        document_total = doc_total - vat_sum - rounding_diff_amount - total_discount
+        # Calculate document_total as Subtotal without VAT (AFTER discount)
+        # SAP DocTotal already has TotalDiscount applied: DocTotal = (Subtotal - TotalDiscount) + VatSum + Rounding
+        # So: DocTotal - VatSum - Rounding = Subtotal - TotalDiscount (net subtotal after discount)
+        # Do NOT subtract total_discount again - that would double-subtract the discount.
+        document_total = doc_total - vat_sum - rounding_diff_amount
         
         # Document Status mapping - unified to OPEN/CLOSED
         doc_status = api_quotation.get('DocumentStatus', '')
