@@ -15,8 +15,9 @@ from collections import defaultdict
 from datetime import date, timedelta
 import logging
 
-from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity, SAPPurchaseOrderItem
+from .models import Items, SAPQuotation, SAPQuotationItem, SAPSalesorder, ProposedQuantity, SAPPurchaseOrderItem, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem
 from .views import salesman_scope_q
+from .sap_salesorder_views import salesman_scope_q_salesorder
 import re
 import requests
 import json
@@ -75,6 +76,58 @@ def _get_open_po_lookup(item_codes):
         )
     )
     return {row['item_no']: safe_float(row['total_qty']) for row in qs}
+
+
+def _get_sold_quantities_lookup(item_codes, request):
+    """
+    Fetch sold qty per item from AR invoices minus credit memos, by year (2025, 2026).
+    Returns dict: item_code -> {'sold_2025': float, 'sold_2026': float}
+    """
+    if not item_codes:
+        return {}
+    scope_q = salesman_scope_q_salesorder(request.user) if request.user.is_authenticated else Q()
+    invoice_qs = SAPARInvoice.objects.filter(scope_q)
+    creditmemo_qs = SAPARCreditMemo.objects.filter(scope_q)
+
+    invoice_items = SAPARInvoiceItem.objects.filter(
+        invoice__in=invoice_qs,
+        item_code__in=item_codes,
+    ).exclude(item_code__isnull=True).exclude(item_code='')
+    creditmemo_items = SAPARCreditMemoItem.objects.filter(
+        credit_memo__in=creditmemo_qs,
+        item_code__in=item_codes,
+    ).exclude(item_code__isnull=True).exclude(item_code='')
+
+    sold_2025 = {}
+    inv_2025 = invoice_items.filter(invoice__posting_date__year=2025).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in inv_2025:
+        sold_2025[row['item_code']] = safe_float(row['qty'])
+    cm_2025 = creditmemo_items.filter(credit_memo__posting_date__year=2025).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_2025:
+        sold_2025[row['item_code']] = sold_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    sold_2026 = {}
+    inv_2026 = invoice_items.filter(invoice__posting_date__year=2026).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in inv_2026:
+        sold_2026[row['item_code']] = safe_float(row['qty'])
+    cm_2026 = creditmemo_items.filter(credit_memo__posting_date__year=2026).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_2026:
+        sold_2026[row['item_code']] = sold_2026.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    result = {}
+    for code in item_codes:
+        s25 = sold_2025.get(code, 0)
+        s26 = sold_2026.get(code, 0)
+        result[code] = {'sold_2025': s25, 'sold_2026': s26}
+    return result
 
 
 def safe_float(x):
@@ -429,6 +482,14 @@ def item_quoted_analysis(request):
     open_po_lookup = _get_open_po_lookup(item_codes)
     for item in items_list:
         item['import_ordered'] = import_ordered_lookup.get(item['item_code'], 0) + open_po_lookup.get(item['item_code'], 0.0)
+
+    # Fetch sold quantities from AR invoices - credit memos (2025, 2026)
+    sold_lookup = _get_sold_quantities_lookup(item_codes, request)
+    for item in items_list:
+        sold = sold_lookup.get(item['item_code'], {'sold_2025': 0.0, 'sold_2026': 0.0})
+        item['sold_2025'] = sold['sold_2025']
+        item['sold_2026'] = sold['sold_2026']
+        item['total_sold'] = sold['sold_2025'] + sold['sold_2026']
     
     # Sort by total quoted (2025 + 2026) descending, then by customer count
     items_list.sort(key=lambda x: (x['qty_quoted_2025'] + x['qty_quoted_2026'], x['customer_quoted_count']), reverse=True)
@@ -446,6 +507,9 @@ def item_quoted_analysis(request):
     # Calculate grand totals
     grand_total_2025 = sum(item['qty_quoted_2025'] for item in items_list)
     grand_total_2026 = sum(item['qty_quoted_2026'] for item in items_list)
+    grand_total_sold_2025 = sum(item['sold_2025'] for item in items_list)
+    grand_total_sold_2026 = sum(item['sold_2026'] for item in items_list)
+    grand_total_sold = grand_total_sold_2025 + grand_total_sold_2026
     
     # Get unique customers across all items
     all_customers_set = set()
@@ -511,7 +575,7 @@ def item_quoted_analysis(request):
     )
     
     if is_ajax:
-        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list), include_conversion, search_term)
+        return _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, len(items_list), include_conversion, search_term, grand_total_sold_2025, grand_total_sold_2026, grand_total_sold)
     
     context = {
         'firms': firms,
@@ -522,6 +586,9 @@ def item_quoted_analysis(request):
         'grand_total_2025': grand_total_2025,
         'grand_total_2026': grand_total_2026,
         'grand_total_customers': grand_total_customers,
+        'grand_total_sold_2025': grand_total_sold_2025,
+        'grand_total_sold_2026': grand_total_sold_2026,
+        'grand_total_sold': grand_total_sold,
         'include_conversion': include_conversion,
         'search_term': search_term,
     }
@@ -604,7 +671,7 @@ def _get_customer_details_for_items(quotation_items_qs, item_codes):
     return dict(result)
 
 
-def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count, include_conversion=False, search_term=''):
+def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_total_2026, grand_total_customers, total_count, include_conversion=False, search_term='', grand_total_sold_2025=0, grand_total_sold_2026=0, grand_total_sold=0):
     """Render AJAX JSON response."""
     try:
         # Load proposed quantities for AJAX response
@@ -623,7 +690,13 @@ def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_
         
         table_html = render_to_string(
             'salesorders/_item_quoted_analysis_table.html',
-            {'items': page_obj, 'include_conversion': include_conversion},
+            {
+                'items': page_obj,
+                'include_conversion': include_conversion,
+                'grand_total_sold_2025': grand_total_sold_2025,
+                'grand_total_sold_2026': grand_total_sold_2026,
+                'grand_total_sold': grand_total_sold,
+            },
             request=request
         )
         
@@ -646,6 +719,9 @@ def _render_ajax_response(request, page_obj, paginator, grand_total_2025, grand_
             'grand_total_2025': float(grand_total_2025),
             'grand_total_2026': float(grand_total_2026),
             'grand_total_customers': grand_total_customers,
+            'grand_total_sold_2025': float(grand_total_sold_2025),
+            'grand_total_sold_2026': float(grand_total_sold_2026),
+            'grand_total_sold': float(grand_total_sold),
             'page_number': page_obj.number,
             'num_pages': paginator.num_pages,
             'has_previous': page_obj.has_previous(),

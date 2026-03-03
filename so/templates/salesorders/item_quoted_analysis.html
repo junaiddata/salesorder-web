@@ -1071,6 +1071,8 @@
                 <th style="min-width:80px;">UPC</th>
                 <th class="text-right" style="min-width:100px;">Total Stock</th>
                 <th class="text-right" style="min-width:90px;">IMPORT + LPO</th>
+                <th class="text-right" style="min-width:75px;">Sold 25</th>
+                <th class="text-right" style="min-width:75px;">Sold 26</th>
                 <th class="text-right" style="min-width:75px;">Qty 2025</th>
                 <th class="text-right" style="min-width:75px;">Qty 2026</th>
                 <th class="text-right" style="min-width:90px;">Total Amt 2025</th>
@@ -1090,7 +1092,7 @@
               </tr>
             </thead>
             <tbody id="analysis-tbody">
-              {% include 'salesorders/_item_quoted_analysis_table.html' with items=items %}
+              {% include 'salesorders/_item_quoted_analysis_table.html' with items=items grand_total_sold_2025=grand_total_sold_2025 grand_total_sold_2026=grand_total_sold_2026 grand_total_sold=grand_total_sold grand_total_2025=grand_total_2025 grand_total_2026=grand_total_2026 %}
             </tbody>
           </table>
         </div>
