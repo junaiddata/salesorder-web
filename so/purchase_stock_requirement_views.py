@@ -13,7 +13,9 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, Value, DecimalField, F
 from django.db.models.functions import Coalesce
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
 
 from .models import (
     Items,
@@ -419,3 +421,113 @@ def export_purchase_stock_requirement_excel(request):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     return response
+
+
+# =====================
+# API: Item analysis totals (item_code, total_qty, ho_qty, others_qty, total_2025, total_2026)
+# =====================
+
+
+@csrf_exempt
+@require_GET
+def api_item_analysis_totals(request):
+    """
+    API endpoint: aggregated item_code with total_qty, ho_qty, others_qty, total_2025, total_2026.
+    Data from AR invoices and credit memos (invoice qty - credit memo qty).
+    Store breakdown: HO vs Others.
+    Optional filter: firm (GET param, comma-separated or multiple).
+    Response: { "results": [ { "item_code": "...", "total_qty": 10, "ho_qty": 5, "others_qty": 5, "total_2025": 8, "total_2026": 2 }, ... ] }
+    """
+    def safe_float(x):
+        if x is None:
+            return 0.0
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return 0.0
+
+    firm_filter = request.GET.getlist('firm')
+    firm_list = list(dict.fromkeys([f.strip() for f in firm_filter if f and str(f).strip()]))
+
+    scope_q = salesman_scope_q_salesorder(request.user) if request.user.is_authenticated else Q()
+    invoice_qs = SAPARInvoice.objects.filter(scope_q)
+    creditmemo_qs = SAPARCreditMemo.objects.filter(scope_q)
+
+    invoice_items = SAPARInvoiceItem.objects.filter(
+        invoice__in=invoice_qs,
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('invoice')
+
+    creditmemo_items = SAPARCreditMemoItem.objects.filter(
+        credit_memo__in=creditmemo_qs,
+    ).exclude(item_code__isnull=True).exclude(item_code='').select_related('credit_memo')
+
+    if firm_list:
+        item_codes = list(Items.objects.filter(item_firm__in=firm_list).values_list('item_code', flat=True))
+        if item_codes:
+            invoice_items = invoice_items.filter(item_code__in=item_codes)
+            creditmemo_items = creditmemo_items.filter(item_code__in=item_codes)
+        else:
+            return JsonResponse({'results': []})
+
+    # HO qty: invoice - credit memo where store='HO'
+    inv_ho = invoice_items.filter(invoice__store='HO').values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    ho_qty = {row['item_code']: safe_float(row['qty']) for row in inv_ho}
+    cm_ho = creditmemo_items.filter(credit_memo__store='HO').values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_ho:
+        ho_qty[row['item_code']] = ho_qty.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    # Others qty: invoice - credit memo where store='Others'
+    inv_others = invoice_items.filter(invoice__store='Others').values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    others_qty = {row['item_code']: safe_float(row['qty']) for row in inv_others}
+    cm_others = creditmemo_items.filter(credit_memo__store='Others').values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_others:
+        others_qty[row['item_code']] = others_qty.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    # total_2025, total_2026
+    inv_2025 = invoice_items.filter(invoice__posting_date__year=2025).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    total_2025 = {row['item_code']: safe_float(row['qty']) for row in inv_2025}
+    cm_2025 = creditmemo_items.filter(credit_memo__posting_date__year=2025).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_2025:
+        total_2025[row['item_code']] = total_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    inv_2026 = invoice_items.filter(invoice__posting_date__year=2026).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    total_2026 = {row['item_code']: safe_float(row['qty']) for row in inv_2026}
+    cm_2026 = creditmemo_items.filter(credit_memo__posting_date__year=2026).values('item_code').annotate(
+        qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
+    )
+    for row in cm_2026:
+        total_2026[row['item_code']] = total_2026.get(row['item_code'], 0) - safe_float(row['qty'])
+
+    all_codes = set(ho_qty.keys()) | set(others_qty.keys()) | set(total_2025.keys()) | set(total_2026.keys())
+
+    results = []
+    for code in sorted(all_codes):
+        ho = ho_qty.get(code, 0)
+        others = others_qty.get(code, 0)
+        t25 = total_2025.get(code, 0)
+        t26 = total_2026.get(code, 0)
+        total = ho + others
+        results.append({
+            'item_code': code,
+            'total_qty': int(total) if total == int(total) else total,
+            'ho_qty': int(ho) if ho == int(ho) else ho,
+            'others_qty': int(others) if others == int(others) else others,
+            'total_2025': int(t25) if t25 == int(t25) else t25,
+            'total_2026': int(t26) if t26 == int(t26) else t26,
+        })
+
+    return JsonResponse({'results': results})
