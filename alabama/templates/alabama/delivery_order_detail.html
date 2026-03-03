@@ -1,0 +1,114 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Delivery Order {{ do.do_number }}{% endblock %}
+
+{% block page_title %}Delivery Order {{ do.do_number }}{% endblock %}
+{% block page_subtitle %}{{ do.customer.customer_name }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
+    .info-label { font-size: 0.75rem; color: var(--gray-500); font-weight: 500; }
+    .info-value { font-size: 0.938rem; font-weight: 600; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .stat-card { padding: 1rem; border-radius: 8px; background: var(--gray-100); border: 1px solid var(--gray-200); }
+    .stat-card.highlight { background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.2); }
+    .stat-label { font-size: 0.75rem; color: var(--gray-500); }
+    .stat-value { font-size: 1.1rem; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 8px 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--gray-500); background: var(--gray-100); border-bottom: 1px solid var(--gray-200); text-align: left; }
+    tbody td { padding: 8px 12px; font-size: 0.875rem; border-bottom: 1px solid #f1f5f9; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="detail-header">
+    <div></div>
+    <a href="{% url 'alabama:delivery_order_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to Delivery Orders
+    </a>
+  </div>
+
+  <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">Customer</span>
+        <span class="info-value">{{ do.customer.customer_name }} <small style="color:var(--gray-500);">({{ do.customer.customer_code }})</small></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Sales Person</span>
+        <span class="info-value">{{ do.sales_person|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Date</span>
+        <span class="info-value">{{ do.date|date:"d M Y" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">City</span>
+        <span class="info-value">{{ do.city|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Area</span>
+        <span class="info-value">{{ do.area|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">LPO</span>
+        <span class="info-value">{{ do.lpo|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Invoice</span>
+        <span class="info-value">{{ do.invoice|default:"—" }}</span>
+      </div>
+    </div>
+    {% if do.remarks %}
+    <div class="info-item" style="margin-top: 0.5rem;">
+      <span class="info-label">Remarks</span>
+      <span class="info-value">{{ do.remarks }}</span>
+    </div>
+    {% endif %}
+
+    <div class="stats-row">
+      <div class="stat-card highlight">
+        <div class="stat-label">Total Amount</div>
+        <div class="stat-value">{{ total_amount|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 1.5rem;">
+    <h3 class="section-title" style="margin-bottom: 1rem;">Line Items</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item No.</th>
+            <th>Description</th>
+            <th class="num">Quantity</th>
+            <th class="num">Price</th>
+            <th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item.item.item_code|default:"—" }}</td>
+            <td>{{ item.item_description|default:item.item.item_description|default:"—" }}</td>
+            <td class="num">{{ item.quantity|floatformat:2 }}</td>
+            <td class="num">{{ item.price|floatformat:2 }}</td>
+            <td class="num">{{ item.amount|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" style="text-align:center; padding:2rem; color:var(--gray-500);">No line items</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

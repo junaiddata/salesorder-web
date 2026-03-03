@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'tradelicense',
     'businesscards',
+    'alabama',
 
     'django.contrib.humanize',
     
@@ -94,6 +95,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'alabama.context_processors.alabama_context',
             ],
         },
     },

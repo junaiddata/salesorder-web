@@ -521,6 +521,10 @@
               <div class="stat-card-label">Est. Margin</div>
               <div class="stat-card-value">{{ total_profit|floatformat:2 }}</div>
             </div>
+            <div class="stat-card success">
+              <div class="stat-card-label">Margin %</div>
+              <div class="stat-card-value">{{ margin_percent|floatformat:1 }}%</div>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -591,6 +595,9 @@
                 <th>Description</th>
                 <th class="num">Qty</th>
                 <th class="num">Price</th>
+                {% if is_admin %}
+                <th class="num">Cost Price</th>
+                {% endif %}
                 <th class="num">Row Total</th>
               </tr>
             </thead>
@@ -602,11 +609,14 @@
                 <td>{{ it.description }}</td>
                 <td class="num">{{ it.quantity|floatformat:2 }}</td>
                 <td class="num">{{ it.price|floatformat:2 }}</td>
+                {% if is_admin %}
+                <td class="num">{% if it.unit_cost is not None %}{{ it.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                {% endif %}
                 <td class="num">{{ it.row_total|floatformat:2 }}</td>
               </tr>
               {% empty %}
               <tr>
-                <td colspan="6" class="empty-state">No items</td>
+                <td colspan="{% if is_admin %}7{% else %}6{% endif %}" class="empty-state">No items</td>
               </tr>
               {% endfor %}
             </tbody>

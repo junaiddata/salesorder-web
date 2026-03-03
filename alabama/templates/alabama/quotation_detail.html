@@ -1,0 +1,136 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Quotation {{ quotation.q_number }}{% endblock %}
+
+{% block page_title %}Quotation {{ quotation.q_number }}{% endblock %}
+{% block page_subtitle %}{{ quotation.customer_name }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
+    .info-label { font-size: 0.75rem; color: var(--gray-500); font-weight: 500; }
+    .info-value { font-size: 0.938rem; font-weight: 600; }
+    .badge { display: inline-flex; padding: 4px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; }
+    .badge-open { background: #d1fae5; color: #059669; }
+    .badge-closed { background: #e2e8f0; color: #475569; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .stat-card { padding: 1rem; border-radius: 8px; background: var(--gray-100); border: 1px solid var(--gray-200); }
+    .stat-card.highlight { background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.2); }
+    .stat-card.success { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+    .stat-card.danger { background: #fef2f2; border-color: rgba(239, 68, 68, 0.2); }
+    .stat-label { font-size: 0.75rem; color: var(--gray-500); }
+    .stat-value { font-size: 1.1rem; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 8px 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--gray-500); background: var(--gray-100); border-bottom: 1px solid var(--gray-200); text-align: left; }
+    tbody td { padding: 8px 12px; font-size: 0.875rem; border-bottom: 1px solid #f1f5f9; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bill-to { white-space: pre-line; font-size: 0.875rem; color: var(--gray-700); }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="detail-header">
+    <div>
+      {% if quotation.status and 'open' in quotation.status|lower or quotation.status == 'O' %}
+      <span class="badge badge-open">Open</span>
+      {% else %}
+      <span class="badge badge-closed">{{ quotation.status|default:"—" }}</span>
+      {% endif %}
+    </div>
+    <a href="{% url 'alabama:quotation_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to Quotations
+    </a>
+  </div>
+
+  <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">Customer</span>
+        <span class="info-value">{{ quotation.customer_name }}{% if quotation.customer_code %} <small style="color:var(--gray-500);">({{ quotation.customer_code }})</small>{% endif %}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Salesman</span>
+        <span class="info-value">{{ quotation.salesman_name|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Posting Date</span>
+        <span class="info-value">{{ quotation.posting_date|date:"d M Y"|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">BP Reference</span>
+        <span class="info-value">{{ quotation.bp_reference_no|default:"—" }}</span>
+      </div>
+      {% if quotation.brand %}
+      <div class="info-item">
+        <span class="info-label">Manufacturer</span>
+        <span class="info-value">{{ quotation.brand }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% if quotation.bill_to %}
+    <div class="info-item" style="margin-top: 0.5rem;">
+      <span class="info-label">Bill To</span>
+      <div class="bill-to">{{ quotation.bill_to }}</div>
+    </div>
+    {% endif %}
+
+    <div class="stats-row">
+      <div class="stat-card highlight">
+        <div class="stat-label">Document Total</div>
+        <div class="stat-value">{{ quotation.document_total|default:0|floatformat:2 }}</div>
+      </div>
+      {% if is_admin %}
+      <div class="stat-card danger">
+        <div class="stat-label">Est. Cost</div>
+        <div class="stat-value">{{ total_cost|floatformat:2 }}</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Est. Margin</div>
+        <div class="stat-value">{{ total_profit|floatformat:2 }}</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Margin %</div>
+        <div class="stat-value">{{ margin_percent|floatformat:1 }}%</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--gray-200); font-weight: 600;">Line Items</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Item No</th>
+            <th>Description</th>
+            <th class="num">Qty</th>
+            <th class="num">Price</th>
+            {% if is_admin %}<th class="num">Unit Cost</th>{% endif %}
+            <th class="num">Row Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ item.item_no|default:"—" }}</td>
+            <td>{{ item.description }}</td>
+            <td class="num">{{ item.quantity|floatformat:2 }}</td>
+            <td class="num">{{ item.price|floatformat:2 }}</td>
+            {% if is_admin %}<td class="num">{% if item.unit_cost is not None %}{{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>{% endif %}
+            <td class="num">{{ item.row_total|default:0|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="{% if is_admin %}7{% else %}6{% endif %}" style="text-align:center; padding:2rem; color:var(--gray-500);">No line items</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

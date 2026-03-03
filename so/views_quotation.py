@@ -239,12 +239,12 @@ def view_quotations(request):
     
     # Apply user-based division restrictions
     if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
-        if request.user.username.lower() == 'alabamaadmin':
+        if request.user.username.lower() in ['so', 'manager']:
+            pass  # so/manager see all quotations
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
             quotations = quotations.filter(division='ALABAMA')
-        elif request.user.username.lower() not in ['so', 'manager']:
+        else:
             quotations = quotations.filter(division='JUNAID')
-        # else: so/manager see all quotations - no additional filter
-
 
     # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
@@ -351,11 +351,12 @@ def view_quotations_ajax(request):
 
     # Apply user-based division restrictions
     if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
-        if request.user.username.lower() == 'alabamaadmin':
+        if request.user.username.lower() in ['so', 'manager']:
+            pass  # so/manager see all quotations
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
             quotations = quotations.filter(division='ALABAMA')
-        elif request.user.username.lower() not in ['so', 'manager']:
+        else:
             quotations = quotations.filter(division='JUNAID')
-        # else: so/manager see all quotations - no additional filter
 
     # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
     if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':

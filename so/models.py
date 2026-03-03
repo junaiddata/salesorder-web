@@ -12,9 +12,14 @@ class Role(models.Model):
         ('Admin', 'Admin'),
         ('Salesman', 'Salesman'),
     ]
+    COMPANY_CHOICES = [
+        ('Junaid', 'Junaid'),
+        ('Alabama', 'Alabama'),
+    ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    company = models.CharField(max_length=20, choices=COMPANY_CHOICES, default='Junaid')
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"

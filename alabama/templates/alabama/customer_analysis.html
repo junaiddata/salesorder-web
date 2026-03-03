@@ -1,0 +1,781 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alabama Customer Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --text: #1e293b; --text-secondary: #64748b;
+      --text-muted: #94a3b8; --border: #e2e8f0; --primary: #3b82f6;
+      --primary-dark: #2563eb; --primary-light: #eff6ff; --success: #10b981;
+      --danger: #ef4444; --radius: 12px; --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 25px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+
+      --col-name-w: 160px;
+      --col-salesman-w: 120px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+    }
+
+    .container { max-width: 1800px; margin: 0 auto; padding: 20px 20px 60px; }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 14px; margin-bottom: 20px;
+    }
+    .header-left h1 {
+      font-size: 1.5rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .header-left h1 .icon-circle {
+      width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      display: inline-flex; align-items: center; justify-content: center;
+      color: white; font-size: 0.85rem; flex-shrink: 0;
+    }
+    .header-left p { color: var(--text-secondary); font-size: 0.85rem; margin-top: 2px; margin-left: 46px; }
+    .header-right { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+      font-size: 0.8rem; font-weight: 500; cursor: pointer;
+      transition: all var(--transition); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); border-color: #cbd5e1; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #b02a37; transform: translateY(-1px); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #0d9668; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+
+    /* ── Month Tiles ── */
+    .month-bar { margin-bottom: 16px; padding: 14px 20px; }
+    .month-bar-inner { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .month-bar-label {
+      font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
+      margin-right: 4px; white-space: nowrap;
+    }
+    .month-tile {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 50px; padding: 6px 0; border-radius: var(--radius-sm);
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
+      border: 1.5px solid var(--border); background: var(--surface);
+      color: var(--text-secondary); cursor: pointer; transition: all var(--transition);
+      user-select: none;
+    }
+    .month-tile:hover { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+    .month-tile.active {
+      border-color: var(--primary); background: var(--primary); color: white;
+      box-shadow: 0 2px 6px rgba(59,130,246,0.3);
+    }
+
+    /* ── Filters Card ── */
+    .filters-card { margin-bottom: 16px; overflow: hidden; }
+
+    .item-filter-bar {
+      padding: 14px 20px; background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .item-filter-bar > label {
+      font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .item-filter-bar > label i { color: var(--primary); font-size: 0.7rem; }
+    .item-filter-bar .multi-select { flex: 1; min-width: 250px; max-width: 600px; }
+
+    .filters-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px; padding: 16px 20px;
+    }
+
+    .field { display: flex; flex-direction: column; }
+    .field label {
+      font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);
+      margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .field input[type="text"],
+    .field input[type="date"] {
+      width: 100%; padding: 8px 12px; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 0.825rem; font-family: inherit;
+      color: var(--text); background: var(--surface); transition: all var(--transition);
+    }
+    .field input:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    .field input::placeholder { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* ── Multi-Select Dropdown ── */
+    .multi-select { position: relative; width: 100%; }
+
+    .select-box {
+      padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); cursor: pointer; display: flex; align-items: center;
+      justify-content: space-between; font-size: 0.825rem; transition: all var(--transition);
+      color: var(--text); min-height: 36px;
+    }
+    .select-box:hover { border-color: #cbd5e1; }
+    .select-box.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .select-box .select-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .select-box .select-text.placeholder { color: var(--text-muted); }
+    .select-box .select-count {
+      background: var(--primary); color: white; font-size: 0.6rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 10px; margin-left: 6px; flex-shrink: 0;
+    }
+    .select-box .select-arrow {
+      margin-left: 8px; font-size: 0.6rem; color: var(--text-muted);
+      transition: transform 0.2s ease; flex-shrink: 0;
+    }
+    .select-box.active .select-arrow { transform: rotate(180deg); color: var(--primary); }
+
+    .options-container {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: var(--shadow-lg);
+      max-height: 260px; overflow: hidden; z-index: 1000;
+      display: none; animation: dropIn 0.15s ease-out;
+    }
+    .options-container.active { display: flex; flex-direction: column; }
+
+    @keyframes dropIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .search-box-container {
+      padding: 8px; border-bottom: 1px solid var(--border);
+      background: #fafbfc; flex-shrink: 0;
+    }
+    .search-box {
+      width: 100%; padding: 7px 10px 7px 30px; border: 1.5px solid var(--border);
+      border-radius: 6px; font-size: 0.8rem; font-family: inherit;
+      background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='%2394a3b8' viewBox='0 0 24 24'%3E%3Cpath d='M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E") 8px center no-repeat;
+      color: var(--text); transition: all var(--transition);
+    }
+    .search-box:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+    }
+    .search-box::placeholder { color: var(--text-muted); font-size: 0.78rem; }
+
+    .options-actions {
+      display: flex; justify-content: space-between; padding: 6px 10px;
+      border-bottom: 1px solid #f1f5f9; background: #fafbfc; flex-shrink: 0;
+    }
+    .options-actions button {
+      font-size: 0.68rem; font-weight: 600; background: none; border: none;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px;
+      transition: all 0.15s; font-family: inherit;
+    }
+    .options-actions .select-all-btn { color: var(--primary); }
+    .options-actions .select-all-btn:hover { background: var(--primary-light); }
+    .options-actions .clear-all-btn { color: var(--danger); }
+    .options-actions .clear-all-btn:hover { background: #fef2f2; }
+
+    .options-list {
+      overflow-y: auto; flex: 1; padding: 4px 0;
+      scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent;
+    }
+    .options-list::-webkit-scrollbar { width: 5px; }
+    .options-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+    .option-label {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; cursor: pointer; font-size: 0.8rem;
+      transition: background 0.1s; border-left: 3px solid transparent;
+      color: #334155;
+    }
+    .option-label:hover { background: #f8fafc; border-left-color: var(--primary); }
+    .option-label.checked { background: var(--primary-light); border-left-color: var(--primary); font-weight: 500; }
+    .option-label.hidden { display: none; }
+    .option-label input[type="checkbox"] {
+      margin: 0; width: 15px; height: 15px; accent-color: var(--primary);
+      cursor: pointer; flex-shrink: 0;
+    }
+    .option-label .option-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .no-results {
+      padding: 16px; text-align: center; color: var(--text-muted);
+      font-size: 0.8rem; display: none;
+    }
+
+    .filter-actions {
+      display: flex; gap: 8px; align-self: flex-end;
+    }
+    .filter-actions .btn { min-width: 70px; justify-content: center; }
+
+    /* ── Table Card ── */
+    .table-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+    }
+    .table-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .table-title { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    thead { background: var(--bg); position: sticky; top: 0; z-index: 10; }
+
+    th {
+      padding: 8px 10px; text-align: left; font-weight: 600;
+      font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase;
+      letter-spacing: 0.05em; border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+    th.text-right { text-align: right; }
+
+    tbody tr { border-bottom: 1px solid var(--border); transition: background var(--transition); }
+    tbody tr:hover { background: #f8fafc; }
+
+    td { padding: 7px 10px; font-size: 0.78rem; color: var(--text); }
+    td.text-right { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Sticky columns */
+    th.sticky-col, td.sticky-col {
+      position: sticky; z-index: 11; background: inherit;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+    }
+    th.sticky-col:first-child, td.sticky-col:first-child {
+      left: 0; min-width: var(--col-name-w); max-width: var(--col-name-w); width: var(--col-name-w);
+    }
+    th.sticky-col:nth-child(2), td.sticky-col:nth-child(2) {
+      left: var(--col-name-w); min-width: var(--col-salesman-w);
+      max-width: var(--col-salesman-w); width: var(--col-salesman-w);
+    }
+    td.sticky-col { background: var(--surface); z-index: 9; font-weight: 500; padding: 6px 8px; }
+    tbody tr:hover td.sticky-col { background: #f8fafc; }
+
+    .customer-name {
+      color: var(--text); font-size: 0.72rem; line-height: 1.3;
+      max-width: 100%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word;
+      font-weight: 600; white-space: normal;
+    }
+    .customer-code {
+      font-size: 0.6rem; color: var(--text-muted); margin-top: 1px; font-weight: 400;
+    }
+    .customer-salesman {
+      color: var(--text-secondary); font-size: 0.72rem;
+      max-width: 100%; font-weight: 500; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .year-group { background: rgba(59, 130, 246, 0.05); }
+
+    /* Year separator borders */
+    {% if is_admin %}
+    thead th:nth-child(5), tbody td:nth-child(5) { border-right: 3px solid var(--primary); }
+    thead th:nth-child(6), tbody td:nth-child(6) { border-left: 3px solid var(--primary); }
+    thead th:nth-child(8), tbody td:nth-child(8) { border-right: 3px solid var(--primary); }
+    tbody tr.totals-row td:nth-child(5) { border-right: 3px solid var(--primary); }
+    tbody tr.totals-row td:nth-child(6) { border-left: 3px solid var(--primary); }
+    tbody tr.totals-row td:nth-child(8) { border-right: 3px solid var(--primary); }
+    {% else %}
+    thead th:nth-child(4), tbody td:nth-child(4) { border-right: 3px solid var(--primary); }
+    thead th:nth-child(5), tbody td:nth-child(5) { border-left: 3px solid var(--primary); }
+    tbody tr.totals-row td:nth-child(4) { border-right: 3px solid var(--primary); }
+    tbody tr.totals-row td:nth-child(5) { border-left: 3px solid var(--primary); }
+    {% endif %}
+
+    /* Totals */
+    .totals-row {
+      background: var(--primary-light) !important;
+      border-top: 2px solid var(--primary); border-bottom: 2px solid var(--primary);
+    }
+    .totals-row td { background: var(--primary-light) !important; font-weight: 700; }
+    .totals-row:hover { background: var(--primary-light) !important; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 14px; }
+    .pagination a {
+      padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--primary); text-decoration: none; font-size: 0.8rem; transition: all var(--transition);
+    }
+    .pagination a:hover { background: var(--primary-light); }
+    .pagination span.disabled { padding: 6px 12px; color: var(--text-muted); opacity: 0.5; font-size: 0.8rem; }
+
+    /* Showing count */
+    .showing-count {
+      padding: 0 20px 16px; text-align: center;
+      color: var(--text-secondary); font-size: 0.8rem;
+    }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state i { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+
+    /* Loading */
+    .loading-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.95); display: flex; align-items: center;
+      justify-content: center; z-index: 9999; transition: opacity 0.3s, visibility 0.3s;
+    }
+    .loading-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .loading-spinner {
+      width: 44px; height: 44px; border: 4px solid var(--border);
+      border-top-color: var(--primary); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 14px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
+    .loading-content { display: flex; flex-direction: column; align-items: center; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .header-right { width: 100%; }
+      :root { --col-name-w: 130px; --col-salesman-w: 100px; }
+      .filters-grid { grid-template-columns: 1fr 1fr; }
+      .item-filter-bar { flex-direction: column; align-items: flex-start; }
+      .item-filter-bar .multi-select { min-width: 100%; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading Customer Analysis…</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- ── Header ── -->
+    <div class="header">
+      <div class="header-left">
+        <h1>
+          <span class="icon-circle"><i class="fas fa-users"></i></span>
+          Customer Analysis
+        </h1>
+        <p>Customer performance by year — current vs previous</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'alabama:item_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-chart-bar"></i> Item Analysis
+        </a>
+        <a href="{% url 'alabama:export_customer_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-danger">
+          <i class="fas fa-file-pdf"></i> PDF
+        </a>
+        <a href="{% url 'alabama:home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Month Tiles ── -->
+    <div class="card month-bar">
+      <div class="month-bar-inner">
+        <span class="month-bar-label"><i class="fas fa-calendar-alt" style="margin-right:4px; color:var(--primary);"></i> Month:</span>
+        {% for m in "1,2,3,4,5,6,7,8,9,10,11,12"|make_list %}{% endfor %}
+        <button type="button" class="month-tile {% if '1' in filters.month %}active{% endif %}" data-month="1">Jan</button>
+        <button type="button" class="month-tile {% if '2' in filters.month %}active{% endif %}" data-month="2">Feb</button>
+        <button type="button" class="month-tile {% if '3' in filters.month %}active{% endif %}" data-month="3">Mar</button>
+        <button type="button" class="month-tile {% if '4' in filters.month %}active{% endif %}" data-month="4">Apr</button>
+        <button type="button" class="month-tile {% if '5' in filters.month %}active{% endif %}" data-month="5">May</button>
+        <button type="button" class="month-tile {% if '6' in filters.month %}active{% endif %}" data-month="6">Jun</button>
+        <button type="button" class="month-tile {% if '7' in filters.month %}active{% endif %}" data-month="7">Jul</button>
+        <button type="button" class="month-tile {% if '8' in filters.month %}active{% endif %}" data-month="8">Aug</button>
+        <button type="button" class="month-tile {% if '9' in filters.month %}active{% endif %}" data-month="9">Sep</button>
+        <button type="button" class="month-tile {% if '10' in filters.month %}active{% endif %}" data-month="10">Oct</button>
+        <button type="button" class="month-tile {% if '11' in filters.month %}active{% endif %}" data-month="11">Nov</button>
+        <button type="button" class="month-tile {% if '12' in filters.month %}active{% endif %}" data-month="12">Dec</button>
+      </div>
+    </div>
+
+    <!-- ── Filters Card ── -->
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'alabama:customer_analysis' %}" id="filters-form">
+
+        <!-- Item filter bar -->
+        <div class="item-filter-bar">
+          <label><i class="fas fa-box"></i> Item Filter</label>
+          <div class="multi-select" id="item-wrapper">
+            <div class="select-box" id="item-trigger">
+              <span class="select-text placeholder" id="item-text">All Items</span>
+              <span class="select-count" id="item-count" style="display:none;">0</span>
+              <span class="select-arrow"><i class="fas fa-chevron-down"></i></span>
+            </div>
+            <div class="options-container" id="item-options" style="max-height: 320px; min-width: 320px;">
+              <div class="search-box-container">
+                <input type="text" id="item-search" class="search-box" placeholder="Search by Code, Name, or UPC…" autocomplete="off">
+              </div>
+              <div class="options-actions">
+                <button type="button" class="select-all-btn" data-target="item">Select All</button>
+                <button type="button" class="clear-all-btn" data-target="item">Clear All</button>
+              </div>
+              <div class="options-list" id="item-options-list">
+                {% for item in items %}
+                <label class="option-label" data-value="{{ item.code }}">
+                  <input type="checkbox" name="item" value="{{ item.code }}" {% if item.code in filters.item %}checked{% endif %}>
+                  <span class="option-text"><strong>{{ item.code }}</strong>{% if item.description %} — {{ item.description|truncatewords:6 }}{% endif %}</span>
+                </label>
+                {% endfor %}
+              </div>
+              <div class="no-results" id="item-no-results">No items found</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Other filters -->
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" id="search-input" value="{{ filters.q }}" placeholder="Customer Code or Name">
+          </div>
+
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span class="select-text placeholder" id="salesman-text">All Salesmen</span>
+                <span class="select-count" id="salesman-count" style="display:none;">0</span>
+                <span class="select-arrow"><i class="fas fa-chevron-down"></i></span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen…" autocomplete="off">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="select-all-btn" data-target="salesman">Select All</button>
+                  <button type="button" class="clear-all-btn" data-target="salesman">Clear All</button>
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                  <label class="option-label">
+                    <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                    <span class="option-text">{{ salesman }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+                <div class="no-results" id="salesman-no-results">No salesmen found</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Firm</label>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger">
+                <span class="select-text placeholder" id="firm-text">All Firms</span>
+                <span class="select-count" id="firm-count" style="display:none;">0</span>
+                <span class="select-arrow"><i class="fas fa-chevron-down"></i></span>
+              </div>
+              <div class="options-container" id="firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="firm-search" class="search-box" placeholder="Search firms…" autocomplete="off">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="select-all-btn" data-target="firm">Select All</button>
+                  <button type="button" class="clear-all-btn" data-target="firm">Clear All</button>
+                </div>
+                <div class="options-list" id="firm-options-list">
+                  {% for firm in firms %}
+                  <label class="option-label">
+                    <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm %}checked{% endif %}>
+                    <span class="option-text">{{ firm }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+                <div class="no-results" id="firm-no-results">No firms found</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" id="start-date" value="{{ filters.start }}">
+          </div>
+
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" id="end-date" value="{{ filters.end }}">
+          </div>
+
+          <div class="field filter-actions" style="flex-direction: row; gap: 8px; align-self: end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters" style="flex:1;">
+              <i class="fas fa-times"></i> Clear
+            </button>
+            <button class="btn btn-primary" type="button" id="apply-filters" style="flex:1;">
+              <i class="fas fa-check"></i> Apply
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- ── Table Card ── -->
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <h3 class="table-title">Customer Performance Matrix</h3>
+          <div id="filter-display-container" style="margin-top: 4px;">
+            {% if filters.salesman or filters.firm or filters.item %}
+            {% include 'alabama/_customer_analysis_filter_display.html' with filters=filters items=items %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th class="sticky-col">Customer</th>
+              <th class="sticky-col">Salesman</th>
+              {% for year in years %}
+              <th colspan="{% if is_admin %}3{% else %}1{% endif %}" class="year-group" style="text-align: center;">{{ year }}</th>
+              {% endfor %}
+            </tr>
+            <tr>
+              <th class="sticky-col" style="left: 0;"></th>
+              <th class="sticky-col" style="left: var(--col-name-w);"></th>
+              {% for year in years %}
+              <th class="text-right">Sales</th>
+              {% if is_admin %}<th class="text-right">GP</th>{% endif %}
+              {% if is_admin %}<th class="text-right">GP%</th>{% endif %}
+              {% endfor %}
+            </tr>
+          </thead>
+          {% include 'alabama/_customer_analysis_table.html' with customers=page_obj years=years is_admin=is_admin totals_list=totals_list %}
+        </table>
+      </div>
+      {% if page_obj.paginator.num_pages > 1 %}
+      {% include 'alabama/_item_analysis_pagination.html' with page_obj=page_obj %}
+      {% endif %}
+      <div class="showing-count" style="margin-top: 12px;">
+        Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count|intcomma }}</strong> customers
+      </div>
+    </div>
+  </div>
+
+  <script>
+  window.addEventListener('load', function() {
+    var lo = document.getElementById('loading-overlay');
+    if (lo) setTimeout(function() { lo.classList.add('hidden'); }, 250);
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var filterDisplay = document.getElementById('filter-display-container');
+    var url = '{% url "alabama:customer_analysis" %}';
+    var dropdownIds = ['salesman', 'firm', 'item'];
+
+    // ── Generic Multi-Select Controller ──
+    function MultiSelect(id, allLabel) {
+      var self = this;
+      self.id = id;
+      self.allLabel = allLabel;
+      self.wrapper = document.getElementById(id + '-wrapper');
+      self.trigger = document.getElementById(id + '-trigger');
+      self.optionsEl = document.getElementById(id + '-options');
+      self.textEl = document.getElementById(id + '-text');
+      self.countEl = document.getElementById(id + '-count');
+      self.searchEl = document.getElementById(id + '-search');
+      self.listEl = document.getElementById(id + '-options-list');
+      self.noResults = document.getElementById(id + '-no-results');
+
+      self.trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Close others
+        dropdownIds.forEach(function(did) {
+          if (did !== id) {
+            document.getElementById(did + '-options').classList.remove('active');
+            document.getElementById(did + '-trigger').classList.remove('active');
+          }
+        });
+        var isOpen = self.optionsEl.classList.toggle('active');
+        self.trigger.classList.toggle('active', isOpen);
+        if (isOpen) {
+          self.searchEl.value = '';
+          self.filterOptions();
+          setTimeout(function() { self.searchEl.focus(); }, 50);
+        }
+      });
+
+      self.searchEl.addEventListener('input', function() { self.filterOptions(); });
+      self.searchEl.addEventListener('click', function(e) { e.stopPropagation(); });
+
+      self.listEl.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+          e.target.closest('.option-label').classList.toggle('checked', e.target.checked);
+          self.updateLabel();
+        }
+      });
+
+      self.updateLabel = function() {
+        var checked = self.listEl.querySelectorAll('input:checked');
+        var count = checked.length;
+        if (count === 0) {
+          self.textEl.textContent = self.allLabel;
+          self.textEl.classList.add('placeholder');
+          self.countEl.style.display = 'none';
+        } else if (count === 1) {
+          self.textEl.textContent = checked[0].value;
+          self.textEl.classList.remove('placeholder');
+          self.countEl.style.display = 'none';
+        } else {
+          self.textEl.textContent = count + ' selected';
+          self.textEl.classList.remove('placeholder');
+          self.countEl.textContent = count;
+          self.countEl.style.display = 'inline-block';
+        }
+      };
+
+      self.filterOptions = function() {
+        var q = (self.searchEl.value || '').toLowerCase().trim();
+        var visible = 0;
+        self.listEl.querySelectorAll('.option-label').forEach(function(l) {
+          var text = l.querySelector('.option-text').textContent.toLowerCase();
+          var show = text.indexOf(q) !== -1;
+          l.classList.toggle('hidden', !show);
+          if (show) visible++;
+        });
+        if (self.noResults) self.noResults.style.display = visible === 0 ? 'block' : 'none';
+      };
+
+      self.close = function() {
+        self.optionsEl.classList.remove('active');
+        self.trigger.classList.remove('active');
+      };
+
+      // Init checked state
+      self.listEl.querySelectorAll('input:checked').forEach(function(cb) {
+        cb.closest('.option-label').classList.add('checked');
+      });
+      self.updateLabel();
+    }
+
+    var selects = {};
+    selects.salesman = new MultiSelect('salesman', 'All Salesmen');
+    selects.firm = new MultiSelect('firm', 'All Firms');
+    selects.item = new MultiSelect('item', 'All Items');
+
+    // Close all on outside click
+    document.addEventListener('click', function(e) {
+      dropdownIds.forEach(function(id) {
+        if (!document.getElementById(id + '-wrapper').contains(e.target)) {
+          selects[id].close();
+        }
+      });
+    });
+
+    // Select All / Clear All buttons
+    document.querySelectorAll('.select-all-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var target = btn.dataset.target;
+        var list = document.getElementById(target + '-options-list');
+        list.querySelectorAll('.option-label:not(.hidden) input[type="checkbox"]').forEach(function(cb) {
+          cb.checked = true;
+          cb.closest('.option-label').classList.add('checked');
+        });
+        selects[target].updateLabel();
+      });
+    });
+    document.querySelectorAll('.clear-all-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var target = btn.dataset.target;
+        var list = document.getElementById(target + '-options-list');
+        list.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+          cb.checked = false;
+          cb.closest('.option-label').classList.remove('checked');
+        });
+        selects[target].updateLabel();
+      });
+    });
+
+    // ── Month tiles ──
+    document.querySelectorAll('.month-tile').forEach(function(t) {
+      t.addEventListener('click', function() { this.classList.toggle('active'); });
+    });
+
+    // ── Build params ──
+    function buildParams() {
+      var params = new URLSearchParams();
+      var fd = new FormData(document.getElementById('filters-form'));
+      for (var pair of fd.entries()) {
+        var k = pair[0], v = pair[1];
+        if (['salesman','firm','item'].indexOf(k) >= 0) params.append(k, v);
+        else if (k !== 'month' && v) params.set(k, v);
+      }
+      document.querySelectorAll('.month-tile.active').forEach(function(t) {
+        params.append('month', t.dataset.month);
+      });
+      return params;
+    }
+
+    // ── AJAX helper ──
+    function fetchData(params) {
+      fetch(url + '?' + params.toString() + '&ajax=1', {
+        method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          var tw = document.querySelector('.table-wrapper');
+          if (tw && data.table_html) {
+            var tb = tw.querySelector('tbody');
+            if (tb) tb.outerHTML = data.table_html;
+          }
+          var pc = document.querySelector('.pagination');
+          if (pc) pc.outerHTML = data.pagination_html || '';
+          else if (data.pagination_html) tw.insertAdjacentHTML('afterend', data.pagination_html);
+          if (filterDisplay && data.filter_display_html !== undefined)
+            filterDisplay.innerHTML = data.filter_display_html || '';
+          window.history.pushState({}, '', url + '?' + params.toString());
+        }
+      })
+      .catch(function() { window.location.href = url + '?' + params.toString(); });
+    }
+
+    // ── Apply / Clear ──
+    document.getElementById('apply-filters').addEventListener('click', function() {
+      fetchData(buildParams());
+    });
+    document.getElementById('clear-filters').addEventListener('click', function() {
+      window.location.href = url;
+    });
+
+    // Enter in search
+    document.getElementById('search-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('apply-filters').click(); }
+    });
+
+    // ── Pagination ──
+    document.addEventListener('click', function(e) {
+      var a = e.target.closest('a[data-page]');
+      if (!a || !document.querySelector('.pagination')) return;
+      e.preventDefault();
+      var params = new URLSearchParams(window.location.search);
+      params.set('page', a.getAttribute('data-page'));
+      fetchData(params);
+    });
+  });
+  </script>
+</body>
+</html>

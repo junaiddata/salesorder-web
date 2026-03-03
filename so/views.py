@@ -329,8 +329,8 @@ def create_sales_order(request):
 
         # Define Mapping: 'username' -> List of ['Name1', 'Name2']
         user_salesman_map = {
-            'alabamakadhar': ['KADER'],
-            'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
+            'alabamakadhar': ['KADER','A.KADER'],
+            'alabamamusharaf': ['MUSHARAF','A.MUSHARAF'],   # Multiple allowed
             'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
             
         }
@@ -737,10 +737,13 @@ def view_sales_orders(request):
     # Initial queryset - all sales orders
     sales_orders = SalesOrder.objects.all()
 
-    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
-        sales_orders = SalesOrder.objects.filter(division='ALABAMA')
-    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so','manager']:
-        sales_orders = SalesOrder.objects.filter(division='JUNAID')
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() in ['so', 'manager']:
+            sales_orders = SalesOrder.objects.all()
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+            sales_orders = SalesOrder.objects.filter(division='ALABAMA')
+        else:
+            sales_orders = SalesOrder.objects.filter(division='JUNAID')
     else:
         sales_orders = SalesOrder.objects.all()
 
@@ -851,10 +854,13 @@ def view_sales_orders_ajax(request):
 
     sales_orders = SalesOrder.objects.all()
 
-    if request.user.role.role == 'Admin' and request.user.username.lower() == 'alabamaadmin':
-        sales_orders = SalesOrder.objects.filter(division='ALABAMA')
-    elif request.user.role.role == 'Admin' and request.user.username.lower() not in ['so', 'manager']:
-        sales_orders = SalesOrder.objects.filter(division='JUNAID')
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() in ['so', 'manager']:
+            sales_orders = SalesOrder.objects.all()
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+            sales_orders = SalesOrder.objects.filter(division='ALABAMA')
+        else:
+            sales_orders = SalesOrder.objects.filter(division='JUNAID')
     else:
         sales_orders = SalesOrder.objects.all()
 
@@ -1392,11 +1398,19 @@ def export_sales_order_to_excel(request, order_id):
 
 def login_view(request):
     if request.user.is_authenticated:
-        # Redirect based on user role
-        if request.user.role.role == 'Salesman':
-            return redirect('sales_home')
-        else:
-            return redirect('home')
+        # Redirect based on user role and company
+        role = getattr(request.user, 'role', None)
+        if role:
+            company = getattr(role, 'company', 'Junaid')
+            if role.role == 'Salesman':
+                if company == 'Alabama':
+                    return redirect('alabama:alabama_sales_home')
+                return redirect('sales_home')
+            if role.role == 'Admin':
+                if company == 'Alabama':
+                    return redirect('alabama:home')
+                return redirect('home')
+        return redirect('home')
     
     # Your normal login logic here
     if request.method == 'POST':
@@ -1405,11 +1419,19 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            # Redirect after login based on role
-            if request.user.role.role == 'Salesman':
-                return redirect('sales_home')
-            else:
-                return redirect('home')
+            # Redirect after login based on role and company
+            role = getattr(request.user, 'role', None)
+            if role:
+                company = getattr(role, 'company', 'Junaid')
+                if role.role == 'Salesman':
+                    if company == 'Alabama':
+                        return redirect('alabama:alabama_sales_home')
+                    return redirect('sales_home')
+                if role.role == 'Admin':
+                    if company == 'Alabama':
+                        return redirect('alabama:home')
+                    return redirect('home')
+            return redirect('home')
         else:
             # Invalid login, show error
             return render(request, 'so/login.html', {'error': 'Invalid credentials'})
@@ -3118,8 +3140,9 @@ SALES_USER_MAP = {
     "retaildeira2": ["R.DEIRA 2"],
     "retailnah": ["R.NAH"],
     "alabamaadmin": ["KADER","MUSHARAF","AIJAZ","CASH"],
-    "alabamakadhar": ["KADER"],
-    "alabamamusharaf": ["MUSHARAF"],
+    "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
+    "alabamakadar": ["KADER", "A.KADER", "A. KADER"],
+    "alabamamusharaf": ["MUSHARAF", "A.MUSHARAF", "A. MUSHARAF"],
     
 }
 
@@ -3641,41 +3664,43 @@ def quotation_detail(request, q_number):
     # Get items - optimized query (convert to list to avoid multiple DB hits)
     items = list(quotation.items.all().order_by('id'))
 
-    # --- OPTIMIZED COST CALCULATION - Use local Items model instead of external API ---
+    # --- Cost Price per item + Total Est. Cost (from Items model) - Admin only ---
     total_estimated_cost = 0.0
+    is_admin = hasattr(request.user, 'role') and request.user.role.role == 'Admin'
     
-    # Only calculate cost if user is Admin (for performance)
-    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
-        # Get all unique item codes from quotation items
+    if is_admin:
         item_codes = [str(item.item_no).strip() for item in items if item.item_no]
-        
         if item_codes:
-            # Bulk fetch costs from Items model (single query instead of N queries)
             cost_map = dict(
                 Items.objects.filter(item_code__in=item_codes)
                 .values_list('item_code', 'item_cost')
             )
-            
-            # Calculate total cost in single pass
             for item in items:
                 item_code = str(item.item_no).strip() if item.item_no else ''
                 unit_cost = cost_map.get(item_code, 0.0)
                 qty = float(item.quantity)
-                total_estimated_cost += (unit_cost * qty)
-    
-    # Calculate Profit/Margin
+                total_estimated_cost += unit_cost * qty
+                item.unit_cost = unit_cost
+        else:
+            for item in items:
+                item.unit_cost = 0.0
+    else:
+        for item in items:
+            item.unit_cost = None
+
     doc_total = float(quotation.document_total or 0)
     total_profit = doc_total - total_estimated_cost
-
-    # Check if user came from old PI list
+    margin_percent = (total_profit / doc_total * 100) if doc_total and doc_total != 0 else 0.0
     from_old_pi = request.GET.get('from') == 'old_pi'
 
     context = {
         'quotation': quotation,
         'items': items,
-        'total_cost': total_estimated_cost, # Passed to template
-        'total_profit': total_profit,       # Passed to template
-        'from_old_pi': from_old_pi,         # Passed to template
+        'total_cost': total_estimated_cost,
+        'total_profit': total_profit,
+        'margin_percent': margin_percent,
+        'from_old_pi': from_old_pi,
+        'is_admin': is_admin,
     }
 
     return render(request, 'quotes/quotation_detail.html', context)
@@ -4559,11 +4584,18 @@ def device_pending(request):
             
             # 3. If Admin has approved it, redirect to Home immediately
             if device.is_approved:
-                # Redirect based on your role logic
-                if hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-                    return redirect('sales_home')
-                else:
-                    return redirect('home')
+                role = getattr(request.user, 'role', None)
+                if role:
+                    company = getattr(role, 'company', 'Junaid')
+                    if role.role == 'Salesman':
+                        if company == 'Alabama':
+                            return redirect('alabama:alabama_sales_home')
+                        return redirect('sales_home')
+                    if role.role == 'Admin':
+                        if company == 'Alabama':
+                            return redirect('alabama:home')
+                        return redirect('home')
+                return redirect('home')
                     
         except TrustedDevice.DoesNotExist:
             # If token exists in cookie but not in DB, force them to register again

@@ -28,7 +28,7 @@ from .sap_salesorder_views import salesman_scope_q_salesorder, get_business_cate
 from .sap_purchaseorder_views import _open_row_status_q_po
 
 # Firms that use 15-day metrics instead of 3-month (name must start with one of these)
-FIRMS_15DAY_PREFIXES = ('COSMO', 'RAKTHERM', 'HEPWORTH', 'GF', 'ULTRAFLOW', 'MULTIFLOW', 'GROHE')
+FIRMS_15DAY_PREFIXES = ('COSMO', 'RAKTHERM', 'HEPWORTH', 'GF', 'ULTRAFLOW', 'MULTIFLOW', 'GROHE', 'ESPA', 'ZENITH','AQUAHOT')
 
 # API for import/purchase order totals to add to LPO given
 ITEM_TOTALS_API_URL = 'https://purchase.junaidworld.com/api/item-totals/'

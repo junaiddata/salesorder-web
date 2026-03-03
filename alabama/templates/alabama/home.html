@@ -1,0 +1,110 @@
+{% extends "alabama/base.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Dashboard{% endblock %}
+
+{% block page_title %}Welcome, {{ user.first_name|default:user.username }}!{% endblock %}
+{% block page_subtitle %}Alabama Sales Dashboard{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .calendar-widget { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 1rem; box-shadow: var(--shadow-sm); }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
+    @media (max-width: 1200px) { .calendar-grid { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 768px) { .calendar-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 480px) { .calendar-grid { grid-template-columns: repeat(3, 1fr); } }
+    .calendar-day {
+      background: var(--white); border: 1px solid var(--gray-200); border-radius: 6px;
+      padding: 0.5rem 0.3rem; text-align: center; min-height: 60px;
+      display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s;
+    }
+    .calendar-day:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .calendar-day-today { border-color: var(--primary-color) !important; background: rgba(220,38,38,0.08) !important; box-shadow: 0 2px 4px rgba(220,38,38,0.2) !important; }
+    .calendar-day-no-sales { background: var(--gray-100) !important; border-color: var(--gray-200) !important; opacity: 0.6; }
+    .calendar-day-no-sales .calendar-day-label, .calendar-day-no-sales .calendar-day-sales, .calendar-day-no-sales .calendar-day-gp { color: var(--gray-400) !important; }
+  </style>
+{% endblock %}
+
+{% block content %}
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div>
+                    <h3 class="stat-value">{{ today_sales|floatformat:2|intcomma }}</h3>
+                    <p class="stat-label">Today's Sales</p>
+                </div>
+                <div class="stat-icon primary"><i class="fas fa-calendar-day"></i></div>
+            </div>
+            {% if is_admin %}<div class="stat-label">GP: {{ today_gp|floatformat:2|intcomma }}</div>{% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div>
+                    <h3 class="stat-value">{{ week_sales|floatformat:2|intcomma }}</h3>
+                    <p class="stat-label">This Week Total</p>
+                </div>
+                <div class="stat-icon warning"><i class="fas fa-calendar-week"></i></div>
+            </div>
+            {% if is_admin %}<div class="stat-label">GP: {{ week_gp|floatformat:2|intcomma }}</div>{% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div>
+                    <h3 class="stat-value">{{ month_sales|floatformat:2|intcomma }}</h3>
+                    <p class="stat-label">This Month Sales</p>
+                </div>
+                <div class="stat-icon success"><i class="fas fa-calendar-alt"></i></div>
+            </div>
+            {% if is_admin %}<div class="stat-label">GP: {{ month_gp|floatformat:2|intcomma }}</div>{% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div>
+                    <h3 class="stat-value">{{ year_sales|floatformat:2|intcomma }}</h3>
+                    <p class="stat-label">This Year Sales</p>
+                </div>
+                <div class="stat-icon info"><i class="fas fa-calendar"></i></div>
+            </div>
+            {% if is_admin %}<div class="stat-label">GP: {{ year_gp|floatformat:2|intcomma }}</div>{% endif %}
+        </div>
+    </div>
+
+    <div style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 class="section-title">{{ today|date:"F" }} Calendar</h2>
+        <div class="calendar-widget">
+            <div class="calendar-grid">
+                {% for day in month_days %}
+                <div class="calendar-day {% if day.day == today.day %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
+                    <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{ day.formatted_date }}</div>
+                    <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{ day.sales|floatformat:0|intcomma }}</div>
+                    {% if is_admin %}<div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">Quick Actions</h2>
+    <div class="actions-grid">
+        <a href="{% url 'create_sales_order' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-shopping-cart"></i></div>
+            <h3 class="action-title">Create Customer Order</h3>
+        </a>
+        <a href="{% url 'create_quotation' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-file-contract"></i></div>
+            <h3 class="action-title">Create Quotation</h3>
+        </a>
+        <a href="{% url 'alabama:sales_summary_list' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-file-invoice"></i></div>
+            <h3 class="action-title">Sales Summary</h3>
+        </a>
+        <a href="{% url 'alabama:sales_summary_upload' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-upload"></i></div>
+            <h3 class="action-title">Upload Sales Summary</h3>
+        </a>
+        <a href="{% url 'alabama:delivery_order_list' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-truck"></i></div>
+            <h3 class="action-title">Delivery Orders</h3>
+        </a>
+    </div>
+{% endblock %}

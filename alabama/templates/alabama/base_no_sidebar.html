@@ -1,0 +1,118 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Alabama{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: hsl(0, 93%, 45%);
+            --primary-dark: #c91f16;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-500: #64748b;
+            --gray-700: #410909;
+            --gray-900: #0f172a;
+            --white: #ffffff;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gray-100);
+            margin: 0;
+            min-height: 100vh;
+        }
+        .top-bar {
+            background: var(--white);
+            padding: 0.875rem 1.25rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .back-btn:hover { color: var(--primary-dark); }
+        .page-title {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+        .page-subtitle {
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--gray-500);
+        }
+        .logout-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(244,63,94,0.1);
+            color: #e11d48;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .logout-btn:hover { background: rgba(244,63,94,0.2); color: #be123c; }
+        .main-content { padding: 1.25rem 1.5rem; max-width: 1400px; margin: 0 auto; }
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--gray-200);
+        }
+        @media (max-width: 768px) {
+            .main-content { padding: 1rem; }
+            .top-bar { padding: 0.75rem 1rem; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <a href="{% if is_alabama_salesman %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'alabama:home' %}{% endif %}" class="back-btn">
+                <i class="fas fa-arrow-left"></i>
+                Back to Alabama
+            </a>
+            <div>
+                <h1 class="page-title">{% block page_title %}Alabama{% endblock %}</h1>
+                <p class="page-subtitle">{% block page_subtitle %}{% endblock %}</p>
+            </div>
+        </div>
+        <a href="{% url 'logout' %}" class="logout-btn">
+            <i class="fas fa-sign-out-alt"></i>
+            Logout
+        </a>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
