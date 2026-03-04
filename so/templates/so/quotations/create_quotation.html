@@ -5,585 +5,318 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="0b0431">
+    <meta name="theme-color" content="#0b0431">
     <title>Create Quotation</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Select2 for searchable dropdowns -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    
+
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        html {
-            height: 100%;
-            -webkit-text-size-adjust: 100%;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        html { height: 100%; -webkit-text-size-adjust: 100%; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
-            min-height: 100vh;
-            height: 100%;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
+            background-color: #f5f7fa; color: #333; line-height: 1.6;
+            min-height: 100vh; height: 100%; overflow-x: hidden; -webkit-font-smoothing: antialiased;
         }
-        
-        .app-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        /* Mobile App Header */
+        .app-container { min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* Header */
         .app-header {
-            background: #0b0431;
-            color: white;
-            padding: 16px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            background: #0b0431; color: white; padding: 16px;
+            position: sticky; top: 0; z-index: 100;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
-        .app-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            text-align: center;
-            margin: 0;
-            color: white;
-        }
-        
-        /* Main Container */
+        .app-header h1 { font-size: 20px; font-weight: 600; text-align: center; margin: 0; color: white; }
+
+        /* Container */
         .container {
-            flex: 1;
-            max-width: 800px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 16px;
-            padding-bottom: 80px; /* Space for fixed submit button */
+            flex: 1; max-width: 800px; width: 100%;
+            margin: 0 auto; padding: 16px; padding-bottom: 80px;
         }
-        
+
+        /* ── Draft Banner ── */
+        .draft-banner {
+            display: none; background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%);
+            border: 1.5px solid #ffc107; border-radius: 12px;
+            padding: 16px 20px; margin: 0 16px 16px; animation: slideIn 0.3s ease-out;
+            box-shadow: 0 2px 8px rgba(255,193,7,0.2);
+        }
+        .draft-banner.visible { display: block; }
+        .draft-banner-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .draft-banner-icon {
+            width: 36px; height: 36px; background: #ffc107; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .draft-banner-icon svg { color: #7c5e00; }
+        .draft-banner-title { font-weight: 700; color: #7c5e00; font-size: 15px; }
+        .draft-banner-time { font-size: 12px; color: #a58300; }
+        .draft-banner-details {
+            font-size: 13px; color: #8a6d00; margin-bottom: 12px;
+            padding: 8px 12px; background: rgba(255,255,255,0.6); border-radius: 8px;
+        }
+        .draft-banner-details strong { color: #7c5e00; }
+        .draft-banner-actions { display: flex; gap: 10px; }
+        .draft-btn {
+            flex: 1; padding: 10px 16px; border: none; border-radius: 8px;
+            font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.15s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .draft-btn-restore { background: #0b0431; color: white; }
+        .draft-btn-restore:hover { background: #1a0f5e; }
+        .draft-btn-discard { background: white; color: #7c5e00; border: 1.5px solid #ddd; }
+        .draft-btn-discard:hover { background: #f5f5f5; border-color: #bbb; }
+
+        /* Draft Saved Toast */
+        .draft-saved-toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: #333; color: white; padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; font-weight: 500; opacity: 0; transition: all 0.3s ease;
+            z-index: 200; pointer-events: none; white-space: nowrap;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .draft-saved-toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .draft-saved-toast svg { flex-shrink: 0; }
+
+        /* Draft Indicator in Header */
+        .draft-indicator {
+            position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+            font-size: 11px; color: rgba(255,255,255,0.8); display: none;
+            align-items: center; gap: 4px;
+        }
+        .draft-indicator.visible { display: flex; }
+        .draft-dot {
+            width: 6px; height: 6px; background: #ffeb3b; border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
         /* Form Cards */
         .form-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: white; border-radius: 12px; padding: 20px;
+            margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        
         .section-header {
-            font-size: 17px;
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 16px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e9ecef;
+            font-size: 17px; font-weight: 600; color: #2c3e50;
+            margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;
         }
-        
-        .form-group {
-            margin-bottom: 16px;
-        }
-        
-        label {
-            display: block;
-            font-weight: 500;
-            color: #495057;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        
-        .required-mark {
-            color: #e74c3c;
-            margin-left: 2px;
-        }
-        
-        /* Select2 Custom Styles for Mobile */
-        .select2-container {
-            width: 100% !important;
-        }
-        
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-weight: 500; color: #495057; margin-bottom: 6px; font-size: 14px; }
+        .required-mark { color: #e74c3c; margin-left: 2px; }
+
+        /* Select2 */
+        .select2-container { width: 100% !important; }
         .select2-container .select2-selection--single {
-            height: 48px;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
+            height: 48px; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; display: flex; align-items: center;
         }
-        
         .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: #333;
-            line-height: 24px;
-            padding-left: 0;
-            padding-right: 0;
+            color: #333; line-height: 24px; padding-left: 0; padding-right: 0;
         }
-        
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 46px;
-            right: 12px;
-        }
-        
+        .select2-container--default .select2-selection--single .select2-selection__arrow { height: 46px; right: 12px; }
         .select2-container--focus .select2-selection--single {
-            border-color: #0b0431;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+            border-color: #0b0431; box-shadow: 0 0 0 3px rgba(11,4,49,0.1);
         }
-
-        /* Select2 Dropdown */
-        .select2-dropdown {
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        .select2-search--dropdown {
-            padding: 8px;
-        }
-        
+        .select2-dropdown { border: 2px solid #e1e8ed; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .select2-search--dropdown { padding: 8px; }
         .select2-search--dropdown .select2-search__field {
-            padding: 10px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            width: 100%;
+            padding: 10px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; width: 100%;
         }
-        
-        .select2-results__options {
-            max-height: 330px !important;
-            overflow-y: auto !important;
-        }
-        
-        .select2-results__option {
-            padding: 6px 10px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        .select2-results__option--highlighted {
-            background-color: #29382a;
-        }
-        
-        /* Multi-select styles */
+        .select2-results__options { max-height: 330px !important; overflow-y: auto !important; }
+        .select2-results__option { padding: 6px 10px; font-size: 14px; line-height: 1.4; }
+        .select2-results__option--highlighted { background-color: #29382a; }
+
         .select2-container--default .select2-selection--multiple {
-            min-height: 48px;
-            padding: 6px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
+            min-height: 48px; padding: 6px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px;
         }
-        
         .select2-container--default.select2-container--focus .select2-selection--multiple {
-            border-color: #0b0425;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+            border-color: #0b0425; box-shadow: 0 0 0 3px rgba(11,4,49,0.1);
         }
-        
         .select2-container--default .select2-selection--multiple .select2-selection__choice {
-            background-color: #0b0431;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 2px 8px;
-            margin-top: 6px;
+            background-color: #0b0431; color: white; border: none; border-radius: 4px; padding: 2px 8px; margin-top: 6px;
         }
-        
         .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
-            color: white;
-            margin-right: 4px;
+            color: white; margin-right: 4px;
         }
 
-        /* Regular inputs */
+        /* Inputs */
         input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            background-color: #fff;
-            height: 48px;
+            width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; transition: all 0.3s ease;
+            background-color: #fff; height: 48px;
         }
-        
-        input:focus {
-            outline: none;
-            border-color: #0b0431;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
-        }
-        
-        input:disabled {
-            background-color: #f8f9fa;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        
-        .help-text {
-            font-size: 13px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        
-        /* Items Section */
+        input:focus { outline: none; border-color: #0b0431; box-shadow: 0 0 0 3px rgba(11,4,49,0.1); }
+        input:disabled { background-color: #f8f9fa; cursor: not-allowed; opacity: 0.7; }
+        .help-text { font-size: 13px; color: #6c757d; margin-top: 4px; }
+
+        /* Item Cards */
         .item-card {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            position: relative;
+            background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;
+            padding: 16px; margin-bottom: 12px; position: relative;
         }
-        
-        .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .item-number {
-            font-weight: 600;
-            color: #495057;
-            font-size: 15px;
-        }
-        
-        .item-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
+        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .item-number { font-weight: 600; color: #495057; font-size: 15px; }
+        .item-grid { display: flex; flex-direction: column; gap: 12px; }
+
         .item-unit {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            background-color: #fff;
-            height: 48px;
+            width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; background-color: #fff; height: 48px;
         }
+        .item-unit:focus { outline: none; border-color: #0b0431; box-shadow: 0 0 0 3px rgba(11,4,49,0.1); }
 
-        .item-unit:focus {
-            outline: none;
-            border-color: #0b0431;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
-        }
+        .qty-price-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
-        /* Update the grid for the new unit field */
-        .qty-price-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-        }
+        .wrap-select option { white-space: normal; }
+        .wrap-select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .wrap-select option {
-            white-space: normal;
-        }
-
-        .wrap-select {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
         /* Buttons */
         .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-            line-height: 1;
-            -webkit-appearance: none;
-            touch-action: manipulation;
+            padding: 12px 20px; border: none; border-radius: 8px; font-size: 15px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            text-decoration: none; line-height: 1; -webkit-appearance: none; touch-action: manipulation;
         }
-        
-        .btn:active {
-            transform: scale(0.98);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .btn-primary {
-            background-color: #0b0431;
-            color: white;
-        }
-        
-        .btn-primary:active:not(:disabled) {
-            background-color: #45a049;
-        }
-        
-        .btn-secondary {
-            background-color: #fff;
-            color: #0b0431;
-            border: 2px solid #0b0431;
-        }
-        
-        .btn-secondary:active:not(:disabled) {
-            background-color: #f0f9f0;
-        }
-        
-        .btn-danger {
-            background-color: #e74c3c;
-            color: white;
-            padding: 8px 12px;
-            font-size: 13px;
-        }
-        
-        .btn-danger:active:not(:disabled) {
-            background-color: #c0392b;
-        }
-        
-        .btn-block {
-            width: 100%;
-        }
-        
-        .btn-add-item {
-            margin-top: 12px;
-            height: 48px;
-        }
-        
-        /* Fixed Submit Button for Mobile */
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-primary { background-color: #0b0431; color: white; }
+        .btn-primary:active:not(:disabled) { background-color: #1a0f5e; }
+        .btn-secondary { background-color: #fff; color: #0b0431; border: 2px solid #0b0431; }
+        .btn-secondary:active:not(:disabled) { background-color: #f0f0f9; }
+        .btn-danger { background-color: #e74c3c; color: white; padding: 8px 12px; font-size: 13px; }
+        .btn-danger:active:not(:disabled) { background-color: #c0392b; }
+        .btn-block { width: 100%; }
+        .btn-add-item { margin-top: 12px; height: 48px; }
+
+        /* Submit */
         .submit-section {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 16px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 50;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: white; padding: 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 50;
         }
-        
-        .btn-submit {
-            width: 100%;
-            height: 48px;
-            font-size: 16px;
-        }
-        
-        /* Loading State */
+        .btn-submit { width: 100%; height: 48px; font-size: 16px; }
+
+        /* Loading */
         .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 0.8s ease-in-out infinite;
+            display: inline-block; width: 16px; height: 16px;
+            border: 3px solid rgba(255,255,255,0.3); border-radius: 50%;
+            border-top-color: white; animation: spin 0.8s ease-in-out infinite;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        /* Custom Price Indicator */
-        .custom-price {
-            border-color: #3498db !important;
-            background-color: #ebf5fb !important;
-        }
-        
-        .price-indicator {
-            font-size: 11px;
-            color: #3498db;
-            margin-top: 4px;
-            display: none;
-        }
-        
-        .custom-price ~ .price-indicator {
-            display: block;
-        }
-        
-        .min-sell-price {
-            font-size: 11px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Price */
+        .custom-price { border-color: #3498db !important; background-color: #ebf5fb !important; }
+        .price-indicator { font-size: 11px; color: #3498db; margin-top: 4px; display: none; }
+        .custom-price ~ .price-indicator { display: block; }
+        .min-sell-price { font-size: 11px; color: #6c757d; margin-top: 4px; }
+
         /* Messages */
         .success-message, .error-message {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin: 0 16px 16px;
-            font-size: 14px;
-            display: none;
-            animation: slideIn 0.3s ease-out;
+            padding: 12px 16px; border-radius: 8px; margin: 0 16px 16px;
+            font-size: 14px; display: none; animation: slideIn 0.3s ease-out;
         }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
-        .success-message {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-        
-        .error-message {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-        
-        /* Item Details Display */
-        .item-details {
-            font-size: 14px;
-            color: #495057;
-            white-space: normal;
-            word-wrap: break-word;
-        }
-        
-        /* Responsive adjustments */
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .success-message { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error-message { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .item-details { font-size: 14px; color: #495057; white-space: normal; word-wrap: break-word; }
+
+        /* Responsive */
         @media (min-width: 576px) {
-            .container {
-                padding: 20px;
-            }
-            
-            .app-header {
-                display: none;
-            }
-            
-            .container h1 {
-                display: block;
-                color: #2c3e50;
-                margin-bottom: 30px;
-                font-size: 28px;
-                text-align: center;
-                font-weight: 700;
-            }
-            
-            .submit-section {
-                position: relative;
-                padding: 0;
-                box-shadow: none;
-                margin-top: 32px;
-                text-align: center;
-            }
-            
-            .btn-submit {
-                width: auto;
-                min-width: 200px;
-                padding: 14px 32px;
-            }
-            
-            .item-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
-            
-        /* Mobile responsive */
-            .qty-price-grid {
-                grid-template-columns: 1fr;
-            }
+            .container { padding: 20px; }
+            .app-header { display: none; }
+            .container h1 { display: block; color: #2c3e50; margin-bottom: 30px; font-size: 28px; text-align: center; font-weight: 700; }
+            .submit-section { position: relative; padding: 0; box-shadow: none; margin-top: 32px; text-align: center; }
+            .btn-submit { width: auto; min-width: 200px; padding: 14px 32px; }
+            .item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .qty-price-grid { grid-template-columns: 1fr; }
+            .draft-banner { margin: 0 0 16px; }
+            .draft-saved-toast { bottom: 30px; }
         }
-        
-        /* Tablet view */
         @media (min-width: 575px) and (max-width: 1024px) {
-            .container {
-                padding: 20px;
-                padding-bottom: 100px;
-            }
-
-            .app-header {
-                display: block;
-            }
-
-            .container h1 {
-                display: none;
-            }
-
-            .submit-section {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                padding: 16px;
-                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-                z-index: 50;
-            }
-
-            .btn-submit {
-                width: 100%;
-                height: 48px;
-                font-size: 16px;
-            }
-
-            .item-grid {
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-            }
-
-            .qty-price-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
+            .container { padding: 20px; padding-bottom: 100px; }
+            .app-header { display: block; }
+            .container h1 { display: none; }
+            .submit-section { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 50; }
+            .btn-submit { width: 100%; height: 48px; font-size: 16px; }
+            .item-grid { display: flex; flex-direction: column; gap: 12px; }
+            .qty-price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         }
-        
-        /* Prevent zoom on input focus on iOS */
         @supports (-webkit-touch-callout: none) {
-            input, select, textarea {
-                font-size: 16px !important;
-            }
+            input, select, textarea { font-size: 16px !important; }
         }
-        
-        /* Hide desktop title on mobile */
         @media (max-width: 575px) {
-            .container > h1 {
-                display: none;
-            }
+            .container > h1 { display: none; }
         }
     </style>
 </head>
 <body>
     <div class="app-container">
-        <div class="app-header">
+        <!-- Header -->
+        <div class="app-header" style="position:relative;">
             <h1>Create Quotation</h1>
+            <div class="draft-indicator" id="draft-indicator">
+                <div class="draft-dot"></div>
+                Draft saved
+            </div>
         </div>
-        
+
+        <!-- Messages -->
         <div id="success-message" class="success-message"></div>
         <div id="error-message" class="error-message"></div>
-        
+
+        <!-- Draft Banner -->
+        <div class="draft-banner" id="draft-banner">
+            <div class="draft-banner-header">
+                <div class="draft-banner-icon">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="draft-banner-title">Unsaved Quotation Draft Found</div>
+                    <div class="draft-banner-time" id="draft-time">Saved a few moments ago</div>
+                </div>
+            </div>
+            <div class="draft-banner-details" id="draft-details">Loading draft details...</div>
+            <div class="draft-banner-actions">
+                <button type="button" class="draft-btn draft-btn-restore" id="draft-restore-btn">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Restore Draft
+                </button>
+                <button type="button" class="draft-btn draft-btn-discard" id="draft-discard-btn">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Discard
+                </button>
+            </div>
+        </div>
+
+        <!-- Draft Saved Toast -->
+        <div class="draft-saved-toast" id="draft-toast">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            Draft saved
+        </div>
+
         <div class="container">
             <h1>Create Quotation</h1>
-            
-            <form method="post" id="quotation-form">
 
+            <form method="post" id="quotation-form">
                 {% csrf_token %}
                 <input type="hidden" name="location_lat" id="location_lat">
                 <input type="hidden" name="location_lng" id="location_lng">
+
                 <!-- Basic Information -->
                 <div class="form-card">
                     <h2 class="section-header">Quotation Information</h2>
-                    
+
                     <div class="form-group">
-                        <label for="salesman">
-                            Salesman <span class="required-mark">*</span>
-                        </label>
+                        <label for="salesman">Salesman <span class="required-mark">*</span></label>
                         <select id="salesman" name="salesman" required onchange="loadCustomersBySalesman()" class="searchable-select">
                             <option value="">Select Salesman</option>
                             {% for salesman in salesmen %}
@@ -593,9 +326,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="customer">
-                            Customer <span class="required-mark">*</span>
-                        </label>
+                        <label for="customer">Customer <span class="required-mark">*</span></label>
                         <select id="customer" name="customer" required disabled class="searchable-select">
                             <option value="">Select Salesman First</option>
                         </select>
@@ -604,16 +335,16 @@
 
                     <div class="form-group">
                         <label for="new_customer_name">Customer Display Name (Optional)</label>
-                        <input type="text" name="new_customer_name" id="new_customer_name" 
-                            class="form-control" placeholder="E.g. Walk-in customer name, project reference">
+                        <input type="text" name="new_customer_name" id="new_customer_name"
+                               placeholder="E.g. Walk-in customer name, project reference">
                         <p class="help-text">For CASH/walk-in customers - this name will appear on the quotation</p>
                     </div>
 
                     <div class="form-group">
                         <label for="remarks">Remarks</label>
-                        <textarea name="remarks" id="remarks" rows="3" 
-                            style="width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; resize: vertical;"
-                            placeholder="Any additional notes or comments..."></textarea>
+                        <textarea name="remarks" id="remarks" rows="3"
+                                  style="width:100%;padding:12px 16px;border:2px solid #e1e8ed;border-radius:8px;font-size:16px;resize:vertical;"
+                                  placeholder="Any additional notes or comments..."></textarea>
                     </div>
 
                     <div class="form-group">
@@ -630,20 +361,16 @@
                 </div>
 
                 <!-- Items Multi-Select Section -->
-                <div class="form-card" id="items-multiselect-section" style="display: none;">
+                <div class="form-card" id="items-multiselect-section" style="display:none;">
                     <h2 class="section-header">Select Items</h2>
-                    
                     <div class="form-group">
-                        <label for="item-multiselect">
-                            Items <span class="required-mark">*</span>
-                        </label>
+                        <label for="item-multiselect">Items <span class="required-mark">*</span></label>
                         <select id="item-multiselect" class="searchable-select" multiple="multiple">
                             <option value="">Select Items</option>
                         </select>
                         <p class="help-text">Search and select multiple items at once</p>
                     </div>
-                    
-                    <button type="button" class="btn btn-secondary btn-block" onclick="addSelectedItems()" style="margin-bottom: 16px;">
+                    <button type="button" class="btn btn-secondary btn-block" onclick="addSelectedItems()" style="margin-bottom:16px;">
                         + Add Selected Items to Quotation
                     </button>
                 </div>
@@ -651,16 +378,12 @@
                 <!-- Items Section -->
                 <div class="form-card">
                     <h2 class="section-header">Quotation Items</h2>
-                    
                     <div id="items-container" class="items-section">
                         <div class="item-card">
                             <div class="item-header">
                                 <span class="item-number">Item #1</span>
-                                <button type="button" class="btn btn-danger" onclick="removeItemRow(this)" style="display:none;">
-                                    Remove
-                                </button>
+                                <button type="button" class="btn btn-danger" onclick="removeItemRow(this)" style="display:none;">Remove</button>
                             </div>
-                            
                             <div class="item-grid">
                                 <div class="individual-firm form-group" style="display:none;">
                                     <label>Firm <span class="required-mark">*</span></label>
@@ -672,7 +395,6 @@
                                         {% endfor %}
                                     </select>
                                 </div>
-                                
                                 <div class="form-group">
                                     <label>Item <span class="required-mark">*</span></label>
                                     <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required disabled>
@@ -684,7 +406,6 @@
                                     <label>Stock</label>
                                     <div class="item-stock" style="font-size:14px;color:#888;">--</div>
                                 </div>
-                                
                                 <div class="qty-price-grid">
                                     <div class="form-group">
                                         <label>Quantity <span class="required-mark">*</span></label>
@@ -700,8 +421,8 @@
                                     </div>
                                     <div class="form-group">
                                         <label>Price <span class="required-mark">*</span></label>
-                                        <input type="number" name="price" class="item-price" 
-                                            step="0.01" min="0" value="" required inputmode="decimal">
+                                        <input type="number" name="price" class="item-price"
+                                               step="0.01" min="0" value="" required inputmode="decimal">
                                         <p class="price-indicator">Custom price applied</p>
                                         <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
                                     </div>
@@ -709,7 +430,6 @@
                             </div>
                         </div>
                     </div>
-                    
                     <button type="button" class="btn btn-secondary btn-block btn-add-item" onclick="addItemRow()">
                         + Add Another Item
                     </button>
@@ -725,734 +445,864 @@
     </div>
 
 <script>
-    $(document).ready(function() {
-        // Initialize Select2 for all searchable selects
-        initializeSelect2();
-        
-        // Initialize multi-select for items
-        $('#item-multiselect').select2({
-            placeholder: "Search and select multiple items",
-            ajax: {
-                url: '/api/items-search/',
-                dataType: 'json',
-                delay: 250,
-                data: function(params) {
-                    return {
-                        q: params.term || ''
-                    };
-                },
-                processResults: function(data) {
-                    return {
-                        results: data.map(item => ({
-                            id: item.id,
-                            text: `${item.item_description || '' }- Stock: ${item.item_stock || 0}`
-                        }))
-                    };
-                },
-                cache: true
-            },
-            minimumInputLength: 2,
-            width: '100%',
-            closeOnSelect: false // Keep dropdown open after selection
+// ╔══════════════════════════════════════════════════════════════╗
+// ║              DRAFT SYSTEM (localStorage)                    ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+var DRAFT_KEY      = 'quotation_draft_v2';
+var DRAFT_DEBOUNCE = 3000;
+var DRAFT_EXPIRY   = 24 * 60 * 60 * 1000;   // 24 hours
+
+var draftTimer   = null;
+var formDirty    = false;
+var isSubmitting = false;
+var isRestoring  = false;
+
+// ── Collect form state ──
+function collectDraftData() {
+    var items = [];
+    $('.item-card').each(function () {
+        var $row = $(this);
+        var $itemSel = $row.find('.item-select');
+        var selOption = $itemSel.find('option:selected');
+        items.push({
+            firm:       $row.find('.item-firm').val() || '',
+            item_id:    $itemSel.val() || '',
+            item_text:  selOption.text() || '',
+            quantity:   $row.find('[name="quantity"]').val() || '',
+            unit:       $row.find('[name="unit"]').val() || 'pcs',
+            price:      $row.find('[name="price"]').val() || '',
+            stock:      $row.find('.item-stock').text() || '--',
+            details:    $row.find('.item-details').text() || '--',
+            min_sell:   $row.find('.min-sell-value').text() || '--'
         });
-        
-        // Initialize item select change handler
-        $(document).on('change', '.item-select', function() {
-            onItemChange(this);
-        });
-        
-        // Update item numbers
-        updateItemNumbers();
-        
-        // Form validation and submit handler
-        $('#quotation-form').on('submit', function(e) {
-            // Only prevent default if validation fails
-            if (!validateForm()) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // Show loading state
-            const submitBtn = $('.btn-submit');
-            const originalText = submitBtn.html();
-            submitBtn.html('<span class="loading-spinner"></span> Creating Quotation...')
-                    .prop('disabled', true);
-            
-            // Let the form submit normally
-        });
-        
-        // Prevent double-tap zoom on iOS
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function (event) {
-            const now = (new Date()).getTime();
-            if (now - lastTouchEnd <= 300) {
-                event.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, false);
-        
-        // Handle viewport height on mobile browsers
-        function setViewportHeight() {
-            const vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        setViewportHeight();
-        window.addEventListener('resize', setViewportHeight);
     });
-    
-    function initializeSelect2() {
-        // Ensure jQuery and Select2 are loaded
-        if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') {
-            console.error('jQuery or Select2 is not loaded properly.');
+
+    var $salesman = $('#salesman');
+    var $customer = $('#customer');
+
+    return {
+        v: 2,
+        ts: Date.now(),
+        salesman_id:       $salesman.val() || '',
+        salesman_text:     $salesman.find('option:selected').text() || '',
+        customer_id:       $customer.val() || '',
+        customer_text:     $customer.find('option:selected').text() || '',
+        new_customer_name: $('#new_customer_name').val() || '',
+        remarks:           $('#remarks').val() || '',
+        common_firm:       $('#common_firm').val() || '',
+        location_lat:      $('#location_lat').val() || '',
+        location_lng:      $('#location_lng').val() || '',
+        items: items
+    };
+}
+
+// ── Persist draft ──
+function saveDraft() {
+    if (isRestoring || isSubmitting) return;
+    try {
+        var data = collectDraftData();
+        var hasContent = data.salesman_id || data.customer_id || data.new_customer_name ||
+                         data.remarks ||
+                         data.items.some(function(i) { return i.item_id || i.quantity || i.price; });
+        if (!hasContent) {
+            localStorage.removeItem(DRAFT_KEY);
             return;
         }
-
-        // Item dropdowns → use AJAX search
-        $('.item-select.searchable-select').select2({
-            placeholder: "Search item...",
-            ajax: {
-                url: '/api/items-search/',
-                dataType: 'json',
-                delay: 250,
-                data: function(params) {
-                    return {
-                        q: params.term || ''
-                    };
-                },
-                processResults: function(data) {
-                    return {
-                        results: data.map(item => ({
-                            id: item.id,
-                            text: `${item.item_code || ''} - ${item.item_stock || ''} - ${item.item_description || ''}`
-                        }))
-                    };
-                },
-                cache: true
-            },
-            minimumInputLength: 2,
-            width: '100%',
-            allowClear: true
-        });
-
-        // Salesman dropdowns → simple select2 (no AJAX)
-        $('#salesman').select2({
-            placeholder: "Select salesman",
-            minimumResultsForSearch: 5,
-            width: '100%',
-            allowClear: true
-        });
-
-        // Customer dropdown → simple select2 (no AJAX)
-        $('#customer').select2({
-            placeholder: "Select customer",
-            width: '100%',
-            allowClear: true
-        });
-
-        // Firm dropdowns → simple select2 (no AJAX)
-        $('#common_firm').select2({
-            placeholder: "Select Brand",
-            allowClear: true,
-            width: '100%'
-        });
-
-        // Individual firm selects
-        $('.item-firm').select2({
-            placeholder: "Select Firm",
-            allowClear: true,
-            width: '100%'
-        });
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+        formDirty = true;
+        showDraftToast();
+        showDraftIndicator();
+    } catch (e) {
+        console.warn('Draft save failed:', e);
     }
-    
-    function updateItemNumbers() {
-        $('.item-card').each(function(index) {
-            $(this).find('.item-number').text('Item #' + (index + 1));
-            
-            // Show/hide remove button
-            if (index === 0 && $('.item-card').length === 1) {
-                $(this).find('.btn-danger').hide();
+}
+
+// ── Debounced trigger ──
+function scheduleDraftSave() {
+    if (isRestoring) return;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, DRAFT_DEBOUNCE);
+}
+
+// ── Get stored draft ──
+function getDraft() {
+    try {
+        var raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return null;
+        var data = JSON.parse(raw);
+        if (!data || !data.ts) return null;
+        if (Date.now() - data.ts > DRAFT_EXPIRY) {
+            localStorage.removeItem(DRAFT_KEY);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        localStorage.removeItem(DRAFT_KEY);
+        return null;
+    }
+}
+
+// ── Clear draft ──
+function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    formDirty = false;
+    hideDraftIndicator();
+}
+
+// ── UI: Toast ──
+function showDraftToast() {
+    var toast = document.getElementById('draft-toast');
+    toast.classList.add('visible');
+    setTimeout(function() { toast.classList.remove('visible'); }, 2000);
+}
+
+// ── UI: Header indicator ──
+function showDraftIndicator() { document.getElementById('draft-indicator').classList.add('visible'); }
+function hideDraftIndicator() { document.getElementById('draft-indicator').classList.remove('visible'); }
+
+// ── UI: Banner ──
+function showDraftBanner(draft) {
+    var banner = document.getElementById('draft-banner');
+    var ago = Math.round((Date.now() - draft.ts) / 60000);
+    var timeStr;
+    if (ago < 1)       timeStr = 'Just now';
+    else if (ago < 60) timeStr = ago + ' minute' + (ago > 1 ? 's' : '') + ' ago';
+    else {
+        var hrs = Math.round(ago / 60);
+        timeStr = hrs + ' hour' + (hrs > 1 ? 's' : '') + ' ago';
+    }
+    document.getElementById('draft-time').textContent = 'Saved ' + timeStr;
+
+    var details = '';
+    if (draft.salesman_text && draft.salesman_text !== 'Select Salesman')
+        details += '<strong>Salesman:</strong> ' + draft.salesman_text + '<br>';
+    if (draft.customer_text && draft.customer_text !== 'Select Customer' && draft.customer_text !== 'Select Salesman First')
+        details += '<strong>Customer:</strong> ' + draft.customer_text + '<br>';
+    if (draft.new_customer_name)
+        details += '<strong>Display Name:</strong> ' + draft.new_customer_name + '<br>';
+    if (draft.remarks)
+        details += '<strong>Remarks:</strong> ' + draft.remarks.substring(0, 50) + (draft.remarks.length > 50 ? '…' : '') + '<br>';
+    var filledItems = draft.items.filter(function(i) { return i.item_id; });
+    details += '<strong>Items:</strong> ' + filledItems.length + ' item' + (filledItems.length !== 1 ? 's' : '');
+    document.getElementById('draft-details').innerHTML = details || 'Partial quotation data';
+
+    banner.classList.add('visible');
+}
+
+function hideDraftBanner() { document.getElementById('draft-banner').classList.remove('visible'); }
+
+// ── Wait for select to have options ──
+function waitForSelect(selectEl, timeout) {
+    timeout = timeout || 8000;
+    return new Promise(function (resolve) {
+        var start = Date.now();
+        function check() {
+            if (!selectEl.prop('disabled') && selectEl.find('option').length > 1) {
+                resolve(true);
+            } else if (Date.now() - start > timeout) {
+                resolve(false);
             } else {
-                $(this).find('.btn-danger').show();
+                setTimeout(check, 200);
             }
+        }
+        check();
+    });
+}
+
+// ── Set Select2 value ──
+function setSelect2Value($sel, id, text) {
+    if (!id) return;
+    if ($sel.find('option[value="' + id + '"]').length === 0) {
+        $sel.append(new Option(text, id, true, true));
+    } else {
+        $sel.val(id);
+    }
+    $sel.trigger('change');
+}
+
+// ── RESTORE DRAFT ──
+async function restoreDraft(draft) {
+    isRestoring = true;
+    hideDraftBanner();
+    showSuccessMessage('Restoring your quotation draft...');
+
+    try {
+        // 1. Salesman
+        if (draft.salesman_id) {
+            setSelect2Value($('#salesman'), draft.salesman_id, draft.salesman_text);
+            loadCustomersBySalesman();
+
+            if (draft.customer_id) {
+                var ready = await waitForSelect($('#customer'), 8000);
+                if (ready) {
+                    setSelect2Value($('#customer'), draft.customer_id, draft.customer_text);
+                }
+            }
+        }
+
+        // 2. Simple fields
+        $('#new_customer_name').val(draft.new_customer_name || '');
+        $('#remarks').val(draft.remarks || '');
+        if (draft.location_lat) $('#location_lat').val(draft.location_lat);
+        if (draft.location_lng) $('#location_lng').val(draft.location_lng);
+
+        // 3. Common firm
+        if (draft.common_firm) {
+            setSelect2Value($('#common_firm'), draft.common_firm, draft.common_firm);
+            toggleCommonFirm();
+            await new Promise(function(r) { setTimeout(r, 1500); });
+        }
+
+        // 4. Item rows
+        var itemRows = draft.items || [];
+        if (itemRows.length > 0) {
+            var $firstRow = $('.item-card').first();
+            await restoreItemRow($firstRow, itemRows[0], draft.common_firm);
+
+            for (var i = 1; i < itemRows.length; i++) {
+                addItemRow();
+                await new Promise(function(r) { setTimeout(r, 400); });
+                var $newRow = $('.item-card').last();
+                await restoreItemRow($newRow, itemRows[i], draft.common_firm);
+            }
+        }
+
+        formDirty = true;
+        showDraftIndicator();
+        showSuccessMessage('Quotation draft restored successfully!');
+    } catch (err) {
+        console.error('Draft restore error:', err);
+        showErrorMessage('Draft partially restored. Some fields may need re-entry.');
+    } finally {
+        isRestoring = false;
+    }
+}
+
+// ── Restore single item row ──
+async function restoreItemRow($row, itemData, commonFirm) {
+    if (!itemData) return;
+
+    if (!commonFirm && itemData.firm) {
+        setSelect2Value($row.find('.item-firm'), itemData.firm, itemData.firm);
+        loadItemsByFirm($row.find('.item-firm')[0]);
+        await new Promise(function(r) { setTimeout(r, 1200); });
+    }
+
+    if (itemData.item_id) {
+        var $itemSel = $row.find('.item-select');
+        $itemSel.prop('disabled', false);
+        setSelect2Value($itemSel, itemData.item_id, itemData.item_text);
+
+        $row.find('.item-details').text(itemData.details || itemData.item_text || '--');
+        $row.find('.item-stock').text(itemData.stock || '--');
+        if (itemData.min_sell && itemData.min_sell !== '--') {
+            $row.find('.min-sell-value').text(itemData.min_sell);
+            $row.find('.min-sell-price').show();
+        }
+
+        loadItemDetails(itemData.item_id, $row);
+    }
+
+    $row.find('[name="quantity"]').val(itemData.quantity || '');
+    $row.find('[name="unit"]').val(itemData.unit || 'pcs');
+    $row.find('[name="price"]').val(itemData.price || '');
+    if (itemData.price) {
+        $row.find('.item-price').addClass('custom-price');
+    }
+}
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║                  MAIN FORM LOGIC                            ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+$(document).ready(function() {
+    initializeSelect2();
+
+    // Multi-select
+    $('#item-multiselect').select2({
+        placeholder: "Search and select multiple items",
+        ajax: {
+            url: '/api/items-search/', dataType: 'json', delay: 250,
+            data: function(params) { return { q: params.term || '' }; },
+            processResults: function(data) {
+                return { results: data.map(function(item) {
+                    return { id: item.id, text: (item.item_description || '') + ' - Stock: ' + (item.item_stock || 0) };
+                })};
+            },
+            cache: true
+        },
+        minimumInputLength: 2, width: '100%', closeOnSelect: false
+    });
+
+    $(document).on('change', '.item-select', function() { onItemChange(this); });
+    updateItemNumbers();
+
+    // Form submit
+    $('#quotation-form').on('submit', function(e) {
+        if (!validateForm()) { e.preventDefault(); return false; }
+        isSubmitting = true;
+        clearDraft();
+        var submitBtn = $('.btn-submit');
+        submitBtn.html('<span class="loading-spinner"></span> Creating Quotation...').prop('disabled', true);
+    });
+
+    // Attach draft auto-save
+    $('#quotation-form').on('change input', 'input, select, textarea', scheduleDraftSave);
+    $(document).on('change', '.select2-hidden-accessible', scheduleDraftSave);
+
+    // Check for existing draft
+    var existingDraft = getDraft();
+    if (existingDraft) {
+        showDraftBanner(existingDraft);
+    }
+
+    // Draft banner buttons
+    $('#draft-restore-btn').on('click', function() {
+        var draft = getDraft();
+        if (draft) restoreDraft(draft);
+        else { hideDraftBanner(); showErrorMessage('Draft has expired or was deleted.'); }
+    });
+    $('#draft-discard-btn').on('click', function() {
+        clearDraft();
+        hideDraftBanner();
+        showSuccessMessage('Quotation draft discarded.');
+    });
+
+    // beforeunload
+    $(window).on('beforeunload', function(e) {
+        if (formDirty && !isSubmitting) {
+            saveDraft();
+            var msg = 'You have unsaved changes. A draft has been saved and can be restored when you return.';
+            e.originalEvent.returnValue = msg;
+            return msg;
+        }
+    });
+
+    // Double-tap zoom prevention
+    var lastTouchEnd = 0;
+    document.addEventListener('touchend', function(event) {
+        var now = Date.now();
+        if (now - lastTouchEnd <= 300) event.preventDefault();
+        lastTouchEnd = now;
+    }, false);
+
+    // Viewport height
+    function setViewportHeight() {
+        document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
+    }
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+});
+
+// ── Select2 Init ──
+function initializeSelect2() {
+    if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') return;
+
+    $('.item-select.searchable-select').select2({
+        placeholder: "Search item...",
+        ajax: {
+            url: '/api/items-search/', dataType: 'json', delay: 250,
+            data: function(params) { return { q: params.term || '' }; },
+            processResults: function(data) {
+                return { results: data.map(function(item) {
+                    return { id: item.id, text: (item.item_code||'') + ' - ' + (item.item_stock||'') + ' - ' + (item.item_description||'') };
+                })};
+            },
+            cache: true
+        },
+        minimumInputLength: 2, width: '100%', allowClear: true
+    });
+
+    $('#salesman').select2({ placeholder: "Select salesman", minimumResultsForSearch: 5, width: '100%', allowClear: true });
+    $('#customer').select2({ placeholder: "Select customer", width: '100%', allowClear: true });
+    $('#common_firm').select2({ placeholder: "Select Brand", allowClear: true, width: '100%' });
+    $('.item-firm').select2({ placeholder: "Select Firm", allowClear: true, width: '100%' });
+}
+
+function updateItemNumbers() {
+    $('.item-card').each(function(index) {
+        $(this).find('.item-number').text('Item #' + (index + 1));
+        $(this).find('.btn-danger').toggle(!(index === 0 && $('.item-card').length === 1));
+    });
+}
+
+// ── Salesman → Customers ──
+function loadCustomersBySalesman() {
+    var salesmanId = $('#salesman').val();
+    var cs = $('#customer');
+    if (!salesmanId) { cs.html('<option value="">Select Salesman First</option>').prop('disabled', true); return; }
+    if (cs.hasClass('select2-hidden-accessible')) cs.select2('destroy');
+    cs.html('<option value="">Loading customers...</option>').prop('disabled', true);
+    $.ajax({
+        url: '/get_customers_by_salesman/', data: { salesman_id: salesmanId }, dataType: 'json',
+        success: function(data) {
+            cs.empty().append('<option value="">Select Customer</option>');
+            $.each(data.customers, function(i, c) { cs.append($('<option>', { value: c.id, text: c.customer_name })); });
+            cs.prop('disabled', false);
+            cs.select2({ placeholder: "Select Customer", allowClear: false, width: '100%' });
+        },
+        error: function() {
+            cs.html('<option value="">Error loading customers</option>').prop('disabled', false);
+            showErrorMessage('Failed to load customers.');
+        }
+    });
+}
+
+// ── Common Firm Toggle ──
+function toggleCommonFirm() {
+    var commonFirm = $('#common_firm').val();
+    var show = !commonFirm;
+    $('.individual-firm').toggle(show);
+    $('#items-multiselect-section').toggle(!!commonFirm);
+    if (commonFirm) {
+        $('.item-select').each(function() { loadItemsForSelect(commonFirm, $(this)); });
+    } else {
+        $('.item-firm').val('').trigger('change');
+        $('.item-select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) $(this).select2('destroy');
+            $(this).html('<option value="">Select Firm First</option>').prop('disabled', true);
+            initializeSelect2();
         });
+        $('.item-price').val('').removeClass('custom-price');
+        $('.item-details').text('--');
     }
+}
 
-    function loadCustomersBySalesman() {
-        const salesmanId = $('#salesman').val();
-        const customerSelect = $('#customer');
-        
-        if (salesmanId) {
-            // Destroy existing Select2 instance
-            if (customerSelect.hasClass('select2-hidden-accessible')) {
-                customerSelect.select2('destroy');
-            }
-            
-            customerSelect.html('<option value="">Loading customers...</option>')
-                         .prop('disabled', true);
-            
-            $.ajax({
-                url: '/get_customers_by_salesman/',
-                data: { 'salesman_id': salesmanId },
-                dataType: 'json',
-                success: function(data) {
-                    customerSelect.empty().append('<option value="">Select Customer</option>');
-                    $.each(data.customers, function(index, customer) {
-                        customerSelect.append(
-                            $('<option>', {
-                                value: customer.id,
-                                text: customer.customer_name
-                            })
-                        );
-                    });
-                    customerSelect.prop('disabled', false);
-                    
-                    // Reinitialize Select2
-                    customerSelect.select2({
-                        placeholder: "Select Customer",
-                        allowClear: false,
-                        width: '100%'
-                    });
+// ── Load items for select ──
+function loadItemsForSelect(firm, sel) {
+    if (!firm) { sel.html('<option value="">Select Firm First</option>').prop('disabled', true); return; }
+    if (sel.hasClass('select2-hidden-accessible')) sel.select2('destroy');
+    sel.html('<option value="">Loading items...</option>').prop('disabled', true);
+    $.ajax({
+        url: '/get_items_by_firm/', data: { firm: firm }, dataType: 'json',
+        success: function(data) {
+            sel.empty().append('<option value="">Select Item</option>');
+            $.each(data.items, function(i, item) {
+                var label = item.item_description + ' (' + item.item_code + ' - ' + item.item_firm + ' - ' + item.item_upvc + ' - Stock: ' + item.item_stock + ')';
+                sel.append($('<option>', { value: item.id, text: label }));
+            });
+            sel.prop('disabled', false);
+            sel.select2({
+                placeholder: "Select Item", allowClear: false, width: '100%', minimumInputLength: 3,
+                templateResult: function(item) {
+                    if (!item.id) return item.text;
+                    var parts = item.text.split(' - Stock: ');
+                    var desc = parts[0].split(' (')[0];
+                    var stock = parts[1] ? parts[1].replace(')','') : '';
+                    return $('<span>' + desc + ' | Stock: ' + stock + '</span>');
                 },
-                error: function() {
-                    customerSelect.html('<option value="">Error loading customers</option>')
-                                 .prop('disabled', false);
-                    showErrorMessage('Failed to load customers. Please try again.');
+                templateSelection: function(item) {
+                    if (!item.id) return item.text;
+                    var parts = item.text.split(' - Stock: ');
+                    var desc = parts[0].split(' (')[0];
+                    var stock = parts[1] ? parts[1].replace(')','') : '';
+                    return desc + ' | Stock: ' + stock;
                 }
             });
-        } else {
-            customerSelect.html('<option value="">Select Salesman First</option>')
-                         .prop('disabled', true);
+        },
+        error: function() {
+            sel.html('<option value="">Error loading items</option>').prop('disabled', false);
+            showErrorMessage('Failed to load items.');
         }
+    });
+}
+
+function loadItemsByFirm(selectElement) {
+    var firm = $(selectElement).val();
+    var itemSelect = $(selectElement).closest('.item-card').find('.item-select');
+    loadItemsForSelect(firm, itemSelect);
+}
+
+// ── Multi-select add ──
+function addSelectedItems() {
+    var selectedItems = $('#item-multiselect').select2('data');
+    var commonFirm = $('#common_firm').val();
+    if (selectedItems.length === 0) { showErrorMessage('Please select at least one item'); return; }
+    var firstRow = $('.item-card').first();
+    var firstRowItem = firstRow.find('.item-select').val();
+    if (!firstRowItem && selectedItems.length > 0) {
+        var firstItem = selectedItems.shift();
+        populateFirstRowWithData(firstItem.id, firstItem.text, commonFirm, firstRow);
+    }
+    selectedItems.forEach(function(itemData) { addItemRowWithData(itemData.id, itemData.text, commonFirm); });
+    $('#item-multiselect').val(null).trigger('change');
+}
+
+function populateFirstRowWithData(itemId, itemText, firm, row) {
+    row.find('.item-select').prop('disabled', false);
+    row.find('.item-select').empty().append('<option value="' + itemId + '" selected>' + itemText + '</option>');
+    row.find('.item-details').text(itemText);
+    row.find('.item-unit').val('pcs');
+    row.find('.btn-danger').show();
+    loadItemDetails(itemId, row);
+    updatePriceField(row.find('.item-select')[0]);
+    if (row.find('.item-select').hasClass('select2-hidden-accessible')) row.find('.item-select').select2('destroy');
+    row.find('.item-select').select2({
+        width: '100%', minimumInputLength: 2,
+        ajax: {
+            url: '/api/items-search/', dataType: 'json', delay: 250,
+            data: function(params) { return { q: params.term || '' }; },
+            processResults: function(data) {
+                return { results: data.map(function(item) {
+                    return { id: item.id, text: (item.item_code||'') + ' - ' + (item.item_upvc||'') + ' - ' + (item.item_description||'') };
+                })};
+            },
+            cache: true
+        }
+    });
+}
+
+function addItemRowWithData(itemId, itemText, firm) {
+    var container = $('#items-container');
+    var showIndividual = !firm;
+    var itemCount = $('.item-card').length + 1;
+
+    var newRow = $([
+        '<div class="item-card">',
+        '  <div class="item-header">',
+        '    <span class="item-number">Item #' + itemCount + '</span>',
+        '    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">Remove</button>',
+        '  </div>',
+        '  <div class="item-grid">',
+        '    <div class="individual-firm form-group" style="display:' + (showIndividual ? 'block' : 'none') + '">',
+        '      <label>Firm <span class="required-mark">*</span></label>',
+        '      <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">',
+        '        <option value="">Select Firm</option>',
+        '        <option value="All">All Firms</option>',
+        '        {% for firm in firms %}<option value="{{ firm }}">{{ firm }}</option>{% endfor %}',
+        '      </select>',
+        '    </div>',
+        '    <div class="form-group">',
+        '      <label>Item <span class="required-mark">*</span></label>',
+        '      <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required>',
+        '        <option value="' + itemId + '" selected>' + itemText + '</option>',
+        '      </select>',
+        '      <div class="item-details" style="font-size:14px;color:#888;">' + itemText + '</div>',
+        '    </div>',
+        '    <div class="form-group">',
+        '      <label>Stock</label>',
+        '      <div class="item-stock" style="font-size:14px;color:#888;">--</div>',
+        '    </div>',
+        '    <div class="qty-price-grid">',
+        '      <div class="form-group">',
+        '        <label>Quantity <span class="required-mark">*</span></label>',
+        '        <input type="number" name="quantity" min="1" value="" required inputmode="numeric">',
+        '      </div>',
+        '      <div class="form-group">',
+        '        <label>Unit <span class="required-mark">*</span></label>',
+        '        <select name="unit" class="item-unit" required>',
+        '          <option value="pcs">pcs</option>',
+        '          <option value="ctn">ctn</option>',
+        '          <option value="roll">roll</option>',
+        '        </select>',
+        '      </div>',
+        '      <div class="form-group">',
+        '        <label>Price <span class="required-mark">*</span></label>',
+        '        <input type="number" name="price" class="item-price" step="0.01" min="0" required placeholder="0.00" inputmode="decimal">',
+        '        <p class="price-indicator">Custom price applied</p>',
+        '        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>',
+        '      </div>',
+        '    </div>',
+        '  </div>',
+        '</div>'
+    ].join('\n'));
+
+    container.append(newRow);
+    newRow.find('.item-select').select2({
+        width: '100%', minimumInputLength: 2,
+        ajax: {
+            url: '/api/items-search/', dataType: 'json', delay: 250,
+            data: function(params) { return { q: params.term || '' }; },
+            processResults: function(data) {
+                return { results: data.map(function(item) {
+                    return { id: item.id, text: (item.item_code||'') + ' - ' + (item.item_upvc||'') + ' - ' + (item.item_description||'') };
+                })};
+            },
+            cache: true
+        }
+    });
+    loadItemDetails(itemId, newRow);
+    updatePriceField(newRow.find('.item-select')[0]);
+    updateItemNumbers();
+    scheduleDraftSave();
+}
+
+// ── Load item details ──
+function loadItemDetails(itemId, rowElement) {
+    $.ajax({
+        url: '/get_item_stock/', data: { item_id: itemId },
+        success: function(data) {
+            rowElement.find('.item-stock').text(data.stock);
+            if (data.min_selling_price !== undefined) {
+                rowElement.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                rowElement.find('.min-sell-price').show();
+            }
+        },
+        error: function() {
+            rowElement.find('.item-stock').text('Error');
+            rowElement.find('.min-sell-price').hide();
+        }
+    });
+}
+
+// ── Add empty item row ──
+function addItemRow() {
+    var container = $('#items-container');
+    var commonFirm = $('#common_firm').val();
+    var showIndividual = !commonFirm;
+    var itemCount = $('.item-card').length + 1;
+
+    var newRow = $([
+        '<div class="item-card" style="display:none;">',
+        '  <div class="item-header">',
+        '    <span class="item-number">Item #' + itemCount + '</span>',
+        '    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">Remove</button>',
+        '  </div>',
+        '  <div class="item-grid">',
+        '    <div class="individual-firm form-group" style="display:' + (showIndividual ? 'block' : 'none') + '">',
+        '      <label>Firm <span class="required-mark">*</span></label>',
+        '      <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">',
+        '        <option value="">Select Firm</option>',
+        '        <option value="All">All Firms</option>',
+        '        {% for firm in firms %}<option value="{{ firm }}">{{ firm }}</option>{% endfor %}',
+        '      </select>',
+        '    </div>',
+        '    <div class="form-group">',
+        '      <label>Item <span class="required-mark">*</span></label>',
+        '      <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required ' + (commonFirm ? '' : 'disabled') + '>',
+        '        <option value="">' + (commonFirm ? 'Select Item' : 'Select Firm First') + '</option>',
+        '      </select>',
+        '      <div class="item-details" style="font-size:14px;color:#888;">--</div>',
+        '    </div>',
+        '    <div class="form-group">',
+        '      <label>Stock</label>',
+        '      <div class="item-stock" style="font-size:14px;color:#888;">--</div>',
+        '    </div>',
+        '    <div class="qty-price-grid">',
+        '      <div class="form-group">',
+        '        <label>Quantity <span class="required-mark">*</span></label>',
+        '        <input type="number" name="quantity" min="1" value="" required inputmode="numeric">',
+        '      </div>',
+        '      <div class="form-group">',
+        '        <label>Unit <span class="required-mark">*</span></label>',
+        '        <select name="unit" class="item-unit" required>',
+        '          <option value="pcs">pcs</option>',
+        '          <option value="ctn">ctn</option>',
+        '          <option value="roll">roll</option>',
+        '        </select>',
+        '      </div>',
+        '      <div class="form-group">',
+        '        <label>Price <span class="required-mark">*</span></label>',
+        '        <input type="number" name="price" class="item-price" step="0.01" min="0" required placeholder="0.00" inputmode="decimal">',
+        '        <p class="price-indicator">Custom price applied</p>',
+        '        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>',
+        '      </div>',
+        '    </div>',
+        '  </div>',
+        '</div>'
+    ].join('\n'));
+
+    container.append(newRow);
+    newRow.slideDown(300);
+
+    newRow.find('.searchable-select').select2({
+        placeholder: function() { return $(this).find('option:first').text(); },
+        allowClear: false, width: '100%'
+    });
+
+    if (commonFirm) loadItemsForSelect(commonFirm, newRow.find('.item-select'));
+    updateItemNumbers();
+    setTimeout(function() { newRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 350);
+}
+
+// ── Remove item row ──
+function removeItemRow(btn) {
+    var row = $(btn).closest('.item-card');
+    var itemVal = row.find('.item-select').val();
+    if (itemVal && !confirm('Are you sure you want to remove this item?')) return;
+    row.find('.searchable-select').each(function() {
+        if ($(this).hasClass('select2-hidden-accessible')) $(this).select2('destroy');
+    });
+    row.slideUp(300, function() {
+        $(this).remove();
+        updateItemNumbers();
+        scheduleDraftSave();
+    });
+}
+
+// ── Item change handler ──
+function onItemChange(itemSelect) {
+    var itemId = $(itemSelect).val();
+    var itemCard = $(itemSelect).closest('.item-card');
+    var stockDisplay = itemCard.find('.item-stock');
+    var itemDetailsDisplay = itemCard.find('.item-details');
+    var selectedOption = $(itemSelect).find('option:selected').text();
+
+    if (!itemId) {
+        stockDisplay.text('--');
+        itemDetailsDisplay.text('--');
+        itemCard.find('.min-sell-price').hide();
+        return;
     }
 
-    function toggleCommonFirm() {
-        const commonFirm = $('#common_firm').val();
-        const showIndividual = !commonFirm;
-        
-        $('.individual-firm').toggle(showIndividual);
+    itemDetailsDisplay.text(selectedOption);
 
-        // Show/hide multi-select section
-        $('#items-multiselect-section').toggle(!!commonFirm);
-        
-        if (commonFirm) {
-            // Load items for all item selects with common firm
-            $('.item-select').each(function() {
-                loadItemsForSelect(commonFirm, $(this));
-            });
-        } else {
-            // Reset individual firm selections
-            $('.item-firm').val('').trigger('change');
-            $('.item-select').each(function() {
-                if ($(this).hasClass('select2-hidden-accessible')) {
-                    $(this).select2('destroy');
-                }
-                $(this).html('<option value="">Select Firm First</option>')
-                       .prop('disabled', true);
-                initializeSelect2();
-            });
-            $('.item-price').val('').removeClass('custom-price');
-            $('.item-details').text('--'); // Reset item details
-        }
-    }
+    $.ajax({
+        url: '/get_item_stock/',
+        data: { item_id: itemId },
+        success: function(data) {
+            stockDisplay.text(data.stock);
+            if (data.min_selling_price !== undefined) {
+                itemCard.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                itemCard.find('.min-sell-price').show();
+            }
+        },
+        error: function() { stockDisplay.text('Error'); }
+    });
 
-    function loadItemsForSelect(firm, selectElement) {
-        if (!firm) {
-            selectElement.html('<option value="">Select Firm First</option>')
-                       .prop('disabled', true);
-            return;
-        }
+    updatePriceField(itemSelect);
+    scheduleDraftSave();
+}
 
-        // Destroy existing Select2 instance if exists
-        if (selectElement.hasClass('select2-hidden-accessible')) {
-            selectElement.select2('destroy');
-        }
+// ── Update price field ──
+function updatePriceField(itemSelect) {
+    var row = $(itemSelect).closest('.item-card');
+    var customerId = $('#customer').val();
+    var itemId = $(itemSelect).val();
+    var priceField = row.find('.item-price');
 
-        selectElement.html('<option value="">Loading items...</option>')
-                    .prop('disabled', true);
-
+    if (itemId && customerId) {
+        priceField.prop('disabled', true).attr('placeholder', 'Loading...');
         $.ajax({
-            url: '/get_items_by_firm/',
-            data: { 'firm': firm },
+            url: '/get_item_price/',
+            data: { item_id: itemId, customer_id: customerId },
             dataType: 'json',
             success: function(data) {
-                selectElement.empty()
-                           .append('<option value="">Select Item</option>');
-                $.each(data.items, function(index, item) {
-                    const label = `${item.item_description} (${item.item_code} - ${item.item_firm} - ${item.item_upvc} - Stock: ${item.item_stock})`;
-                    selectElement.append(
-                        $('<option>', {
-                            value: item.id,
-                            text: label
-                        })
-                    );
-                });
-                selectElement.prop('disabled', false);
-                
-                // Reinitialize Select2
-                selectElement.select2({
-                    placeholder: "Select Item",
-                    allowClear: false,
-                    width: '100%',
-                    minimumInputLength: 3,
-                    templateResult: function(item) {
-                        if (!item.id) return item.text;
-
-                        const parts = item.text.split(' - Stock: ');
-                        const description = parts[0].split(' (')[0];
-                        const stock = parts[1] ? parts[1].replace(')', '') : '';
-
-                        return $('<span>' + description + ' | Stock: ' + stock + '</span>');
-                    },
-                    templateSelection: function(item) {
-                        if (!item.id) return item.text;
-
-                        const parts = item.text.split(' - Stock: ');
-                        const description = parts[0].split(' (')[0];
-                        const stock = parts[1] ? parts[1].replace(')', '') : '';
-
-                        return description + ' | Stock: ' + stock;
-                    }
-                });
-            },
-            error: function() {
-                selectElement.html('<option value="">Error loading items</option>')
-                            .prop('disabled', false);
-                showErrorMessage('Failed to load items. Please try again.');
-            }
-        });
-    }
-
-    function loadItemsByFirm(selectElement) {
-        const firm = $(selectElement).val();
-        const itemSelect = $(selectElement).closest('.item-card').find('.item-select');
-        
-        loadItemsForSelect(firm, itemSelect);
-    }
-
-    function addSelectedItems() {
-        const selectedItems = $('#item-multiselect').select2('data');
-        const commonFirm = $('#common_firm').val();
-        
-        if (selectedItems.length === 0) {
-            showErrorMessage('Please select at least one item');
-            return;
-        }
-        
-        // Check if the first/default row is empty and can be used
-        const firstRow = $('.item-card').first();
-        const firstRowItem = firstRow.find('.item-select').val();
-        
-        // If first row is empty, use it for the first selected item
-        if (!firstRowItem && selectedItems.length > 0) {
-            const firstItem = selectedItems.shift(); // Remove first item from array
-            populateFirstRowWithData(firstItem.id, firstItem.text, commonFirm, firstRow);
-        }
-        
-        // Add remaining items as new rows
-        selectedItems.forEach(itemData => {
-            addItemRowWithData(itemData.id, itemData.text, commonFirm);
-        });
-        
-        // Clear the selection
-        $('#item-multiselect').val(null).trigger('change');
-    }
-
-    // Function to populate the first/default row with data
-    function populateFirstRowWithData(itemId, itemText, firm, rowElement) {
-        // Enable the row elements
-        rowElement.find('.item-select').prop('disabled', false);
-        
-        // Set the item selection
-        rowElement.find('.item-select').empty().append(`<option value="${itemId}" selected>${itemText}</option>`);
-        rowElement.find('.item-details').text(itemText);
-        
-        // Set default unit
-        rowElement.find('.item-unit').val('pcs');
-        
-        // Show remove button for the first row
-        rowElement.find('.btn-danger').show();
-        
-        // Load stock and price information
-        loadItemDetails(itemId, rowElement);
-        updatePriceField(rowElement.find('.item-select')[0]);
-    }
-
-    // Function to add item row with pre-selected data
-    function addItemRowWithData(itemId, itemText, firm) {
-        const container = $('#items-container');
-        const showIndividual = !firm;
-        const itemCount = $('.item-card').length + 1;
-        
-        const newRow = $(`
-            <div class="item-card">
-                <div class="item-header">
-                    <span class="item-number">Item #${itemCount}</span>
-                    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">
-                        Remove
-                    </button>
-                </div>
-                
-                <div class="item-grid">
-                    <div class="individual-firm form-group" style="display:${showIndividual ? 'block' : 'none'}">
-                        <label>Firm <span class="required-mark">*</span></label>
-                        <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
-                            <option value="">Select Firm</option>
-                            <option value="All">All Firms</option>
-                            {% for firm in firms %}
-                                <option value="{{ firm }}">{{ firm }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Item <span class="required-mark">*</span></label>
-                        <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required>
-                            <option value="${itemId}" selected>${itemText}</option>
-                        </select>
-                        <div class="item-details" style="font-size:14px;color:#888;">${itemText}</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Stock</label>
-                        <div class="item-stock" style="font-size:14px;color:#888;">--</div>
-                    </div>
-                    
-                    <div class="qty-price-grid">
-                        <div class="form-group">
-                            <label>Quantity <span class="required-mark">*</span></label>
-                            <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
-                        </div>
-                        <div class="form-group">
-                            <label>Unit <span class="required-mark">*</span></label>
-                            <select name="unit" class="item-unit" required>
-                                <option value="pcs">pcs</option>
-                                <option value="ctn">ctn</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Price <span class="required-mark">*</span></label>
-                            <input type="number" name="price" class="item-price" 
-                                step="0.01" min="0" value="" required inputmode="decimal">
-                            <p class="price-indicator">Custom price applied</p>
-                            <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `);
-        
-        container.append(newRow);
-        
-        // Initialize Select2 for the new row
-        initializeSelect2();
-        
-        // Load stock and price information
-        loadItemDetails(itemId, newRow);
-        updatePriceField(newRow.find('.item-select')[0]);
-        
-        updateItemNumbers();
-    }
-
-    function addItemRow() {
-        const container = $('#items-container');
-        const showIndividual = !$('#common_firm').val();
-        const itemCount = $('.item-card').length + 1;
-        
-        const newRow = $(`
-            <div class="item-card">
-                <div class="item-header">
-                    <span class="item-number">Item #${itemCount}</span>
-                    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">
-                        Remove
-                    </button>
-                </div>
-                
-                <div class="item-grid">
-                    <div class="individual-firm form-group" style="display:${showIndividual ? 'block' : 'none'}">
-                        <label>Firm <span class="required-mark">*</span></label>
-                        <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
-                            <option value="">Select Firm</option>
-                            <option value="All">All Firms</option>
-                            {% for firm in firms %}
-                                <option value="{{ firm }}">{{ firm }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Item <span class="required-mark">*</span></label>
-                        <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required>
-                            <option value="">${showIndividual ? 'Select Firm First' : 'Select Item'}</option>
-                        </select>
-                        <div class="item-details" style="font-size:14px;color:#888;">--</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Stock</label>
-                        <div class="item-stock" style="font-size:14px;color:#888;">--</div>
-                    </div>
-                    
-                    <div class="qty-price-grid">
-                        <div class="form-group">
-                            <label>Quantity <span class="required-mark">*</span></label>
-                            <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
-                        </div>
-                        <div class="form-group">
-                            <label>Unit <span class="required-mark">*</span></label>
-                            <select name="unit" class="item-unit" required>
-                                <option value="pcs">pcs</option>
-                                <option value="ctn">ctn</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Price <span class="required-mark">*</span></label>
-                            <input type="number" name="price" class="item-price" 
-                                step="0.01" min="0" value="" required inputmode="decimal">
-                            <p class="price-indicator">Custom price applied</p>
-                            <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `);
-        
-        container.append(newRow);
-        
-        // Initialize Select2 for the new row
-        initializeSelect2();
-        
-        // If common firm is selected, load items for this new row
-        const commonFirm = $('#common_firm').val();
-        if (commonFirm) {
-            loadItemsForSelect(commonFirm, newRow.find('.item-select'));
-        }
-        
-        updateItemNumbers();
-    }
-
-    function removeItemRow(button) {
-        const itemCard = $(button).closest('.item-card');
-        
-        // Confirm deletion if item has been filled
-        const itemSelect = itemCard.find('.item-select').val();
-        if (itemSelect) {
-            if (!confirm('Are you sure you want to remove this item?')) {
-                return;
-            }
-        }
-        
-        // Destroy Select2 instances before removing
-        itemCard.find('.searchable-select').each(function() {
-            if ($(this).hasClass('select2-hidden-accessible')) {
-                $(this).select2('destroy');
-            }
-        });
-        
-        itemCard.slideUp(300, function() {
-            $(this).remove();
-            updateItemNumbers();
-        });
-    }
-
-    function onItemChange(itemSelect) {
-        const itemId = $(itemSelect).val();
-        const itemCard = $(itemSelect).closest('.item-card');
-        const stockDisplay = itemCard.find('.item-stock');
-        const itemDetailsDisplay = itemCard.find('.item-details');
-        const selectedOption = $(itemSelect).find('option:selected').text();
-
-        if (!itemId) {
-            stockDisplay.text('--');
-            itemDetailsDisplay.text('--');
-            itemCard.find('.min-sell-price').hide();
-            return;
-        }
-
-        // Update item details display
-        itemDetailsDisplay.text(selectedOption);
-
-        // Fetch and update stock
-        $.ajax({
-            url: '/get_item_stock/',
-            data: { 'item_id': itemId },
-            success: function(data) {
-                stockDisplay.text(data.stock);
+                if (data.custom_price !== null && data.custom_price !== undefined) {
+                    priceField.val(data.final_price).addClass('custom-price');
+                } else if (data.default_price !== null && data.default_price !== undefined) {
+                    priceField.val(data.default_price).removeClass('custom-price');
+                }
                 if (data.min_selling_price !== undefined) {
-                    itemCard.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                    itemCard.find('.min-sell-price').show();
+                    row.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                    row.find('.min-sell-price').show();
                 }
+                priceField.prop('disabled', false).attr('placeholder', '0.00');
+                scheduleDraftSave();
             },
             error: function() {
-                stockDisplay.text('Error');
+                priceField.prop('disabled', false).attr('placeholder', '0.00');
+                showErrorMessage('Failed to load price. Please enter manually.');
             }
         });
+    } else {
+        priceField.val('').removeClass('custom-price');
+        row.find('.min-sell-price').hide();
+    }
+}
 
-        // Update price field
-        updatePriceField(itemSelect);
+// ── Form validation ──
+function validateForm() {
+    var isValid = true;
+    var errorMessage = '';
+
+    if ($('.item-card').length === 0) {
+        errorMessage = 'Please add at least one item to the quotation.';
+        isValid = false;
     }
 
-    function loadItemDetails(itemId, rowElement) {
-        $.ajax({
-            url: '/get_item_stock/',
-            data: { 'item_id': itemId },
-            success: function(data) {
-                rowElement.find('.item-stock').text(data.stock);
-                if (data.min_selling_price !== undefined) {
-                    rowElement.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                    rowElement.find('.min-sell-price').show();
-                }
-            },
-            error: function() {
-                rowElement.find('.item-stock').text('Error');
-                rowElement.find('.min-sell-price').hide();
-            }
-        });
-    }
-    
-    function updatePriceField(itemSelect) {
-        const row = $(itemSelect).closest('.item-card');
-        const customerId = $('#customer').val();
-        const itemId = $(itemSelect).val();
-        const priceField = row.find('.item-price');
-        
-        if (itemId && customerId) {
-            // Show loading state on price field
-            priceField.prop('disabled', true).attr('placeholder', 'Loading...');
-            
-            $.ajax({
-                url: '/get_item_price/',
-                data: {
-                    'item_id': itemId,
-                    'customer_id': customerId
-                },
-                dataType: 'json',
-                success: function(data) {
-                    console.log('Price data received:', data);
-                    
-                    // Check if custom price exists and use it, otherwise use default price
-                    if (data.custom_price !== null && data.custom_price !== undefined) {
-                        priceField.val(data.final_price);
-                        priceField.addClass('custom-price');
-                    } else if (data.default_price !== null && data.default_price !== undefined) {
-                        priceField.val(data.default_price);
-                        priceField.removeClass('custom-price');
-                    }
-                    
-                    // Show min selling price (item_price)
-                    if (data.min_selling_price !== undefined) {
-                        row.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                        row.find('.min-sell-price').show();
-                    }
-                    
-                    // Re-enable the field
-                    priceField.prop('disabled', false).attr('placeholder', '0.00');
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error loading price:', error);
-                    priceField.prop('disabled', false).attr('placeholder', '0.00');
-                    showErrorMessage('Failed to load price. Please enter manually.');
-                }
-            });
-        } else {
-            console.log('Missing itemId or customerId - itemId:', itemId, 'customerId:', customerId);
-            priceField.val('').removeClass('custom-price');
-            row.find('.min-sell-price').hide();
-        }
-    }
-
-    function validateForm() {
-        let isValid = true;
-        let errorMessage = '';
-        
-        // Check if at least one item is added
-        if ($('.item-card').length === 0) {
-            errorMessage = 'Please add at least one item to the quotation.';
+    var requiredFields = $('#quotation-form').find('[required]');
+    requiredFields.each(function() {
+        if (!$(this).val()) {
             isValid = false;
+            $(this).addClass('error');
+            errorMessage = 'Please fill in all required fields.';
+        } else {
+            $(this).removeClass('error');
         }
-        
-        // Check if all required fields are filled
-        const requiredFields = $('#quotation-form').find('[required]');
-        requiredFields.each(function() {
-            if (!$(this).val()) {
-                isValid = false;
-                $(this).addClass('error');
-                errorMessage = 'Please fill in all required fields.';
-            } else {
-                $(this).removeClass('error');
-            }
-        });
-        
-        if (!isValid) {
-            showErrorMessage(errorMessage);
-            // Scroll to first error field on mobile
-            const firstError = $('.error').first();
-            if (firstError.length) {
-                firstError[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+    });
+
+    if (!isValid) {
+        showErrorMessage(errorMessage);
+        var firstError = $('.error').first();
+        if (firstError.length) {
+            firstError[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        
-        return isValid;
     }
-    
-    function showSuccessMessage(message) {
-        $('#success-message').text(message).slideDown();
-        $('#error-message').slideUp();
-        
-        // Scroll to top on mobile to see message
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        setTimeout(() => {
-            $('#success-message').slideUp();
-        }, 5000);
+    return isValid;
+}
+
+// ── Messages ──
+function showSuccessMessage(message) {
+    $('#success-message').text(message).slideDown();
+    $('#error-message').slideUp();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(function() { $('#success-message').slideUp(); }, 5000);
+}
+
+function showErrorMessage(message) {
+    $('#error-message').text(message).slideDown();
+    $('#success-message').slideUp();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if ('vibrate' in navigator) navigator.vibrate(200);
+    setTimeout(function() { $('#error-message').slideUp(); }, 5000);
+}
+
+// ── Touch feedback ──
+$(document).on('touchstart', '.btn', function() { $(this).addClass('active'); });
+$(document).on('touchend touchcancel', '.btn', function() { $(this).removeClass('active'); });
+
+// ── Select2 mobile helpers ──
+$(document).on('select2:open', function() {
+    if (window.innerWidth < 576) {
+        $('.select2-container--open .select2-search__field').attr('placeholder', 'Search...');
+        setTimeout(function() {
+            $('.select2-container--open .select2-search__field').focus();
+        }, 100);
     }
-    
-    function showErrorMessage(message) {
-        $('#error-message').text(message).slideDown();
-        $('#success-message').slideUp();
-        
-        // Scroll to top on mobile to see message
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // Vibrate on mobile for error feedback
-        if ('vibrate' in navigator) {
-            navigator.vibrate(200);
-        }
-        
-        setTimeout(() => {
-            $('#error-message').slideUp();
-        }, 5000);
+});
 
-
+$(document).on('select2:open', function() {
+    var searchField = $('.select2-container--open .select2-search__field');
+    var results = $('.select2-container--open .select2-results__options');
+    if (results.length && searchField.length) {
+        results.on('scroll', function() { searchField.blur(); });
     }
+});
 
-      // Try to get location when page loads
-  document.addEventListener("DOMContentLoaded", function () {
-    if (!navigator.geolocation) {
-      console.log("Geolocation not supported");
-      return;
-    }
+// ── Prevent Enter key form submit ──
+$(document).on('keypress', 'input', function(e) {
+    if (e.which === 13) { e.preventDefault(); $(this).blur(); }
+});
 
+// ── Online / Offline ──
+window.addEventListener('online', function() { showSuccessMessage('Connection restored'); });
+window.addEventListener('offline', function() { showErrorMessage('No internet connection. Your draft is saved locally.'); });
+
+// ── PWA / Standalone ──
+window.addEventListener('load', function() {
+    if (window.navigator.standalone) document.body.classList.add('standalone');
+    if (window.matchMedia('(display-mode: standalone)').matches) document.body.classList.add('pwa');
+});
+
+// ── Geolocation ──
+document.addEventListener('DOMContentLoaded', function() {
+    if (!navigator.geolocation) { console.log('Geolocation not supported'); return; }
     navigator.geolocation.getCurrentPosition(
-      function (position) {
-        const latInput = document.getElementById("location_lat");
-        const lngInput = document.getElementById("location_lng");
-
-        if (latInput && lngInput) {
-          latInput.value = position.coords.latitude;
-          lngInput.value = position.coords.longitude;
-        }
-      },
-      function (error) {
-        console.log("Geolocation error:", error);
-        // user may deny permission – that's fine, we just leave it blank
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 60000
-      }
+        function(position) {
+            var latInput = document.getElementById('location_lat');
+            var lngInput = document.getElementById('location_lng');
+            if (latInput && lngInput) {
+                latInput.value = position.coords.latitude;
+                lngInput.value = position.coords.longitude;
+            }
+        },
+        function(error) { console.log('Geolocation error:', error); },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
     );
-  });
+});
 </script>
 </body>
 </html>

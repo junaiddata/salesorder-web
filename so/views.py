@@ -1577,24 +1577,37 @@ def home(request):
             )
         
         # Add all days (including zero sales days)
+        day_sales_val = day_sales or Decimal('0')
+        day_gp_val = day_gp or Decimal('0')
+        day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
+
         month_days.append({
             'day': day_num,
             'date': day_date,
             'formatted_date': f"{month_names[current_month - 1]} {day_num}",
-            'sales': day_sales or Decimal('0'),
-            'gp': day_gp or Decimal('0'),
+            'sales': day_sales_val,
+            'gp': day_gp_val,
+            'gp_pct': round(day_gp_pct, 1),
             'has_sales': bool(day_sales and day_sales > Decimal('0')),
         })
-    
+
+    def _gp_pct(gp, sales):
+        s = float(sales or Decimal('0'))
+        return round((float(gp or Decimal('0')) / s * 100), 1) if s else 0
+
     return render(request, 'so/home.html', {
         'today_sales': today_sales or Decimal('0'),
         'today_gp': today_gp or Decimal('0'),
+        'today_gp_pct': _gp_pct(today_gp, today_sales),
         'month_sales': month_sales or Decimal('0'),
         'month_gp': month_gp or Decimal('0'),
+        'month_gp_pct': _gp_pct(month_gp, month_sales),
         'year_sales': year_sales or Decimal('0'),
         'year_gp': year_gp or Decimal('0'),
+        'year_gp_pct': _gp_pct(year_gp, year_sales),
         'week_sales': week_sales or Decimal('0'),
         'week_gp': week_gp or Decimal('0'),
+        'week_gp_pct': _gp_pct(week_gp, week_sales),
         'is_admin': is_admin,
         'store_filter': store_filter,
         'month_days': month_days,

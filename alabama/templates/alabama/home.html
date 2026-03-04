@@ -35,7 +35,7 @@
                 </div>
                 <div class="stat-icon primary"><i class="fas fa-calendar-day"></i></div>
             </div>
-            {% if is_admin %}<div class="stat-label">GP: {{ today_gp|floatformat:2|intcomma }}</div>{% endif %}
+            {% if is_admin %}<div class="stat-label">GP: {{ today_gp|floatformat:2|intcomma }} &nbsp;|&nbsp; GP%: {{ today_gp_pct|floatformat:1 }}%</div>{% endif %}
         </div>
         <div class="stat-card">
             <div class="stat-header">
@@ -45,7 +45,7 @@
                 </div>
                 <div class="stat-icon warning"><i class="fas fa-calendar-week"></i></div>
             </div>
-            {% if is_admin %}<div class="stat-label">GP: {{ week_gp|floatformat:2|intcomma }}</div>{% endif %}
+            {% if is_admin %}<div class="stat-label">GP: {{ week_gp|floatformat:2|intcomma }} &nbsp;|&nbsp; GP%: {{ week_gp_pct|floatformat:1 }}%</div>{% endif %}
         </div>
         <div class="stat-card">
             <div class="stat-header">
@@ -55,7 +55,7 @@
                 </div>
                 <div class="stat-icon success"><i class="fas fa-calendar-alt"></i></div>
             </div>
-            {% if is_admin %}<div class="stat-label">GP: {{ month_gp|floatformat:2|intcomma }}</div>{% endif %}
+            {% if is_admin %}<div class="stat-label">GP: {{ month_gp|floatformat:2|intcomma }} &nbsp;|&nbsp; GP%: {{ month_gp_pct|floatformat:1 }}%</div>{% endif %}
         </div>
         <div class="stat-card">
             <div class="stat-header">
@@ -65,7 +65,7 @@
                 </div>
                 <div class="stat-icon info"><i class="fas fa-calendar"></i></div>
             </div>
-            {% if is_admin %}<div class="stat-label">GP: {{ year_gp|floatformat:2|intcomma }}</div>{% endif %}
+            {% if is_admin %}<div class="stat-label">GP: {{ year_gp|floatformat:2|intcomma }} &nbsp;|&nbsp; GP%: {{ year_gp_pct|floatformat:1 }}%</div>{% endif %}
         </div>
     </div>
 
@@ -77,7 +77,7 @@
                 <div class="calendar-day {% if day.day == today.day %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
                     <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{ day.formatted_date }}</div>
                     <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{ day.sales|floatformat:0|intcomma }}</div>
-                    {% if is_admin %}<div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }}</div>{% endif %}
+                    {% if is_admin %}<div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }} | {{ day.gp_pct|floatformat:1 }}%</div>{% endif %}
                 </div>
                 {% endfor %}
             </div>

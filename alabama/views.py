@@ -88,6 +88,10 @@ def home(request):
 
     qs = AlabamaSalesLine.objects.all()
 
+    def _gp_pct(gp, sales):
+        s = float(sales or 0)
+        return round((float(gp or 0) / s * 100), 1) if s else 0
+
     # Today
     today_qs = qs.filter(posting_date=today)
     today_sales = today_qs.aggregate(s=Sum('net_sales'))['s'] or 0
@@ -125,6 +129,7 @@ def home(request):
             'formatted_date': f"{month_names[current_month - 1]} {day_num}",
             'sales': day_sales,
             'gp': day_gp,
+            'gp_pct': _gp_pct(day_gp, day_sales),
             'has_sales': bool(day_sales and day_sales > 0),
         })
 
@@ -137,13 +142,17 @@ def home(request):
     context = {
         'today_sales': today_sales,
         'today_gp': today_gp,
+        'today_gp_pct': _gp_pct(today_gp, today_sales),
         'today_docs': today_docs,
         'week_sales': week_sales,
         'week_gp': week_gp,
+        'week_gp_pct': _gp_pct(week_gp, week_sales),
         'month_sales': month_sales,
         'month_gp': month_gp,
+        'month_gp_pct': _gp_pct(month_gp, month_sales),
         'year_sales': year_sales,
         'year_gp': year_gp,
+        'year_gp_pct': _gp_pct(year_gp, year_sales),
         'month_days': month_days,
         'is_admin': is_admin,
         'today': today,
