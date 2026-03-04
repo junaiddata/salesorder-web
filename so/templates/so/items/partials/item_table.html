@@ -1,201 +1,70 @@
-<style>
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .data-table thead {
-        background-color: #f7fafc;
-        border-bottom: 2px solid #e2e8f0;
-    }
-
-    .data-table th {
-        padding: 1rem;
-        text-align: left;
-        font-weight: 600;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #718096;
-    }
-
-    .data-table tbody tr {
-        border-bottom: 1px solid #e2e8f0;
-        transition: background-color 0.15s;
-    }
-
-    .data-table tbody tr:hover {
-        background-color: #f7fafc;
-    }
-
-    .data-table td {
-        padding: 1rem;
-        font-size: 0.875rem;
-        color: #2d3748;
-    }
-
-    .code-cell {
-        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-        font-weight: 500;
-        color: #1a202c;
-    }
-
-    .upvc-cell {
-        color: #718096;
-        font-weight: 500;
-    }
-
-    .description-cell {
-        max-width: 400px;
-        line-height: 1.5;
-    }
-
-    .firm-cell {
-        color: #4a5568;
-        font-weight: 500;
-    }
-
-    .actions-cell {
-        white-space: nowrap;
-    }
-
-    .action-buttons {
-        display: flex;
-        gap: 0.5rem;
-    }
-
-    .action-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2rem;
-        height: 2rem;
-        border-radius: 0.375rem;
-        transition: all 0.15s;
-        text-decoration: none;
-    }
-
-    .edit-btn {
-        color: #4299e1;
-        background-color: #ebf8ff;
-    }
-
-    .edit-btn:hover {
-        background-color: #bee3f8;
-        transform: scale(1.05);
-    }
-
-    .delete-btn {
-        color: #f56565;
-        background-color: #fed7d7;
-    }
-
-    .delete-btn:hover {
-        background-color: #fc8181;
-        color: white;
-        transform: scale(1.05);
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 4rem 2rem;
-    }
-
-    .empty-icon {
-        width: 4rem;
-        height: 4rem;
-        margin: 0 auto 1rem;
-        color: #cbd5e0;
-    }
-
-    .empty-title {
-        font-size: 1.125rem;
-        font-weight: 600;
-        color: #4a5568;
-        margin-bottom: 0.5rem;
-    }
-
-    .empty-text {
-        color: #718096;
-        font-size: 0.875rem;
-    }
-
-    /* Responsive table */
-    @media (max-width: 768px) {
-        .data-table {
-            font-size: 0.813rem;
-        }
-
-        .data-table th,
-        .data-table td {
-            padding: 0.75rem 0.5rem;
-        }
-
-        .description-cell {
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-    }
-</style>
-
-<table class="data-table">
+{% if items %}
+<table class="items-table">
     <thead>
         <tr>
+            <th style="width:40px;">#</th>
             <th>Code</th>
-            <th>UPVC</th>
             <th>Description</th>
             <th>Firm</th>
-            <th>Stock</th>
-            <th style="text-align: center;">Actions</th>
+            <th>UPVC</th>
+            <th class="th-num">Price</th>
+            <th class="th-num">Cost</th>
+            <th class="th-num">Stock</th>
+            <th class="th-actions" style="width:90px;">Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for item in items %}
         <tr>
-            <td class="code-cell">{{ item.item_code }}</td>
-            <td class="upvc-cell">{{ item.item_upvc }}</td>
-            <td class="description-cell">{{ item.item_description }}</td>
-            <td class="firm-cell">{{ item.item_firm }}</td>
-            <td class="stock-cell">{{ item.item_stock }}</td>
-            <td class="actions-cell">
-                <div class="action-buttons">
-                    <a href="{% url 'item_edit' item.pk %}" class="action-btn edit-btn" title="Edit item">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            <td style="color:#94a3b8; font-size:.78rem;">{{ forloop.counter }}</td>
+            <td class="td-code">{{ item.item_code }}</td>
+            <td>{{ item.item_description|default:"—" }}</td>
+            <td>{{ item.item_firm|default:"—" }}</td>
+            <td>{{ item.item_upvc|default:"—" }}</td>
+            <td class="td-num">{{ item.item_price|default:"—" }}</td>
+            <td class="td-num">
+                {% if request and request.user.is_authenticated and request.user.username == 'manager' %}
+                    {{ item.item_cost|default:"—" }}
+                {% else %}
+                    <span style="color:#cbd5e1;">••••</span>
+                {% endif %}
+            </td>
+            <td class="td-num">{{ item.item_stock|default:"0" }}</td>
+            <td>
+                <div class="td-actions">
+                    <a href="{% url 'item_edit' item.pk %}" class="action-btn" title="Edit">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414
+                                     a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                         </svg>
                     </a>
-                     <a href="#" onclick="confirmDelete('{{ item.pk }}')" class="action-btn delete-btn" title="Delete item">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </a>
-                    <form id="delete-form-{{ item.pk }}" method="post" action="{% url 'item_delete' item.pk %}" style="display:none;">
+                    <form method="post" action="{% url 'item_delete' item.pk %}"
+                          style="display:inline;" onsubmit="return confirm('Delete {{ item.item_code }}?');">
                         {% csrf_token %}
+                        <button type="submit" class="action-btn danger" title="Delete">
+                            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858
+                                         L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
                     </form>
                 </div>
             </td>
         </tr>
-        {% empty %}
-        <tr>
-            <td colspan="5" class="empty-state">
-                <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <div class="empty-title">No items found</div>
-                <div class="empty-text">Try adjusting your filters or add a new item to get started.</div>
-            </td>
-        </tr>
         {% endfor %}
     </tbody>
-
 </table>
-
-    <script>
-function confirmDelete(itemId) {
-    if (confirm('Are you sure you want to delete this item?')) {
-        document.getElementById('delete-form-' + itemId).submit();
-    }
-}
-</script>
+{% else %}
+<div class="empty-state">
+    <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16
+                 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293
+                 l-2.414-2.414A1 1 0 006.586 13H4"/>
+    </svg>
+    <h3>No items found</h3>
+    <p>Try adjusting your search or filters, or add a new item.</p>
+</div>
+{% endif %}

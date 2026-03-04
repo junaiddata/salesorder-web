@@ -3,245 +3,486 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Item Management</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        /* ── Reset & Base ───────────────────────────── */
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #f5f7fa;
-            color: #2d3748;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            line-height: 1.5;
+            min-height: 100vh;
         }
 
-        .container {
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 2rem;
+        /* ── Container ──────────────────────────────── */
+        .container { max-width: 1360px; margin: 0 auto; padding: 1.5rem; }
+
+        /* ── Header ─────────────────────────────────── */
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+        }
+        .page-title { font-size: 1.75rem; font-weight: 700; color: #0f172a; }
+        .page-title svg { vertical-align: -3px; margin-right: .4rem; color: #3b82f6; }
+        .btn-add {
+            display: inline-flex; align-items: center; gap: .45rem;
+            background: #3b82f6; color: #fff; padding: .65rem 1.4rem;
+            border-radius: .5rem; text-decoration: none; font-weight: 600;
+            font-size: .875rem; transition: all .2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,.08);
+        }
+        .btn-add:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+
+        /* ── Card ───────────────────────────────────── */
+        .card {
+            background: #fff; border-radius: .75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            overflow: hidden;
+        }
+        .card + .card { margin-top: 1.25rem; }
+
+        /* ── Search Card ────────────────────────────── */
+        .search-card { padding: 1.5rem; margin-bottom: 1.25rem; }
+        .search-card .section-title {
+            font-size: .8rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: #64748b; margin-bottom: .75rem;
         }
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
+        /* Row layout */
+        .filter-row {
+            display: flex; flex-wrap: wrap; gap: .75rem;
+            align-items: flex-end; margin-bottom: 1rem;
+        }
+        .filter-row:last-child { margin-bottom: 0; }
+
+        .fg { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 140px; }
+        .fg-grow2 { flex: 2.5; min-width: 260px; }
+        .fg-small { flex: 0 0 130px; min-width: 110px; }
+        .fg-auto { flex: 0 0 auto; }
+
+        .fg label {
+            font-size: .75rem; font-weight: 600; color: #475569;
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .fg select, .fg input, .fg textarea {
+            padding: .55rem .75rem; border: 1.5px solid #e2e8f0;
+            border-radius: .45rem; font-size: .875rem;
+            background: #fff; color: #1e293b; transition: all .15s;
+            width: 100%;
+        }
+        .fg select:focus, .fg input:focus, .fg textarea:focus {
+            outline: none; border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+        }
+        .fg textarea { resize: vertical; min-height: 60px; font-family: 'Consolas','Courier New', monospace; font-size: .82rem; }
+
+        .search-input-wrap { position: relative; }
+        .search-input-wrap input { padding-left: 2.3rem; }
+        .search-input-wrap .search-icon {
+            position: absolute; left: .7rem; top: 50%; transform: translateY(-50%);
+            color: #94a3b8; pointer-events: none;
         }
 
-        .title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-        }
+        /* Divider line */
+        .filter-divider { border: none; border-top: 1px solid #f1f5f9; margin: .75rem 0; }
 
-        .add-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background-color: #4299e1;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.2s;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
+        /* Bulk section styling */
+        .bulk-section { background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: .5rem; padding: 1rem; margin-bottom: 1rem; }
+        .bulk-section .section-title { margin-bottom: .5rem; color: #3b82f6; }
+        .bulk-section .hint { font-size: .75rem; color: #94a3b8; margin-top: .3rem; }
+        .bulk-section textarea { border-color: #cbd5e1; background: #fff; }
 
-        .add-button:hover {
-            background-color: #3182ce;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        /* Toggle link for advanced */
+        .advanced-toggle {
+            display: inline-flex; align-items: center; gap: .3rem;
+            font-size: .8rem; font-weight: 600; color: #64748b;
+            cursor: pointer; user-select: none; margin-bottom: .75rem;
+            transition: color .15s; border: none; background: none; padding: 0;
         }
+        .advanced-toggle:hover { color: #3b82f6; }
+        .advanced-toggle svg { transition: transform .2s; }
+        .advanced-toggle.open svg { transform: rotate(90deg); }
+        .advanced-body { display: none; }
+        .advanced-body.open { display: block; }
 
-        .filters {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            align-items: center;
+        /* Action buttons */
+        .btn-search {
+            padding: .6rem 1.6rem; background: #3b82f6; color: #fff;
+            border: none; border-radius: .45rem; font-weight: 600;
+            font-size: .875rem; cursor: pointer; transition: all .15s;
         }
-
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            flex: 1;
-            min-width: 250px;
+        .btn-search:hover { background: #2563eb; }
+        .btn-clear {
+            padding: .6rem 1.2rem; color: #64748b; text-decoration: none;
+            font-size: .85rem; font-weight: 500; border-radius: .45rem;
+            transition: all .15s;
         }
+        .btn-clear:hover { color: #3b82f6; background: #f1f5f9; }
 
-        .filter-label {
-            font-weight: 500;
-            color: #4a5568;
+        /* ── Results Bar ────────────────────────────── */
+        .results-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: .5rem; padding: .75rem 0; font-size: .85rem;
+        }
+        .result-count { color: #64748b; font-weight: 500; }
+        .result-count strong { color: #1e293b; }
+        .not-found-alert {
+            display: none; background: #fef3c7; color: #92400e;
+            padding: .45rem .85rem; border-radius: .4rem; font-size: .8rem;
+            font-weight: 500; border: 1px solid #fde68a;
+        }
+        .not-found-alert.visible { display: inline-flex; align-items: center; gap: .3rem; }
+        .not-found-alert svg { flex-shrink: 0; }
+
+        /* ── Table ──────────────────────────────────── */
+        .table-wrap { position: relative; min-height: 200px; overflow-x: auto; }
+        table.items-table {
+            width: 100%; border-collapse: collapse; font-size: .85rem;
+        }
+        table.items-table thead { background: #f8fafc; position: sticky; top: 0; z-index: 2; }
+        table.items-table th {
+            padding: .7rem 1rem; text-align: left; font-weight: 700;
+            color: #475569; font-size: .75rem; text-transform: uppercase;
+            letter-spacing: .04em; border-bottom: 2px solid #e2e8f0;
             white-space: nowrap;
         }
-
-        .filter-select, .search-input {
-            flex: 1;
-            padding: 0.625rem 1rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 0.5rem;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-            background-color: white;
+        table.items-table td {
+            padding: .6rem 1rem; border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
         }
+        table.items-table tbody tr { transition: background .1s; }
+        table.items-table tbody tr:hover { background: #f8fafc; }
+        table.items-table tbody tr:nth-child(even) { background: #fafbfd; }
+        table.items-table tbody tr:nth-child(even):hover { background: #f1f5f9; }
 
-        .filter-select:focus, .search-input:focus {
-            outline: none;
-            border-color: #4299e1;
-            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        .td-code { font-family: 'Consolas','Courier New', monospace; font-weight: 600; color: #1e40af; }
+        .td-num { text-align: right; font-variant-numeric: tabular-nums; }
+        .th-num { text-align: right; }
+        .th-actions, .td-actions { text-align: center; white-space: nowrap; }
+
+        /* Action buttons in table */
+        .td-actions { display: flex; gap: .35rem; justify-content: center; }
+        .action-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; border-radius: .35rem;
+            border: 1.5px solid #e2e8f0; background: #fff;
+            color: #64748b; cursor: pointer; transition: all .15s;
+            text-decoration: none;
         }
+        .action-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+        .action-btn.danger:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
 
-        .search-input {
-            padding-left: 2.5rem;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: 0.75rem center;
-            background-size: 1.25rem;
+        /* ── Empty state ────────────────────────────── */
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 3rem 1rem; color: #94a3b8;
         }
+        .empty-state svg { margin-bottom: .75rem; }
+        .empty-state h3 { font-size: 1.1rem; color: #64748b; margin-bottom: .25rem; }
+        .empty-state p { font-size: .85rem; }
 
-        .table-container {
-            background: white;
-            border-radius: 0.75rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            position: relative;
-            min-height: 400px;
-        }
-
+        /* ── Loading ────────────────────────────────── */
         .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.9);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
+            position: absolute; inset: 0; background: rgba(255,255,255,.85);
+            display: none; align-items: center; justify-content: center; z-index: 10;
         }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-
+        .loading-overlay.active { display: flex; }
         .spinner {
-            width: 2.5rem;
-            height: 2.5rem;
-            border: 3px solid #e2e8f0;
-            border-top-color: #4299e1;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            width: 2.2rem; height: 2.2rem; border: 3px solid #e2e8f0;
+            border-top-color: #3b82f6; border-radius: 50%;
+            animation: spin .7s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        /* ── Messages ───────────────────────────────── */
+        .messages { list-style: none; margin-bottom: 1rem; }
+        .messages li {
+            padding: .7rem 1rem; border-radius: .45rem; font-size: .875rem;
+            font-weight: 500; margin-bottom: .4rem;
         }
+        .messages .success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .messages .error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
-        /* Responsive */
+        /* ── Responsive ─────────────────────────────── */
         @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .add-button {
-                text-align: center;
-                justify-content: center;
-            }
-
-            .filters {
-                flex-direction: column;
-            }
-
-            .filter-group {
-                width: 100%;
-            }
+            .container { padding: 1rem; }
+            .page-header { flex-direction: column; align-items: stretch; }
+            .btn-add { justify-content: center; }
+            .fg-grow2 { min-width: 100%; }
+            .fg-small { flex: 1 1 45%; min-width: 45%; }
+            .filter-row { gap: .5rem; }
+            table.items-table th, table.items-table td { padding: .5rem .6rem; font-size: .78rem; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1 class="title">Item Management</h1>
-            <a href="{% url 'item_create' %}" class="add-button">
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+
+        <!-- Messages -->
+        {% if messages %}
+        <ul class="messages">
+            {% for msg in messages %}
+            <li class="{{ msg.tags }}">{{ msg }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <!-- Header -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+                Item Management
+            </h1>
+            <a href="{% url 'item_create' %}" class="btn-add">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
                 </svg>
                 Add New Item
             </a>
         </div>
 
-        <div class="filters">
-            <div class="filter-group">
-                <label for="firm-filter" class="filter-label">Filter by Firm:</label>
-                <select id="firm-filter" class="filter-select">
-                    <option value="">All Firms</option>
-                    {% for firm in firms %}
-                        <option value="{{ firm }}">{{ firm }}</option>
-                    {% endfor %}
-                </select>
+        <!-- ─── Search & Filters ─── -->
+        <form method="get" action="{% url 'item_list' %}" id="search-form" class="card search-card" autocomplete="off">
+
+            <!-- Row 1: Firm / Quick Search / Search-In -->
+            <div class="section-title">Quick Search</div>
+            <div class="filter-row">
+                <div class="fg">
+                    <label for="firm-filter">Firm</label>
+                    <select id="firm-filter" name="firm">
+                        <option value="">All Firms</option>
+                        {% for f in firms %}
+                        <option value="{{ f }}" {% if f == search_params.firm %}selected{% endif %}>{{ f }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg fg-grow2">
+                    <label for="search-box">Search term</label>
+                    <div class="search-input-wrap">
+                        <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" id="search-box" name="q"
+                               placeholder="Search by code, description, firm…"
+                               value="{{ search_params.q|default:'' }}">
+                    </div>
+                </div>
+                <div class="fg" style="max-width:160px;">
+                    <label for="search-in">Search in</label>
+                    <select id="search-in" name="search_in">
+                        <option value="all"         {% if search_params.search_in == 'all' %}selected{% endif %}>All fields</option>
+                        <option value="code"        {% if search_params.search_in == 'code' %}selected{% endif %}>Code only</option>
+                        <option value="description" {% if search_params.search_in == 'description' %}selected{% endif %}>Description</option>
+                        <option value="upvc"        {% if search_params.search_in == 'upvc' %}selected{% endif %}>UPVC only</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="filter-group">
-                <input type="text" id="search-box" class="search-input" placeholder="Search code or description...">
+            <!-- Bulk Code Lookup -->
+            <div class="bulk-section">
+                <div class="section-title">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:-2px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 12h16M4 18h7"/>
+                    </svg>
+                    Bulk Code Lookup
+                </div>
+                <div class="fg">
+                    <textarea id="multi-codes" name="multi_codes" rows="2"
+                              placeholder="Paste multiple item codes here — separated by space, comma, semicolon or new line&#10;Example: ABC001 DEF002 GHI003">{{ search_params.multi_codes|default:'' }}</textarea>
+                </div>
+                <div class="hint">Each code is matched exactly. All matching items will be returned.</div>
             </div>
-        </div>
+            <!-- Advanced Filters Toggle -->
+            <button type="button" class="advanced-toggle" id="adv-toggle">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/>
+                </svg>
+                Advanced Filters
+            </button>
+            <div class="advanced-body" id="adv-body">
+                <div class="filter-row">
+                    <div class="fg fg-small">
+                        <label for="min-price">Min Price</label>
+                        <input type="number" id="min-price" name="min_price" step="0.01" min="0"
+                               placeholder="0" value="{{ search_params.min_price|default:'' }}">
+                    </div>
+                    <div class="fg fg-small">
+                        <label for="max-price">Max Price</label>
+                        <input type="number" id="max-price" name="max_price" step="0.01" min="0"
+                               placeholder="∞" value="{{ search_params.max_price|default:'' }}">
+                    </div>
+                    <div class="fg fg-small">
+                        <label for="min-stock">Min Stock</label>
+                        <input type="number" id="min-stock" name="min_stock" min="0"
+                               placeholder="0" value="{{ search_params.min_stock|default:'' }}">
+                    </div>
+                    <div class="fg fg-small">
+                        <label for="max-stock">Max Stock</label>
+                        <input type="number" id="max-stock" name="max_stock" min="0"
+                               placeholder="∞" value="{{ search_params.max_stock|default:'' }}">
+                    </div>
+                </div>
+            </div>
 
-        <div class="table-container">
-            <div class="loading-overlay" id="loading">
-                <div class="spinner"></div>
+            <hr class="filter-divider">
+
+            <!-- Action Buttons -->
+            <div class="filter-row" style="justify-content: flex-end; margin-bottom: 0;">
+                <div class="fg-auto" style="display:flex; gap:.5rem; align-items:center;">
+                    <button type="submit" class="btn-search">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                             style="vertical-align:-2px; margin-right:4px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        Search
+                    </button>
+                    <a href="{% url 'item_list' %}" class="btn-clear">Clear All</a>
+                </div>
             </div>
-            <div id="item-table">
-                {% include 'so/items/partials/item_table.html' %}
+        </form>
+
+        <!-- ─── Results ─── -->
+        <div class="card">
+            <!-- Results bar -->
+            <div style="padding: .75rem 1.25rem; border-bottom: 1px solid #f1f5f9;">
+                <div class="results-bar">
+                    <span class="result-count" id="result-count">
+                        <strong>{{ total_count }}</strong> item{{ total_count|pluralize }} found
+                        {% if total_count > 500 %}<span style="color:#f59e0b;">(showing first 500)</span>{% endif %}
+                    </span>
+                    <span class="not-found-alert {% if not_found_codes %}visible{% endif %}" id="not-found-alert">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span id="not-found-text">
+                            {% if not_found_codes %}
+                                Not found: {{ not_found_codes|join:", " }}
+                            {% endif %}
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrap">
+                <div class="loading-overlay" id="loading">
+                    <div class="spinner"></div>
+                </div>
+                <div id="item-table">
+                    {% include 'so/items/partials/item_table.html' %}
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- ─── JavaScript ─── -->
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const firmSelect = document.getElementById('firm-filter');
-        const searchBox = document.getElementById('search-box');
-        const loading = document.getElementById('loading');
+        const form        = document.getElementById('search-form');
+        const loading     = document.getElementById('loading');
+        const resultCount = document.getElementById('result-count');
+        const nfAlert     = document.getElementById('not-found-alert');
+        const nfText      = document.getElementById('not-found-text');
+        const advToggle   = document.getElementById('adv-toggle');
+        const advBody     = document.getElementById('adv-body');
         let searchTimer;
 
+        /* ── Advanced toggle ── */
+        advToggle.addEventListener('click', function () {
+            advToggle.classList.toggle('open');
+            advBody.classList.toggle('open');
+        });
+        // Auto-open if any advanced filter has a value
+        if (document.getElementById('min-price').value ||
+            document.getElementById('max-price').value ||
+            document.getElementById('min-stock').value ||
+            document.getElementById('max-stock').value) {
+            advToggle.classList.add('open');
+            advBody.classList.add('open');
+        }
+
+        /* ── Build query string ── */
+        function getSearchParams() {
+            const fd = new FormData(form);
+            const params = new URLSearchParams();
+            for (const [k, v] of fd) {
+                if (v.trim()) params.append(k, v.trim());
+            }
+            return params.toString();
+        }
+
+        /* ── AJAX load ── */
         function loadItems() {
-            const firm = firmSelect.value;
-            const query = searchBox.value;
-
             loading.classList.add('active');
+            const qs = getSearchParams();
 
-            fetch(`/ajax/item-list/?firm=${firm}&q=${query}`)
-                .then(response => response.json())
+            fetch('{% url "item_list_ajax" %}?' + qs)
+                .then(r => r.json())
                 .then(data => {
                     document.getElementById('item-table').innerHTML = data.html;
+
+                    // Update result count
+                    const c = data.total_count;
+                    let txt = '<strong>' + c + '</strong> item' + (c !== 1 ? 's' : '') + ' found';
+                    if (c > 500) txt += ' <span style="color:#f59e0b;">(showing first 500)</span>';
+                    resultCount.innerHTML = txt;
+
+                    // Update not-found alert
+                    if (data.not_found_codes && data.not_found_codes.length > 0) {
+                        nfText.textContent = 'Not found: ' + data.not_found_codes.join(', ');
+                        nfAlert.classList.add('visible');
+                    } else {
+                        nfAlert.classList.remove('visible');
+                        nfText.textContent = '';
+                    }
+
                     loading.classList.remove('active');
                 })
-                .catch(error => {
-                    console.error('Error:', error);
+                .catch(err => {
+                    console.error('Search error:', err);
                     loading.classList.remove('active');
                 });
         }
 
-        firmSelect.addEventListener('change', loadItems);
-        
-        searchBox.addEventListener('input', () => {
+        /* ── Prevent form reload, use AJAX ── */
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
             clearTimeout(searchTimer);
-            searchTimer = setTimeout(loadItems, 300);
+            loadItems();
+            // Update URL without reload so bookmarking / back works
+            const qs = getSearchParams();
+            history.replaceState(null, '', qs ? '?' + qs : window.location.pathname);
+        });
+
+        /* ── Live search on dropdowns & number fields ── */
+        form.querySelectorAll('select, input[type="number"]').forEach(el => {
+            el.addEventListener('change', function () {
+                clearTimeout(searchTimer);
+                loadItems();
+            });
+        });
+
+        /* ── Debounced live search on text input ── */
+        document.getElementById('search-box').addEventListener('input', function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadItems, 400);
+        });
+
+        /* ── Debounced live search on bulk codes textarea ── */
+        document.getElementById('multi-codes').addEventListener('input', function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadItems, 600);
         });
     });
     </script>
 </body>
 </html>
+                

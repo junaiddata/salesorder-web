@@ -1685,76 +1685,187 @@ def delete_customer(request, customer_id):
 
 
 #####################################  ITEM SECTION ################################################################
-# List all items
-def item_list(request):
-    selected_firm = request.GET.get('firm')
-    firms = Items.objects.values_list('item_firm', flat=True).distinct().order_by('item_firm')
+import re
+from functools import reduce
 
-    if selected_firm:
-        items = Items.objects.filter(item_firm=selected_firm)[:200]
-    else:
-        items = Items.objects.all()[:200]
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.db.models import Q
+
+from .models import Items
+from .forms import ItemForm
+
+
+def _build_item_search_queryset(request, base_queryset=None):
+    """Shared backend logic for advanced item search. Returns filtered queryset."""
+    items = base_queryset if base_queryset is not None else Items.objects.all()
+
+    # ── Firm filter ──
+    firm = request.GET.get('firm', '').strip()
+    if firm:
+        items = items.filter(item_firm=firm)
+
+    # ── Bulk code search (exact match, multiple codes) ──
+    multi_codes = request.GET.get('multi_codes', '').strip()
+    if multi_codes:
+        codes = [c.strip() for c in re.split(r'[,\s\n;]+', multi_codes) if c.strip()]
+        if codes:
+            code_query = reduce(
+                lambda a, b: a | b,
+                [Q(item_code__iexact=c) for c in codes]
+            )
+            items = items.filter(code_query)
+
+    # ── Single search query (partial / contains match) ──
+    query = request.GET.get('q', '').strip()
+    if query:
+        search_in = request.GET.get('search_in', 'all')
+        if search_in == 'code':
+            items = items.filter(item_code__icontains=query)
+        elif search_in == 'description':
+            items = items.filter(item_description__icontains=query)
+        elif search_in == 'upvc':
+            items = items.filter(item_upvc__icontains=query)
+        else:
+            items = items.filter(
+                Q(item_code__icontains=query)
+                | Q(item_description__icontains=query)
+                | Q(item_firm__icontains=query)
+                | Q(item_upvc__icontains=query)
+            )
+
+    # ── Price range ──
+    for param, lookup in [('min_price', 'item_price__gte'), ('max_price', 'item_price__lte')]:
+        val = request.GET.get(param, '').strip()
+        if val:
+            try:
+                items = items.filter(**{lookup: float(val)})
+            except ValueError:
+                pass
+
+    # ── Stock range ──
+    for param, lookup in [('min_stock', 'item_stock__gte'), ('max_stock', 'item_stock__lte')]:
+        val = request.GET.get(param, '').strip()
+        if val:
+            try:
+                items = items.filter(**{lookup: int(val)})
+            except ValueError:
+                pass
+
+    return items
+
+
+def _get_not_found_codes(request, queryset):
+    """Compare searched bulk codes against found results."""
+    multi_codes_raw = request.GET.get('multi_codes', '').strip()
+    if not multi_codes_raw:
+        return []
+    searched = [c.strip() for c in re.split(r'[,\s\n;]+', multi_codes_raw) if c.strip()]
+    found_lower = {
+        c.lower()
+        for c in queryset.values_list('item_code', flat=True).distinct()
+    }
+    return [c for c in searched if c.lower() not in found_lower]
+
+
+# ─── List all items ───────────────────────────────────────────
+def item_list(request):
+    firms = (
+        Items.objects.values_list('item_firm', flat=True)
+        .distinct()
+        .order_by('item_firm')
+    )
+
+    items_qs = _build_item_search_queryset(request)
+    total_count = items_qs.count()
+    not_found_codes = _get_not_found_codes(request, items_qs)
+    items = items_qs[:500]
 
     return render(request, 'so/items/item_list.html', {
         'items': items,
         'firms': firms,
-        'selected_firm': selected_firm
+        'total_count': total_count,
+        'not_found_codes': not_found_codes,
+        'search_params': {
+            'firm': request.GET.get('firm', ''),
+            'q': request.GET.get('q', ''),
+            'search_in': request.GET.get('search_in', 'all'),
+            'multi_codes': request.GET.get('multi_codes', ''),
+            'min_price': request.GET.get('min_price', ''),
+            'max_price': request.GET.get('max_price', ''),
+            'min_stock': request.GET.get('min_stock', ''),
+            'max_stock': request.GET.get('max_stock', ''),
+        },
     })
 
-# Add a new item
+
+# ─── AJAX endpoint ────────────────────────────────────────────
+def item_list_ajax(request):
+    items_qs = _build_item_search_queryset(request)
+    total_count = items_qs.count()
+    not_found_codes = _get_not_found_codes(request, items_qs)
+    items = items_qs[:500]
+
+    html = render_to_string(
+        'so/items/partials/item_table.html',
+        {'items': items},
+        request=request,
+    )
+    return JsonResponse({
+        'html': html,
+        'total_count': total_count,
+        'not_found_codes': not_found_codes,
+    })
+
+
+# ─── Create ───────────────────────────────────────────────────
 def item_create(request):
     if request.method == 'POST':
         form = ItemForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Item created successfully.")
-            return redirect('item_list')
     else:
         form = ItemForm()
-    return render(request, 'so/items/item_form.html', {'form': form, 'title': 'Add Item'})
+    if not (request.user.is_authenticated and request.user.username == 'manager'):
+        form.fields.pop('item_cost', None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, "Item created successfully.")
+        return redirect('item_list')
+    return render(request, 'so/items/item_form.html', {
+        'form': form,
+        'title': 'Add Item',
+    })
 
-# Edit an existing item
+
+# ─── Edit ─────────────────────────────────────────────────────
 def item_edit(request, pk):
     item = get_object_or_404(Items, pk=pk)
     if request.method == 'POST':
         form = ItemForm(request.POST, instance=item)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Item updated successfully.")
-            return redirect('item_list')
     else:
         form = ItemForm(instance=item)
-    return render(request, 'so/items/item_form.html', {'form': form, 'title': 'Edit Item'})
+    if not (request.user.is_authenticated and request.user.username == 'manager'):
+        form.fields.pop('item_cost', None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, "Item updated successfully.")
+        return redirect('item_list')
+    return render(request, 'so/items/item_form.html', {
+        'form': form,
+        'title': 'Edit Item',
+    })
 
+
+# ─── Delete ───────────────────────────────────────────────────
 @csrf_exempt
 def item_delete(request, pk):
     item = get_object_or_404(Items, pk=pk)
     if request.method == 'POST':
         item.delete()
         messages.success(request, "Item deleted successfully.")
-        return redirect('item_list')
-
-
-from django.http import JsonResponse
-from django.template.loader import render_to_string
-
-def item_list_ajax(request):
-    firm = request.GET.get('firm', '')
-    query = request.GET.get('q', '')
-
-    items = Items.objects.all()
-    if firm:
-        items = items.filter(item_firm=firm)
-    if query:
-        items = items.filter(
-            models.Q(item_code__icontains=query) |
-            models.Q(item_description__icontains=query) |
-            models.Q(item_firm__icontains=query) |
-            models.Q(item_upvc__icontains=query)
-        )
-    items = items[:200]
-    html = render_to_string('so/items/partials/item_table.html', {'items': items})
-    return JsonResponse({'html': html})
+    return redirect('item_list')
 #####################################################################################################################
 
 
