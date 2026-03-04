@@ -408,6 +408,12 @@
             display: block;
         }
         
+        .min-sell-price {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
         /* Messages */
         .success-message, .error-message {
             padding: 12px 16px;
@@ -697,6 +703,7 @@
                                         <input type="number" name="price" class="item-price" 
                                             step="0.01" min="0" value="" required inputmode="decimal">
                                         <p class="price-indicator">Custom price applied</p>
+                                        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
                                     </div>
                                 </div>
                             </div>
@@ -1127,6 +1134,7 @@
                             <input type="number" name="price" class="item-price" 
                                 step="0.01" min="0" value="" required inputmode="decimal">
                             <p class="price-indicator">Custom price applied</p>
+                            <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
                         </div>
                     </div>
                 </div>
@@ -1201,6 +1209,7 @@
                             <input type="number" name="price" class="item-price" 
                                 step="0.01" min="0" value="" required inputmode="decimal">
                             <p class="price-indicator">Custom price applied</p>
+                            <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
                         </div>
                     </div>
                 </div>
@@ -1255,6 +1264,7 @@
         if (!itemId) {
             stockDisplay.text('--');
             itemDetailsDisplay.text('--');
+            itemCard.find('.min-sell-price').hide();
             return;
         }
 
@@ -1267,6 +1277,10 @@
             data: { 'item_id': itemId },
             success: function(data) {
                 stockDisplay.text(data.stock);
+                if (data.min_selling_price !== undefined) {
+                    itemCard.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                    itemCard.find('.min-sell-price').show();
+                }
             },
             error: function() {
                 stockDisplay.text('Error');
@@ -1283,9 +1297,14 @@
             data: { 'item_id': itemId },
             success: function(data) {
                 rowElement.find('.item-stock').text(data.stock);
+                if (data.min_selling_price !== undefined) {
+                    rowElement.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                    rowElement.find('.min-sell-price').show();
+                }
             },
             error: function() {
                 rowElement.find('.item-stock').text('Error');
+                rowElement.find('.min-sell-price').hide();
             }
         });
     }
@@ -1319,6 +1338,12 @@
                         priceField.removeClass('custom-price');
                     }
                     
+                    // Show min selling price (item_price)
+                    if (data.min_selling_price !== undefined) {
+                        row.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
+                        row.find('.min-sell-price').show();
+                    }
+                    
                     // Re-enable the field
                     priceField.prop('disabled', false).attr('placeholder', '0.00');
                 },
@@ -1331,6 +1356,7 @@
         } else {
             console.log('Missing itemId or customerId - itemId:', itemId, 'customerId:', customerId);
             priceField.val('').removeClass('custom-price');
+            row.find('.min-sell-price').hide();
         }
     }
 

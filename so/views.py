@@ -599,6 +599,7 @@ def get_item_price(request):
         'default_price': float(default_price),
         'custom_price': float(custom_price) if custom_price else None,
         'final_price': float(final_price),
+        'min_selling_price': float(item.item_price),
     })
 
 from django.db.models import Case, When, Value, IntegerField
@@ -651,7 +652,11 @@ def get_items_by_firm(request):
 def get_item_stock(request):
     item_id = request.GET.get('item_id')
     item = get_object_or_404(Items, id=item_id)
-    return JsonResponse({'stock': item.item_stock, 'cost': float(item.item_cost)})
+    return JsonResponse({
+        'stock': item.item_stock,
+        'cost': float(item.item_cost),
+        'min_selling_price': float(item.item_price),
+    })
 
 
 def format_whatsapp_order(sales_order, order_items, request):
