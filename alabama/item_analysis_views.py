@@ -33,6 +33,14 @@ def _get_salesman_mapping_dict():
         return {}
 
 
+def _is_null_item_code(code):
+    """Exclude item codes that are NULL, -NULL-, etc."""
+    if not code or not str(code).strip():
+        return True
+    c = str(code).strip().upper()
+    return c in ('NULL', '-NULL-', 'NULL-', '-NULL')
+
+
 def _salesman_filter_q(selected_salesmen, field='sales_employee'):
     """
     Build Q filter for sales_employee matching any selected salesman.
@@ -175,7 +183,7 @@ def item_analysis(request):
             except Items.DoesNotExist:
                 continue
             code = item.item_code or ''
-            if not code:
+            if not code or _is_null_item_code(code):
                 continue
             key = code
             if key not in item_data:
@@ -229,7 +237,7 @@ def item_analysis(request):
                 }
         items_list.append(item_row)
 
-    items_list = [i for i in items_list if i['item_code'] and i['item_code'].strip()]
+    items_list = [i for i in items_list if i['item_code'] and i['item_code'].strip() and not _is_null_item_code(i['item_code'])]
     items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
 
     # Totals
@@ -434,7 +442,7 @@ def export_item_analysis_pdf(request):
             except Items.DoesNotExist:
                 continue
             code = item.item_code or ''
-            if not code:
+            if not code or _is_null_item_code(code):
                 continue
             key = code
             if key not in item_data:
@@ -689,7 +697,7 @@ def export_item_analysis_excel(request):
             except Items.DoesNotExist:
                 continue
             code = item.item_code or ''
-            if not code:
+            if not code or _is_null_item_code(code):
                 continue
             key = code
             if key not in item_data:
