@@ -86,8 +86,7 @@ def get_business_category(salesman_name):
         "B.MR.JAFAR",
         "A.MR.RASHID -2",
         "B.MR.JUNAID",
-        "A. RAFIQ SHABBIR - RASHID",
-        "A. RAFIQ ABU - RASHID",
+
     ]
     
     # Trading names list (will be normalized for comparison)
@@ -97,7 +96,9 @@ def get_business_category(salesman_name):
         "A.MR.SIYAB",
         "A.MR.RAFIQ ABU-TRD",
         "A.MR.RASHID",
-        "A.MR.RAFIQ AD"
+        "A.MR.RAFIQ AD",
+        "A. RAFIQ SHABBIR - RASHID",
+        "A. RAFIQ ABU - RASHID",
     ]
     
     # Normalize all names in lists for comparison
@@ -7566,9 +7567,11 @@ def item_analysis(request):
     creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
     
     # Apply category filter (applies before salesman filter)
+    category_salesmen_for_tiles = []  # Salesmen in selected category - for Power BI-style tiles (only when category != All)
     if category_filter and category_filter != 'All':
         category_salesmen = get_salesmen_by_category(category_filter, invoice_qs)
         if category_salesmen:
+            category_salesmen_for_tiles = list(category_salesmen)
             invoice_qs = invoice_qs.filter(salesman_name__in=category_salesmen)
             creditmemo_qs = creditmemo_qs.filter(salesman_name__in=category_salesmen)
         else:
@@ -8038,6 +8041,7 @@ def item_analysis(request):
         'salesmen': all_salesmen,
         'firms': all_firms,
         'totals_list': totals_list,
+        'category_salesmen': category_salesmen_for_tiles,  # For Power BI-style salesman tiles when category selected
         'filters': {
             'q': search_query,
             'salesman': salesmen_filter,

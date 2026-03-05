@@ -717,6 +717,20 @@
       </div>
     </div>
 
+    <!-- Salesman Tiles (Power BI effect: only when a category is selected) -->
+    {% if category_salesmen %}
+    <div id="salesman-tiles-row" class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Salesman:</label>
+        {% for sm in category_salesmen %}
+        <button type="button" class="month-tile salesman-tile {% if sm in filters.salesman %}active{% endif %}" data-salesman="{{ sm }}">
+          {{ sm }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Month Filter Tiles -->
     <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
       <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -961,11 +975,20 @@
         }
       }
 
+      function syncSalesmanTilesFromCheckboxes() {
+        document.querySelectorAll('.salesman-tile[data-salesman]').forEach(tile => {
+          const salesmanName = tile.dataset.salesman;
+          const checkbox = salesmanOptionsList ? Array.from(salesmanOptionsList.querySelectorAll('input[type="checkbox"]')).find(cb => cb.value === salesmanName) : null;
+          if (checkbox) tile.classList.toggle('active', checkbox.checked);
+        });
+      }
+
       updateSalesmanLabel();
 
       getSalesmanCheckboxes().forEach(box => {
         box.addEventListener('change', function() {
           updateSalesmanLabel();
+          syncSalesmanTilesFromCheckboxes();
         });
       });
 
@@ -1131,11 +1154,25 @@
       });
 
       // Month filter tiles (multi-select - no page refresh, just toggle)
-      const monthTiles = document.querySelectorAll('.month-tile');
+      const monthTiles = document.querySelectorAll('.month-tile[data-month]');
       
       monthTiles.forEach(tile => {
         tile.addEventListener('click', function() {
           this.classList.toggle('active');
+        });
+      });
+
+      // Salesman tiles (Power BI effect - only visible when category selected)
+      const salesmanTiles = document.querySelectorAll('.salesman-tile[data-salesman]');
+      salesmanTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+          this.classList.toggle('active');
+          const salesmanName = this.dataset.salesman;
+          const checkbox = salesmanOptionsList ? Array.from(salesmanOptionsList.querySelectorAll('input[type="checkbox"]')).find(cb => cb.value === salesmanName) : null;
+          if (checkbox) {
+            checkbox.checked = this.classList.contains('active');
+            updateSalesmanLabel();
+          }
         });
       });
 
@@ -1164,8 +1201,13 @@
         });
         
         // Add category filter
-        if (categoryInput && categoryInput.value) {
-          params.set('category', categoryInput.value);
+        const categoryVal = categoryInput ? categoryInput.value : 'All';
+        if (categoryVal) params.set('category', categoryVal);
+        
+        // When category is selected (not All), full reload so salesman tiles row appears
+        if (categoryVal && categoryVal !== 'All') {
+          window.location.href = '{% url "item_analysis" %}?' + params.toString();
+          return;
         }
         
         // Make AJAX request
@@ -1178,6 +1220,9 @@
         .then(response => response.json())
         .then(data => {
           if (data.success) {
+            // Hide salesman tiles row when category is All (AJAX only runs for All)
+            const salesmanRow = document.getElementById('salesman-tiles-row');
+            if (salesmanRow) salesmanRow.style.display = 'none';
             // Update table
             const tableWrapper = document.querySelector('.table-wrapper');
             if (tableWrapper && data.table_html) {
