@@ -1706,7 +1706,7 @@ from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.template.loader import render_to_string
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, IntegerField
 
 from .models import Items
 from .forms import ItemForm
@@ -1731,6 +1731,13 @@ def _build_item_search_queryset(request, base_queryset=None):
                 [Q(item_code__iexact=c) for c in codes]
             )
             items = items.filter(code_query)
+            # Order results by the same order as pasted codes
+            ordering = Case(
+                *[When(item_code__iexact=c, then=Value(i)) for i, c in enumerate(codes)],
+                default=Value(len(codes)),
+                output_field=IntegerField(),
+            )
+            items = items.order_by(ordering)
 
     # ── Single search query (partial / contains match) ──
     query = request.GET.get('q', '').strip()
