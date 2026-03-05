@@ -94,17 +94,21 @@
             <div class="action-icon"><i class="fas fa-file-contract"></i></div>
             <h3 class="action-title">Create Quotation</h3>
         </a>
-        <a href="{% url 'alabama:sales_summary_list' %}" class="action-card">
-            <div class="action-icon"><i class="fas fa-file-invoice"></i></div>
-            <h3 class="action-title">Sales Summary</h3>
+    </div>
+
+    <h2 class="section-title" style="margin-top: 1.5rem;">Analysis</h2>
+    <div class="actions-grid">
+        <a href="{% url 'alabama:sales_analysis_dashboard' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-chart-bar"></i></div>
+            <h3 class="action-title">Sales Analysis</h3>
         </a>
-        <a href="{% url 'alabama:sales_summary_upload' %}" class="action-card">
-            <div class="action-icon"><i class="fas fa-upload"></i></div>
-            <h3 class="action-title">Upload Sales Summary</h3>
+        <a href="{% url 'alabama:item_analysis' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-chart-pie"></i></div>
+            <h3 class="action-title">Item Analysis</h3>
         </a>
-        <a href="{% url 'alabama:delivery_order_list' %}" class="action-card">
-            <div class="action-icon"><i class="fas fa-truck"></i></div>
-            <h3 class="action-title">Delivery Orders</h3>
+        <a href="{% url 'alabama:customer_analysis' %}" class="action-card">
+            <div class="action-icon"><i class="fas fa-users"></i></div>
+            <h3 class="action-title">Customer Analysis</h3>
         </a>
     </div>
 {% endblock %}

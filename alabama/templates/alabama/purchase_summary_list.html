@@ -1,0 +1,249 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Purchase Summary{% endblock %}
+
+{% block page_title %}Purchase Summary{% endblock %}
+{% block page_subtitle %}Purchase documents (Excel upload){% endblock %}
+
+{% block extra_head %}
+  <style>
+    .filters-card { margin-bottom: 20px; }
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--gray-500);
+      margin-bottom: 6px;
+    }
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      outline: none;
+    }
+    .input:focus, .select:focus {
+      border-color: var(--primary-color);
+    }
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 0 20px;
+    }
+    .stat-cards > div {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      padding: 8px 10px;
+    }
+    .stat-cards .label {
+      font-size: 0.65rem;
+      font-weight: 500;
+      color: var(--gray-500);
+      text-transform: uppercase;
+    }
+    .stat-cards .val {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--gray-100);
+      border-top: 1px solid #f1f5f9;
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+    .stat-value { font-weight: 700; }
+    .table-card { margin-top: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    thead th {
+      padding: 4px 8px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--gray-500);
+      background: var(--gray-100);
+      border-bottom: 1px solid var(--gray-200);
+      text-align: left;
+    }
+    tbody td {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    tbody tr:hover { background: #fafbfc; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .badge { display: inline-flex; padding: 1px 5px; font-size: 0.6rem; font-weight: 600; border-radius: 4px; }
+    .badge-purchase { background: #d1fae5; color: #059669; }
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--gray-100);
+      border-top: 1px solid #f1f5f9;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="card filters-card">
+    <form class="filters-grid" method="get">
+      <div class="field">
+        <label>Search</label>
+        <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Doc No, Vendor, Salesman...">
+      </div>
+
+      <div class="field">
+        <label>Salesman</label>
+        <div class="multi-select" id="salesman-wrapper">
+          <div class="select-box" id="salesman-trigger">
+            <span id="salesman-text">All Salesmen</span>
+          </div>
+          <div class="options-container" id="salesman-options">
+            {% for s in salesmen %}
+            <label class="option-label">
+              <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
+              {{ s }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Start Date</label>
+        <input class="input" type="date" name="start" value="{{ filters.start }}">
+      </div>
+
+      <div class="field">
+        <label>End Date</label>
+        <input class="input" type="date" name="end" value="{{ filters.end }}">
+      </div>
+
+      <div class="field">
+        <label>Document Type</label>
+        <select class="select" name="document_type">
+          <option value="All" {% if filters.document_type == 'All' or not filters.document_type %}selected{% endif %}>All</option>
+          {% for dt in doc_types %}
+          <option value="{{ dt }}" {% if filters.document_type == dt %}selected{% endif %}>{{ dt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Per Page</label>
+        <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
+      </div>
+
+      <div class="field" style="align-self:end;">
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </div>
+    </form>
+
+    <div class="stat-cards">
+      <div><div class="label">Today Purchase</div><div class="val">{{ today_purchase|default:0|floatformat:2 }}</div></div>
+      <div><div class="label">Month Purchase</div><div class="val">{{ month_purchase|default:0|floatformat:2 }}</div></div>
+      <div><div class="label">Year Purchase</div><div class="val">{{ year_purchase|default:0|floatformat:2 }}</div></div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">Total Net Purchase:</span>
+        <span class="stat-value">{{ total_net_purchase|default:0|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Document Number</th>
+            <th>Vendor</th>
+            <th>Salesman</th>
+            <th style="text-align:right">Net Purchase</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in page_obj %}
+          <tr>
+            <td>
+              <span class="badge badge-purchase">{{ doc.document_type|default:"—" }}</span>
+            </td>
+            <td>{{ doc.posting_date|date:"d-m-y"|default:"-" }}</td>
+            <td>
+              <a href="{% url 'alabama:purchase_summary_detail' doc.document_number %}" class="so-link">{{ doc.document_number }}</a>
+            </td>
+            <td>{{ doc.vendor_name|default:"—" }}</td>
+            <td>{{ doc.sales_employee|default:"—" }}</td>
+            <td class="num">{{ doc.net_purchase|default:0|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="empty-state">
+              No documents found. Upload Excel data first.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <div style="font-size:0.75rem; color:var(--gray-500);">
+        Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> documents
+      </div>
+      {% include 'alabama/_pagination.html' with page_obj=page_obj query_string=query_string %}
+    </div>
+  </div>
+
+  <script>
+    const salesmanTrigger = document.getElementById('salesman-trigger');
+    const salesmanOptions = document.getElementById('salesman-options');
+    const salesmanText = document.getElementById('salesman-text');
+    const salesmanCheckboxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
+    if (salesmanTrigger) {
+      salesmanTrigger.addEventListener('click', () => salesmanOptions.classList.toggle('active'));
+      salesmanCheckboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
+          salesmanText.textContent = checked.length === 0 ? 'All Salesmen' : checked.length === 1 ? checked[0].nextSibling.textContent.trim() : checked.length + ' selected';
+        });
+      });
+      document.addEventListener('click', (e) => {
+        if (!salesmanTrigger.contains(e.target) && !salesmanOptions.contains(e.target)) salesmanOptions.classList.remove('active');
+      });
+      const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
+      salesmanText.textContent = checked.length === 0 ? 'All Salesmen' : checked.length === 1 ? checked[0].nextSibling.textContent.trim() : checked.length + ' selected';
+    }
+  </script>
+{% endblock %}

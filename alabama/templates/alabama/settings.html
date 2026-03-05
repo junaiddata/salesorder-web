@@ -8,22 +8,46 @@
 
 {% block extra_head %}
   <style>
+    .settings-page { max-width: 800px; margin: 0 auto; padding-bottom: 2rem; }
     .settings-card {
-      max-width: 720px;
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--gray-200);
       margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .settings-card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--gray-200);
+      background: linear-gradient(to bottom, #fafafa, var(--white));
+    }
+    .settings-card-header h2 {
+      margin: 0;
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .settings-card-body {
+      padding: 1.5rem;
+    }
+    .settings-card-body p {
+      color: var(--gray-500);
+      font-size: 0.938rem;
+      margin: 0 0 1.25rem 0;
+      line-height: 1.5;
     }
     .upload-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 1rem;
-      margin-top: 1rem;
     }
     .upload-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      padding: 1rem 1.25rem;
+      gap: 0.75rem;
+      padding: 1.25rem 1rem;
       font-size: 0.938rem;
       font-weight: 600;
       font-family: inherit;
@@ -33,125 +57,231 @@
       color: var(--gray-700);
       text-decoration: none;
       transition: all 0.2s;
+      text-align: center;
     }
     .upload-btn:hover {
       border-color: var(--primary-color);
-      background: rgba(220, 38, 38, 0.05);
+      background: rgba(220, 38, 38, 0.06);
       color: var(--primary-color);
       transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
     }
     .upload-btn i {
-      font-size: 1.25rem;
+      font-size: 1.35rem;
+      opacity: 0.9;
     }
-    .info-box {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
+    .alert { padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .column-reference {
+      margin-top: 2rem;
+    }
+    .column-reference summary {
+      cursor: pointer;
+      padding: 0.75rem 1rem;
+      background: var(--gray-100);
       border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 1.5rem;
+      font-weight: 600;
       font-size: 0.875rem;
-      color: #1e40af;
+      color: var(--gray-700);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    .alert { padding: 1rem; border-radius: 8px; }
-    .alert-error { background: #fee2e2; color: #dc2626; }
-    .alert-success { background: #d1fae5; color: #059669; }
+    .column-reference summary::-webkit-details-marker { display: none; }
+    .column-reference summary::before {
+      content: '▸';
+      font-size: 0.75rem;
+      transition: transform 0.2s;
+    }
+    .column-reference[open] summary::before { transform: rotate(90deg); }
+    .column-reference summary:hover { background: var(--gray-200); }
+    .info-list {
+      margin-top: 1rem;
+      padding-left: 0;
+      list-style: none;
+    }
+    .info-list li {
+      padding: 0.875rem 1rem;
+      margin-bottom: 0.5rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.813rem;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .info-list li strong { color: #1e293b; }
+    .mapping-form {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 1.5rem;
+    }
+    .mapping-form .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .mapping-form label {
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--gray-500);
+    }
+    .mapping-form input {
+      padding: 0.6rem 0.875rem;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      min-width: 160px;
+    }
+    .mapping-form input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    }
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .mapping-table thead {
+      background: var(--gray-100);
+    }
+    .mapping-table th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--gray-500);
+      border-bottom: 2px solid var(--gray-200);
+    }
+    .mapping-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .mapping-table tbody tr:hover { background: #fafafa; }
+    .btn-delete {
+      background: none;
+      border: none;
+      color: #dc2626;
+      cursor: pointer;
+      padding: 0.35rem;
+      font-size: 0.875rem;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .btn-delete:hover { background: #fef2f2; }
   </style>
 {% endblock %}
 
 {% block content %}
-  <div class="card settings-card">
-    <h2 class="section-title">Excel Uploads</h2>
-    <p style="color: var(--gray-500); margin-bottom: 1rem; font-size: 0.938rem;">
-      Upload Excel files to import data. Re-uploading updates existing records.
-    </p>
+  <div class="settings-page">
+    <div class="settings-card">
+      <div class="settings-card-header">
+        <h2>Excel Uploads</h2>
+      </div>
+      <div class="settings-card-body">
+        <p>Upload Excel files to import data. Re-uploading updates existing records.</p>
 
-    {% if messages %}
-      {% for msg in messages %}
-        <div class="alert alert-{% if msg.tags == 'error' %}error{% else %}success{% endif %}" style="margin-bottom: 1rem;">
-          {{ msg }}
+        {% if messages %}
+          {% for msg in messages %}
+            <div class="alert alert-{% if msg.tags == 'error' %}error{% else %}success{% endif %}">
+              {{ msg }}
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="upload-grid">
+          <a href="{% url 'alabama:sales_summary_upload' %}" class="upload-btn">
+            <i class="fas fa-file-invoice-dollar"></i>
+            Upload Sales Summary
+          </a>
+          <a href="{% url 'alabama:quotation_upload' %}" class="upload-btn">
+            <i class="fas fa-file-alt"></i>
+            Upload Quotations
+          </a>
+          <a href="{% url 'alabama:delivery_order_upload' %}" class="upload-btn">
+            <i class="fas fa-truck"></i>
+            Upload Delivery Orders
+          </a>
+          <a href="{% url 'alabama:purchase_summary_upload' %}" class="upload-btn">
+            <i class="fas fa-shopping-cart"></i>
+            Upload Purchase Summary
+          </a>
         </div>
-      {% endfor %}
+
+        <details class="column-reference">
+          <summary>Expected columns (click to expand)</summary>
+          <ul class="info-list">
+            <li><strong>Sales Summary:</strong> Document Type, Document Number, PostingDate, Customer Code, Customer Name, Sales Employee, ItemCode, Item Description, Item Manufacturer, Quantity, Net Sales, Gross Profit.</li>
+            <li><strong>Quotations:</strong> Document Number, Posting Date, Customer/Supplier No., Customer/Supplier Name, Sales Employee Name, Manufacturer Name, BP Reference No., Item No., Item/Service Description, Quantity, Price, Row Total, Document Total, Status, Bill To.</li>
+            <li><strong>Delivery Orders:</strong> DO, DATE, CUSTOMER CODE, CUSTOMER, Sales Person (uses Settings mappings), CITY, AREA, LPO, Remarks, INVOICE, AMOUNT, Item No., Item/Service Description, Quantity, Price.</li>
+            <li><strong>Purchase Summary:</strong> DocumentTypeCode, Document Type, Document Number, Document Date, Vendor Code, Vendor Name, Sales Employee, ItemCode, Item Description, Quantity, UnitPrice, Item Manufacturer, Net Purchase.</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+
+    {% if can_manage_mappings %}
+    <div class="settings-card">
+      <div class="settings-card-header">
+        <h2>Salesman Name Mappings</h2>
+      </div>
+      <div class="settings-card-body">
+        <p>Map salesman name variants from Excel to a single canonical name. For example, <code>A.KADER</code> and <code>A. KADER</code> both map to <code>KADER</code>.</p>
+
+        <form method="post" action="{% url 'alabama:settings' %}" class="mapping-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_mapping">
+          <div class="field">
+            <label for="raw_name">Variant (from Excel)</label>
+            <input type="text" id="raw_name" name="raw_name" placeholder="e.g. A.IJAZ" maxlength="255">
+          </div>
+          <div class="field">
+            <label for="normalized_name">Maps to</label>
+            <input type="text" id="normalized_name" name="normalized_name" placeholder="e.g. IJAZ" maxlength="255">
+          </div>
+          <button type="submit" class="btn btn-primary" style="padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600;">Add Mapping</button>
+        </form>
+
+        <table class="mapping-table">
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Maps to</th>
+              <th style="width: 72px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in salesman_mappings %}
+            <tr>
+              <td>{{ m.raw_name }}</td>
+              <td>{{ m.normalized_name }}</td>
+              <td>
+                <form method="post" action="{% url 'alabama:settings' %}" style="display: inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_mapping">
+                  <input type="hidden" name="mapping_id" value="{{ m.id }}">
+                  <button type="submit" class="btn-delete" title="Remove mapping">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" style="padding: 1.25rem; color: var(--gray-500); font-size: 0.9rem;">No mappings yet. Add one above.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
     {% endif %}
-
-    <div class="upload-grid">
-      <a href="{% url 'alabama:sales_summary_upload' %}" class="upload-btn">
-        <i class="fas fa-file-invoice-dollar"></i>
-        Upload Sales Summary
-      </a>
-      <a href="{% url 'alabama:quotation_upload' %}" class="upload-btn">
-        <i class="fas fa-file-alt"></i>
-        Upload Quotations
-      </a>
-      <a href="{% url 'alabama:delivery_order_upload' %}" class="upload-btn">
-        <i class="fas fa-truck"></i>
-        Upload Delivery Orders
-      </a>
-    </div>
-
-    <div class="info-box" style="margin-top: 1.5rem;">
-      <strong>Sales Summary:</strong> Document Type, Document Number, PostingDate, Customer Code, Customer Name, Sales Employee, ItemCode, Item Description, Item Manufacturer, Quantity, Net Sales, Gross Profit.
-    </div>
-    <div class="info-box">
-      <strong>Quotations:</strong> Document Number, Posting Date, Customer/Supplier No., Customer/Supplier Name, Sales Employee Name, Manufacturer Name, BP Reference No., Item No., Item/Service Description, Quantity, Price, Row Total, Document Total, Status, Bill To.
-    </div>
-    <div class="info-box">
-      <strong>Delivery Orders:</strong> DO, DATE, CUSTOMER CODE, CUSTOMER, Sales Person (uses Settings mappings), CITY, AREA, LPO, Remarks, INVOICE, AMOUNT, Item No., Item/Service Description, Quantity, Price.
-    </div>
   </div>
-
-  {% if can_manage_mappings %}
-  <div class="card settings-card">
-    <h2 class="section-title">Salesman Name Mappings</h2>
-    <p style="color: var(--gray-500); margin-bottom: 1rem; font-size: 0.938rem;">
-      Map salesman name variants from Excel to a single canonical name. For example, <code>A.KADER</code> and <code>A. KADER</code> both map to <code>KADER</code>. Add new mappings here—no code changes needed.
-    </p>
-
-    <form method="post" action="{% url 'alabama:settings' %}" class="mapping-form" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.25rem;">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="add_mapping">
-      <div>
-        <label for="raw_name" style="display: block; font-size: 0.8rem; color: var(--gray-500); margin-bottom: 0.25rem;">Variant (from Excel)</label>
-        <input type="text" id="raw_name" name="raw_name" placeholder="e.g. A.IJAZ" maxlength="255" style="padding: 0.5rem 0.75rem; border: 1px solid var(--gray-200); border-radius: 8px; min-width: 140px;">
-      </div>
-      <div>
-        <label for="normalized_name" style="display: block; font-size: 0.8rem; color: var(--gray-500); margin-bottom: 0.25rem;">Maps to</label>
-        <input type="text" id="normalized_name" name="normalized_name" placeholder="e.g. IJAZ" maxlength="255" style="padding: 0.5rem 0.75rem; border: 1px solid var(--gray-200); border-radius: 8px; min-width: 120px;">
-      </div>
-      <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600;">Add Mapping</button>
-    </form>
-
-    <table class="mapping-table" style="width: 100%; border-collapse: collapse;">
-      <thead>
-        <tr style="border-bottom: 2px solid var(--gray-200); text-align: left;">
-          <th style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--gray-500);">Variant</th>
-          <th style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--gray-500);">Maps to</th>
-          <th style="padding: 0.5rem 0.75rem; font-size: 0.8rem; color: var(--gray-500); width: 80px;"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for m in salesman_mappings %}
-        <tr style="border-bottom: 1px solid var(--gray-200);">
-          <td style="padding: 0.5rem 0.75rem;">{{ m.raw_name }}</td>
-          <td style="padding: 0.5rem 0.75rem;">{{ m.normalized_name }}</td>
-          <td style="padding: 0.5rem 0.75rem;">
-            <form method="post" action="{% url 'alabama:settings' %}" style="display: inline;">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="delete_mapping">
-              <input type="hidden" name="mapping_id" value="{{ m.id }}">
-              <button type="submit" class="btn-delete" style="background: none; border: none; color: #dc2626; cursor: pointer; padding: 0.25rem; font-size: 0.875rem;" title="Remove mapping">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="3" style="padding: 1rem; color: var(--gray-500); font-size: 0.9rem;">No mappings yet. Add one above.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
 {% endblock %}

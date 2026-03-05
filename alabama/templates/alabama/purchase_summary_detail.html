@@ -1,0 +1,154 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama Purchase {{ document_number }}{% endblock %}
+
+{% block page_title %}Purchase {{ document_number }}{% endblock %}
+{% block page_subtitle %}Alabama purchase document from uploaded Purchase Summary{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: minmax(0, 1fr); }
+    }
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 8px;
+      font-size: 0.83rem;
+      margin-bottom: 4px;
+    }
+    .field-label { color: var(--gray-500); }
+    .field-value { color: var(--gray-900); font-weight: 500; }
+    .totals-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .total-item {
+      background: var(--gray-100);
+      border-radius: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--gray-200);
+    }
+    .total-label {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      margin-bottom: 2px;
+    }
+    .total-value {
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    .lines-card { margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    thead th {
+      padding: 6px 8px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-500);
+      background: var(--gray-100);
+      border-bottom: 1px solid var(--gray-200);
+      text-align: left;
+    }
+    tbody td {
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tbody tr:hover { background: #f9fafb; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="layout">
+    <section class="card">
+      <div class="card-title">Vendor &amp; Document</div>
+      <div class="field-row">
+        <div class="field-label">Vendor Code</div>
+        <div class="field-value">{{ header.vendor_code }}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Vendor Name</div>
+        <div class="field-value">{{ header.vendor_name }}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Document Type</div>
+        <div class="field-value">{{ header.document_type|default:"—" }}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Posting Date</div>
+        <div class="field-value">{{ header.posting_date|date:"d-m-Y" }}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Sales Employee</div>
+        <div class="field-value">{{ header.sales_employee|default:"—" }}</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Totals</div>
+      <div class="totals-grid">
+        <div class="total-item">
+          <div class="total-label">Total Quantity</div>
+          <div class="total-value">{{ totals.total_quantity|default:0|floatformat:2 }}</div>
+        </div>
+        <div class="total-item">
+          <div class="total-label">Net Purchase</div>
+          <div class="total-value">{{ totals.total_net_purchase|default:0|floatformat:2 }}</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card lines-card">
+    <div class="card-title">Line Items</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Item Code</th>
+          <th>Description</th>
+          <th>Manufacturer</th>
+          <th style="text-align:right;">Quantity</th>
+          <th style="text-align:right;">Unit Price</th>
+          <th style="text-align:right;">Net Purchase</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in lines %}
+        <tr>
+          <td>{{ line.item.item_code }}</td>
+          <td>{{ line.item_description|default:line.item.item_description|default:"—" }}</td>
+          <td>{{ line.item_manufacturer|default:line.item.item_firm|default:"—" }}</td>
+          <td class="num">{{ line.quantity|default:0|floatformat:2 }}</td>
+          <td class="num">{{ line.unit_price|default:0|floatformat:2 }}</td>
+          <td class="num">{{ line.net_purchase|default:0|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align:center; padding: 10px 0; font-size:0.8rem; color:var(--gray-500);">
+            No line items found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

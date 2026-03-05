@@ -131,6 +131,42 @@ class AlabamaDeliveryOrderItem(models.Model):
         return f"{self.delivery_order.do_number} - {self.item.item_code}"
 
 
+class AlabamaPurchaseLine(models.Model):
+    """Purchase Summary line - Excel upload. DocumentTypeCode, Document Type, Document Number, Document Date,
+    Vendor Code, Vendor Name, Sales Employee, ItemCode, ItemDescription, Quantity, UnitPrice, Item Manufacturer, Net Purchase."""
+    document_type = models.CharField(max_length=100, db_index=True)  # e.g. Purchase Invoice, Purchase Credit Memo
+    document_number = models.CharField(max_length=100, db_index=True)
+    posting_date = models.DateField(db_index=True)
+
+    vendor_code = models.CharField(max_length=100)
+    vendor_name = models.CharField(max_length=255)
+
+    sales_employee = models.CharField(max_length=255, blank=True, null=True)
+
+    item = models.ForeignKey(
+        'so.Items',
+        on_delete=models.CASCADE,
+        related_name='alabama_purchase_lines',
+    )
+    item_description = models.CharField(max_length=500, blank=True, null=True)  # Denormalized from Excel
+    item_manufacturer = models.CharField(max_length=255, blank=True, null=True)  # Denormalized from Excel
+
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_purchase = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['document_type', 'document_number']),
+            models.Index(fields=['posting_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.document_type} {self.document_number} - {self.vendor_name}"
+
+
 class AlabamaSAPQuotationItem(models.Model):
     """Alabama SAP Quotation line item - Excel upload."""
     quotation = models.ForeignKey(

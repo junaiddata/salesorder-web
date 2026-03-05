@@ -181,7 +181,7 @@
                     Dashboard
                 </a>
             </li>
-            <li class="has-submenu {% if active_page in 'sales_summary sales_summary_detail' %}open{% endif %}">
+            <li class="has-submenu {% if active_page in 'sales_summary sales_summary_detail sales_analysis' %}open{% endif %}">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
                     <i class="fas fa-file-invoice-dollar"></i>
                     Sales Invoices
@@ -190,6 +190,24 @@
                     <li>
                         <a href="{% url 'alabama:sales_summary_list' %}" class="{% if active_page == 'sales_summary' or active_page == 'sales_summary_detail' %}active{% endif %}">
                             <i class="fas fa-list"></i> Sales Summary
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:sales_analysis_dashboard' %}" class="{% if active_page == 'sales_analysis' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i> Sales Analysis
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li class="has-submenu {% if active_page in 'purchase_summary purchase_summary_detail' %}open{% endif %}">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-shopping-cart"></i>
+                    Purchase Summary
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{% url 'alabama:purchase_summary_list' %}" class="{% if active_page == 'purchase_summary' or active_page == 'purchase_summary_detail' %}active{% endif %}">
+                            <i class="fas fa-list"></i> Purchase Summary
                         </a>
                     </li>
                 </ul>
@@ -229,12 +247,7 @@
                 </ul>
             </li>
             {% endif %}
-            <li>
-                <a href="{% url 'alabama:settings' %}" class="{% if active_page == 'settings' %}active{% endif %}">
-                    <i class="fas fa-cog"></i>
-                    Settings
-                </a>
-            </li>
+
             <li class="has-submenu {% if active_page in 'delivery_order delivery_order_upload delivery_order_detail' %}open{% endif %}">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
                     <i class="fas fa-truck"></i>
@@ -260,10 +273,18 @@
                     Customer Analysis
                 </a>
             </li>
+            {% if is_manager %}
             <li>
                 <a href="{% url 'home' %}" class="back-link">
                     <i class="fas fa-arrow-left"></i>
                     Back to Junaid
+                </a>
+            </li>
+            {% endif %}
+            <li>
+                <a href="{% url 'alabama:settings' %}" class="{% if active_page == 'settings' %}active{% endif %}">
+                    <i class="fas fa-cog"></i>
+                    Settings
                 </a>
             </li>
             <li class="logout-btn">

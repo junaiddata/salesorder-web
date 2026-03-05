@@ -1,0 +1,78 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Upload Purchase Summary{% endblock %}
+
+{% block page_title %}Upload Purchase Summary{% endblock %}
+{% block page_subtitle %}Excel upload (append + update){% endblock %}
+
+{% block extra_head %}
+  <style>
+    .upload-card {
+      max-width: 600px;
+    }
+    .alert {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .alert-error { background: #fee2e2; color: #dc2626; }
+    .alert-success { background: #d1fae5; color: #059669; }
+    .columns {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--gray-500);
+    }
+    .columns ul { margin: 0.5rem 0 0 1rem; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="card upload-card">
+    <p style="color: var(--gray-500); margin-bottom: 1.5rem;">
+      Upload Excel file with Purchase document data. Re-uploading updates existing documents.
+    </p>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{% if msg.tags == 'error' %}error{% else %}success{% endif %}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+    {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="excel_file" class="form-label fw-medium">Excel File (.xlsx)</label>
+        <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls" required class="form-control">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-upload"></i> Upload
+        </button>
+        <a href="{% url 'alabama:settings' %}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+
+    <div class="columns">
+      <strong>Required columns:</strong>
+      <ul>
+        <li>DocumentTypeCode (optional)</li>
+        <li>Document Type</li>
+        <li>Document Number</li>
+        <li>Document Date</li>
+        <li>Vendor Code</li>
+        <li>Vendor Name</li>
+        <li>Sales Employee</li>
+        <li>ItemCode</li>
+        <li>Item Description</li>
+        <li>Quantity</li>
+        <li>UnitPrice</li>
+        <li>Item Manufacturer</li>
+        <li>Net Purchase</li>
+      </ul>
+    </div>
+  </div>
+{% endblock %}

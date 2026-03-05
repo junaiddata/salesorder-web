@@ -8,7 +8,7 @@ from django.http import Http404
 from datetime import date, datetime
 from decimal import Decimal
 
-from .models import AlabamaSalesLine, AlabamaSAPQuotation, AlabamaSAPQuotationItem, AlabamaSalesmanMapping
+from .models import AlabamaSalesLine, AlabamaPurchaseLine, AlabamaSAPQuotation, AlabamaSAPQuotationItem, AlabamaSalesmanMapping
 
 # Cache for salesman mappings; cleared when mappings are added/edited/deleted
 _salesman_mapping_cache = None
@@ -656,6 +656,393 @@ def sales_summary_upload(request):
             return render(request, 'alabama/sales_summary_upload.html', {'error': str(e), 'active_page': 'sales_summary_upload'})
 
     return render(request, 'alabama/sales_summary_upload.html', {'active_page': 'sales_summary_upload'})
+
+
+# =====================
+# Purchase Summary
+# =====================
+
+@login_required
+def purchase_summary_list(request):
+    """Purchase Summary list - similar to Sales Summary."""
+    today = date.today()
+    current_year = today.year
+    current_month = today.month
+
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    document_type_filter = request.GET.get('document_type', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    page_size = int(request.GET.get('page_size', 25)) or 25
+    page_size = max(5, min(100, page_size))
+
+    lines_qs = AlabamaPurchaseLine.objects.all()
+
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Salesman' and getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+        scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
+        lines_qs = lines_qs.filter(scope_q)
+
+    if document_type_filter and document_type_filter != 'All':
+        lines_qs = lines_qs.filter(document_type__icontains=document_type_filter)
+
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            lines_qs = lines_qs.filter(sales_employee__in=clean_salesmen)
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        lines_qs = lines_qs.filter(posting_date__gte=start_date)
+    if end_date:
+        lines_qs = lines_qs.filter(posting_date__lte=end_date)
+
+    if q:
+        lines_qs = lines_qs.filter(
+            Q(document_number__icontains=q) |
+            Q(vendor_name__icontains=q) |
+            Q(vendor_code__icontains=q) |
+            Q(sales_employee__icontains=q)
+        )
+
+    docs_qs = (
+        lines_qs.values('document_type', 'document_number', 'posting_date')
+        .annotate(
+            net_purchase=Sum('net_purchase'),
+        )
+        .order_by('-posting_date', '-document_number')
+    )
+
+    doc_list = list(docs_qs)
+    doc_keys = [(d['document_type'], d['document_number']) for d in doc_list]
+    vendor_map = {}
+    sales_emp_map = {}
+    for dt, dn in doc_keys:
+        first = AlabamaPurchaseLine.objects.filter(
+            document_type=dt, document_number=dn
+        ).first()
+        if first:
+            vendor_map[(dt, dn)] = first.vendor_name
+            sales_emp_map[(dt, dn)] = first.sales_employee or '—'
+
+    for d in doc_list:
+        d['vendor_name'] = vendor_map.get((d['document_type'], d['document_number']), '—')
+        d['sales_employee'] = sales_emp_map.get((d['document_type'], d['document_number']), '—')
+
+    paginator = Paginator(doc_list, page_size)
+    page_num = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_num)
+
+    salesmen_base = AlabamaPurchaseLine.objects.all()
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Salesman' and getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+        salesmen_base = salesmen_base.filter(alabama_salesman_scope_q(request.user, field='sales_employee'))
+    salesmen = list(
+        salesmen_base.exclude(sales_employee__isnull=True)
+        .exclude(sales_employee='')
+        .values_list('sales_employee', flat=True)
+        .distinct()
+        .order_by('sales_employee')
+    )
+
+    today_lines = AlabamaPurchaseLine.objects.filter(posting_date=today)
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Salesman' and getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+        today_lines = today_lines.filter(alabama_salesman_scope_q(request.user, field='sales_employee'))
+    if document_type_filter and document_type_filter != 'All':
+        today_lines = today_lines.filter(document_type__icontains=document_type_filter)
+    if salesmen_filter:
+        clean = [s for s in salesmen_filter if s.strip()]
+        if clean:
+            today_lines = today_lines.filter(sales_employee__in=clean)
+    if start_date:
+        today_lines = today_lines.filter(posting_date__gte=start_date)
+    if end_date:
+        today_lines = today_lines.filter(posting_date__lte=end_date)
+    today_purchase = today_lines.aggregate(s=Sum('net_purchase'))['s'] or 0
+
+    month_lines = AlabamaPurchaseLine.objects.filter(
+        posting_date__year=current_year, posting_date__month=current_month
+    )
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Salesman' and getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+        month_lines = month_lines.filter(alabama_salesman_scope_q(request.user, field='sales_employee'))
+    if document_type_filter and document_type_filter != 'All':
+        month_lines = month_lines.filter(document_type__icontains=document_type_filter)
+    if salesmen_filter:
+        clean = [s for s in salesmen_filter if s.strip()]
+        if clean:
+            month_lines = month_lines.filter(sales_employee__in=clean)
+    if start_date:
+        month_lines = month_lines.filter(posting_date__gte=start_date)
+    if end_date:
+        month_lines = month_lines.filter(posting_date__lte=end_date)
+    month_purchase = month_lines.aggregate(s=Sum('net_purchase'))['s'] or 0
+
+    year_lines = AlabamaPurchaseLine.objects.filter(posting_date__year=current_year)
+    if hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Salesman' and getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+        year_lines = year_lines.filter(alabama_salesman_scope_q(request.user, field='sales_employee'))
+    if document_type_filter and document_type_filter != 'All':
+        year_lines = year_lines.filter(document_type__icontains=document_type_filter)
+    if salesmen_filter:
+        clean = [s for s in salesmen_filter if s.strip()]
+        if clean:
+            year_lines = year_lines.filter(sales_employee__in=clean)
+    if start_date:
+        year_lines = year_lines.filter(posting_date__gte=start_date)
+    if end_date:
+        year_lines = year_lines.filter(posting_date__lte=end_date)
+    year_purchase = year_lines.aggregate(s=Sum('net_purchase'))['s'] or 0
+
+    total_net_purchase = sum(d['net_purchase'] or 0 for d in doc_list)
+
+    from urllib.parse import urlencode
+    qd = request.GET.copy()
+    if 'page' in qd:
+        del qd['page']
+    query_string = qd.urlencode()
+
+    # Document types for filter (distinct from data)
+    doc_types = list(
+        AlabamaPurchaseLine.objects.values_list('document_type', flat=True).distinct().order_by('document_type')
+    )
+
+    context = {
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+        'query_string': query_string,
+        'filters': {
+            'q': q,
+            'salesmen_filter': salesmen_filter,
+            'document_type': document_type_filter or 'All',
+            'start': start,
+            'end': end,
+            'page_size': page_size,
+        },
+        'salesmen': salesmen,
+        'doc_types': doc_types,
+        'today_purchase': today_purchase,
+        'month_purchase': month_purchase,
+        'year_purchase': year_purchase,
+        'total_net_purchase': total_net_purchase,
+        'is_admin': request.user.is_superuser or request.user.is_staff or (
+            request.user.username or ''
+        ).strip().lower() == 'manager',
+        'active_page': 'purchase_summary',
+    }
+    return render(request, 'alabama/purchase_summary_list.html', context)
+
+
+@login_required
+def purchase_summary_detail(request, document_number):
+    """Detail view for a single Purchase document."""
+    lines = (
+        AlabamaPurchaseLine.objects
+        .filter(document_number=document_number)
+        .select_related('item')
+        .order_by('id')
+    )
+    if not lines.exists():
+        raise Http404("Document not found")
+
+    header = lines.first()
+    totals = lines.aggregate(
+        total_quantity=Sum('quantity'),
+        total_net_purchase=Sum('net_purchase'),
+    )
+
+    context = {
+        'document_number': document_number,
+        'header': header,
+        'lines': lines,
+        'totals': totals,
+        'active_page': 'purchase_summary_detail',
+    }
+    return render(request, 'alabama/purchase_summary_detail.html', context)
+
+
+@login_required
+def purchase_summary_upload(request):
+    """Upload Excel file for Alabama Purchase Summary."""
+    import pandas as pd
+    from so.models import Items
+    from django.db import transaction
+
+    def _col_map(df):
+        col_map = {}
+        aliases = {
+            'document_type': ['document type', 'documenttype', 'doc type'],
+            'document_number': ['document number', 'documentnumber', 'doc no'],
+            'document_date': ['document date', 'documentdate', 'posting date', 'postingdate'],
+            'vendor_code': ['vendor code', 'vendorcode'],
+            'vendor_name': ['vendor name', 'vendorname'],
+            'sales_employee': ['sales employee', 'salesemployee', 'salesman'],
+            'itemcode': ['itemcode', 'item code'],
+            'item_description': ['item description', 'itemdescription'],
+            'quantity': ['quantity', 'qty'],
+            'unit_price': ['unitprice', 'unit price', 'price'],
+            'item_manufacturer': ['item manufacturer', 'itemmanufacturer', 'manufacturer'],
+            'net_purchase': ['net purchase', 'netpurchase'],
+        }
+        for col in df.columns:
+            c = str(col).strip().lower().replace('\ufeff', '').replace('\xa0', ' ')
+            for canonical, alis in aliases.items():
+                if c == canonical or c in alis:
+                    col_map[col] = canonical
+                    break
+        return col_map
+
+    def parse_date(val):
+        if pd.isna(val):
+            return None
+        if hasattr(val, 'date'):
+            return val.date()
+        if isinstance(val, (int, float)):
+            try:
+                return pd.Timestamp(val).date()
+            except Exception:
+                pass
+        s = str(val).strip()
+        for fmt in ['%d.%m.%y', '%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%d-%m-%y', '%Y%m%d']:
+            try:
+                return datetime.strptime(s, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def to_decimal(x):
+        if pd.isna(x):
+            return Decimal('0')
+        try:
+            return Decimal(str(x).replace(',', '').strip())
+        except Exception:
+            return Decimal('0')
+
+    def to_str(x):
+        if pd.isna(x):
+            return ''
+        s = str(x).strip()
+        if s.endswith('.0') and s.replace('.', '').isdigit():
+            s = s[:-2]
+        return s
+
+    if request.method == 'POST':
+        excel_file = request.FILES.get('excel_file')
+        if not excel_file:
+            messages.error(request, 'Please upload an Excel file.')
+            return render(request, 'alabama/purchase_summary_upload.html', {'active_page': 'purchase_summary_upload'})
+
+        try:
+            df = pd.read_excel(excel_file)
+            df.columns = [str(c).strip().replace('\ufeff', '').replace('\xa0', ' ') for c in df.columns]
+            col_map = _col_map(df)
+            required = ['document_type', 'document_number', 'document_date', 'vendor_code', 'vendor_name',
+                       'sales_employee', 'itemcode', 'item_description', 'quantity', 'unit_price',
+                       'item_manufacturer', 'net_purchase']
+            missing = [r for r in required if r not in col_map.values()]
+            if missing:
+                return render(request, 'alabama/purchase_summary_upload.html', {
+                    'error': f'Missing columns: {", ".join(missing)}. Expected: Document Type, Document Number, Document Date, Vendor Code, Vendor Name, Sales Employee, ItemCode, Item Description, Quantity, UnitPrice, Item Manufacturer, Net Purchase',
+                    'active_page': 'purchase_summary_upload',
+                })
+
+            rev_map = {v: k for k, v in col_map.items() if v in required}
+            rev_map = {k: rev_map[k] for k in required if k in rev_map}
+
+            def get_val(row, key):
+                col = rev_map.get(key)
+                if col is None:
+                    return ''
+                return row.get(col, '')
+
+            docs_to_replace = set()
+            rows_to_insert = []
+
+            for idx, row in df.iterrows():
+                doc_type_raw = to_str(get_val(row, 'document_type'))
+                if not doc_type_raw:
+                    continue
+                doc_no = to_str(get_val(row, 'document_number'))
+                if not doc_no:
+                    continue
+                posting_d = parse_date(get_val(row, 'document_date'))
+                if not posting_d:
+                    continue
+                vendor_code = to_str(get_val(row, 'vendor_code'))
+                vendor_name = to_str(get_val(row, 'vendor_name'))
+                if not vendor_code or not vendor_name:
+                    continue
+                sales_emp = normalize_alabama_salesman(to_str(get_val(row, 'sales_employee')))
+                item_code = to_str(get_val(row, 'itemcode'))
+                item_desc = to_str(get_val(row, 'item_description'))
+                item_manu = to_str(get_val(row, 'item_manufacturer'))
+
+                if not item_code:
+                    continue
+
+                qty = to_decimal(get_val(row, 'quantity'))
+                unit_price = to_decimal(get_val(row, 'unit_price'))
+                net_purchase = to_decimal(get_val(row, 'net_purchase'))
+
+                docs_to_replace.add((doc_type_raw, doc_no))
+
+                item, _ = Items.objects.get_or_create(
+                    item_code=item_code,
+                    defaults={
+                        'item_description': item_desc or item_code,
+                        'item_firm': item_manu or '',
+                    }
+                )
+
+                rows_to_insert.append({
+                    'document_type': doc_type_raw,
+                    'document_number': doc_no,
+                    'posting_date': posting_d,
+                    'vendor_code': vendor_code,
+                    'vendor_name': vendor_name,
+                    'sales_employee': sales_emp or None,
+                    'item': item,
+                    'item_description': item_desc or None,
+                    'item_manufacturer': item_manu or None,
+                    'quantity': qty,
+                    'unit_price': unit_price,
+                    'net_purchase': net_purchase,
+                })
+
+            if not rows_to_insert:
+                return render(request, 'alabama/purchase_summary_upload.html', {
+                    'error': f'No valid rows found. Check: (1) Dates must be valid, (2) Document Number, Vendor Code, Vendor Name, Item Code must not be empty. Found {len(df)} rows. Detected columns: {list(col_map.keys())}',
+                    'active_page': 'purchase_summary_upload',
+                })
+
+            with transaction.atomic():
+                for doc_type, doc_no in docs_to_replace:
+                    AlabamaPurchaseLine.objects.filter(
+                        document_type=doc_type, document_number=doc_no
+                    ).delete()
+                AlabamaPurchaseLine.objects.bulk_create([
+                    AlabamaPurchaseLine(**r) for r in rows_to_insert
+                ])
+
+            messages.success(
+                request,
+                f'Successfully uploaded {len(rows_to_insert)} line items from {len(docs_to_replace)} purchase documents.'
+            )
+            return redirect('alabama:settings')
+
+        except Exception as e:
+            messages.error(request, f'Upload failed: {str(e)}')
+            return render(request, 'alabama/purchase_summary_upload.html', {'error': str(e), 'active_page': 'purchase_summary_upload'})
+
+    return render(request, 'alabama/purchase_summary_upload.html', {'active_page': 'purchase_summary_upload'})
 
 
 @login_required
