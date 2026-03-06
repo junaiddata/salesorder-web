@@ -153,12 +153,19 @@
                  placeholder="last"
                  style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:0.938rem; width:120px;">
         </div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:22px;">
+          <input type="checkbox" name="cancel_update_only" id="cancel_update_only" value="1">
+          <label for="cancel_update_only" style="font-size:0.813rem; color:var(--text-secondary);">
+            Only update existing invoices (do not create new)
+          </label>
+        </div>
         <button type="submit" class="sync-now-btn" style="background:#f59e0b;">
           <i class="fas fa-undo-alt"></i> Sync Cancellation Invoices
         </button>
       </form>
       <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">
         e.g. enter <strong>1</strong> to <strong>10</strong> to sync only pages 1–10, or enter <strong>80</strong> and leave To page empty to sync page 80 to the last page.
+        Tick <strong>Only update existing invoices</strong> if you want to skip creating new cancellation invoices.
       </p>
     </div>
 

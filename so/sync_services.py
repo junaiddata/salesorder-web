@@ -1005,7 +1005,7 @@ def sync_purchaseorders_core(from_date=None, to_date=None):
 # =====================
 # AR Invoice Cancellation Sync
 # =====================
-def sync_cancellation_invoices_core(from_page: int = 1, to_page: int = None):
+def sync_cancellation_invoices_core(from_page: int = 1, to_page: int = None, update_existing_only: bool = False):
     """
     Fetch AR Invoices with CancelStatus='csCancellation' from the SAP API,
     starting from a specific page number, and save/update them in the DB.
@@ -1020,9 +1020,9 @@ def sync_cancellation_invoices_core(from_page: int = 1, to_page: int = None):
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
     if to_page is not None:
-        log.info(f'Fetching pages: {from_page} to {to_page}')
+        log.info(f'Fetching pages: {from_page} to {to_page} (update_existing_only={update_existing_only})')
     else:
-        log.info(f'Fetching from page: {from_page} to last')
+        log.info(f'Fetching from page: {from_page} to last (update_existing_only={update_existing_only})')
     log.info('-' * 70)
 
     sync_stats = {
@@ -1097,6 +1097,9 @@ def sync_cancellation_invoices_core(from_page: int = 1, to_page: int = None):
                 }
                 obj = existing_map.get(invoice_no)
                 if obj is None:
+                    if update_existing_only:
+                        # Skip creating new invoice when in update-only mode
+                        continue
                     to_create.append(SAPARInvoice(invoice_number=invoice_no, **defaults))
                     sync_stats['created'] += 1
                 else:

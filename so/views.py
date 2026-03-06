@@ -4852,19 +4852,21 @@ def sync_cancellation_invoices_form(request):
     from_page = int(from_page_raw) if from_page_raw.isdigit() and int(from_page_raw) >= 1 else 1
     to_page_raw = request.POST.get('cancel_to_page', '').strip()
     to_page = int(to_page_raw) if to_page_raw.isdigit() and int(to_page_raw) >= 1 else None
+    update_only = bool(request.POST.get('cancel_update_only'))
 
     if to_page is not None and to_page < from_page:
         messages.error(request, "To page must be greater than or equal to From page.")
         return redirect('sync_settings')
 
     try:
-        stats = sync_cancellation_invoices_core(from_page=from_page, to_page=to_page)
+        stats = sync_cancellation_invoices_core(from_page=from_page, to_page=to_page, update_existing_only=update_only)
         if stats.get('errors'):
             messages.error(request, f"Cancellation sync errors: {stats['errors'][-1]}")
         else:
             messages.success(
                 request,
-                f"Cancellation invoices synced (pages {from_page}{f' to {to_page}' if to_page else ' to last'}): "
+                f"Cancellation invoices synced (pages {from_page}{f' to {to_page}' if to_page else ' to last'}"
+                f"{' - update existing only' if update_only else ''}): "
                 f"{stats['created']} created, {stats['updated']} updated, "
                 f"{stats['total_invoices']} invoices, {stats['total_items']} items."
             )
