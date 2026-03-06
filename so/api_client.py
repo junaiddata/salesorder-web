@@ -1129,6 +1129,7 @@ class SAPAPIClient:
             gross_profit = line_total_after_discount - cost_price
             
             # Apply sign multiplier to item amounts (for csCancellation)
+            quantity = quantity * sign_multiplier
             price = price * sign_multiplier
             price_after_vat = price_after_vat * sign_multiplier
             line_total = line_total * sign_multiplier
