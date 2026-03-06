@@ -4843,22 +4843,28 @@ def sync_settings_form(request):
 def sync_cancellation_invoices_form(request):
     """
     Sync only AR Invoices with CancelStatus='csCancellation' from SAP API.
-    Accepts a starting page number so historical pages can be targeted.
+    Accepts a page range so historical pages can be targeted.
     """
     from django.contrib import messages
     from so.sync_services import sync_cancellation_invoices_core
 
     from_page_raw = request.POST.get('cancel_from_page', '1').strip()
     from_page = int(from_page_raw) if from_page_raw.isdigit() and int(from_page_raw) >= 1 else 1
+    to_page_raw = request.POST.get('cancel_to_page', '').strip()
+    to_page = int(to_page_raw) if to_page_raw.isdigit() and int(to_page_raw) >= 1 else None
+
+    if to_page is not None and to_page < from_page:
+        messages.error(request, "To page must be greater than or equal to From page.")
+        return redirect('sync_settings')
 
     try:
-        stats = sync_cancellation_invoices_core(from_page=from_page)
+        stats = sync_cancellation_invoices_core(from_page=from_page, to_page=to_page)
         if stats.get('errors'):
             messages.error(request, f"Cancellation sync errors: {stats['errors'][-1]}")
         else:
             messages.success(
                 request,
-                f"Cancellation invoices synced (from page {from_page}): "
+                f"Cancellation invoices synced (pages {from_page}{f' to {to_page}' if to_page else ' to last'}): "
                 f"{stats['created']} created, {stats['updated']} updated, "
                 f"{stats['total_invoices']} invoices, {stats['total_items']} items."
             )

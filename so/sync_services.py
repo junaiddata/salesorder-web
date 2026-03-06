@@ -1005,7 +1005,7 @@ def sync_purchaseorders_core(from_date=None, to_date=None):
 # =====================
 # AR Invoice Cancellation Sync
 # =====================
-def sync_cancellation_invoices_core(from_page: int = 1):
+def sync_cancellation_invoices_core(from_page: int = 1, to_page: int = None):
     """
     Fetch AR Invoices with CancelStatus='csCancellation' from the SAP API,
     starting from a specific page number, and save/update them in the DB.
@@ -1019,7 +1019,10 @@ def sync_cancellation_invoices_core(from_page: int = 1):
     log.info('SAP Cancellation Invoice Sync (csCancellation only)')
     log.info('=' * 70)
     log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
-    log.info(f'Fetching from page: {from_page}')
+    if to_page is not None:
+        log.info(f'Fetching pages: {from_page} to {to_page}')
+    else:
+        log.info(f'Fetching from page: {from_page} to last')
     log.info('-' * 70)
 
     sync_stats = {
@@ -1034,7 +1037,7 @@ def sync_cancellation_invoices_core(from_page: int = 1):
         from .models import SAPARInvoice, SAPARInvoiceItem
 
         client = SAPAPIClient()
-        all_invoices = client.fetch_arinvoices_by_cancel_status('csCancellation', from_page=from_page)
+        all_invoices = client.fetch_arinvoices_by_cancel_status('csCancellation', from_page=from_page, to_page=to_page)
 
         if not all_invoices:
             log.info('No cancellation invoices found.')

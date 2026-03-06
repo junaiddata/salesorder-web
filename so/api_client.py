@@ -781,21 +781,30 @@ class SAPAPIClient:
         logger.info(f"Total unique AR invoices from last {days} days: {len(all_invoices)}")
         return all_invoices
     
-    def fetch_arinvoices_by_cancel_status(self, cancel_status: str = 'csCancellation', from_page: int = 1) -> List[Dict]:
+    def fetch_arinvoices_by_cancel_status(
+        self,
+        cancel_status: str = 'csCancellation',
+        from_page: int = 1,
+        to_page: Optional[int] = None,
+    ) -> List[Dict]:
         """
-        Fetch AR Invoices filtered by CancelStatus, starting from a given page number.
+        Fetch AR Invoices filtered by CancelStatus, for a given page range.
 
         Args:
             cancel_status: SAP cancel status string (e.g. 'csCancellation', 'csYes', 'csNo')
             from_page: Page number to start fetching from (1-based, default: 1)
+            to_page: Optional page number to stop at (inclusive). If omitted, fetches until last page.
 
         Returns:
-            List of AR invoices matching the cancel status, from from_page onwards
+            List of AR invoices matching the cancel status, for pages [from_page..to_page]
         """
         payload = {"CancelStatus": cancel_status}
         base_url = getattr(settings, 'SAP_AR_INVOICE_API_URL', 'http://192.168.1.103/IntegrationApi/api/ARInvoice')
 
-        logger.info(f"Fetching AR invoices with CancelStatus={cancel_status} from page {from_page}...")
+        logger.info(
+            f"Fetching AR invoices with CancelStatus={cancel_status} "
+            f"from page {from_page}{f' to {to_page}' if to_page else ' to last'}..."
+        )
 
         # Fetch the first page in the range to get total count
         first_page = self._make_request_with_url(payload, base_url, page_number=from_page)
@@ -809,9 +818,19 @@ class SAPAPIClient:
         records_per_page = 20
         if total_count > records_per_page:
             total_pages = (total_count + records_per_page - 1) // records_per_page
-            logger.info(f"Total records: {total_count}, total pages: {total_pages}, fetching from page {from_page}")
+            end_page = total_pages
+            if to_page is not None:
+                try:
+                    end_page = max(1, min(int(to_page), total_pages))
+                except Exception:
+                    end_page = total_pages
 
-            for page_num in range(from_page + 1, total_pages + 1):
+            logger.info(
+                f"Total records: {total_count}, total pages: {total_pages}, "
+                f"fetching pages {from_page}..{end_page}"
+            )
+
+            for page_num in range(from_page + 1, end_page + 1):
                 logger.info(f"  Fetching page {page_num}/{total_pages}...")
                 page_result = self._make_request_with_url(payload, base_url, page_number=page_num)
                 if page_result is None:
@@ -821,7 +840,10 @@ class SAPAPIClient:
                 all_records.extend(page_records)
                 logger.info(f"  Fetched page {page_num}/{total_pages}: {len(page_records)} records")
 
-        logger.info(f"Fetched {len(all_records)} AR invoices with CancelStatus={cancel_status} (from page {from_page})")
+        logger.info(
+            f"Fetched {len(all_records)} AR invoices with CancelStatus={cancel_status} "
+            f"(from page {from_page}{f' to {to_page}' if to_page else ''})"
+        )
         return all_records
 
     def fetch_arcreditmemos_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
