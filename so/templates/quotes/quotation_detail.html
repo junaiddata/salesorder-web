@@ -513,6 +513,12 @@
               <div class="stat-card-value">{{ quotation.document_total|floatformat:2 }}</div>
             </div>
             {% if user.role.role == 'Admin' %}
+            {% if has_zero_cost_items %}
+            <div class="stat-card" style="background: var(--warning-light); border-color: rgba(245, 158, 11, 0.3);">
+              <div class="stat-card-label">Note</div>
+              <div class="stat-card-value" style="font-size: 0.9rem; color: var(--warning);">Some items have cost 0.0</div>
+            </div>
+            {% else %}
             <div class="stat-card danger">
               <div class="stat-card-label">Est. Cost</div>
               <div class="stat-card-value">{{ total_cost|floatformat:2 }}</div>
@@ -525,6 +531,7 @@
               <div class="stat-card-label">Margin %</div>
               <div class="stat-card-value">{{ margin_percent|floatformat:1 }}%</div>
             </div>
+            {% endif %}
             {% endif %}
           </div>
         </div>

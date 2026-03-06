@@ -3829,6 +3829,11 @@ def quotation_detail(request, q_number):
     margin_percent = (total_profit / doc_total * 100) if doc_total and doc_total != 0 else 0.0
     from_old_pi = request.GET.get('from') == 'old_pi'
 
+    # If any item has cost 0.0, don't show Est. Cost / Margin / % — show warning instead
+    has_zero_cost_items = is_admin and any(
+        (getattr(it, 'unit_cost') or 0) == 0 for it in items
+    )
+
     context = {
         'quotation': quotation,
         'items': items,
@@ -3837,6 +3842,7 @@ def quotation_detail(request, q_number):
         'margin_percent': margin_percent,
         'from_old_pi': from_old_pi,
         'is_admin': is_admin,
+        'has_zero_cost_items': has_zero_cost_items,
     }
 
     return render(request, 'quotes/quotation_detail.html', context)
