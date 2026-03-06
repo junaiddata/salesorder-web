@@ -1000,3 +1000,166 @@ def sync_purchaseorders_core(from_date=None, to_date=None):
         log.exception("Error syncing purchase orders from API")
         sync_stats['errors'].append(str(e))
     return sync_stats
+
+
+# =====================
+# AR Invoice Cancellation Sync
+# =====================
+def sync_cancellation_invoices_core(from_page: int = 1):
+    """
+    Fetch AR Invoices with CancelStatus='csCancellation' from the SAP API,
+    starting from a specific page number, and save/update them in the DB.
+    Useful for backfilling historical cancellation invoices with correct negative quantities.
+
+    Returns dict with created, updated, total_invoices, total_items, errors.
+    """
+    log = _get_sync_logger('arinvoices')
+    sync_start = datetime.now()
+    log.info('=' * 70)
+    log.info('SAP Cancellation Invoice Sync (csCancellation only)')
+    log.info('=' * 70)
+    log.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
+    log.info(f'Fetching from page: {from_page}')
+    log.info('-' * 70)
+
+    sync_stats = {
+        'created': 0,
+        'updated': 0,
+        'total_invoices': 0,
+        'total_items': 0,
+        'errors': [],
+    }
+
+    try:
+        from .models import SAPARInvoice, SAPARInvoiceItem
+
+        client = SAPAPIClient()
+        all_invoices = client.fetch_arinvoices_by_cancel_status('csCancellation', from_page=from_page)
+
+        if not all_invoices:
+            log.info('No cancellation invoices found.')
+            return sync_stats
+
+        mapped_invoices = []
+        for api_invoice in all_invoices:
+            try:
+                mapped = client._map_arinvoice_api_response(api_invoice)
+                mapped_invoices.append(mapped)
+            except Exception as e:
+                log.error(f"Error mapping invoice {api_invoice.get('DocNum')}: {e}")
+                sync_stats['errors'].append(str(e))
+
+        if not mapped_invoices:
+            return sync_stats
+
+        invoice_numbers = [m['invoice_number'] for m in mapped_invoices if m.get('invoice_number')]
+        sync_stats['total_invoices'] = len(invoice_numbers)
+
+        with transaction.atomic():
+            try:
+                existing_map = SAPARInvoice.objects.in_bulk(invoice_numbers, field_name='invoice_number')
+            except TypeError:
+                existing_map = {o.invoice_number: o for o in SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers)}
+
+            to_create = []
+            to_update = []
+            for mapped in mapped_invoices:
+                invoice_no = mapped.get('invoice_number')
+                if not invoice_no:
+                    continue
+                posting_date = _parse_date(mapped.get('posting_date'))
+                doc_due_date = _parse_date(mapped.get('doc_due_date'))
+                defaults = {
+                    'internal_number': mapped.get('internal_number'),
+                    'posting_date': posting_date,
+                    'doc_due_date': doc_due_date,
+                    'customer_code': mapped.get('customer_code', ''),
+                    'customer_name': mapped.get('customer_name', ''),
+                    'customer_address': mapped.get('customer_address', ''),
+                    'salesman_name': mapped.get('salesman_name', ''),
+                    'salesman_code': mapped.get('salesman_code'),
+                    'store': mapped.get('store', 'HO'),
+                    'bp_reference_no': mapped.get('bp_reference_no', ''),
+                    'doc_total': _dec2(mapped.get('doc_total', 0)),
+                    'doc_total_without_vat': _dec2(mapped.get('doc_total_without_vat', 0)),
+                    'subtotal_before_discount': _dec2(mapped.get('subtotal_before_discount', 0)),
+                    'vat_sum': _dec2(mapped.get('vat_sum', 0)),
+                    'rounding_diff_amount': _dec2(mapped.get('rounding_diff_amount', 0)),
+                    'total_gross_profit': _dec2(mapped.get('total_gross_profit', 0)),
+                    'discount_percent': _dec2(mapped.get('discount_percent', 0)),
+                    'cancel_status': mapped.get('cancel_status', ''),
+                    'document_status': mapped.get('document_status', ''),
+                    'vat_number': mapped.get('vat_number', ''),
+                    'comments': mapped.get('comments', ''),
+                }
+                obj = existing_map.get(invoice_no)
+                if obj is None:
+                    to_create.append(SAPARInvoice(invoice_number=invoice_no, **defaults))
+                    sync_stats['created'] += 1
+                else:
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    to_update.append(obj)
+                    sync_stats['updated'] += 1
+
+            if to_create:
+                SAPARInvoice.objects.bulk_create(to_create, batch_size=5000)
+            if to_update:
+                update_fields = [
+                    'internal_number', 'posting_date', 'doc_due_date', 'customer_code', 'customer_name',
+                    'customer_address', 'salesman_name', 'salesman_code', 'store', 'bp_reference_no',
+                    'doc_total', 'doc_total_without_vat', 'subtotal_before_discount', 'vat_sum',
+                    'rounding_diff_amount', 'total_gross_profit', 'discount_percent',
+                    'cancel_status', 'document_status', 'vat_number', 'comments',
+                ]
+                SAPARInvoice.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+
+            invoice_id_map = dict(
+                SAPARInvoice.objects.filter(invoice_number__in=invoice_numbers).values_list('invoice_number', 'id')
+            )
+            SAPARInvoiceItem.objects.filter(invoice__invoice_number__in=invoice_numbers).delete()
+
+            items_to_create = []
+            for mapped in mapped_invoices:
+                invoice_no = mapped.get('invoice_number')
+                invoice_id = invoice_id_map.get(invoice_no)
+                if not invoice_id:
+                    continue
+                for item_data in mapped.get('items', []):
+                    items_to_create.append(
+                        SAPARInvoiceItem(
+                            invoice_id=invoice_id,
+                            item_id=item_data.get('item_id'),
+                            line_no=item_data.get('line_no', 1),
+                            item_code=item_data.get('item_code', ''),
+                            item_description=item_data.get('item_description', ''),
+                            quantity=_dec_any(item_data.get('quantity', 0)),
+                            price=_dec_any(item_data.get('price', 0)),
+                            price_after_vat=_dec_any(item_data.get('price_after_vat', 0)),
+                            discount_percent=_dec_any(item_data.get('discount_percent', 0)),
+                            line_total=_dec_any(item_data.get('line_total', 0)),
+                            line_total_after_discount=_dec_any(item_data.get('line_total_after_discount', 0)),
+                            cost_price=_dec_any(item_data.get('cost_price', 0)),
+                            gross_profit=_dec_any(item_data.get('gross_profit', 0)),
+                            tax_percentage=_dec_any(item_data.get('tax_percentage', 0)),
+                            tax_total=_dec_any(item_data.get('tax_total', 0)),
+                            upc_code=item_data.get('upc_code', ''),
+                        )
+                    )
+                    if len(items_to_create) >= 20000:
+                        SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+                        items_to_create = []
+            if items_to_create:
+                SAPARInvoiceItem.objects.bulk_create(items_to_create, batch_size=20000)
+
+            sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_invoices)
+
+        duration = (datetime.now() - sync_start).total_seconds()
+        log.info('SYNC SUMMARY')
+        log.info(f'Created: {sync_stats["created"]} | Updated: {sync_stats["updated"]} | Total items: {sync_stats["total_items"]}')
+        log.info(f'Duration: {duration:.2f}s')
+        log.info('=' * 70)
+    except Exception as e:
+        log.exception('Error syncing cancellation invoices')
+        sync_stats['errors'].append(str(e))
+    return sync_stats

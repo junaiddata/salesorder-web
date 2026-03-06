@@ -4840,6 +4840,37 @@ def sync_settings_form(request):
 
 @login_required
 @require_POST
+def sync_cancellation_invoices_form(request):
+    """
+    Sync only AR Invoices with CancelStatus='csCancellation' from SAP API.
+    Accepts a starting page number so historical pages can be targeted.
+    """
+    from django.contrib import messages
+    from so.sync_services import sync_cancellation_invoices_core
+
+    from_page_raw = request.POST.get('cancel_from_page', '1').strip()
+    from_page = int(from_page_raw) if from_page_raw.isdigit() and int(from_page_raw) >= 1 else 1
+
+    try:
+        stats = sync_cancellation_invoices_core(from_page=from_page)
+        if stats.get('errors'):
+            messages.error(request, f"Cancellation sync errors: {stats['errors'][-1]}")
+        else:
+            messages.success(
+                request,
+                f"Cancellation invoices synced (from page {from_page}): "
+                f"{stats['created']} created, {stats['updated']} updated, "
+                f"{stats['total_invoices']} invoices, {stats['total_items']} items."
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception('Error syncing cancellation invoices')
+        messages.error(request, f'Error: {str(e)}')
+    return redirect('sync_settings')
+
+
+@login_required
+@require_POST
 def sync_all_sales_data_form(request):
     """
     Form POST endpoint for syncing AR Invoices and AR Credit Memos from Settings page.

@@ -781,6 +781,49 @@ class SAPAPIClient:
         logger.info(f"Total unique AR invoices from last {days} days: {len(all_invoices)}")
         return all_invoices
     
+    def fetch_arinvoices_by_cancel_status(self, cancel_status: str = 'csCancellation', from_page: int = 1) -> List[Dict]:
+        """
+        Fetch AR Invoices filtered by CancelStatus, starting from a given page number.
+
+        Args:
+            cancel_status: SAP cancel status string (e.g. 'csCancellation', 'csYes', 'csNo')
+            from_page: Page number to start fetching from (1-based, default: 1)
+
+        Returns:
+            List of AR invoices matching the cancel status, from from_page onwards
+        """
+        payload = {"CancelStatus": cancel_status}
+        base_url = getattr(settings, 'SAP_AR_INVOICE_API_URL', 'http://192.168.1.103/IntegrationApi/api/ARInvoice')
+
+        logger.info(f"Fetching AR invoices with CancelStatus={cancel_status} from page {from_page}...")
+
+        # Fetch the first page in the range to get total count
+        first_page = self._make_request_with_url(payload, base_url, page_number=from_page)
+        if first_page is None:
+            return []
+
+        records = first_page.get('value', [])
+        total_count = first_page.get('count', len(records))
+        all_records = list(records)
+
+        records_per_page = 20
+        if total_count > records_per_page:
+            total_pages = (total_count + records_per_page - 1) // records_per_page
+            logger.info(f"Total records: {total_count}, total pages: {total_pages}, fetching from page {from_page}")
+
+            for page_num in range(from_page + 1, total_pages + 1):
+                logger.info(f"  Fetching page {page_num}/{total_pages}...")
+                page_result = self._make_request_with_url(payload, base_url, page_number=page_num)
+                if page_result is None:
+                    logger.warning(f"  Failed to fetch page {page_num}, continuing...")
+                    continue
+                page_records = page_result.get('value', [])
+                all_records.extend(page_records)
+                logger.info(f"  Fetched page {page_num}/{total_pages}: {len(page_records)} records")
+
+        logger.info(f"Fetched {len(all_records)} AR invoices with CancelStatus={cancel_status} (from page {from_page})")
+        return all_records
+
     def fetch_arcreditmemos_by_date_range(self, from_date: str, to_date: str) -> List[Dict]:
         """
         Fetch AR Credit Memos for a date range (with pagination)

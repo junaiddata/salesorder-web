@@ -43,6 +43,7 @@ urlpatterns = [
     path('settings/', views.sync_settings, name='sync_settings'),
     path('settings/sync/', views.sync_settings_form, name='sync_settings_form'),
     path('settings/sync-all/', views.sync_all_sales_data_form, name='sync_all_sales_data'),
+    path('settings/sync-cancellation-invoices/', views.sync_cancellation_invoices_form, name='sync_cancellation_invoices_form'),
 
     ############### FINANCE STATEMENT ##################
     path('finance-statement/', finance_statement_views.finance_statement_list, name='finance_statement_list'),

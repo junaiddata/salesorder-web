@@ -6,6 +6,7 @@ Usage:
     python manage.py sync_arinvoices_vps
     python manage.py sync_arinvoices_vps --days-back 7
     python manage.py sync_arinvoices_vps --specific-date 2026-01-21
+    python manage.py sync_arinvoices_vps --from-date 2024-01-01 --to-date 2026-03-05
     python manage.py sync_arinvoices_vps --docnum 12345
 """
 import sys
@@ -46,11 +47,15 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--days-back', type=int, default=getattr(settings, 'SAP_SYNC_DAYS_BACK', 3), help='Number of days to fetch (default: 3)')
         parser.add_argument('--specific-date', type=str, default=None, help='Single date to fetch (YYYY-MM-DD)')
+        parser.add_argument('--from-date', type=str, default=None, help='Start date for range (YYYY-MM-DD). Use with --to-date.')
+        parser.add_argument('--to-date', type=str, default=None, help='End date for range (YYYY-MM-DD). Use with --from-date.')
         parser.add_argument('--docnum', type=int, default=None, help='Single DocNum to fetch')
 
     def handle(self, *args, **options):
         days_back = options['days_back']
         specific_date = options.get('specific_date')
+        from_date = options.get('from_date')
+        to_date = options.get('to_date')
         docnum = str(options['docnum']) if options.get('docnum') else None
         sync_start = datetime.now()
 
@@ -60,7 +65,9 @@ class Command(BaseCommand):
         logger.info(f'Started at: {sync_start.strftime("%Y-%m-%d %H:%M:%S")}')
         logger.info(f'API: {getattr(settings, "SAP_AR_INVOICE_API_URL", "")}')
         logger.info(f'Log file: {LOG_FILE}')
-        if specific_date:
+        if from_date and to_date:
+            logger.info(f'Date range: {from_date} to {to_date}')
+        elif specific_date:
             logger.info(f'Date filter: {specific_date}')
         elif docnum:
             logger.info(f'DocNum filter: {docnum}')
@@ -69,7 +76,13 @@ class Command(BaseCommand):
         logger.info('-' * 70)
 
         try:
-            stats = sync_arinvoices_core(days_back=days_back, specific_date=specific_date, docnum=docnum)
+            stats = sync_arinvoices_core(
+                days_back=days_back,
+                specific_date=specific_date,
+                docnum=docnum,
+                from_date=from_date,
+                to_date=to_date,
+            )
         except Exception as e:
             logger.exception('Error during sync')
             raise SystemExit(1)

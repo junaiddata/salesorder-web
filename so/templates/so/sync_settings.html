@@ -133,6 +133,27 @@
           <button type="submit" class="sync-btn"><i class="fas fa-users"></i> Customer Finance</button>
         </form>
       </div>
+
+      <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border);">
+
+      <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.875rem;">
+        Backfill <strong>csCancellation</strong> invoices only — re-syncs all pages from the given start page.
+        Useful for fixing negative quantities on historical cancellation invoices.
+      </p>
+      <form method="post" action="{% url 'sync_cancellation_invoices_form' %}" style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+        {% csrf_token %}
+        <div>
+          <label for="cancel_from_page" style="display:block; font-size:0.813rem; font-weight:500; color:var(--text-secondary); margin-bottom:4px;">Start from page</label>
+          <input type="number" name="cancel_from_page" id="cancel_from_page" value="1" min="1"
+                 style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:0.938rem; width:100px;">
+        </div>
+        <button type="submit" class="sync-now-btn" style="background:#f59e0b;">
+          <i class="fas fa-undo-alt"></i> Sync Cancellation Invoices
+        </button>
+      </form>
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">
+        e.g. enter <strong>80</strong> to start from page 80 to the last page. Leave as <strong>1</strong> to sync all pages.
+      </p>
     </div>
 
     <script>
