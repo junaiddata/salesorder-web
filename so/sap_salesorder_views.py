@@ -1413,6 +1413,15 @@ def salesorder_detail(request, so_number):
 
     # Admin-only: Customer Finance Summary and approval status
     is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    # Approved and Rejected are only for username 'manager'; others see all except those two
+    MANAGER_ONLY_STATUSES = ('Approved', 'Rejected')
+    if request.user.username == 'manager':
+        approval_status_choices = APPROVAL_STATUS_CHOICES
+    else:
+        approval_status_choices = [c for c in APPROVAL_STATUS_CHOICES if c[0] not in MANAGER_ONLY_STATUSES]
+        # If current status is manager-only, prepend it so it displays correctly (user can change to others)
+        if salesorder.approval_status in MANAGER_ONLY_STATUSES:
+            approval_status_choices = [(salesorder.approval_status, salesorder.approval_status)] + approval_status_choices
     monthly_pending_data = []
     credit_limit = Decimal("0")
     payment_terms = ""
@@ -1460,7 +1469,7 @@ def salesorder_detail(request, so_number):
         'total_pi_amount': total_pi_amount,
         'balance_amount': balance_amount,
         'is_admin': is_admin,
-        'approval_status_choices': APPROVAL_STATUS_CHOICES,
+        'approval_status_choices': approval_status_choices,
         'monthly_pending_data': monthly_pending_data,
         'credit_limit': credit_limit,
         'payment_terms': payment_terms,
@@ -2090,6 +2099,13 @@ def salesorder_update_approval(request, so_number):
     if new_status not in valid_statuses:
         messages.error(request, f"Invalid approval status. Must be one of: {', '.join(valid_statuses)}")
         return redirect("salesorder_detail", so_number=so_number)
+
+    # Approved and Rejected can only be set by username 'manager' (except no-change when already set)
+    MANAGER_ONLY_STATUSES = ('Approved', 'Rejected')
+    if new_status in MANAGER_ONLY_STATUSES and request.user.username != 'manager':
+        if new_status != salesorder.approval_status:
+            messages.error(request, "Only the manager can set Approved or Rejected status.")
+            return redirect("salesorder_detail", so_number=salesorder.so_number)
 
     from django.utils import timezone
     salesorder.approval_status = new_status
