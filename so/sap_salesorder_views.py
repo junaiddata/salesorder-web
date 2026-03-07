@@ -1216,16 +1216,16 @@ def salesorder_list(request):
     if end_date:
         qs = qs.filter(posting_date__lte=end_date)
 
-    # Calculate totals
+    # Calculate totals (pending amounts from items, not document totals)
     grand_total_agg = qs.aggregate(
-        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
+        total=Coalesce(Sum('items__pending_amount'), Value(0, output_field=DecimalField()))
     )
     total_value = grand_total_agg['total']
 
     # Calculate Years from 'qs_for_years' (Respects Salesman/Status, IGNORES Date)
     yearly_agg = qs_for_years.aggregate(
-        total_2025=Coalesce(Sum('document_total', filter=Q(posting_date__year=2025)), Value(0, output_field=DecimalField())),
-        total_2026=Coalesce(Sum('document_total', filter=Q(posting_date__year=2026)), Value(0, output_field=DecimalField())),
+        total_2025=Coalesce(Sum('items__pending_amount', filter=Q(posting_date__year=2025)), Value(0, output_field=DecimalField())),
+        total_2026=Coalesce(Sum('items__pending_amount', filter=Q(posting_date__year=2026)), Value(0, output_field=DecimalField())),
     )
     total_2025 = yearly_agg['total_2025']
     total_2026 = yearly_agg['total_2026']
@@ -1624,9 +1624,9 @@ def salesorder_search(request):
         elif total_range == "100000+":
             qs = qs.filter(document_total__gt=100000)
 
-    # Total value (sum of document_total on FILTERED qs)
+    # Total value (sum of pending_amount from items on FILTERED qs)
     total_value = qs.aggregate(
-        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
+        total=Coalesce(Sum('items__pending_amount'), Value(0, output_field=DecimalField()))
     )['total']
 
     # Order + Pagination
