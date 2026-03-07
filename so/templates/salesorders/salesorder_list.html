@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -602,15 +603,15 @@
       <div class="stats-bar">
         <div class="stat-item">
           <span class="stat-label">Pending Total Value:</span>
-          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2 }}</span>
+          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2|intcomma }}</span>
         </div>
         <div class="stat-item">
           <span class="stat-label">2025 Pending:</span>
-          <span class="stat-value">{{ total_2025|default:0|floatformat:2 }}</span>
+          <span class="stat-value">{{ total_2025|default:0|floatformat:2|intcomma }}</span>
         </div>
         <div class="stat-item">
           <span class="stat-label">2026 Pending:</span>
-          <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2 }}</span>
+          <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2|intcomma }}</span>
         </div>
       </div>
     </div>

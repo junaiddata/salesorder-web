@@ -1,3 +1,4 @@
+{% load humanize %}
 {% for so in page_obj %}
 <tr>
   <td>{{ so.posting_date|date:"M d, Y"|default:"-" }}</td>
@@ -7,8 +8,8 @@
   <td>{{ so.customer_name }}</td>
   <td class="text-muted">{{ so.salesman_name|default:"—" }}</td>
   <td class="text-muted">{{ so.bp_reference_no|default:"—" }}</td>
-  <td class="num">{{ so.pending_total|default_if_none:"0"|floatformat:2 }}</td>
-  <td class="num">{{ so.row_total_sum|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ so.pending_total|default_if_none:"0"|floatformat:2|intcomma }}</td>
+  <td class="num">{{ so.row_total_sum|default_if_none:"0"|floatformat:2|intcomma }}</td>
   <td>
     {% if so.display_status == 'O' %}
       <span class="badge badge-open">Open</span>
