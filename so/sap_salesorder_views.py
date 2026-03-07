@@ -2082,6 +2082,166 @@ def export_salesorder_list_pdf(request):
 
 
 @login_required
+def export_salesorder_list_excel(request):
+    """
+    Exports the filtered list of salesorders to an Excel file.
+    Respects: q, salesman, start/end date, status, total range, remarks, approval_status.
+    """
+    qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+    open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
+    qs = qs.annotate(
+        has_open=Exists(open_items_sq),
+        display_status=Case(
+            When(has_open=True, then=Value("O")),
+            default=Value("C"),
+            output_field=CharField(),
+        ),
+        pending_total=Coalesce(
+            Sum('items__pending_amount'),
+            Value(0, output_field=DecimalField())
+        ),
+    )
+
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    status = request.GET.get('status', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    remarks_filter = request.GET.get('remarks', '').strip()
+    approval_status_filter = request.GET.get('approval_status', '').strip()
+
+    is_admin_export = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
+    if is_admin_export and approval_status_filter in valid_approval_statuses:
+        qs = qs.filter(approval_status=approval_status_filter)
+
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
+
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(document_total__gt=100000)
+
+    if remarks_filter == "YES":
+        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+    elif remarks_filter == "NO":
+        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
+
+    if q:
+        if q.isdigit():
+            qs = qs.filter(so_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q) |
+                Q(bp_reference_no__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(so_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q) |
+                Q(bp_reference_no__icontains=q)
+            )
+
+    if status:
+        s = status.strip().upper()
+        if s in ("OPEN", "O"):
+            qs = qs.filter(has_open=True)
+        elif s in ("CLOSED", "C"):
+            qs = qs.filter(has_open=False)
+        else:
+            qs = qs.filter(status__iexact=status)
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            if len(s) == 7:
+                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    start_date = parse_date(start)
+    end_date = parse_date(end)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    qs = qs.order_by('-posting_date', '-so_number')
+
+    data = []
+    for so in qs:
+        status_display = "Open" if so.display_status == 'O' else "Closed"
+        approval_display = getattr(so, 'approval_status', None) or ''
+        if approval_display in ('DO Completed', 'Partial DO', 'Trade License Expired'):
+            approval_display = f"Approved + {approval_display}"
+
+        row_data = {
+            'Date': so.posting_date.strftime('%Y-%m-%d') if so.posting_date else '',
+            'SO Number': so.so_number,
+            'Customer': so.customer_name or '',
+            'Salesman': so.salesman_name or '',
+            'LPO Reference': so.bp_reference_no or '',
+            'Pending Total': float(so.pending_total) if so.pending_total is not None else 0.0,
+            'Document Total': float(so.document_total) if so.document_total is not None else 0.0,
+            'Status': status_display,
+        }
+        if is_admin_export:
+            row_data['Approval Status'] = approval_display
+        data.append(row_data)
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Sales Orders', index=False)
+        worksheet = writer.sheets['Sales Orders']
+        from openpyxl.styles import Font, PatternFill, Alignment
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except Exception:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+        worksheet.row_dimensions[1].height = 20
+
+    output.seek(0)
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"Sales_Orders_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
 @require_POST
 def salesorder_update_remarks(request, so_number):
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)

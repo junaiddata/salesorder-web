@@ -150,6 +150,7 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
     path('sapsalesorders/<str:so_number>/approval/', sap_salesorder_views.salesorder_update_approval, name='salesorder_update_approval'),
     path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
+    path('sapsalesorders/export-excel/', sap_salesorder_views.export_salesorder_list_excel, name='export_salesorder_list_excel'),
     
     # SAP AR Invoice URLs
     path('saparinvoices/sync-api/', sap_salesorder_views.sync_arinvoices_from_api, name='sync_arinvoices_api'),
