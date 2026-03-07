@@ -503,6 +503,28 @@
                 <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
               </div>
             </div>
+            {% if is_admin %}
+            <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+              {% if has_zero_cost_items %}
+              <div style="padding:10px 14px; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); font-size:0.85rem;">
+                <strong>Note:</strong> Some items have cost 0.0 — cost/margin figures may be incomplete.
+              </div>
+              {% else %}
+              <div style="padding:8px 12px; background:var(--surface-alt); border-radius:var(--radius-sm);">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Total Cost</span>
+                <div style="font-weight:700; font-size:1rem;">{{ total_cost|floatformat:2 }}</div>
+              </div>
+              <div style="padding:8px 12px; background:var(--success-light); border-radius:var(--radius-sm);">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Total Margin</span>
+                <div style="font-weight:700; font-size:1rem; color:var(--success);">{{ total_margin|floatformat:2 }}</div>
+              </div>
+              <div style="padding:8px 12px; background:var(--success-light); border-radius:var(--radius-sm);">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Margin %</span>
+                <div style="font-weight:700; font-size:1rem; color:var(--success);">{{ margin_percent|floatformat:1 }}%</div>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
         </div>
 

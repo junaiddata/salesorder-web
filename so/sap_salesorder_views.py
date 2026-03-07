@@ -1421,6 +1421,22 @@ def salesorder_detail(request, so_number):
 
     # Admin-only: Customer Finance Summary and approval status
     is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+
+    # Admin-only: Total cost, total margin, margin % (like SAP Quotation)
+    total_cost = Decimal("0.00")
+    total_margin = Decimal("0.00")
+    margin_percent = Decimal("0.00")
+    has_zero_cost_items = False
+    if is_admin and items:
+        for it in items:
+            cost_val = getattr(it, 'item_cost', None) or Decimal("0")
+            qty_val = it.quantity or Decimal("0")
+            total_cost += (cost_val * qty_val).quantize(Decimal("0.01"))
+            if cost_val == 0:
+                has_zero_cost_items = True
+        total_sales = total_before_tax or Decimal("0.00")
+        total_margin = (total_sales - total_cost).quantize(Decimal("0.01"))
+        margin_percent = (total_margin / total_sales * 100).quantize(Decimal("0.01")) if total_sales and total_sales > 0 else Decimal("0.00")
     # Approved and Rejected are only for username 'manager'; others see all except those two
     MANAGER_ONLY_STATUSES = ('Approved', 'Rejected')
     if request.user.username == 'manager':
@@ -1486,6 +1502,10 @@ def salesorder_detail(request, so_number):
         'pending_total_without': pending_total_without,
         'old_months': old_months,
         'pending_total_with_order': pending_total_with_order,
+        'total_cost': total_cost,
+        'total_margin': total_margin,
+        'margin_percent': margin_percent,
+        'has_zero_cost_items': has_zero_cost_items,
     }
 
     return render(request, 'salesorders/salesorder_detail.html', context)
