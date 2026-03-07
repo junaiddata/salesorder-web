@@ -173,6 +173,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                 if not so_no:
                     continue
 
+                status_val = mapped.get('status', 'C')
                 defaults = {
                     "posting_date": mapped.get('posting_date'),
                     "customer_code": mapped.get('customer_code', ''),
@@ -182,7 +183,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),
                     "document_total": _dec2(mapped.get('document_total', 0)),
                     "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
-                    "status": mapped.get('status', 'C'),
+                    "status": status_val,
                     "vat_number": mapped.get('vat_number', '') or '',
                     "customer_address": mapped.get('customer_address', '') or '',
                     "customer_phone": mapped.get('customer_phone', '') or '',
@@ -194,6 +195,9 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     defaults["internal_number"] = mapped.get('internal_number')
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     defaults["last_synced_at"] = datetime.now()
+                # When status is Closed, set approval_status to DO Completed
+                if status_val in ('C', 'CLOSED'):
+                    defaults["approval_status"] = 'DO Completed'
 
                 obj = existing_map.get(so_no)
                 if obj is None:
@@ -212,7 +216,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     "posting_date", "customer_code", "customer_name", "bp_reference_no",
                     "salesman_name", "discount_percentage", "document_total", "row_total_sum",
                     "status", "vat_number", "customer_address", "customer_phone", "closing_remarks",
-                    "internal_number", "is_sap_pi", "nf_ref"
+                    "internal_number", "is_sap_pi", "nf_ref", "approval_status"
                 ]
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     update_fields.append("last_synced_at")
@@ -267,7 +271,8 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
             closed_count = 0
             for order in previously_open_orders:
                 order.status = 'C'
-                order.save(update_fields=['status'])
+                order.approval_status = 'DO Completed'
+                order.save(update_fields=['status', 'approval_status'])
                 order.items.all().update(
                     row_status='C',
                     remaining_open_quantity=Decimal('0'),

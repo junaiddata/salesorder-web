@@ -16,7 +16,9 @@
       <span class="badge badge-closed">Closed</span>
     {% endif %}
     {% if is_admin and so.approval_status %}
-      <span class="badge" style="margin-left:4px; background:{% if so.approval_status == 'Approved' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Rejected' %}#fef2f2; color:#dc2626{% elif so.approval_status == 'DO Completed' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Partial DO' %}#eff6ff; color:#2563eb{% elif so.approval_status == 'Trade License Expired' %}#fef2f2; color:#dc2626{% else %}#fffbeb; color:#d97706{% endif %};">{{ so.approval_status }}</span>
+      <span class="badge" style="margin-left:4px; background:{% if so.approval_status == 'Approved' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Rejected' %}#fef2f2; color:#dc2626{% elif so.approval_status == 'DO Completed' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Partial DO' %}#eff6ff; color:#2563eb{% elif so.approval_status == 'Trade License Expired' %}#fef2f2; color:#dc2626{% else %}#fffbeb; color:#d97706{% endif %}">
+        {% if so.approval_status == 'DO Completed' or so.approval_status == 'Partial DO' or so.approval_status == 'Trade License Expired' %}Approved + {{ so.approval_status }}{% else %}{{ so.approval_status }}{% endif %}
+      </span>
     {% endif %}
   </td>
 </tr>

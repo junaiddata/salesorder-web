@@ -495,6 +495,8 @@ def upload_salesorders(request):
                                 "row_total_sum": _dec2(row.row_total_sum),
                                 "status": status_val,
                             }
+                            if status_val == "C":
+                                defaults["approval_status"] = "DO Completed"
                             
                             # Add VAT Number if it exists in the row
                             if hasattr(row, 'vat_number') and row.vat_number:
@@ -531,6 +533,7 @@ def upload_salesorders(request):
                                 "document_total",
                                 "row_total_sum",
                                 "status",
+                                "approval_status",
                             ]
                             # Add vat_number if it exists in the Excel
                             if "VAT Number" in df.columns:
@@ -826,6 +829,7 @@ def sync_salesorders_api_receive(request):
                 elif sap_pi_lpo_date and hasattr(sap_pi_lpo_date, 'date'):
                     sap_pi_lpo_date = sap_pi_lpo_date.date() if hasattr(sap_pi_lpo_date, 'date') else sap_pi_lpo_date
                 
+                status_val = mapped.get('status', 'C')
                 defaults = {
                     "posting_date": posting_date,
                     "customer_code": mapped.get('customer_code', ''),
@@ -835,7 +839,7 @@ def sync_salesorders_api_receive(request):
                     "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),  # Exact value from API
                     "document_total": _dec2(mapped.get('document_total', 0)),
                     "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
-                    "status": mapped.get('status', 'C'),
+                    "status": status_val,
                     "vat_number": mapped.get('vat_number', '') or '',  # VAT Number from BusinessPartner.FederalTaxID
                     "customer_address": mapped.get('customer_address', '') or '',  # Address from main API response
                     "customer_phone": mapped.get('customer_phone', '') or '',  # Phone1 from BusinessPartner
@@ -847,6 +851,9 @@ def sync_salesorders_api_receive(request):
                 # Add last_synced_at only if field exists in model (after migration)
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     defaults["last_synced_at"] = datetime.now()
+                # When status is Closed, set approval_status to DO Completed
+                if status_val in ('C', 'CLOSED'):
+                    defaults["approval_status"] = 'DO Completed'
                 
                 if mapped.get('internal_number'):
                     defaults["internal_number"] = mapped.get('internal_number')
@@ -869,7 +876,7 @@ def sync_salesorders_api_receive(request):
                 update_fields = [
                     "posting_date", "customer_code", "customer_name", "bp_reference_no",
                     "salesman_name", "discount_percentage", "document_total", "row_total_sum",
-                    "status", "vat_number", "customer_address", "customer_phone", "closing_remarks", "internal_number", "is_sap_pi", "nf_ref"
+                    "status", "vat_number", "customer_address", "customer_phone", "closing_remarks", "internal_number", "is_sap_pi", "nf_ref", "approval_status"
                 ]
                 # Add last_synced_at only if field exists in model (after migration)
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
@@ -943,7 +950,8 @@ def sync_salesorders_api_receive(request):
             closed_count = 0
             for order in previously_open_orders:
                 order.status = 'C'
-                order.save(update_fields=['status'])
+                order.approval_status = 'DO Completed'
+                order.save(update_fields=['status', 'approval_status'])
                 
                 SAPSalesorderItem.objects.filter(salesorder=order).update(
                     row_status='C',
