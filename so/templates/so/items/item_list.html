@@ -135,6 +135,15 @@
         .not-found-alert.visible { display: inline-flex; align-items: center; gap: .3rem; }
         .not-found-alert svg { flex-shrink: 0; }
 
+        .btn-copy-table {
+            display: inline-flex; align-items: center;
+            padding: .45rem .85rem; font-size: .8rem; font-weight: 600;
+            color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0;
+            border-radius: .45rem; cursor: pointer; transition: all .15s;
+        }
+        .btn-copy-table:hover { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
+        .copy-feedback { font-size: .8rem; color: var(--success, #10b981); font-weight: 500; }
+
         /* ── Table ──────────────────────────────────── */
         .table-wrap { position: relative; min-height: 200px; overflow-x: auto; }
         table.items-table {
@@ -357,7 +366,13 @@
                         <strong>{{ total_count }}</strong> item{{ total_count|pluralize }} found
                         {% if total_count > 500 %}<span style="color:#f59e0b;">(showing first 500)</span>{% endif %}
                     </span>
-                    <span class="not-found-alert {% if not_found_codes %}visible{% endif %}" id="not-found-alert">
+                    <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+                        <button type="button" id="btn-copy-table" class="btn-copy-table" title="Copy table to clipboard (paste in Excel)">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:-2px; margin-right:4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2m0 10h2a2 2 0 002-2v-2m-4 0h10a2 2 0 012 2v2a2 2 0 01-2 2h-2m-4-1v4"/></svg>
+                            Copy
+                        </button>
+                        <span id="copy-feedback" class="copy-feedback" aria-live="polite"></span>
+                        <span class="not-found-alert {% if not_found_codes %}visible{% endif %}" id="not-found-alert">
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -368,6 +383,7 @@
                             {% endif %}
                         </span>
                     </span>
+                    </div>
                 </div>
             </div>
 
@@ -480,6 +496,46 @@
         document.getElementById('multi-codes').addEventListener('input', function () {
             clearTimeout(searchTimer);
             searchTimer = setTimeout(loadItems, 600);
+        });
+
+        /* ── Copy table as tab-separated (paste in Excel) ── */
+        document.getElementById('btn-copy-table').addEventListener('click', function () {
+            var table = document.querySelector('#item-table table.items-table');
+            var feedback = document.getElementById('copy-feedback');
+            if (!table) {
+                feedback.textContent = 'No table to copy';
+                feedback.style.color = '#94a3b8';
+                setTimeout(function () { feedback.textContent = ''; }, 2000);
+                return;
+            }
+            var headerCells = table.querySelectorAll('thead tr th');
+            var copyColCount = headerCells.length - 1;
+            if (copyColCount <= 0) copyColCount = headerCells.length;
+            var rows = [];
+            var headerRow = [];
+            for (var i = 0; i < copyColCount; i++) {
+                headerRow.push((headerCells[i] && headerCells[i].textContent.trim()) || '');
+            }
+            rows.push(headerRow.join('\t'));
+            var bodyRows = table.querySelectorAll('tbody tr');
+            bodyRows.forEach(function (tr) {
+                var cells = tr.querySelectorAll('td');
+                var row = [];
+                for (var j = 0; j < copyColCount && j < cells.length; j++) {
+                    row.push((cells[j] && cells[j].textContent.trim()) || '');
+                }
+                rows.push(row.join('\t'));
+            });
+            var tsv = rows.join('\r\n');
+            navigator.clipboard.writeText(tsv).then(function () {
+                feedback.textContent = 'Copied! Paste in Excel.';
+                feedback.style.color = '';
+                setTimeout(function () { feedback.textContent = ''; }, 2500);
+            }).catch(function () {
+                feedback.textContent = 'Copy failed';
+                feedback.style.color = '#94a3b8';
+                setTimeout(function () { feedback.textContent = ''; }, 2000);
+            });
         });
     });
     </script>

@@ -400,6 +400,16 @@ class SAPQuotationItem(models.Model):
 
 
 # SAP Salesorder models
+APPROVAL_STATUS_CHOICES = [
+    ('Pending', 'Pending'),
+    ('Approved', 'Approved'),
+    ('Rejected', 'Rejected'),
+    ('DO Completed', 'DO Completed'),
+    ('Partial DO', 'Partial DO'),
+    ('Trade License Expired', 'Trade License Expired'),
+]
+
+
 class SAPSalesorder(models.Model):
     so_number = models.CharField(max_length=100, unique=True)  # Document Number
     internal_number = models.CharField(max_length=100, blank=True, null=True)
@@ -422,6 +432,21 @@ class SAPSalesorder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
     bill_to = models.TextField(blank=True, null=True)
+    approval_status = models.CharField(
+        max_length=30,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='Pending',
+        help_text="Approval status (Admin only)",
+    )
+    approval_updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sapsalesorder_approvals',
+        help_text="User who last updated approval status",
+    )
+    approval_updated_at = models.DateTimeField(null=True, blank=True, help_text="When approval status was last updated")
 
     def extract_quotation_number(self):
         """Extract quotation number from NFRef string.

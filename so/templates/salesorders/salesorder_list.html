@@ -521,6 +521,7 @@
     <!-- Filters -->
     <div class="card filters-card">
       <form id="filters" class="filters-grid" method="get">
+        {% if is_admin %}<input type="hidden" name="approval_status" value="{{ filters.approval_status }}">{% endif %}
         <div class="field">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="SO No, Customer, Salesman, LPO Ref...">
@@ -610,6 +611,19 @@
       </div>
     </div>
 
+    {% if is_admin %}
+    <!-- Approval Status Tabs -->
+    <div id="approval-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+      <button type="button" class="btn {% if not filters.approval_status %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="">All</button>
+      <button type="button" class="btn {% if filters.approval_status == 'Pending' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Pending">Pending</button>
+      <button type="button" class="btn {% if filters.approval_status == 'Approved' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Approved">Approved</button>
+      <button type="button" class="btn {% if filters.approval_status == 'Rejected' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Rejected">Rejected</button>
+      <button type="button" class="btn {% if filters.approval_status == 'DO Completed' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="DO Completed">DO Completed</button>
+      <button type="button" class="btn {% if filters.approval_status == 'Partial DO' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Partial DO">Partial DO</button>
+      <button type="button" class="btn {% if filters.approval_status == 'Trade License Expired' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Trade License Expired">Trade License Expired</button>
+    </div>
+    {% endif %}
+
     <!-- Table -->
     <div class="card table-card">
       <div class="table-wrap">
@@ -627,7 +641,7 @@
             </tr>
           </thead>
           <tbody id="salesorders-body">
-            {% include 'salesorders/_salesorder_rows.html' with page_obj=page_obj %}
+            {% include 'salesorders/_salesorder_rows.html' with page_obj=page_obj is_admin=is_admin %}
           </tbody>
         </table>
       </div>
@@ -693,6 +707,22 @@
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       load(collectParams({ page: 1 }));
+    });
+
+    // Approval tabs (Admin only)
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const approval = this.getAttribute('data-approval') || '';
+        const hidden = form.querySelector('input[name="approval_status"]');
+        if (hidden) hidden.value = approval;
+        document.querySelectorAll('.tab-btn').forEach(function(b) {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        });
+        this.classList.remove('btn-secondary');
+        this.classList.add('btn-primary');
+        load(collectParams({ page: 1 }));
+      });
     });
 
     const searchInput = form.querySelector('input[name="q"]');

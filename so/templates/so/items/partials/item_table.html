@@ -23,7 +23,7 @@
             <td>{{ item.item_upvc|default:"—" }}</td>
             <td class="td-num">{{ item.item_price|default:"—" }}</td>
             <td class="td-num">
-                {% if request and request.user.is_authenticated and request.user.username == 'manager' %}
+                {% if can_see_cost %}
                     {{ item.item_cost|default:"—" }}
                 {% else %}
                     <span style="color:#cbd5e1;">••••</span>

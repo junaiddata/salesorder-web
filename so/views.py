@@ -1711,6 +1711,9 @@ from django.db.models import Q, Case, When, Value, IntegerField
 from .models import Items
 from .forms import ItemForm
 
+# Usernames that can see and edit item cost (items list + create/edit forms). Add more as needed.
+ITEM_COST_VISIBLE_USERNAMES = {'manager', 'admin','adil','azaad'}
+
 
 def _build_item_search_queryset(request, base_queryset=None):
     """Shared backend logic for advanced item search. Returns filtered queryset."""
@@ -1803,12 +1806,17 @@ def item_list(request):
     total_count = items_qs.count()
     not_found_codes = _get_not_found_codes(request, items_qs)
     items = items_qs[:500]
+    can_see_cost = (
+        request.user.is_authenticated
+        and (request.user.username or '').strip().lower() in {u.lower() for u in ITEM_COST_VISIBLE_USERNAMES}
+    )
 
     return render(request, 'so/items/item_list.html', {
         'items': items,
         'firms': firms,
         'total_count': total_count,
         'not_found_codes': not_found_codes,
+        'can_see_cost': can_see_cost,
         'search_params': {
             'firm': request.GET.get('firm', ''),
             'q': request.GET.get('q', ''),
@@ -1828,10 +1836,14 @@ def item_list_ajax(request):
     total_count = items_qs.count()
     not_found_codes = _get_not_found_codes(request, items_qs)
     items = items_qs[:500]
+    can_see_cost = (
+        request.user.is_authenticated
+        and (request.user.username or '').strip().lower() in {u.lower() for u in ITEM_COST_VISIBLE_USERNAMES}
+    )
 
     html = render_to_string(
         'so/items/partials/item_table.html',
-        {'items': items},
+        {'items': items, 'can_see_cost': can_see_cost},
         request=request,
     )
     return JsonResponse({
@@ -1847,7 +1859,7 @@ def item_create(request):
         form = ItemForm(request.POST)
     else:
         form = ItemForm()
-    if not (request.user.is_authenticated and request.user.username == 'manager'):
+    if not (request.user.is_authenticated and (request.user.username or '').strip().lower() in {u.lower() for u in ITEM_COST_VISIBLE_USERNAMES}):
         form.fields.pop('item_cost', None)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -1866,7 +1878,7 @@ def item_edit(request, pk):
         form = ItemForm(request.POST, instance=item)
     else:
         form = ItemForm(instance=item)
-    if not (request.user.is_authenticated and request.user.username == 'manager'):
+    if not (request.user.is_authenticated and (request.user.username or '').strip().lower() in {u.lower() for u in ITEM_COST_VISIBLE_USERNAMES}):
         form.fields.pop('item_cost', None)
     if request.method == 'POST' and form.is_valid():
         form.save()

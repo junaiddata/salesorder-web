@@ -33,10 +33,10 @@ import json
 logger = logging.getLogger(__name__)
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList, APPROVAL_STATUS_CHOICES
 
 # Import shared utilities
-from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q
+from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
 from .views_quotation import QuotationPDFTemplate, styles
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
@@ -1136,6 +1136,13 @@ def salesorder_list(request):
     status = request.GET.get('status', '').strip()
     total_range = request.GET.get('total', '').strip()
     remarks_filter = request.GET.get('remarks', '').strip()
+    approval_status_filter = request.GET.get('approval_status', '').strip()
+
+    # Approval status filter (Admin only - filter applied for all, tabs shown for Admin)
+    is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
+    if is_admin and approval_status_filter in valid_approval_statuses:
+        qs = qs.filter(approval_status=approval_status_filter)
 
     if total_range:
         if total_range == "0-5000":
@@ -1253,13 +1260,18 @@ def salesorder_list(request):
             'page_size': page_size,
             'total': total_range,
             'remarks': remarks_filter,
-        }
+            'approval_status': approval_status_filter,
+        },
+        'is_admin': is_admin,
     })
 
 
 @login_required
 def salesorder_detail(request, so_number):
-    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    salesorder = get_object_or_404(
+        SAPSalesorder.objects.select_related('approval_updated_by'),
+        so_number=so_number
+    )
 
     # Enforce scope for non-staff users
     if not (request.user.is_superuser or request.user.is_staff):
@@ -1305,18 +1317,22 @@ def salesorder_detail(request, so_number):
     row_total_sum = getattr(salesorder, "row_total_sum", None)
     row_total_calc_sum = Decimal("0")
 
-    # Batch load live stock from Items model (for all item_no values)
+    # Batch load live stock and cost from Items model (for all item_no values)
     from so.models import Items
     item_codes = [it.item_no for it in items if it.item_no]
     stock_lookup = {}
     if item_codes:
-        for item in Items.objects.filter(item_code__in=item_codes).only('item_code', 'total_available_stock', 'dip_warehouse_stock'):
+        for item in Items.objects.filter(item_code__in=item_codes).only(
+            'item_code', 'total_available_stock', 'dip_warehouse_stock', 'item_cost', 'item_price'
+        ):
             stock_lookup[item.item_code] = {
                 'total_available_stock': item.total_available_stock or Decimal("0"),
                 'dip_warehouse_stock': item.dip_warehouse_stock or Decimal("0"),
+                'item_cost': Decimal(str(item.item_cost or 0)),
+                'item_price': Decimal(str(item.item_price or 0)),
             }
 
-    # Attach derived unit price, live stock, and PI allocation info for templates
+    # Attach derived unit price, live stock, cost, margin, and PI allocation info for templates
     for it in items:
         qty = it.quantity or Decimal("0")
         row_total = it.row_total or Decimal("0")
@@ -1331,6 +1347,15 @@ def salesorder_detail(request, so_number):
         stock_data = stock_lookup.get(it.item_no, {})
         it.total_available_stock = stock_data.get('total_available_stock', Decimal("0"))
         it.dip_warehouse_stock = stock_data.get('dip_warehouse_stock', Decimal("0"))
+        
+        # Cost and margin from ItemMaster (for Admin)
+        it.item_cost = stock_data.get('item_cost', Decimal("0"))
+        unit_price_val = it.unit_price or Decimal("0")
+        if unit_price_val and unit_price_val > 0:
+            cost_val = it.item_cost or Decimal("0")
+            it.margin_pct = ((unit_price_val - cost_val) / unit_price_val * 100).quantize(Decimal("0.01"))
+        else:
+            it.margin_pct = Decimal("0.00")
         
         # Attach PI allocation info (using item ID for accurate matching)
         it.pi_allocated_qty = allocated.get(it.id, Decimal("0"))
@@ -1386,6 +1411,38 @@ def salesorder_detail(request, so_number):
     # Balance Amount = Row Total Sum - Total PI Amount
     balance_amount = (row_total_sum - total_pi_amount).quantize(Decimal("0.01")) if row_total_sum is not None else Decimal("0.00")
 
+    # Admin-only: Customer Finance Summary and approval status
+    is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    monthly_pending_data = []
+    credit_limit = Decimal("0")
+    payment_terms = ""
+    has_over_limit = False
+    current_month_receivables = Decimal("0")
+    pending_total_without = Decimal("0")
+    old_months = Decimal("0")
+    pending_total_with_order = grand_total
+
+    if is_admin and salesorder.customer_code:
+        customer = Customer.objects.filter(customer_code=salesorder.customer_code).first()
+        if customer:
+            credit_limit = Decimal(str(customer.credit_limit or 0))
+            payment_terms = customer.credit_days or ""
+            current_month_receivables = Decimal(str(customer.pdc_received or 0))
+            pending_total_without = Decimal(str(customer.total_outstanding_with_pdc or 0))
+            old_months = Decimal(str(customer.old_months_pending or 0))
+            pending_total_with_order = (pending_total_without + grand_total).quantize(Decimal("0.01"))
+            has_over_limit = credit_limit > 0 and pending_total_with_order > credit_limit
+
+            last_six = get_last_six_months()
+            for month_abbr, field in last_six:
+                monthly_pending_data.append({
+                    'month_abbr': month_abbr,
+                    'pending_total': getattr(customer, field, 0.0),
+                })
+            monthly_pending_data.append({'month_abbr': '6+ mo', 'pending_total': float(old_months)})
+            while len(monthly_pending_data) < 12:
+                monthly_pending_data.append({'month_abbr': '', 'pending_total': 0.0})
+
     context = {
         'salesorder': salesorder,
         'items': items,
@@ -1402,6 +1459,16 @@ def salesorder_detail(request, so_number):
         'grand_total': grand_total,
         'total_pi_amount': total_pi_amount,
         'balance_amount': balance_amount,
+        'is_admin': is_admin,
+        'approval_status_choices': APPROVAL_STATUS_CHOICES,
+        'monthly_pending_data': monthly_pending_data,
+        'credit_limit': credit_limit,
+        'payment_terms': payment_terms,
+        'has_over_limit': has_over_limit,
+        'current_month_receivables': current_month_receivables,
+        'pending_total_without': pending_total_without,
+        'old_months': old_months,
+        'pending_total_with_order': pending_total_with_order,
     }
 
     return render(request, 'salesorders/salesorder_detail.html', context)
@@ -1445,6 +1512,13 @@ def salesorder_search(request):
     status = request.GET.get('status', '').strip()
     total_range = request.GET.get('total', '').strip()
     remarks_filter = request.GET.get('remarks', '').strip()
+    approval_status_filter = request.GET.get('approval_status', '').strip()
+
+    # Approval status filter (Admin only)
+    is_admin_search = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
+    if is_admin_search and approval_status_filter in valid_approval_statuses:
+        qs = qs.filter(approval_status=approval_status_filter)
 
     # Existing filters
     if q:
@@ -1531,7 +1605,8 @@ def salesorder_search(request):
     page_obj = paginator.get_page(page_number)
 
     rows_html = render_to_string('salesorders/_salesorder_rows.html', {
-        'page_obj': page_obj
+        'page_obj': page_obj,
+        'is_admin': is_admin_search,
     }, request=request)
 
     pagination_html = render_to_string('salesorders/_pagination.html', {
@@ -1825,6 +1900,13 @@ def export_salesorder_list_pdf(request):
     status = request.GET.get('status', '').strip()
     total_range = request.GET.get('total', '').strip()
     remarks_filter = request.GET.get('remarks', '').strip()
+    approval_status_filter = request.GET.get('approval_status', '').strip()
+
+    # Approval status filter (Admin only)
+    is_admin_export = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
+    if is_admin_export and approval_status_filter in valid_approval_statuses:
+        qs = qs.filter(approval_status=approval_status_filter)
 
     # Apply Total Range Filter
     if total_range:
@@ -1981,6 +2063,40 @@ def salesorder_update_remarks(request, so_number):
     salesorder.save(update_fields=["remarks"])
 
     messages.success(request, "Remarks updated.")
+    return redirect("salesorder_detail", so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
+def salesorder_update_approval(request, so_number):
+    """Update approval status (Admin only). Accepts approval_status in POST."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+
+    # Admin role required
+    if not getattr(request.user, 'role', None) or getattr(request.user.role, 'role', None) != 'Admin':
+        messages.error(request, "Only Admin users can change approval status.")
+        return redirect("salesorder_detail", so_number=so_number)
+
+    # Enforce scope for non-staff users
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+
+    valid_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
+    new_status = (request.POST.get("approval_status") or "").strip()
+    if new_status not in valid_statuses:
+        messages.error(request, f"Invalid approval status. Must be one of: {', '.join(valid_statuses)}")
+        return redirect("salesorder_detail", so_number=so_number)
+
+    from django.utils import timezone
+    salesorder.approval_status = new_status
+    salesorder.approval_updated_by = request.user
+    salesorder.approval_updated_at = timezone.now()
+    salesorder.save(update_fields=["approval_status", "approval_updated_by", "approval_updated_at"])
+    messages.success(request, f"Approval status updated to {new_status}.")
     return redirect("salesorder_detail", so_number=salesorder.so_number)
 
 
