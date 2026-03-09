@@ -482,6 +482,49 @@
         transform: scale(0.8);
       }
     }
+
+    /* Remark: click to toggle full text */
+    .cell-remark {
+      color: #64748b;
+      font-size: 0.68rem;
+      max-width: 70px;
+    }
+    .cell-remark .remark-preview {
+      cursor: pointer;
+      display: inline-block;
+      max-width: 70px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-bottom: 1px dashed #94a3b8;
+    }
+    .cell-remark .remark-preview:hover {
+      color: #3b82f6;
+      border-bottom-color: #3b82f6;
+    }
+    #remarkPopup {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      width: 280px;
+      max-width: 90vw;
+      padding: 0.6rem 0.75rem;
+      background: #1e293b;
+      color: #f1f5f9;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      line-height: 1.5;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #remarkPopup.visible {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -643,6 +686,7 @@
               <th style="text-align:right">Pending Total</th>
               <th style="text-align:right">Document Total</th>
               <th>Status</th>
+              <th>Remarks</th>
             </tr>
           </thead>
           <tbody id="salesorders-body">
@@ -659,6 +703,8 @@
       </div>
     </div>
   </div>
+
+  <div id="remarkPopup"></div>
 
 <script>
   // AJAX Search Logic
@@ -817,6 +863,40 @@
 
     document.addEventListener('click', e => {
       if (!wrapper.contains(e.target)) options.classList.remove('active');
+    });
+  });
+
+  // Remark: click to toggle full text
+  document.addEventListener("DOMContentLoaded", function() {
+    var remarkPopup = document.getElementById('remarkPopup');
+    var activeRemarkEl = null;
+    document.addEventListener('click', function(e) {
+      var preview = e.target.closest('.remark-preview');
+      if (preview) {
+        e.stopPropagation();
+        if (activeRemarkEl === preview) {
+          remarkPopup.classList.remove('visible');
+          activeRemarkEl = null;
+          return;
+        }
+        activeRemarkEl = preview;
+        remarkPopup.textContent = preview.getAttribute('data-remark') || '';
+        remarkPopup.classList.add('visible');
+        var rect = preview.getBoundingClientRect();
+        var popupW = 280;
+        var left = rect.left;
+        if (left + popupW > window.innerWidth - 10) { left = window.innerWidth - popupW - 10; }
+        if (left < 10) left = 10;
+        var top = rect.top - 8;
+        remarkPopup.style.left = left + 'px';
+        remarkPopup.style.top = 'auto';
+        remarkPopup.style.bottom = (window.innerHeight - top) + 'px';
+        return;
+      }
+      if (!e.target.closest('#remarkPopup')) {
+        remarkPopup.classList.remove('visible');
+        activeRemarkEl = null;
+      }
     });
   });
 </script>
