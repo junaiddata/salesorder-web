@@ -94,6 +94,8 @@ urlpatterns = [
 
     path('api/get-last-location/<int:customer_id>/', get_last_location, name='get_last_location'),
     path('sales-orders/<int:order_id>/so-created/', views.mark_so_created, name='mark_so_created'),
+    path('sales-orders/<int:order_id>/direct-so-created/', views.direct_mark_so_created, name='direct_mark_so_created'),
+    
 
     path('api/items-search/', views.items_search, name='items_search'),
     path('api/get-item-details/', views.get_item_details, name='get_item_details'),

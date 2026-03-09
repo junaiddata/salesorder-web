@@ -823,6 +823,7 @@ def view_sales_orders(request):
     
     query_string = "&".join(query_params)
 
+    sales_orders_base = request.path.rstrip('/') or '/sales-orders'
     return render(request, 'so/view_sales_orders.html', {
         'sales_orders': sales_orders_page,
         'current_status': status or "All",
@@ -833,6 +834,7 @@ def view_sales_orders(request):
         'start_date': start_date,
         'end_date': end_date,
         'query_string': query_string,
+        'sales_orders_base': sales_orders_base,
     })
 
 
@@ -949,6 +951,14 @@ def mark_so_created(request, order_id):
         sales_order.order_status = "SO Created"
         sales_order.save()
         return JsonResponse({"success": True, "new_status": "SO Created"})
+    return JsonResponse({"success": False}, status=400)
+
+def direct_mark_so_created(request, order_id):
+    if request.method == "POST":
+        sales_order = get_object_or_404(SalesOrder, id=order_id)
+        sales_order.order_status = "Direct SO Created"
+        sales_order.save()
+        return JsonResponse({"success": True, "new_status": "Direct SO Created"})
     return JsonResponse({"success": False}, status=400)
 
 from datetime import date

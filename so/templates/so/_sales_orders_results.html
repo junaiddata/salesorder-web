@@ -7,6 +7,7 @@
         {% if order.order_status == 'Approved' %}approved
         {% elif order.order_status == 'Hold by A/c' %}hold
         {% elif order.order_status == 'SO Created' %}created
+        {% elif order.order_status == 'Direct SO Created' %}created
         {% else %}pending{% endif %}">
         
         <div class="d-flex justify-content-between align-items-start mb-3">
@@ -25,6 +26,7 @@
             {% if order.order_status == 'Approved' %}badge-approved
             {% elif order.order_status == 'Hold by A/c' %}badge-hold
             {% elif order.order_status == 'SO Created' %}badge-success
+            {% elif order.order_status == 'Direct SO Created' %}badge-primary
             {% else %}badge-pending{% endif %}">
             {{ order.order_status }}
           </span>
@@ -51,6 +53,11 @@
             {% if order.order_status != "SO Created" and order.order_status == "Approved" %}
               <button class="btn btn-sm btn-success ms-1 mark-so-btn" data-id="{{ order.id }}">
                 Mark as Done
+              </button>
+            {% endif %}
+            {% if order.order_status != "SO Created"  and order.order_status != "Direct SO Created" %}
+              <button class="btn btn-sm btn-success ms-1 direct-mark-so-btn" data-id="{{ order.id }}">
+                Mark as Direct SO Created
               </button>
             {% endif %}
           </div>

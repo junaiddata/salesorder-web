@@ -118,6 +118,11 @@
             color: var(--danger);
         }
         
+        .badge-primary {
+            background-color: rgba(67, 97, 238, 0.15);
+            color: var(--primary);
+        }
+        
         .nav-tabs .nav-link {
             border: none;
             border-bottom: 3px solid transparent;
@@ -459,6 +464,10 @@
                    href="?status=SO Created{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">SO Created</a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if current_status == 'Direct SO Created' %}active{% endif %}" 
+                   href="?status=Direct SO Created{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Direct SO Created</a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if current_status == 'Approved' %}active{% endif %}" 
                    href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Approved</a>
             </li>
@@ -475,7 +484,7 @@
 </div>
 
 <!-- Orders List -->
-<div class="orders-container" id="ordersContainer">
+<div class="orders-container" id="ordersContainer" data-sales-orders-base="{{ sales_orders_base|default:'/sales-orders' }}">
   {% include 'so/_sales_orders_results.html' with sales_orders=sales_orders current_status=current_status selected_salesman=selected_salesman selected_division=selected_division start_date=start_date end_date=end_date query_string=query_string %}
 </div>
 
@@ -647,6 +656,34 @@
                     // Replace button with a label
                     button.replaceWith('<span class="badge bg-success ms-1">SO Created</span>');
                 }
+            }
+        });
+    });
+    // AJAX to mark order as Direct SO Created (base path from server)
+    $(document).on("click", ".direct-mark-so-btn", function() {
+        let orderId = $(this).data("id");
+        let button = $(this);
+        let basePath = ordersContainer.dataset.salesOrdersBase || '/sales-orders';
+        let directUrl = basePath + '/' + orderId + '/direct-so-created/';
+
+        $.ajax({
+            url: directUrl,
+            type: "POST",
+            headers: { "X-CSRFToken": "{{ csrf_token }}" },
+            success: function(response) {
+                if (response.success) {
+                    // Update status badge
+                    let statusBadge = $(".status-" + orderId);
+                    statusBadge.text(response.new_status);
+                    statusBadge.removeClass().addClass("status-badge badge-primary status-" + orderId);
+
+                    // Replace button with a label
+                    button.replaceWith('<span class="badge bg-primary ms-1">Direct SO Created</span>');
+                }
+            },
+            error: function(xhr) {
+                console.error("Direct SO Created:", xhr.status, xhr.responseText);
+                alert("Failed: " + xhr.status + (xhr.status === 404 ? " (URL not found)" : ""));
             }
         });
     });
