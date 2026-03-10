@@ -407,6 +407,7 @@ APPROVAL_STATUS_CHOICES = [
     ('DO Completed', 'DO Completed'),
     ('Partial DO', 'Partial DO'),
     ('Trade License Expired', 'Trade License Expired'),
+    ('MD Approval Required', 'MD Approval Required'),
 ]
 
 

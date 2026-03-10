@@ -4862,6 +4862,38 @@ def sync_settings_form(request):
 
 @login_required
 @require_POST
+def check_salesorder_margins_form(request):
+    """
+    Form POST endpoint for manually running the check_salesorder_margins management command.
+    Checks Open + Pending SOs against brand margins, flags low-margin SOs, sends Telegram notifications.
+    """
+    from django.contrib import messages
+    from django.core.management import call_command
+    from io import StringIO
+
+    check_all = bool(request.POST.get('check_all'))
+
+    try:
+        out = StringIO()
+        call_command('check_salesorder_margins', all=check_all, stdout=out)
+        output = out.getvalue().strip()
+        if output:
+            # Show last 2 lines as summary (e.g. "Checked: X | Newly flagged: Y | Notifications sent: Z")
+            lines = [l for l in output.split('\n') if l.strip()]
+            summary = lines[-1] if lines else 'Done.'
+        else:
+            summary = 'Done.'
+        mode = 'all Open SOs' if check_all else 'Pending SOs only'
+        messages.success(request, f'Check Sales Order Margins completed ({mode}). {summary}')
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception('Error running check_salesorder_margins')
+        messages.error(request, f'Error: {str(e)}')
+    return redirect('sync_settings')
+
+
+@login_required
+@require_POST
 def sync_cancellation_invoices_form(request):
     """
     Sync only AR Invoices with CancelStatus='csCancellation' from SAP API.

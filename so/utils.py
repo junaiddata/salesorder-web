@@ -18,14 +18,35 @@ import requests
 import requests
 from django.conf import settings
 
-def send_telegram_message(chat_id, text):
-    token = settings.TELEGRAM_BOT_TOKEN
+def send_telegram_message(chat_id, text, parse_mode="Markdown", token=None):
+    """
+    Send a Telegram message. Returns (success: bool, error_msg: str or None).
+    Use parse_mode="HTML" for safe escaping of special chars, or parse_mode=None for plain text.
+    token: optional; if not provided, uses settings.TELEGRAM_BOT_TOKEN.
+    """
+    token = token or settings.TELEGRAM_BOT_TOKEN
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     try:
-        requests.post(url, data=payload, timeout=5)
+        resp = requests.post(url, data=payload, timeout=10)
+        data = resp.json() if resp.text else {}
+        if not data.get("ok"):
+            err = data.get("description", resp.text or "Unknown error")
+            return False, err
+        return True, None
     except Exception as e:
-        print("Telegram error:", e)
+        return False, str(e)
+
+
+def send_md_approval_telegram(chat_id, text):
+    """
+    Send to MD Approvals group using the MD-specific bot token.
+    Uses TELEGRAM_MD_APPROVAL_BOT_TOKEN if set, else falls back to TELEGRAM_BOT_TOKEN.
+    """
+    token = getattr(settings, 'TELEGRAM_MD_APPROVAL_BOT_TOKEN', '') or settings.TELEGRAM_BOT_TOKEN
+    return send_telegram_message(chat_id, text, parse_mode="HTML", token=token)
 
 
 

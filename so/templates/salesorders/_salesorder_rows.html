@@ -17,7 +17,7 @@
       <span class="badge badge-closed">Closed</span>
     {% endif %}
     {% if so.approval_status %}
-      <span class="badge" style="margin-left:4px; background:{% if so.approval_status == 'Approved' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Rejected' %}#fef2f2; color:#dc2626{% elif so.approval_status == 'DO Completed' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Partial DO' %}#eff6ff; color:#2563eb{% elif so.approval_status == 'Trade License Expired' %}#fef2f2; color:#dc2626{% else %}#fffbeb; color:#d97706{% endif %}">
+      <span class="badge" style="margin-left:4px; background:{% if so.approval_status == 'Approved' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Rejected' %}#fef2f2; color:#dc2626{% elif so.approval_status == 'DO Completed' %}var(--success-light); color:var(--success){% elif so.approval_status == 'Partial DO' %}#eff6ff; color:#2563eb{% elif so.approval_status == 'Trade License Expired' %}#fef2f2; color:#dc2626{% elif so.approval_status == 'MD Approval Required' %}#fdf4ff; color:#7c3aed{% else %}#fffbeb; color:#d97706{% endif %}">
         {% if so.approval_status == 'DO Completed' or so.approval_status == 'Partial DO' or so.approval_status == 'Trade License Expired' %}Approved + {{ so.approval_status }}{% else %}{{ so.approval_status }}{% endif %}
       </span>
     {% endif %}
@@ -33,7 +33,7 @@
 {% empty %}
 <tr>
   <td colspan="9" class="empty-state">
-    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 8px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 8px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
     No sales orders found
   </td>
 </tr>

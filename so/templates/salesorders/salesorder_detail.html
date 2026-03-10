@@ -249,6 +249,8 @@
     }
 
     tbody tr:hover { background: #f9fafb; }
+    tbody tr.row-low-margin { background: #fef2f2; }
+    tbody tr.row-low-margin:hover { background: #fee2e2; }
     tbody tr:last-child td { border-bottom: none; }
 
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -586,6 +588,7 @@
         <div class="finance-grid">
           <div><strong>6+ Months:</strong> {{ old_months|floatformat:2 }} AED</div>
           <div><strong>Credit Limit:</strong> {{ credit_limit|floatformat:2 }} AED</div>
+          <div><strong>Balance:</strong> {{ balance_outstanding|floatformat:2 }} AED</div>
           <div><strong>Total Pending:</strong> <span style="{% if has_over_limit %}color:var(--danger);font-weight:700;{% endif %}">{{ pending_total_without|floatformat:2 }} AED</span></div>
           <div><strong>Total PDC:</strong> {{ current_month_receivables|floatformat:2 }} AED</div>
           <div><strong>Payment Terms:</strong> {{ payment_terms|default:"—" }}</div>
@@ -679,6 +682,7 @@
                 {% if is_admin %}
                 <th class="num">Cost Price</th>
                 <th class="num">Margin %</th>
+                <th class="num">Req Margin</th>
                 {% endif %}
                 <th class="num">Row Total</th>
                 <th class="num">Open Qty</th>
@@ -691,7 +695,7 @@
             </thead>
             <tbody>
               {% for it in items %}
-              <tr>
+              <tr{% if is_admin and it.margin_below_req %} class="row-low-margin"{% endif %}>
                 <td class="num">{{ forloop.counter }}</td>
                 <td><strong>{{ it.item_no }}</strong></td>
                 <td>{{ it.description }}</td>
@@ -708,6 +712,7 @@
                 {% if is_admin %}
                 <td class="num">{{ it.item_cost|floatformat:2 }}</td>
                 <td class="num">{{ it.margin_pct|floatformat:2 }}%</td>
+                <td class="num">{% if it.req_margin is not None %}{{ it.req_margin|floatformat:1 }}%{% else %}—{% endif %}</td>
                 {% endif %}
                 <td class="num">{{ it.row_total|floatformat:2 }}</td>
                 <td class="num">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
@@ -719,7 +724,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if is_admin %}16{% else %}14{% endif %}" class="empty-state">No line items found</td>
+                <td colspan="{% if is_admin %}17{% else %}14{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>

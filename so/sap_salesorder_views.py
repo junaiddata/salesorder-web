@@ -1331,13 +1331,14 @@ def salesorder_detail(request, so_number):
     stock_lookup = {}
     if item_codes:
         for item in Items.objects.filter(item_code__in=item_codes).only(
-            'item_code', 'total_available_stock', 'dip_warehouse_stock', 'item_cost', 'item_price'
+            'item_code', 'total_available_stock', 'dip_warehouse_stock', 'item_cost', 'item_price', 'item_firm'
         ):
             stock_lookup[item.item_code] = {
                 'total_available_stock': item.total_available_stock or Decimal("0"),
                 'dip_warehouse_stock': item.dip_warehouse_stock or Decimal("0"),
                 'item_cost': Decimal(str(item.item_cost or 0)),
                 'item_price': Decimal(str(item.item_price or 0)),
+                'item_firm': item.item_firm or '',
             }
 
     # Attach derived unit price, live stock, cost, margin, and PI allocation info for templates
@@ -1364,10 +1365,29 @@ def salesorder_detail(request, so_number):
             it.margin_pct = ((unit_price_val - cost_val) / unit_price_val * 100).quantize(Decimal("0.01"))
         else:
             it.margin_pct = Decimal("0.00")
-        
+
         # Attach PI allocation info (using item ID for accurate matching)
         it.pi_allocated_qty = allocated.get(it.id, Decimal("0"))
         it.pi_remaining_qty = max(Decimal("0"), qty - it.pi_allocated_qty)
+
+    # Fetch brand margins and set req_margin per item (Admin column)
+    try:
+        from so.brand_margins_service import fetch_brand_margins, _get_required_margin
+        brand_margins = fetch_brand_margins()
+        if brand_margins:
+            for it in items:
+                stock_data = stock_lookup.get(it.item_no, {})
+                manufacture = (it.manufacture or '').strip() or stock_data.get('item_firm', '')
+                it.req_margin = Decimal(str(_get_required_margin(manufacture, brand_margins)))
+                it.margin_below_req = it.req_margin is not None and (it.margin_pct or Decimal("0")) < it.req_margin
+        else:
+            for it in items:
+                it.req_margin = None
+                it.margin_below_req = False
+    except Exception:
+        for it in items:
+            it.req_margin = None
+            it.margin_below_req = False
 
     if row_total_sum is None:
         row_total_sum = row_total_calc_sum
@@ -1451,6 +1471,7 @@ def salesorder_detail(request, so_number):
     payment_terms = ""
     has_over_limit = False
     current_month_receivables = Decimal("0")
+    balance_outstanding = Decimal("0")
     pending_total_without = Decimal("0")
     old_months = Decimal("0")
     pending_total_with_order = grand_total
@@ -1461,6 +1482,7 @@ def salesorder_detail(request, so_number):
             credit_limit = Decimal(str(customer.credit_limit or 0))
             payment_terms = customer.credit_days or ""
             current_month_receivables = Decimal(str(customer.pdc_received or 0))
+            balance_outstanding = Decimal(str(customer.total_outstanding or 0))
             pending_total_without = Decimal(str(customer.total_outstanding_with_pdc or 0))
             old_months = Decimal(str(customer.old_months_pending or 0))
             pending_total_with_order = (pending_total_without + grand_total).quantize(Decimal("0.01"))
@@ -1499,6 +1521,7 @@ def salesorder_detail(request, so_number):
         'payment_terms': payment_terms,
         'has_over_limit': has_over_limit,
         'current_month_receivables': current_month_receivables,
+        'balance_outstanding': balance_outstanding,
         'pending_total_without': pending_total_without,
         'old_months': old_months,
         'pending_total_with_order': pending_total_with_order,

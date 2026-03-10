@@ -132,6 +132,12 @@
           {% csrf_token %}
           <button type="submit" class="sync-btn"><i class="fas fa-users"></i> Customer Finance</button>
         </form>
+        <form method="post" action="{% url 'check_salesorder_margins_form' %}">
+          {% csrf_token %}
+          <button type="submit" class="sync-btn" style="background:#dc2626;">
+            <i class="fas fa-percentage"></i> Check Margins
+          </button>
+        </form>
       </div>
 
       <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border);">
