@@ -604,6 +604,37 @@
             </div>
         </div>
 
+        <!-- Margin Summary (Admin Only) -->
+        {% if is_admin %}
+        <div class="sap-card">
+            <div class="sap-card-header">
+                <h5>Margin Summary</h5>
+            </div>
+            <div class="sap-card-body">
+                {% if has_zero_cost_items %}
+                <div style="padding: 12px 16px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 6px; font-size: 14px;">
+                    <i class="fas fa-exclamation-triangle"></i> Some items have cost 0.0 — cost/margin figures are not shown.
+                </div>
+                {% else %}
+                <div class="info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px;">
+                    <div class="info-item">
+                        <span class="info-label">Est. Cost</span>
+                        <span class="info-value">AED {{ total_cost|floatformat:2 }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Total Margin</span>
+                        <span class="info-value" style="color: var(--sap-success); font-weight: 600;">AED {{ total_margin|floatformat:2 }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Margin %</span>
+                        <span class="info-value" style="color: var(--sap-success); font-weight: 600;">{{ margin_percent|floatformat:1 }}%</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Quotation Items -->
         <div class="sap-card">
             <div class="sap-card-header">
@@ -626,9 +657,12 @@
                             <th style="width: 100px; text-align: right;">Total Stock</th>
                             
                             <th style="width: 150px; text-align: right;">Unit Price</th>
-                            {% if user.role.role == "Admin" %}
+                            {% if is_admin %}
                             <th style="width: 150px; text-align: right;">Cost Price</th>
                             <th style="width: 150px; text-align: right;">Min. Selling Price</th>
+                            {% if not has_zero_cost_items %}
+                            <th style="width: 100px; text-align: right;">Margin %</th>
+                            {% endif %}
                             {% endif %}
                             <th style="width: 150px; text-align: right;">Line Total</th>
                         </tr>
@@ -656,15 +690,18 @@
                                 data-label="Unit Price">
                                 AED {{ item.price|floatformat:2 }}
                             </td>
-                            {% if user.role.role == "Admin" %}
+                            {% if is_admin %}
                             <td style="text-align: right;" data-label="Cost Price">AED {{ item.item.item_cost|floatformat:2 }}</td>
                             <td style="text-align: right;" data-label="Min. Selling Price">AED {{ item.item.item_price|floatformat:2 }}</td>
+                            {% if not has_zero_cost_items %}
+                            <td style="text-align: right;" data-label="Margin %">{% if item.margin_pct is not None %}{{ item.margin_pct|floatformat:2 }}%{% else %}—{% endif %}</td>
+                            {% endif %}
                             {% endif %}
                             <td style="text-align: right;" data-label="Line Total">AED {{ item.line_total|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if user.role.role == 'Admin' %}10{% else %}8{% endif %}">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}10{% else %}11{% endif %}{% else %}8{% endif %}">
                                 <div class="empty-state">
                                     <i class="fas fa-inbox"></i>
                                     <p>No items in this quotation</p>
@@ -674,7 +711,7 @@
                         {% endfor %}
                         {% if quotation_items %}
                         <tr class="table-total-row">
-                            <td colspan="{% if user.role.role == 'Admin' %}9{% else %}7{% endif %}" style="text-align: right;">Quotation Total:</td>
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Quotation Total:</td>
                             <td style="text-align: right; color: var(--sap-blue);">
                                 AED {{ quotation.total_amount|floatformat:2 }}
                             </td>

@@ -441,6 +441,12 @@ def view_quotation_details(request, quotation_id):
     # ✅ Compute totals & undercost logic
     grand_total = 0
     has_undercost_items = False
+    is_admin = hasattr(request.user, 'role') and request.user.role.role == 'Admin'
+    total_cost = 0.0
+    total_margin = 0.0
+    margin_percent = 0.0
+    has_zero_cost_items = False
+
     for item in quotation_items:
         item.line_total = item.quantity * item.price
         grand_total += item.line_total
@@ -451,8 +457,31 @@ def view_quotation_details(request, quotation_id):
             item.is_undercost = item.price < undercost_limit
             if item.is_undercost:
                 has_undercost_items = True
+
+            # Margin per item (Admin only) - skip if cost is zero
+            cost_val = float(item.item.item_cost or 0)
+            if cost_val == 0:
+                has_zero_cost_items = True
+                item.line_cost = None
+                item.line_margin = None
+                item.margin_pct = None
+            else:
+                item.line_cost = cost_val * item.quantity
+                item.line_margin = item.line_total - item.line_cost
+                item.margin_pct = (item.line_margin / item.line_total * 100) if item.line_total else None
         else:
             item.is_undercost = False
+            item.line_cost = None
+            item.line_margin = None
+            item.margin_pct = None
+
+    # Overall margin (Admin only, and only if no zero-cost items)
+    if is_admin and not has_zero_cost_items:
+        for item in quotation_items:
+            if getattr(item, 'line_cost') is not None:
+                total_cost += item.line_cost
+        total_margin = grand_total - total_cost
+        margin_percent = (total_margin / grand_total * 100) if grand_total else 0.0
 
     # 🔹 Automatic approval if no undercost items
     if not has_undercost_items and quotation.status != 'Approved':
@@ -492,6 +521,11 @@ def view_quotation_details(request, quotation_id):
         "quotation_items": quotation_items,
         "grand_total": grand_total,
         "has_undercost_items": has_undercost_items,
+        "is_admin": is_admin,
+        "has_zero_cost_items": has_zero_cost_items,
+        "total_cost": total_cost,
+        "total_margin": total_margin,
+        "margin_percent": margin_percent,
     })
 
 
