@@ -429,6 +429,7 @@ class SAPSalesorder(models.Model):
     customer_address = models.TextField(blank=True, null=True, help_text="Customer address from SAP API (Address field)")
     customer_phone = models.CharField(max_length=50, blank=True, null=True, help_text="Customer phone from SAP API (BusinessPartner.Phone1)")
     closing_remarks = models.TextField(blank=True, null=True, help_text="Closing remarks from SAP API (ClosingRemarks field) - used as default remarks for SAP PIs")
+    sap_remarks = models.TextField(blank=True, null=True, help_text="Comments from SAP API (Comments field) - e.g. PRICE NEED TO BE CHANGED, Based On Sales Quotations")
     nf_ref = models.CharField(max_length=500, blank=True, null=True, help_text="NFRef from TaxExtension - quotation reference")
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)

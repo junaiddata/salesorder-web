@@ -433,6 +433,10 @@ class SAPAPIClient:
         # Replace \r with \n for proper line breaks
         if closing_remarks:
             closing_remarks = closing_remarks.replace('\r', '\n')
+        # Extract Comments from API (SAP Remarks - e.g. PRICE NEED TO BE CHANGED, Based On Sales Quotations)
+        sap_remarks = str(api_order.get('Comments', '')).strip() if api_order.get('Comments') else ''
+        if sap_remarks:
+            sap_remarks = sap_remarks.replace('\r', '\n')
         
         # Sales Person
         sales_person = api_order.get('SalesPerson', {})
@@ -559,6 +563,7 @@ class SAPAPIClient:
             'customer_address': customer_address,  # Address from main API response
             'customer_phone': customer_phone,  # Phone1 from BusinessPartner
             'closing_remarks': closing_remarks,  # ClosingRemarks from API
+            'sap_remarks': sap_remarks,  # Comments from API (SAP Remarks)
             'is_sap_pi': is_sap_pi,  # True if U_PROFORMAINVOICE=Y
             'sap_pi_lpo_date': sap_pi_lpo_date,  # From API field U_Lpdate (date or None)
             'nf_ref': nf_ref,  # NFRef from TaxExtension - quotation reference

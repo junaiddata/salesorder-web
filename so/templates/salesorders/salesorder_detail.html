@@ -598,6 +598,16 @@
     </div>
     {% endif %}
 
+    {% if salesorder.sap_remarks %}
+    <!-- SAP Remarks (from API Comments) -->
+    <div class="card">
+      <div class="card-header">SAP Remarks</div>
+      <div class="card-body">
+        <div class="remarks-box" style="white-space:pre-wrap;">{{ salesorder.sap_remarks }}</div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Remarks -->
     <div class="card">
       <div class="card-header">Remarks</div>

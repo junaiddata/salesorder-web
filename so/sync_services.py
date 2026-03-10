@@ -188,6 +188,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     "customer_address": mapped.get('customer_address', '') or '',
                     "customer_phone": mapped.get('customer_phone', '') or '',
                     "closing_remarks": mapped.get('closing_remarks', '') or '',
+                    "sap_remarks": mapped.get('sap_remarks', '') or '',
                     "is_sap_pi": mapped.get('is_sap_pi', False),
                     "nf_ref": mapped.get('nf_ref', '') or '',
                 }
@@ -216,7 +217,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     "posting_date", "customer_code", "customer_name", "bp_reference_no",
                     "salesman_name", "discount_percentage", "document_total", "row_total_sum",
                     "status", "vat_number", "customer_address", "customer_phone", "closing_remarks",
-                    "internal_number", "is_sap_pi", "nf_ref", "approval_status"
+                    "sap_remarks", "internal_number", "is_sap_pi", "nf_ref", "approval_status"
                 ]
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     update_fields.append("last_synced_at")
