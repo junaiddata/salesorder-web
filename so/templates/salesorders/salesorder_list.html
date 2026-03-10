@@ -708,6 +708,18 @@
   <div id="remarkPopup"></div>
 
 <script>
+  // Restore saved filters if page loaded with no params (e.g. Back button or Back link)
+  (function() {
+    var hasParams = window.location.search && window.location.search.length > 1;
+    if (!hasParams) {
+      var saved = sessionStorage.getItem('so_list_filters');
+      if (saved) {
+        window.location.replace(window.location.pathname + '?' + saved);
+        return;
+      }
+    }
+  })();
+
   // AJAX Search Logic
   (function() {
     const form = document.getElementById('filters');
@@ -737,7 +749,11 @@
     }
 
     function load(params) {
-      fetch('{% url "salesorder_search" %}?' + params.toString(), {
+      var qs = params.toString();
+      history.replaceState(null, '', '?' + qs);
+      sessionStorage.setItem('so_list_filters', qs);
+
+      fetch('{% url "salesorder_search" %}?' + qs, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       })
         .then(r => r.json())

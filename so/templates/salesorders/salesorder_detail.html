@@ -380,7 +380,7 @@
         <p>{{ salesorder.customer_name }}</p>
       </div>
       <div class="header-actions">
-        <a class="btn btn-secondary" href="{% url 'salesorder_list' %}">
+        <a class="btn btn-secondary back-to-list" href="{% url 'salesorder_list' %}">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           Back
         </a>
@@ -735,7 +735,7 @@
 
     <!-- Footer -->
     <div class="footer-actions">
-      <a class="btn btn-secondary" href="{% url 'salesorder_list' %}">
+      <a class="btn btn-secondary back-to-list" href="{% url 'salesorder_list' %}">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
         Back to Sales Orders
       </a>
@@ -745,6 +745,16 @@
       </a>
     </div>
   </div>
+
+  <script>
+    (function() {
+      var saved = sessionStorage.getItem('so_list_filters');
+      if (saved) {
+        var url = '{% url "salesorder_list" %}' + '?' + saved;
+        document.querySelectorAll('a.back-to-list').forEach(function(a) { a.href = url; });
+      }
+    })();
+  </script>
 
   {% if is_admin and monthly_pending_data %}
   <script>
