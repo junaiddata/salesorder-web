@@ -2289,6 +2289,27 @@ def salesorder_update_remarks(request, so_number):
 
 @login_required
 @require_POST
+def salesorder_update_salesman_remarks(request, so_number):
+    """Update salesman remarks. Salesman and Admin can edit."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+
+    new_remarks = (request.POST.get("salesman_remarks") or "").strip()
+    salesorder.salesman_remarks = new_remarks
+    salesorder.save(update_fields=["salesman_remarks"])
+
+    messages.success(request, "Salesman remarks updated.")
+    return redirect("salesorder_detail", so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
 def salesorder_update_approval(request, so_number):
     """Update approval status (Admin only). Accepts approval_status in POST."""
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)

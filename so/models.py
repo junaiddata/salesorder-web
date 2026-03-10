@@ -432,7 +432,8 @@ class SAPSalesorder(models.Model):
     sap_remarks = models.TextField(blank=True, null=True, help_text="Comments from SAP API (Comments field) - e.g. PRICE NEED TO BE CHANGED, Based On Sales Quotations")
     nf_ref = models.CharField(max_length=500, blank=True, null=True, help_text="NFRef from TaxExtension - quotation reference")
     created_at = models.DateTimeField(auto_now_add=True)
-    remarks = models.TextField(blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True, help_text="Internal remarks (Admin only - salesman can view)")
+    salesman_remarks = models.TextField(blank=True, null=True, help_text="Remarks from salesman (salesman can edit)")
     bill_to = models.TextField(blank=True, null=True)
     approval_status = models.CharField(
         max_length=30,

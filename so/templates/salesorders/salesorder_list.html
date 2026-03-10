@@ -638,7 +638,8 @@
           <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
         </div>
 
-        <div class="field" style="align-self:end;">
+        <div class="field" style="align-self:end; display:flex; gap:8px;">
+          <a href="{% url 'salesorder_list' %}" class="btn btn-secondary" id="clear-filters-btn" style="text-decoration:none;" onclick="sessionStorage.removeItem('so_list_filters');">Clear</a>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
       </form>

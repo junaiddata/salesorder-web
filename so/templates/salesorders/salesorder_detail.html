@@ -608,20 +608,43 @@
     </div>
     {% endif %}
 
-    <!-- Remarks -->
+    <!-- Salesman Remarks (salesman can edit) -->
     <div class="card">
-      <div class="card-header">Remarks</div>
+      <div class="card-header">Salesman Remarks</div>
       <div class="card-body">
+        <form method="post" action="{% url 'salesorder_update_salesman_remarks' salesorder.so_number %}">
+          {% csrf_token %}
+          {% if not salesorder.salesman_remarks %}
+            <p class="empty-remarks">No salesman remarks yet.</p>
+          {% endif %}
+          <textarea name="salesman_remarks" class="remarks-textarea" placeholder="Add your remarks...">{{ salesorder.salesman_remarks|default_if_none:"" }}</textarea>
+          <div style="margin-top:10px;">
+            <button class="btn btn-success btn-sm" type="submit">Save Salesman Remarks</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Internal Remarks (Admin only - salesman can view) -->
+    <div class="card">
+      <div class="card-header">Internal Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.8rem;">(view only)</span>{% endif %}</div>
+      <div class="card-body">
+        {% if is_admin %}
         <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}">
           {% csrf_token %}
           {% if not salesorder.remarks %}
-            <p class="empty-remarks">No remarks yet.</p>
+            <p class="empty-remarks">No internal remarks yet.</p>
           {% endif %}
           <textarea name="remarks" class="remarks-textarea" placeholder="Add internal remarks...">{{ salesorder.remarks|default_if_none:"" }}</textarea>
           <div style="margin-top:10px;">
             <button class="btn btn-success btn-sm" type="submit">Save Remarks</button>
           </div>
         </form>
+        {% else %}
+        <div class="remarks-readonly" style="white-space:pre-wrap;min-height:60px;padding:10px;background:var(--surface-alt);border-radius:var(--radius-sm);border:1px solid var(--border);">
+          {{ salesorder.remarks|default:"—" }}
+        </div>
+        {% endif %}
       </div>
     </div>
 
