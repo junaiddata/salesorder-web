@@ -25,8 +25,8 @@
       --warning: #d97706;
       --warning-light: #fffbeb;
       --danger: #dc2626;
-      --radius: 10px;
-      --radius-sm: 6px;
+      --radius: 8px;
+      --radius-sm: 5px;
       --shadow: 0 1px 2px rgba(0,0,0,0.05);
       --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
       --transition: 120ms ease;
@@ -38,14 +38,15 @@
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.55;
+      line-height: 1.45;
       -webkit-font-smoothing: antialiased;
+      font-size: 13px;
     }
 
     .container {
-      max-width: 1280px;
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 20px 16px 48px;
+      padding: 12px 14px 32px;
     }
 
     /* ─── Header ─── */
@@ -54,39 +55,36 @@
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 20px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
-    .header-left { display: flex; flex-direction: column; gap: 2px; }
+    .header-left { display: flex; align-items: center; gap: 10px; }
 
     .header-left h1 {
-      font-size: 1.375rem;
+      font-size: 1.15rem;
       font-weight: 700;
       letter-spacing: -0.01em;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
-    .header-left p {
+    .header-left .customer-name {
       color: var(--text-secondary);
-      font-size: 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 400;
     }
 
-    .header-actions {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
+    .header-actions { display: flex; gap: 5px; flex-wrap: wrap; }
 
     /* ─── Buttons ─── */
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 7px 13px;
-      font-size: 0.8rem;
+      gap: 4px;
+      padding: 5px 10px;
+      font-size: 0.72rem;
       font-weight: 600;
       font-family: inherit;
       border-radius: var(--radius-sm);
@@ -112,14 +110,14 @@
     .btn-success { background: var(--success); color: #fff; }
     .btn-success:hover { background: #047857; }
 
-    .btn-sm { padding: 5px 10px; font-size: 0.75rem; }
+    .btn-sm { padding: 4px 8px; font-size: 0.68rem; }
 
     /* ─── Badge ─── */
     .badge {
       display: inline-flex;
       align-items: center;
-      padding: 2px 10px;
-      font-size: 0.7rem;
+      padding: 1px 8px;
+      font-size: 0.62rem;
       font-weight: 700;
       border-radius: 20px;
       text-transform: uppercase;
@@ -135,32 +133,32 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      margin-bottom: 16px;
+      margin-bottom: 10px;
       overflow: hidden;
     }
 
     .card-header {
-      padding: 12px 16px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border-light);
       font-weight: 600;
-      font-size: 0.875rem;
+      font-size: 0.78rem;
       color: var(--text);
       background: var(--surface-alt);
     }
 
-    .card-body { padding: 16px; }
+    .card-body { padding: 10px 12px; }
 
     /* ─── Info Grid ─── */
     .info-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 8px;
     }
 
-    .info-item { display: flex; flex-direction: column; gap: 1px; }
+    .info-item { display: flex; flex-direction: column; gap: 0; }
 
     .info-label {
-      font-size: 0.7rem;
+      font-size: 0.62rem;
       color: var(--text-muted);
       font-weight: 500;
       text-transform: uppercase;
@@ -168,57 +166,76 @@
     }
 
     .info-value {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       color: var(--text);
       font-weight: 600;
     }
 
     /* ─── Totals ─── */
-    .totals-list { display: grid; gap: 6px; }
+    .totals-list { display: grid; gap: 3px; }
 
     .totals-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
+      padding: 6px 10px;
       border-radius: var(--radius-sm);
       background: var(--surface-alt);
     }
 
-    .totals-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
-    .totals-value { font-size: 0.9rem; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .totals-label { font-size: 0.73rem; color: var(--text-secondary); font-weight: 500; }
+    .totals-value { font-size: 0.8rem; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     .totals-row.grand { background: var(--primary-light); }
     .totals-row.grand .totals-label { color: var(--primary-dark); font-weight: 600; }
-    .totals-row.grand .totals-value { color: var(--primary); font-size: 1rem; }
+    .totals-row.grand .totals-value { color: var(--primary); font-size: 0.88rem; }
 
     /* ─── Remarks ─── */
+    .remarks-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
     .remarks-textarea {
       width: 100%;
-      padding: 10px 12px;
-      font-size: 0.825rem;
+      padding: 7px 10px;
+      font-size: 0.76rem;
       font-family: inherit;
       color: var(--text);
       background: var(--surface-alt);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       resize: vertical;
-      min-height: 80px;
+      min-height: 60px;
+      max-height: 120px;
       outline: none;
       transition: border-color var(--transition), box-shadow var(--transition);
     }
 
     .remarks-textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.08);
       background: var(--surface);
     }
 
     .empty-remarks {
       color: var(--text-muted);
       font-style: italic;
-      font-size: 0.8rem;
-      margin-bottom: 8px;
+      font-size: 0.72rem;
+      margin-bottom: 4px;
+    }
+
+    .remarks-readonly {
+      white-space: pre-wrap;
+      min-height: 60px;
+      max-height: 120px;
+      overflow-y: auto;
+      padding: 7px 10px;
+      background: var(--surface-alt);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-size: 0.76rem;
     }
 
     /* ─── Table ─── */
@@ -227,8 +244,8 @@
     table { width: 100%; border-collapse: collapse; }
 
     thead th {
-      padding: 9px 12px;
-      font-size: 0.675rem;
+      padding: 6px 8px;
+      font-size: 0.6rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -242,8 +259,8 @@
     }
 
     tbody td {
-      padding: 9px 12px;
-      font-size: 0.8rem;
+      padding: 5px 8px;
+      font-size: 0.73rem;
       border-bottom: 1px solid var(--border-light);
       color: var(--text);
     }
@@ -265,8 +282,8 @@
 
     .item-badge {
       display: inline-flex;
-      padding: 1px 7px;
-      font-size: 0.65rem;
+      padding: 0px 6px;
+      font-size: 0.58rem;
       font-weight: 700;
       border-radius: 10px;
       text-transform: uppercase;
@@ -278,36 +295,37 @@
 
     .empty-state {
       text-align: center;
-      padding: 32px 16px;
+      padding: 20px 12px;
       color: var(--text-muted);
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
 
     /* ─── Layouts ─── */
-    @media (min-width: 768px) {
-      .two-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 10px;
+      margin-bottom: 10px;
     }
+
+    .right-stack { display: flex; flex-direction: column; gap: 10px; }
 
     .footer-actions {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
       margin-top: 4px;
     }
 
     /* ─── Warning banner ─── */
     .warning-banner {
-      padding: 10px 14px;
+      padding: 6px 10px;
       background: #fef3c7;
       color: #92400e;
       border: 1px solid #fcd34d;
       border-radius: var(--radius-sm);
-      margin-bottom: 14px;
-      font-size: 0.825rem;
+      margin-bottom: 8px;
+      font-size: 0.75rem;
       font-weight: 500;
     }
 
@@ -316,31 +334,31 @@
     /* ─── Finance grid ─── */
     .finance-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 10px;
-      padding: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 6px;
+      padding: 8px 10px;
       background: var(--surface-alt);
       border-radius: var(--radius-sm);
-      font-size: 0.8rem;
+      font-size: 0.73rem;
     }
 
-    .finance-grid div { line-height: 1.6; }
+    .finance-grid div { line-height: 1.5; }
     .finance-grid strong { font-weight: 600; color: var(--text); }
 
     /* ─── PI actions cell ─── */
-    .pi-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .pi-actions { display: flex; gap: 3px; flex-wrap: wrap; }
 
     /* ─── Select ─── */
     .select-sm {
-      padding: 5px 10px;
-      font-size: 0.8rem;
+      padding: 3px 8px;
+      font-size: 0.73rem;
       font-family: inherit;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--surface);
       color: var(--text);
       cursor: pointer;
-      min-width: 160px;
+      min-width: 140px;
     }
 
     .select-sm:focus {
@@ -350,16 +368,54 @@
     }
 
     .meta-note {
-      font-size: 0.7rem;
+      font-size: 0.62rem;
       color: var(--text-muted);
-      margin-top: 3px;
+      margin-top: 2px;
     }
 
-    /* ─── Responsive tweaks ─── */
+    /* ─── Admin metrics row ─── */
+    .metrics-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .metric-box {
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+    }
+
+    .metric-box .metric-label {
+      font-size: 0.62rem;
+      color: var(--text-muted);
+    }
+
+    .metric-box .metric-value {
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    /* ─── Compact line items table ─── */
+    .line-items-card .table-wrap {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 1024px) {
+      .top-grid { grid-template-columns: 1fr; }
+      .remarks-grid { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 640px) {
       .header { flex-direction: column; align-items: flex-start; }
       .header-actions { width: 100%; }
       .header-actions .btn { flex: 1; justify-content: center; min-width: 0; }
+      .remarks-grid { grid-template-columns: 1fr; }
+      .top-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -376,37 +432,37 @@
           {% else %}
             <span class="badge badge-closed">Closed</span>
           {% endif %}
+          <span class="customer-name">— {{ salesorder.customer_name }}</span>
         </h1>
-        <p>{{ salesorder.customer_name }}</p>
       </div>
       <div class="header-actions">
         <a class="btn btn-secondary back-to-list" href="{% url 'salesorder_list' %}">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           Back
         </a>
         <a class="btn btn-secondary" href="{% url 'export_sap_salesorder_open_items_pdf' salesorder.so_number %}">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          Open Items PDF
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Open Items
         </a>
         <a class="btn btn-primary" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          Export PDF
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          PDF
         </a>
         <a class="btn btn-success" href="{% url 'create_pi' salesorder.so_number %}">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
           Create PI
         </a>
         {% if user.is_staff or user.is_superuser %}
-          <a class="btn btn-secondary" href="{% url 'upload_salesorders' %}">Upload New</a>
+          <a class="btn btn-secondary" href="{% url 'upload_salesorders' %}">Upload</a>
         {% endif %}
       </div>
     </header>
 
-    <!-- Two-column: Info + Totals -->
-    <div class="two-col">
+    <!-- Top Grid: Info + Totals side by side -->
+    <div class="top-grid">
 
       <!-- Order Information -->
-      <div class="card">
+      <div class="card" style="margin-bottom:0;">
         <div class="card-header">Order Information</div>
         <div class="card-body">
           <div class="info-grid">
@@ -436,9 +492,9 @@
               <span class="info-value">
                 {% if salesorder.related_quotation_number %}
                   <a href="{% url 'quotation_detail' salesorder.related_quotation_number %}" style="color: var(--primary); text-decoration: none;">{{ salesorder.related_quotation_number }}</a>
-                  <span style="color: var(--text-muted); font-size: 0.7rem; margin-left: 4px;">({{ salesorder.nf_ref|truncatewords:8 }})</span>
+                  <span style="color: var(--text-muted); font-size: 0.62rem; margin-left: 2px;">({{ salesorder.nf_ref|truncatewords:6 }})</span>
                 {% else %}
-                  <span style="color: var(--text-muted);">{{ salesorder.nf_ref|truncatewords:12 }}</span>
+                  <span style="color: var(--text-muted);">{{ salesorder.nf_ref|truncatewords:10 }}</span>
                 {% endif %}
               </span>
             </div>
@@ -451,7 +507,7 @@
             <div class="info-item">
               <span class="info-label">Approval Status</span>
               <span class="info-value">
-                <form method="post" action="{% url 'salesorder_update_approval' salesorder.so_number %}" style="display:flex; flex-direction:column; gap:3px;">
+                <form method="post" action="{% url 'salesorder_update_approval' salesorder.so_number %}" style="display:flex; flex-direction:column; gap:2px;">
                   {% csrf_token %}
                   <select name="approval_status" onchange="this.form.submit()" class="select-sm">
                     {% for value, label in approval_status_choices %}
@@ -475,10 +531,9 @@
         </div>
       </div>
 
-      <!-- Right column: Totals + PI Summary -->
-      <div>
-        <!-- Order Totals -->
-        <div class="card">
+      <!-- Right: Totals + PI Summary stacked -->
+      <div class="right-stack">
+        <div class="card" style="margin-bottom:0;">
           <div class="card-header">Order Totals</div>
           <div class="card-body">
             <div class="totals-list">
@@ -504,50 +559,41 @@
                 <div class="totals-label">Grand Total</div>
                 <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
               </div>
+              {% if pis.exists %}
+              <div class="totals-row" style="margin-top:2px;">
+                <div class="totals-label">Total PI Amount</div>
+                <div class="totals-value">{{ total_pi_amount|floatformat:2 }}</div>
+              </div>
+              <div class="totals-row">
+                <div class="totals-label">Balance Amount</div>
+                <div class="totals-value" style="color:var(--warning);">{{ balance_amount|floatformat:2 }}</div>
+              </div>
+              {% endif %}
             </div>
             {% if is_admin %}
-            <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            <div class="metrics-row">
               {% if has_zero_cost_items %}
-              <div style="padding:10px 14px; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); font-size:0.85rem;">
-                <strong>Note:</strong> Some items have cost 0.0 — cost/margin figures may be incomplete.
+              <div style="padding:6px 10px; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); font-size:0.73rem; flex:1;">
+                <strong>Note:</strong> Some items have cost 0.0 — margins may be incomplete.
               </div>
               {% else %}
-              <div style="padding:8px 12px; background:var(--surface-alt); border-radius:var(--radius-sm);">
-                <span style="font-size:0.75rem; color:var(--text-muted);">Total Cost</span>
-                <div style="font-weight:700; font-size:1rem;">{{ total_cost|floatformat:2 }}</div>
+              <div class="metric-box" style="background:var(--surface-alt);">
+                <div class="metric-label">Total Cost</div>
+                <div class="metric-value">{{ total_cost|floatformat:2 }}</div>
               </div>
-              <div style="padding:8px 12px; background:var(--success-light); border-radius:var(--radius-sm);">
-                <span style="font-size:0.75rem; color:var(--text-muted);">Total Margin</span>
-                <div style="font-weight:700; font-size:1rem; color:var(--success);">{{ total_margin|floatformat:2 }}</div>
+              <div class="metric-box" style="background:var(--success-light);">
+                <div class="metric-label">Margin</div>
+                <div class="metric-value" style="color:var(--success);">{{ total_margin|floatformat:2 }}</div>
               </div>
-              <div style="padding:8px 12px; background:var(--success-light); border-radius:var(--radius-sm);">
-                <span style="font-size:0.75rem; color:var(--text-muted);">Margin %</span>
-                <div style="font-weight:700; font-size:1rem; color:var(--success);">{{ margin_percent|floatformat:1 }}%</div>
+              <div class="metric-box" style="background:var(--success-light);">
+                <div class="metric-label">Margin %</div>
+                <div class="metric-value" style="color:var(--success);">{{ margin_percent|floatformat:1 }}%</div>
               </div>
               {% endif %}
             </div>
             {% endif %}
           </div>
         </div>
-
-        <!-- PI Summary -->
-        {% if pis.exists %}
-        <div class="card">
-          <div class="card-header">PI Summary</div>
-          <div class="card-body">
-            <div class="totals-list">
-              <div class="totals-row">
-                <div class="totals-label">Total PI Amount</div>
-                <div class="totals-value">{{ total_pi_amount|floatformat:2 }}</div>
-              </div>
-              <div class="totals-row">
-                <div class="totals-label">Balance Amount</div>
-                <div class="totals-value">{{ balance_amount|floatformat:2 }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endif %}
       </div>
     </div>
 
@@ -557,7 +603,7 @@
       <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
         <span>Monthly Pending Summary</span>
         <button type="button" class="btn btn-secondary btn-sm" id="refreshFinanceBtn" title="Refresh">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Refresh
         </button>
       </div>
@@ -567,86 +613,89 @@
           <strong>Warning!</strong> Credit limit exceeded ({{ pending_total_with_order|floatformat:2 }} AED vs {{ credit_limit|floatformat:2 }} AED limit)
         </div>
         {% endif %}
-        <div style="overflow-x:auto; margin-bottom:14px;">
-          <table style="min-width:auto;">
-            <thead>
-              <tr>
-                {% for month in monthly_pending_data|slice:":7" %}
-                  <th style="text-align:center;">{{ month.month_abbr }}</th>
-                {% endfor %}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {% for month in monthly_pending_data|slice:":7" %}
-                  <td style="text-align:center; font-weight:500;">{{ month.pending_total|floatformat:2|default:"0.00" }}</td>
-                {% endfor %}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="finance-grid">
-          <div><strong>6+ Months:</strong> {{ old_months|floatformat:2 }} AED</div>
-          <div><strong>Credit Limit:</strong> {{ credit_limit|floatformat:2 }} AED</div>
-          <div><strong>Balance:</strong> {{ balance_outstanding|floatformat:2 }} AED</div>
-          <div><strong>Total Pending:</strong> <span style="{% if has_over_limit %}color:var(--danger);font-weight:700;{% endif %}">{{ pending_total_without|floatformat:2 }} AED</span></div>
-          <div><strong>Total PDC:</strong> {{ current_month_receivables|floatformat:2 }} AED</div>
-          <div><strong>Payment Terms:</strong> {{ payment_terms|default:"—" }}</div>
-          <div><strong>Pending + Order:</strong> {{ pending_total_with_order|floatformat:2 }} AED</div>
+        <div style="display:grid; grid-template-columns: auto 1fr; gap:10px; align-items:start;">
+          <div style="overflow-x:auto;">
+            <table style="min-width:auto;">
+              <thead>
+                <tr>
+                  {% for month in monthly_pending_data|slice:":7" %}
+                    <th style="text-align:center; padding:4px 8px;">{{ month.month_abbr }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {% for month in monthly_pending_data|slice:":7" %}
+                    <td style="text-align:center; font-weight:500; padding:4px 8px;">{{ month.pending_total|floatformat:2|default:"0.00" }}</td>
+                  {% endfor %}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="finance-grid">
+            <div><strong>6+ Months:</strong> {{ old_months|floatformat:2 }}</div>
+            <div><strong>Credit Limit:</strong> {{ credit_limit|floatformat:2 }}</div>
+            <div><strong>Balance:</strong> {{ balance_outstanding|floatformat:2 }}</div>
+            <div><strong>Total Pending:</strong> <span style="{% if has_over_limit %}color:var(--danger);font-weight:700;{% endif %}">{{ pending_total_without|floatformat:2 }}</span></div>
+            <div><strong>Total PDC:</strong> {{ current_month_receivables|floatformat:2 }}</div>
+            <div><strong>Payment Terms:</strong> {{ payment_terms|default:"—" }}</div>
+            <div><strong>Pending + Order:</strong> {{ pending_total_with_order|floatformat:2 }}</div>
+          </div>
         </div>
       </div>
     </div>
     {% endif %}
 
-    {% if salesorder.sap_remarks %}
-    <!-- SAP Remarks (from API Comments) -->
-    <div class="card">
-      <div class="card-header">SAP Remarks</div>
-      <div class="card-body">
-        <div class="remarks-box" style="white-space:pre-wrap;">{{ salesorder.sap_remarks }}</div>
-      </div>
-    </div>
-    {% endif %}
+    <!-- ═══ All Remarks in ONE Row ═══ -->
+    <div class="remarks-grid">
 
-    <!-- Salesman Remarks (salesman can edit) -->
-    <div class="card">
-      <div class="card-header">Salesman Remarks</div>
-      <div class="card-body">
-        <form method="post" action="{% url 'salesorder_update_salesman_remarks' salesorder.so_number %}">
-          {% csrf_token %}
-          {% if not salesorder.salesman_remarks %}
-            <p class="empty-remarks">No salesman remarks yet.</p>
+      <!-- SAP Remarks -->
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-header">SAP Remarks</div>
+        <div class="card-body">
+          {% if salesorder.sap_remarks %}
+          <div class="remarks-readonly">{{ salesorder.sap_remarks }}</div>
+          {% else %}
+          <div class="remarks-readonly" style="color:var(--text-muted); font-style:italic;">No SAP remarks</div>
           {% endif %}
-          <textarea name="salesman_remarks" class="remarks-textarea" placeholder="Add your remarks...">{{ salesorder.salesman_remarks|default_if_none:"" }}</textarea>
-          <div style="margin-top:10px;">
-            <button class="btn btn-success btn-sm" type="submit">Save Salesman Remarks</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Internal Remarks (Admin only - salesman can view) -->
-    <div class="card">
-      <div class="card-header">Internal Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.8rem;">(view only)</span>{% endif %}</div>
-      <div class="card-body">
-        {% if is_admin %}
-        <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}">
-          {% csrf_token %}
-          {% if not salesorder.remarks %}
-            <p class="empty-remarks">No internal remarks yet.</p>
-          {% endif %}
-          <textarea name="remarks" class="remarks-textarea" placeholder="Add internal remarks...">{{ salesorder.remarks|default_if_none:"" }}</textarea>
-          <div style="margin-top:10px;">
-            <button class="btn btn-success btn-sm" type="submit">Save Remarks</button>
-          </div>
-        </form>
-        {% else %}
-        <div class="remarks-readonly" style="white-space:pre-wrap;min-height:60px;padding:10px;background:var(--surface-alt);border-radius:var(--radius-sm);border:1px solid var(--border);">
-          {{ salesorder.remarks|default:"—" }}
         </div>
-        {% endif %}
+      </div>
+
+      <!-- Salesman Remarks -->
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-header">Salesman Remarks</div>
+        <div class="card-body">
+          <form method="post" action="{% url 'salesorder_update_salesman_remarks' salesorder.so_number %}">
+            {% csrf_token %}
+            <textarea name="salesman_remarks" class="remarks-textarea" placeholder="Add your remarks...">{{ salesorder.salesman_remarks|default_if_none:"" }}</textarea>
+            <div style="margin-top:6px; text-align:right;">
+              <button class="btn btn-success btn-sm" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Internal Remarks -->
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-header">Internal Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;">(view only)</span>{% endif %}</div>
+        <div class="card-body">
+          {% if is_admin %}
+          <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}">
+            {% csrf_token %}
+            <textarea name="remarks" class="remarks-textarea" placeholder="Add internal remarks...">{{ salesorder.remarks|default_if_none:"" }}</textarea>
+            <div style="margin-top:6px; text-align:right;">
+              <button class="btn btn-success btn-sm" type="submit">Save</button>
+            </div>
+          </form>
+          {% else %}
+          <div class="remarks-readonly">{{ salesorder.remarks|default:"—" }}</div>
+          {% endif %}
+        </div>
       </div>
     </div>
+
+    <!-- Spacing between remarks grid and next card -->
+    <div style="height:10px;"></div>
 
     <!-- Proforma Invoices -->
     {% if pis %}
@@ -698,7 +747,7 @@
     {% endif %}
 
     <!-- Line Items -->
-    <div class="card">
+    <div class="card line-items-card">
       <div class="card-header">Line Items ({{ items|length }})</div>
       <div class="card-body" style="padding:0;">
         <div class="table-wrap">
@@ -708,22 +757,23 @@
                 <th class="num">#</th>
                 <th>Item No</th>
                 <th>Description</th>
-                <th>Manufacture</th>
-                <th>Status</th>
+                <th>Mfr</th>
+                <th>St</th>
                 <th class="num">Qty</th>
-                <th class="num">Unit Price</th>
+                <th class="num">Price</th>
+                <!-- <th class="num" style="background:#fffef5;">Rev.Price</th> -->
                 {% if is_admin %}
-                <th class="num">Cost Price</th>
-                <th class="num">Margin %</th>
-                <th class="num">Req Margin</th>
+                <th class="num">Cost</th>
+                <th class="num">Mgn%</th>
+                <th class="num">Req</th>
                 {% endif %}
-                <th class="num">Row Total</th>
-                <th class="num">Open Qty</th>
-                <th class="num">Pending Amt</th>
-                <th class="num">Avail. Stock</th>
-                <th class="num">DIP Stock</th>
-                <th class="num pi-col">PI Sent Qty</th>
-                <th class="num pi-col">Balance Qty</th>
+                <th class="num">Total</th>
+                <th class="num">Open</th>
+                <th class="num">Pending</th>
+                <th class="num">Stock</th>
+                <th class="num">DIP</th>
+                <th class="num pi-col">PI Qty</th>
+                <th class="num pi-col">Bal Qty</th>
               </tr>
             </thead>
             <tbody>
@@ -731,33 +781,40 @@
               <tr{% if is_admin and it.margin_below_req %} class="row-low-margin"{% endif %}>
                 <td class="num">{{ forloop.counter }}</td>
                 <td><strong>{{ it.item_no }}</strong></td>
-                <td>{{ it.description }}</td>
+                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ it.description }}">{{ it.description }}</td>
                 <td>{{ it.manufacture|default:"—" }}</td>
                 <td>
                   {% if it.row_status == 'O' or it.row_status == 'Open' %}
-                    <span class="item-badge item-badge-open">Open</span>
+                    <span class="item-badge item-badge-open">O</span>
                   {% else %}
-                    <span class="item-badge item-badge-closed">Closed</span>
+                    <span class="item-badge item-badge-closed">C</span>
                   {% endif %}
                 </td>
                 <td class="num">{{ it.quantity|floatformat:2 }}</td>
                 <td class="num">{{ it.unit_price|floatformat:2 }}</td>
+                <!-- <td class="num" style="background:#fffef5;">
+                  <input type="number" class="revised-price-input" data-item-id="{{ it.id }}"
+                    value="{% if it.revised_price %}{{ it.revised_price|floatformat:2 }}{% endif %}"
+                    placeholder="—" min="0" step="0.01"
+                    style="width:62px;padding:3px 5px;border:1.5px solid #e2e8f0;border-radius:4px;font-size:0.73rem;text-align:right;font-family:inherit;background:white;"
+                  />
+                </td> -->
                 {% if is_admin %}
                 <td class="num">{{ it.item_cost|floatformat:2 }}</td>
-                <td class="num">{{ it.margin_pct|floatformat:2 }}%</td>
-                <td class="num">{% if it.req_margin is not None %}{{ it.req_margin|floatformat:1 }}%{% else %}—{% endif %}</td>
+                <td class="num">{{ it.margin_pct|floatformat:1 }}%</td>
+                <td class="num">{% if it.req_margin is not None %}{{ it.req_margin|floatformat:0 }}%{% else %}—{% endif %}</td>
                 {% endif %}
                 <td class="num">{{ it.row_total|floatformat:2 }}</td>
                 <td class="num">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
                 <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
-                <td class="num">{{ it.total_available_stock|default_if_none:"0"|floatformat:2 }}</td>
-                <td class="num">{{ it.dip_warehouse_stock|default_if_none:"0"|floatformat:2 }}</td>
+                <td class="num">{{ it.total_available_stock|default_if_none:"0"|floatformat:0 }}</td>
+                <td class="num">{{ it.dip_warehouse_stock|default_if_none:"0"|floatformat:0 }}</td>
                 <td class="num pi-col">{{ it.pi_allocated_qty|floatformat:2 }}</td>
                 <td class="num pi-col">{{ it.pi_remaining_qty|floatformat:2 }}</td>
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if is_admin %}17{% else %}14{% endif %}" class="empty-state">No line items found</td>
+                <td colspan="{% if is_admin %}18{% else %}15{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -769,11 +826,15 @@
     <!-- Footer -->
     <div class="footer-actions">
       <a class="btn btn-secondary back-to-list" href="{% url 'salesorder_list' %}">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
         Back to Sales Orders
       </a>
+      <a class="btn btn-secondary" href="{% url 'sap_salesorder_view_pdf' salesorder.so_number %}" target="_blank">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        View PDF
+      </a>
       <a class="btn btn-primary" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Export PDF
       </a>
     </div>
@@ -786,6 +847,43 @@
         var url = '{% url "salesorder_list" %}' + '?' + saved;
         document.querySelectorAll('a.back-to-list').forEach(function(a) { a.href = url; });
       }
+    })();
+  </script>
+
+  <script>
+    (function() {
+      var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      var csrftoken = csrf ? csrf.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+      var timers = {};
+      document.querySelectorAll('.revised-price-input').forEach(function(input) {
+        input.addEventListener('change', function() {
+          var itemId = this.getAttribute('data-item-id');
+          var val = this.value.trim();
+          var num = val === '' ? null : parseFloat(val);
+          if (num !== null && (isNaN(num) || num < 0)) num = null;
+          if (timers[itemId]) clearTimeout(timers[itemId]);
+          var el = this;
+          var origBg = el.style.background;
+          el.style.background = '#fef3c7';
+          timers[itemId] = setTimeout(function() {
+            fetch('{% url "salesorder_item_save_revised_price" %}', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+              body: JSON.stringify({ item_id: parseInt(itemId, 10), revised_price: num }),
+              credentials: 'same-origin'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              el.style.background = data.success ? '#d1fae5' : '#fee2e2';
+              setTimeout(function() { el.style.background = origBg; }, data.success ? 300 : 1000);
+            })
+            .catch(function() {
+              el.style.background = '#fee2e2';
+              setTimeout(function() { el.style.background = origBg; }, 1000);
+            });
+          }, 500);
+        });
+      });
     })();
   </script>
 

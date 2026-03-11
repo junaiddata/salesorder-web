@@ -37,7 +37,7 @@ from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPPro
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
-from .views_quotation import QuotationPDFTemplate, styles
+from .sap_salesorder_pdf import generate_sap_salesorder_pdf_bytes
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
 from .sync_services import sync_salesorders_core, sync_arinvoices_core, sync_arcreditmemos_core
@@ -1682,250 +1682,50 @@ def salesorder_search(request):
     })
 
 
+def _generate_sap_salesorder_pdf_bytes(salesorder):
+    """Generate SAP Sales Order PDF bytes using Customer Order design."""
+    return generate_sap_salesorder_pdf_bytes(salesorder)
+
+
 @login_required
-def export_sap_salesorder_pdf(request, so_number):
+def sap_salesorder_view_pdf(request, so_number):
     """
-    Generate a PDF for SAPSalesorder using the same template as quotations.
+    View SAP Sales Order PDF in the browser (inline display).
     """
-    # Fetch salesorder
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
-    
-    # Enforce scope for non-staff users
     if not (request.user.is_superuser or request.user.is_staff):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()
         if not allowed:
             raise Http404("Salesorder not found")
-    
-    items_qs = salesorder.items.all().order_by('id')
 
-    # Prepare HTTP response
-    response = HttpResponse(content_type='application/pdf')
+    pdf_bytes = _generate_sap_salesorder_pdf_bytes(salesorder)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
+    filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
+
+
+@login_required
+def export_sap_salesorder_pdf(request, so_number):
+    """
+    Download SAP Sales Order as PDF (attachment).
+    """
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+
+    pdf_bytes = _generate_sap_salesorder_pdf_bytes(salesorder)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
     date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
     filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-    buffer = BytesIO()
-
-    # Define default config (Junaid Settings)
-    company_config = {
-        'name': "Junaid Sanitary & Electrical Trading LLC",
-        'address': "Dubai Investment Parks 2, Dubai, UAE",
-        'contact': "Email: sales@junaid.ae | Phone: +97142367723",
-        'logo_url': "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp",
-        'local_logo_path': os.path.join(settings.BASE_DIR, 'static', 'images', 'footer-logo.png.webp')
-    }
-
-    # Default Green Theme
-    theme_config = {'primary': HexColor('#2C5530')}
-
-    # Initialize template with config
-    doc = QuotationPDFTemplate(
-        buffer,
-        company_config=company_config,
-        theme_config=theme_config,
-        pagesize=A4,
-        rightMargin=0.5*inch,
-        leftMargin=0.5*inch,
-        topMargin=0.5*inch,
-        bottomMargin=1.0*inch
-    )
-
-    elements = []
-
-    # Title
-    elements.append(Spacer(1, -1.3*inch))
-
-    title_table = Table(
-        [[Paragraph('SALES ORDER', styles['MainTitle'])]],
-        colWidths=[7.5*inch]
-    )
-    title_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TEXTCOLOR', (0, 0), (-1, -1), theme_config['primary']),
-    ]))
-    elements.append(title_table)
-    elements.append(Spacer(1, 0.1*inch))
-
-    # Two-column info (Salesorder / Customer)
-    main_table_width = 7.2 * inch
-
-    salesorder_data = [
-        [Paragraph('Salesorder Details', styles['SectionHeader'])],
-        [Paragraph(f"<b>Number:</b> {salesorder.so_number}", styles['Normal'])],
-        [Paragraph(f"<b>Date:</b> {salesorder.posting_date or '-'}", styles['Normal'])],
-        [Paragraph(f"<b>BP Ref No:</b> {salesorder.bp_reference_no or '—'}", styles['Normal'])],
-        [Paragraph(f"<b>Status:</b> {salesorder.status or '—'}", styles['Normal'])],
-    ]
-
-    bg_color = theme_config['primary']
-
-    salesorder_info_table = Table(salesorder_data, colWidths=[main_table_width / 2])
-    salesorder_info_table.setStyle(TableStyle([
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 1), (-1, -1), 2),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('BACKGROUND', (0, 0), (0, 0), bg_color),
-        ('TEXTCOLOR', (0, 0), (0, 0), white),
-    ]))
-
-    customer_data = [
-        [Paragraph('Customer Information', styles['SectionHeader'])],
-        [Paragraph(f"<b>Name:</b> {salesorder.customer_name or '—'}", styles['Normal'])],
-        [Paragraph(f"<b>Code:</b> {salesorder.customer_code or '—'}", styles['Normal'])],
-        [Paragraph(f"<b>Salesman:</b> {salesorder.salesman_name or '—'}", styles['Normal'])],
-    ]
-
-    customer_info_table = Table(customer_data, colWidths=[main_table_width / 2])
-    customer_info_table.setStyle(TableStyle([
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 1), (-1, -1), 2),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('BACKGROUND', (0, 0), (0, 0), bg_color),
-        ('TEXTCOLOR', (0, 0), (0, 0), white),
-    ]))
-
-    info_table = Table([[salesorder_info_table, customer_info_table]],
-                       colWidths=[main_table_width / 2, main_table_width / 2])
-    info_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Items table
-    items_header = ['#', 'Item No.', 'Description', 'Qty', 'Unit Price', 'Total']
-    items_data = [items_header]
-
-    def _to_decimal(x):
-        if x is None:
-            return Decimal('0')
-        if isinstance(x, Decimal):
-            return x
-        try:
-            return Decimal(str(x))
-        except Exception:
-            return Decimal('0')
-
-    subtotal = Decimal('0')
-    for idx, it in enumerate(items_qs, 1):
-        qty = _to_decimal(it.quantity)
-        price = _to_decimal(it.price)
-        row_total = _to_decimal(it.row_total) if it.row_total is not None else (qty * price)
-
-        # New Excel doesn't include unit price; derive from row_total/qty when possible
-        if (price == 0 or price is None) and qty:
-            try:
-                price = (row_total / qty).quantize(Decimal("0.01"))
-            except Exception:
-                price = Decimal("0")
-        subtotal += row_total
-
-        desc_para = Paragraph(it.description or '—', styles['ItemDescription'])
-        qty_str = f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0"
-        qty_para = Paragraph(qty_str, ParagraphStyle('QtyCell', fontSize=7, alignment=TA_CENTER))
-
-        items_data.append([
-            str(idx),
-            it.item_no or '—',
-            desc_para,
-            qty_para,
-            f"AED {price:,.2f}",
-            f"AED {row_total:,.2f}",
-        ])
-
-    items_table = Table(
-        items_data,
-        colWidths=[
-            main_table_width * 0.05,
-            main_table_width * 0.15,
-            main_table_width * 0.43,
-            main_table_width * 0.07,
-            main_table_width * 0.15,
-            main_table_width * 0.15
-        ],
-        repeatRows=1
-    )
-    items_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), bg_color),
-        ('TEXTCOLOR', (0, 0), (-1, 0), white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#F0F7F4'), white]),
-        ('ALIGN', (0, 1), (1, -1), 'CENTER'),
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),
-        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
-        ('FONTSIZE', (3, 1), (3, -1), 7),  # Shrink Qty column so 4+ digit numbers fit
-    ]))
-
-    elements.append(items_table)
-    elements.append(Spacer(1, 0.1 * inch))
-
-    # Summary
-    # - Subtotal is computed from line Row Total (fallback qty*price)
-    # - row_total_sum is stored from Excel SUM(Row Total) (Document Total)
-    stored_row_total_sum = _to_decimal(getattr(salesorder, 'row_total_sum', None))
-    doc_total = (stored_row_total_sum if stored_row_total_sum else subtotal).quantize(Decimal("0.01"))
-    vat_rate = Decimal("0.05")
-    vat_amount = (doc_total * vat_rate).quantize(Decimal("0.01"))
-    grand_total = (doc_total + vat_amount).quantize(Decimal("0.01"))
-
-    summary_data = [
-        ['Document Total:', f"AED {doc_total:,.2f}"],
-        ['VAT (5%):', f"AED {vat_amount:,.2f}"],
-        ['Grand Total:', f"AED {grand_total:,.2f}"],
-    ]
-    summary_table = Table(summary_data, colWidths=[main_table_width * 0.5, main_table_width * 0.5])
-    summary_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 12),
-        ('BACKGROUND', (0, -1), (-1, -1), bg_color),
-        ('TEXTCOLOR', (0, -1), (-1, -1), white),
-    ]))
-
-    summary_wrapper = Table([[summary_table]], colWidths=[main_table_width])
-    summary_wrapper.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-    ]))
-    elements.append(KeepTogether(summary_wrapper))
-    elements.append(Spacer(1, 0.3 * inch))
-
-    # Optional: remarks / terms
-    if getattr(salesorder, 'remarks', None):
-        elements.extend([
-            Paragraph("Remarks:", styles['h3']),
-            Paragraph(salesorder.remarks, styles['Normal']),
-            Spacer(1, 0.2 * inch)
-        ])
-
-    elements.extend([
-        Paragraph("Terms & Conditions:", styles['h3']),
-        Paragraph("1. This sales order is valid for 30 days from the date of issue.", styles['Normal']),
-        Paragraph("2. Prices are subject to change after the validity period.", styles['Normal']),
-        Paragraph("3. Delivery timelines to be confirmed upon order confirmation.", styles['Normal']),
-        Paragraph("4. System-generated document.", styles['Normal']),
-    ])
-
-    # Build + return
-    doc.multiBuild(elements)
-    pdf = buffer.getvalue()
-    buffer.close()
-    response.write(pdf)
     return response
 
 
@@ -2306,6 +2106,50 @@ def salesorder_update_salesman_remarks(request, so_number):
 
     messages.success(request, "Salesman remarks updated.")
     return redirect("salesorder_detail", so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
+def salesorder_item_save_revised_price(request):
+    """AJAX: Save revised price for an SO line item. Salesman and Admin can edit."""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        item_id = data.get('item_id')
+        revised_price = data.get('revised_price')
+
+        if not item_id:
+            return JsonResponse({'success': False, 'error': 'item_id required'}, status=400)
+
+        so_item = get_object_or_404(SAPSalesorderItem, pk=item_id)
+        if not (request.user.is_superuser or request.user.is_staff):
+            allowed = SAPSalesorder.objects.filter(
+                Q(pk=so_item.salesorder_id) & salesman_scope_q_salesorder(request.user)
+            ).exists()
+            if not allowed:
+                return JsonResponse({'success': False, 'error': 'Not allowed'}, status=403)
+
+        try:
+            if revised_price is None or revised_price == '':
+                so_item.revised_price = None
+            else:
+                val = Decimal(str(revised_price))
+                if val < 0:
+                    val = Decimal('0')
+                so_item.revised_price = val.quantize(Decimal('0.01'))
+        except (ValueError, InvalidOperation):
+            so_item.revised_price = None
+
+        so_item.save(update_fields=['revised_price'])
+        return JsonResponse({
+            'success': True,
+            'item_id': item_id,
+            'revised_price': float(so_item.revised_price) if so_item.revised_price else None,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.exception('Error saving revised price')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @login_required

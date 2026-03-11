@@ -496,6 +496,7 @@ class SAPSalesorderItem(models.Model):
     pending_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     total_available_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     dip_warehouse_stock = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    revised_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Optional revised unit price (salesman can edit)")
 
     class Meta:
         indexes = [
