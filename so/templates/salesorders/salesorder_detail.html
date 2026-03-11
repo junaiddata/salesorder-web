@@ -677,7 +677,7 @@
 
       <!-- Internal Remarks -->
       <div class="card" style="margin-bottom:0;">
-        <div class="card-header">Internal Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;">(view only)</span>{% endif %}</div>
+        <div class="card-header">Management Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;">(view only)</span>{% endif %}</div>
         <div class="card-body">
           {% if is_admin %}
           <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}">
