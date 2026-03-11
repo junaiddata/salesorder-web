@@ -404,7 +404,7 @@ APPROVAL_STATUS_CHOICES = [
     ('Pending', 'Pending'),
     ('Approved', 'Approved'),
     ('Rejected', 'Rejected'),
-    ('DO Completed', 'DO Completed'),
+    ('SO Closed/Completed', 'SO Closed/Completed'),
     ('Partial DO', 'Partial DO'),
     ('Trade License Expired', 'Trade License Expired'),
     ('MD Approval Required', 'MD Approval Required'),

@@ -494,39 +494,6 @@ def _build_sap_summary_block(salesorder, subtotal, theme, styles, usable_width):
     return tbl
 
 
-def _build_remarks_block(salesorder, theme, styles, usable_width):
-    """Build remarks section if remarks exist."""
-    elements = []
-    remarks = getattr(salesorder, 'remarks', None)
-    if not remarks:
-        return elements
-
-    note_text = Paragraph(remarks, styles['notes'])
-    note_tbl = Table(
-        [['', note_text]],
-        colWidths=[3, usable_width - 3],
-    )
-    note_tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), theme['accent']),
-        ('BACKGROUND', (1, 0), (1, 0), theme['accent_light']),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (1, 0), (1, 0), 8),
-        ('RIGHTPADDING', (1, 0), (1, 0), 8),
-    ]))
-
-    elements.append(Paragraph(
-        '<b>Remarks</b>', ParagraphStyle(
-            'RemarksHeading', parent=styles['label'],
-            fontSize=FONT_BODY, textColor=theme['text'],
-        )
-    ))
-    elements.append(Spacer(1, 2))
-    elements.append(note_tbl)
-    return elements
-
-
 def _build_terms_block(theme, styles):
     """Build terms & conditions section."""
     elements = []
@@ -643,13 +610,7 @@ def generate_sap_salesorder_pdf_bytes(salesorder):
     elements.append(summary_block)
     elements.append(Spacer(1, SP_SECTION))
 
-    # 6. Remarks (if any)
-    remarks_elements = _build_remarks_block(salesorder, theme, styles, usable_width)
-    if remarks_elements:
-        elements.extend(remarks_elements)
-        elements.append(Spacer(1, SP_INNER))
-
-    # 7. Terms & Conditions
+    # 6. Terms & Conditions
     elements.extend(_build_terms_block(theme, styles))
 
     # Build

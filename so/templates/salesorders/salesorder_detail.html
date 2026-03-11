@@ -293,6 +293,8 @@
     .item-badge-open { background: var(--success-light); color: var(--success); }
     .item-badge-closed { background: var(--border-light); color: var(--text-muted); }
 
+    .open-qty-highlight { background: var(--success-light); color: var(--success); font-weight: 600; }
+
     .empty-state {
       text-align: center;
       padding: 20px 12px;
@@ -680,11 +682,21 @@
         <div class="card-header">Management Remarks {% if not is_admin %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;">(view only)</span>{% endif %}</div>
         <div class="card-body">
           {% if is_admin %}
-          <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}">
+          <form method="post" action="{% url 'salesorder_update_remarks' salesorder.so_number %}" id="remarks-form">
             {% csrf_token %}
-            <textarea name="remarks" class="remarks-textarea" placeholder="Add internal remarks...">{{ salesorder.remarks|default_if_none:"" }}</textarea>
-            <div style="margin-top:6px; text-align:right;">
+            <textarea name="remarks" id="remarks-textarea" class="remarks-textarea" placeholder="Add internal remarks...">{{ salesorder.remarks|default_if_none:"" }}</textarea>
+            <div style="margin-top:6px; text-align:right; display:flex; gap:6px; justify-content:flex-end;">
               <button class="btn btn-success btn-sm" type="submit">Save</button>
+              {% if can_send_telegram %}
+              <button type="button" class="btn btn-secondary btn-sm" id="send-remarks-telegram-btn" title="Send to salesman Telegram group">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                Send
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="send-remarks-telegram-pdf-btn" title="Send remarks + SO PDF to salesman Telegram group">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Send with PDF
+              </button>
+              {% endif %}
             </div>
           </form>
           {% else %}
@@ -772,8 +784,10 @@
                 <th class="num">Pending</th>
                 <th class="num">Stock</th>
                 <th class="num">DIP</th>
+                {% if pis %}
                 <th class="num pi-col">PI Qty</th>
                 <th class="num pi-col">Bal Qty</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -805,16 +819,18 @@
                 <td class="num">{% if it.req_margin is not None %}{{ it.req_margin|floatformat:0 }}%{% else %}—{% endif %}</td>
                 {% endif %}
                 <td class="num">{{ it.row_total|floatformat:2 }}</td>
-                <td class="num">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
+                <td class="num{% if it.remaining_open_quantity|default:0 > 0 %} open-qty-highlight{% endif %}">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
                 <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
                 <td class="num">{{ it.total_available_stock|default_if_none:"0"|floatformat:0 }}</td>
                 <td class="num">{{ it.dip_warehouse_stock|default_if_none:"0"|floatformat:0 }}</td>
+                {% if pis %}
                 <td class="num pi-col">{{ it.pi_allocated_qty|floatformat:2 }}</td>
                 <td class="num pi-col">{{ it.pi_remaining_qty|floatformat:2 }}</td>
+                {% endif %}
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if is_admin %}18{% else %}15{% endif %}" class="empty-state">No line items found</td>
+                <td colspan="{% if is_admin %}{% if pis %}18{% else %}16{% endif %}{% else %}{% if pis %}15{% else %}13{% endif %}{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -886,6 +902,43 @@
       });
     })();
   </script>
+
+  {% if can_send_telegram %}
+  <script>
+    (function() {
+      var form = document.getElementById('remarks-form');
+      var textarea = document.getElementById('remarks-textarea');
+      if (!form) return;
+
+      function doSend(btn, url, successMsg) {
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+          var orig = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = 'Sending…';
+          var fd = new FormData();
+          fd.append('csrfmiddlewaretoken', form.querySelector('input[name="csrfmiddlewaretoken"]').value);
+          fd.append('remarks', textarea ? textarea.value : '');
+          fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              btn.disabled = false;
+              btn.innerHTML = orig;
+              alert(data.success ? successMsg : (data.error || 'Failed'));
+            })
+            .catch(function() {
+              btn.disabled = false;
+              btn.innerHTML = orig;
+              alert('Failed to send');
+            });
+        });
+      }
+
+      doSend(document.getElementById('send-remarks-telegram-btn'), '{% url "salesorder_send_remarks_telegram" salesorder.so_number %}', 'Sent to Telegram');
+      doSend(document.getElementById('send-remarks-telegram-pdf-btn'), '{% url "salesorder_send_remarks_telegram_pdf" salesorder.so_number %}', 'Sent to Telegram with PDF');
+    })();
+  </script>
+  {% endif %}
 
   {% if is_admin and monthly_pending_data %}
   <script>

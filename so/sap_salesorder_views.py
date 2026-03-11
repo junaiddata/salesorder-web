@@ -38,6 +38,7 @@ from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPPro
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
 from .sap_salesorder_pdf import generate_sap_salesorder_pdf_bytes
+from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
 from .sync_services import sync_salesorders_core, sync_arinvoices_core, sync_arcreditmemos_core
@@ -496,7 +497,7 @@ def upload_salesorders(request):
                                 "status": status_val,
                             }
                             if status_val == "C":
-                                defaults["approval_status"] = "DO Completed"
+                                defaults["approval_status"] = "SO Closed/Completed"
                             
                             # Add VAT Number if it exists in the row
                             if hasattr(row, 'vat_number') and row.vat_number:
@@ -852,9 +853,9 @@ def sync_salesorders_api_receive(request):
                 # Add last_synced_at only if field exists in model (after migration)
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     defaults["last_synced_at"] = datetime.now()
-                # When status is Closed, set approval_status to DO Completed
+                # When status is Closed, set approval_status to SO Closed/Completed
                 if status_val in ('C', 'CLOSED'):
-                    defaults["approval_status"] = 'DO Completed'
+                    defaults["approval_status"] = 'SO Closed/Completed'
                 
                 if mapped.get('internal_number'):
                     defaults["internal_number"] = mapped.get('internal_number')
@@ -951,7 +952,7 @@ def sync_salesorders_api_receive(request):
             closed_count = 0
             for order in previously_open_orders:
                 order.status = 'C'
-                order.approval_status = 'DO Completed'
+                order.approval_status = 'SO Closed/Completed'
                 order.save(update_fields=['status', 'approval_status'])
                 
                 SAPSalesorderItem.objects.filter(salesorder=order).update(
@@ -1530,6 +1531,7 @@ def salesorder_detail(request, so_number):
         'total_margin': total_margin,
         'margin_percent': margin_percent,
         'has_zero_cost_items': has_zero_cost_items,
+        'can_send_telegram': can_send_remarks_telegram(salesorder),
     }
 
     return render(request, 'salesorders/salesorder_detail.html', context)
@@ -2013,7 +2015,7 @@ def export_salesorder_list_excel(request):
     for so in qs:
         status_display = "Open" if so.display_status == 'O' else "Closed"
         approval_display = getattr(so, 'approval_status', None) or ''
-        if approval_display in ('DO Completed', 'Partial DO', 'Trade License Expired'):
+        if approval_display in ('SO Closed/Completed', 'Partial DO', 'Trade License Expired'):
             approval_display = f"Approved + {approval_display}"
 
         row_data = {
@@ -2063,6 +2065,51 @@ def export_salesorder_list_excel(request):
     filename = f"Sales_Orders_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@login_required
+@require_POST
+def salesorder_send_remarks_telegram(request, so_number):
+    """Send Management Remarks to salesman's Telegram group. Returns JSON."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            return JsonResponse({'success': False, 'error': 'Not found'}, status=404)
+
+    remark_text = (request.POST.get('remarks') or '').strip() or (salesorder.remarks or '')
+    # Save remarks before sending
+    salesorder.remarks = remark_text
+    salesorder.save(update_fields=["remarks"])
+
+    ok, err = send_remarks_to_salesman_telegram(salesorder, remark_text)
+    if ok:
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': err or 'Unknown error'}, status=400)
+
+
+@login_required
+@require_POST
+def salesorder_send_remarks_telegram_pdf(request, so_number):
+    """Send Management Remarks + SO PDF to salesman's Telegram group. Returns JSON."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            return JsonResponse({'success': False, 'error': 'Not found'}, status=404)
+
+    remark_text = (request.POST.get('remarks') or '').strip() or (salesorder.remarks or '')
+    salesorder.remarks = remark_text
+    salesorder.save(update_fields=["remarks"])
+
+    ok, err = send_remarks_with_pdf_to_salesman_telegram(salesorder, remark_text)
+    if ok:
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': err or 'Unknown error'}, status=400)
 
 
 @login_required
@@ -2185,10 +2232,17 @@ def salesorder_update_approval(request, so_number):
             return redirect("salesorder_detail", so_number=salesorder.so_number)
 
     from django.utils import timezone
+    old_status = salesorder.approval_status or ""
     salesorder.approval_status = new_status
     salesorder.approval_updated_by = request.user
     salesorder.approval_updated_at = timezone.now()
     salesorder.save(update_fields=["approval_status", "approval_updated_by", "approval_updated_at"])
+
+    if old_status != new_status:
+        ok, err = send_approval_status_change_telegram(salesorder, old_status, new_status, changed_by=request.user)
+        if not ok:
+            logger.warning("Approval status Telegram notification failed for SO %s: %s", salesorder.so_number, err)
+
     messages.success(request, f"Approval status updated to {new_status}.")
     return redirect("salesorder_detail", so_number=salesorder.so_number)
 

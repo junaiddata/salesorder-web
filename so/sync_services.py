@@ -196,9 +196,9 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     defaults["internal_number"] = mapped.get('internal_number')
                 if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
                     defaults["last_synced_at"] = datetime.now()
-                # When status is Closed, set approval_status to DO Completed
+                # When status is Closed, set approval_status to SO Closed/Completed
                 if status_val in ('C', 'CLOSED'):
-                    defaults["approval_status"] = 'DO Completed'
+                    defaults["approval_status"] = 'SO Closed/Completed'
 
                 obj = existing_map.get(so_no)
                 if obj is None:
@@ -272,7 +272,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
             closed_count = 0
             for order in previously_open_orders:
                 order.status = 'C'
-                order.approval_status = 'DO Completed'
+                order.approval_status = 'SO Closed/Completed'
                 order.save(update_fields=['status', 'approval_status'])
                 order.items.all().update(
                     row_status='C',

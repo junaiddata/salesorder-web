@@ -49,6 +49,30 @@ def send_md_approval_telegram(chat_id, text):
     return send_telegram_message(chat_id, text, parse_mode="HTML", token=token)
 
 
+def send_telegram_document(chat_id, file_bytes, filename, caption=None, parse_mode="HTML", token=None):
+    """
+    Send a document (e.g. PDF) to Telegram. caption is optional text above the file.
+    Returns (success: bool, error_msg: str or None).
+    """
+    token = token or settings.TELEGRAM_BOT_TOKEN
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    files = {'document': (filename, file_bytes, 'application/pdf')}
+    data = {'chat_id': chat_id}
+    if caption:
+        data['caption'] = caption
+    if parse_mode:
+        data['parse_mode'] = parse_mode
+    try:
+        resp = requests.post(url, data=data, files=files, timeout=30)
+        data_resp = resp.json() if resp.text else {}
+        if not data_resp.get("ok"):
+            err = data_resp.get("description", resp.text or "Unknown error")
+            return False, err
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
 
 def get_client_ip(request):
     """

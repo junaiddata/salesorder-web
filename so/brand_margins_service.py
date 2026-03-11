@@ -72,7 +72,7 @@ def check_salesorder_margin(salesorder, brand_margins: dict) -> bool:
     Check all items in a SAPSalesorder against the required brand margins.
 
     Only acts when approval_status is currently "Pending".
-    Never overrides Approved, Rejected, DO Completed, Partial DO,
+    Never overrides Approved, Rejected, SO Closed/Completed, Partial DO,
     Trade License Expired, or MD Approval Required.
 
     Returns True if approval_status was changed to 'MD Approval Required'.
