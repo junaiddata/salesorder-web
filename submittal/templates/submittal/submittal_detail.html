@@ -1,0 +1,230 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submittal: {{ submittal.project|truncatewords:6 }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #003399;
+            --primary-light: #335cbf;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+        }
+
+        .top-bar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: #fff;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .top-bar h1 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+        .top-bar a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.85rem; }
+        .top-bar a:hover { color: #fff; }
+
+        .container-main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .detail-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-card h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--bg);
+        }
+
+        .detail-row {
+            display: flex;
+            padding: 0.5rem 0;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--bg);
+        }
+
+        .detail-label {
+            width: 180px;
+            font-weight: 500;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .detail-value { flex: 1; }
+
+        .materials-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+        }
+
+        .materials-table th {
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            font-weight: 500;
+            text-align: left;
+        }
+
+        .materials-table td {
+            font-size: 0.8rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn-action {
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .btn-generate {
+            background: var(--success);
+            color: #fff;
+        }
+        .btn-generate:hover { background: #059669; color: #fff; }
+
+        .btn-edit-link {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .btn-edit-link:hover { color: #78350f; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Back to Submittals</a>
+        <h1>Submittal Details</h1>
+        <div></div>
+    </div>
+
+    <div class="container-main">
+        <div class="detail-card">
+            <h2><i class="fas fa-heading me-2"></i>Title Page</h2>
+            <div class="detail-row">
+                <span class="detail-label">Project</span>
+                <span class="detail-value">{{ submittal.project }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Client</span>
+                <span class="detail-value">{{ submittal.client }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Consultant</span>
+                <span class="detail-value">{{ submittal.consultant|default:"—" }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Main Contractor</span>
+                <span class="detail-value">{{ submittal.main_contractor|default:"—" }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">MEP Contractor</span>
+                <span class="detail-value">{{ submittal.mep_contractor|default:"—" }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Product</span>
+                <span class="detail-value">{{ submittal.product }}</span>
+            </div>
+        </div>
+
+        <div class="detail-card">
+            <h2><i class="fas fa-cog me-2"></i>Sections</h2>
+            <div class="detail-row">
+                <span class="detail-label">Index Format</span>
+                <span class="detail-value">{{ submittal.get_index_format_display }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Company Profile</span>
+                <span class="detail-value">Auto-included</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Trade License</span>
+                <span class="detail-value">Auto-included</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Vendor List</span>
+                <span class="detail-value">{% if submittal.vendor_list_pdf %}Uploaded{% else %}Skipped{% endif %}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Comply Statement</span>
+                <span class="detail-value">{% if submittal.comply_statement_file %}Uploaded{% else %}Skipped{% endif %}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Area of Application</span>
+                <span class="detail-value">{% if submittal.area_of_application_pdf %}Uploaded{% else %}Skipped{% endif %}</span>
+            </div>
+        </div>
+
+        {% if materials %}
+        <div class="detail-card">
+            <h2><i class="fas fa-boxes-stacked me-2"></i>Proposed Materials ({{ materials.count }})</h2>
+            <table class="materials-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Item Code</th>
+                        <th>Description</th>
+                        <th>Brand</th>
+                        <th>Size</th>
+                        <th>WRAS No.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mat in materials %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ mat.item_code }}</td>
+                        <td>{{ mat.description }}</td>
+                        <td>{{ mat.brand }}</td>
+                        <td>{{ mat.size }}</td>
+                        <td>{{ mat.wras_number }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="text-center mt-3 mb-5">
+            <a href="{% url 'submittal:generate_pdf' submittal.pk %}" class="btn-action btn-generate">
+                <i class="fas fa-download me-1"></i> Download PDF
+            </a>
+            <a href="{% url 'submittal:edit' submittal.pk %}" class="btn-action btn-edit-link">
+                <i class="fas fa-edit me-1"></i> Edit
+            </a>
+        </div>
+    </div>
+</body>
+</html>

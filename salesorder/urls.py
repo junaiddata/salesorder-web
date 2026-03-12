@@ -26,4 +26,5 @@ urlpatterns = [
     path('alabama/', include('alabama.urls')),
     path('tradelicense/', include('tradelicense.urls')),
     path('businesscards/', include('businesscards.urls')),
+    path('submittal/', include('submittal.urls')),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

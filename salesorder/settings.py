@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'tradelicense',
     'businesscards',
     'alabama',
+    'submittal',
 
     'django.contrib.humanize',
     

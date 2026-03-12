@@ -1,0 +1,703 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #003399;
+            --primary-light: #335cbf;
+            --accent: #CC0000;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --step-done: #10b981;
+            --step-active: #003399;
+            --step-pending: #cbd5e1;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: #fff;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .top-bar h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .top-bar a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .top-bar a:hover { color: #fff; }
+
+        .wizard-container {
+            max-width: 960px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* Step indicator */
+        .step-indicator {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+
+        .step-dot {
+            flex: 1;
+            min-width: 40px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--step-pending);
+            transition: background 0.3s;
+            cursor: pointer;
+        }
+
+        .step-dot.active { background: var(--step-active); }
+        .step-dot.done { background: var(--step-done); }
+
+        .step-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .step-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-align: center;
+            flex: 1;
+        }
+
+        .step-label.active { color: var(--primary); font-weight: 600; }
+
+        /* Cards / Steps */
+        .step-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: none;
+        }
+
+        .step-card.active { display: block; }
+
+        .step-card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .step-card .step-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        .step-card label {
+            font-weight: 500;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        /* Navigation */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1.5rem;
+        }
+
+        .btn-wizard {
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-prev {
+            background: var(--border);
+            color: var(--text);
+        }
+        .btn-prev:hover { background: #cbd5e1; }
+
+        .btn-next {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-next:hover { background: var(--primary-light); }
+
+        .btn-generate {
+            background: var(--step-done);
+            color: #fff;
+        }
+        .btn-generate:hover { background: #059669; }
+
+        /* Material selector */
+        .material-search {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .material-search input {
+            width: 100%;
+            padding: 0.6rem 0.75rem 0.6rem 2.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .material-search i {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .material-results {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .material-results.show { display: block; }
+
+        .material-result-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--bg);
+        }
+
+        .material-result-item:hover { background: var(--bg); }
+
+        .material-result-item .code { font-weight: 600; color: var(--primary); }
+        .material-result-item .desc { color: var(--text-muted); }
+
+        .selected-materials-table {
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .selected-materials-table th {
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            font-weight: 500;
+        }
+
+        .selected-materials-table td {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn-remove-material {
+            background: none;
+            border: none;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .auto-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            background: #dbeafe;
+            color: var(--primary);
+        }
+
+        .auto-badge.from-db {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .section-source-info {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #0c4a6e;
+        }
+
+        .section-source-info i { margin-right: 0.5rem; }
+
+        /* History dropdown */
+        .history-dropdown {
+            position: absolute;
+            z-index: 50;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .history-dropdown.show { display: block; }
+
+        .history-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .history-item:hover { background: var(--bg); }
+
+        .form-group-hist { position: relative; }
+
+        /* Review summary */
+        .review-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--bg);
+            font-size: 0.85rem;
+        }
+
+        .review-label { font-weight: 500; color: var(--text-muted); }
+        .review-value { font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div>
+            <a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Back to Submittals</a>
+        </div>
+        <h1><i class="fas fa-file-pdf me-2"></i>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</h1>
+        <div></div>
+    </div>
+
+    <div class="wizard-container">
+        <!-- Step indicator -->
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step-dot active" data-step="0"></div>
+            <div class="step-dot" data-step="1"></div>
+            <div class="step-dot" data-step="2"></div>
+            <div class="step-dot" data-step="3"></div>
+            <div class="step-dot" data-step="4"></div>
+        </div>
+
+        <form id="submittalForm" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {% if submittal %}<input type="hidden" name="submittal_id" value="{{ submittal.pk }}">{% endif %}
+
+            <!-- STEP 0: Title Page -->
+            <div class="step-card active" data-step="0">
+                <h2><i class="fas fa-heading me-2"></i>Title Page</h2>
+                <p class="step-subtitle">Enter the project and contractor details for the cover page.</p>
+
+                {% for field in title_form %}
+                <div class="mb-3 form-group-hist">
+                    <label for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="history-dropdown" id="hist_{{ field.name }}"></div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- STEP 1: Index -->
+            <div class="step-card" data-step="1">
+                <h2><i class="fas fa-list-ol me-2"></i>Index Page</h2>
+                <p class="step-subtitle">Choose the index format for this submittal.</p>
+
+                <div class="section-source-info">
+                    <i class="fas fa-info-circle"></i>
+                    Standard format uses the pre-uploaded index PDF. Select "Client Format" to upload a custom one.
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="index_format" id="idx_standard" value="standard" {% if not submittal or submittal.index_format == 'standard' %}checked{% endif %}>
+                        <label class="form-check-label" for="idx_standard">
+                            <strong>Standard Format</strong> <span class="auto-badge from-db">From Storage</span>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="index_format" id="idx_client" value="client" {% if submittal and submittal.index_format == 'client' %}checked{% endif %}>
+                        <label class="form-check-label" for="idx_client">
+                            <strong>Client Format</strong> <span class="auto-badge">Upload New</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3" id="clientIndexUpload" style="display:none;">
+                    <label>Upload Client Index PDF</label>
+                    <input type="file" name="index_client_pdf" class="form-control" accept=".pdf">
+                </div>
+            </div>
+
+            <!-- STEP 2: Sections 3-6, 8 -->
+            <div class="step-card" data-step="2">
+                <h2><i class="fas fa-file-upload me-2"></i>Documents</h2>
+                <p class="step-subtitle">Company profile and trade license are pulled automatically. Upload optional documents below.</p>
+
+                <div class="section-source-info">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Company Profile</strong> and <strong>Trade License</strong> are auto-included from storage.
+                </div>
+
+                {% for field in uploads_form %}
+                <div class="mb-3">
+                    <label>{{ field.label }}</label>
+                    {{ field }}
+                    <small class="text-muted">Leave empty to skip this section</small>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- STEP 3: Materials -->
+            <div class="step-card" data-step="3">
+                <h2><i class="fas fa-boxes-stacked me-2"></i>Proposed Materials</h2>
+                <p class="step-subtitle">Search and select materials. Certifications, catalogues, and technical details are auto-linked.</p>
+
+                <div class="material-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="materialSearchInput" placeholder="Search by item code, description, or brand...">
+                </div>
+                <div class="material-results" id="materialResults"></div>
+
+                <table class="selected-materials-table" id="selectedMaterialsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Item Code</th>
+                            <th>Description</th>
+                            <th>Brand</th>
+                            <th>Size</th>
+                            <th>WRAS No.</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="selectedMaterialsBody"></tbody>
+                </table>
+
+                <div class="section-source-info mt-3">
+                    <i class="fas fa-magic"></i>
+                    The following are auto-included for selected materials:<br>
+                    <span class="auto-badge from-db mt-1 me-1">Product Catalogue</span>
+                    <span class="auto-badge from-db mt-1 me-1">Technical Details</span>
+                    <span class="auto-badge from-db mt-1 me-1">Test Certificates</span>
+                    <span class="auto-badge from-db mt-1 me-1">Country of Origin</span>
+                    <span class="auto-badge from-db mt-1">Previous Approvals</span>
+                </div>
+
+                <div id="materialHiddenInputs"></div>
+            </div>
+
+            <!-- STEP 4: Review & Generate -->
+            <div class="step-card" data-step="4">
+                <h2><i class="fas fa-check-double me-2"></i>Review & Generate</h2>
+                <p class="step-subtitle">Review your submittal sections before generating the PDF.</p>
+
+                <div id="reviewSummary"></div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn-wizard btn-generate" id="btnSaveGenerate" style="padding: 0.8rem 3rem; font-size: 1rem;">
+                        <i class="fas fa-save me-2"></i>Save & Generate PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="wizard-nav">
+                <button type="button" class="btn-wizard btn-prev" id="btnPrev" style="display:none;">
+                    <i class="fas fa-arrow-left me-1"></i> Previous
+                </button>
+                <div></div>
+                <button type="button" class="btn-wizard btn-next" id="btnNext">
+                    Next <i class="fas fa-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    (function() {
+        const TOTAL_STEPS = 5;
+        let currentStep = 0;
+        const selectedMaterials = [];
+
+        const historyData = {
+            project: {{ history.project|safe }},
+            client: {{ history.client|safe }},
+            consultant: {{ history.consultant|safe }},
+            main_contractor: {{ history.main_contractor|safe }},
+            mep_contractor: {{ history.mep_contractor|safe }},
+            product: {{ history.product|safe }},
+        };
+
+        const preselected = {{ selected_material_ids|safe }};
+
+        // Step navigation
+        const dots = document.querySelectorAll('.step-dot');
+        const cards = document.querySelectorAll('.step-card');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+
+        function showStep(step) {
+            currentStep = step;
+            cards.forEach(c => c.classList.remove('active'));
+            cards[step].classList.add('active');
+
+            dots.forEach((d, i) => {
+                d.classList.remove('active', 'done');
+                if (i < step) d.classList.add('done');
+                if (i === step) d.classList.add('active');
+            });
+
+            btnPrev.style.display = step === 0 ? 'none' : 'inline-block';
+            btnNext.style.display = step === TOTAL_STEPS - 1 ? 'none' : 'inline-block';
+
+            if (step === TOTAL_STEPS - 1) buildReview();
+        }
+
+        dots.forEach(d => d.addEventListener('click', () => showStep(parseInt(d.dataset.step))));
+        btnNext.addEventListener('click', () => { if (currentStep < TOTAL_STEPS - 1) showStep(currentStep + 1); });
+        btnPrev.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
+
+        // Index format toggle
+        document.querySelectorAll('input[name="index_format"]').forEach(r => {
+            r.addEventListener('change', () => {
+                document.getElementById('clientIndexUpload').style.display =
+                    r.value === 'client' && r.checked ? 'block' : 'none';
+            });
+        });
+
+        // History dropdowns
+        document.querySelectorAll('.form-group-hist input, .form-group-hist textarea').forEach(input => {
+            const fieldName = input.name;
+            const dropdown = document.getElementById('hist_' + fieldName);
+            if (!dropdown || !historyData[fieldName]) return;
+
+            input.addEventListener('focus', () => {
+                populateHistory(dropdown, historyData[fieldName], input);
+                dropdown.classList.add('show');
+            });
+
+            input.addEventListener('input', () => {
+                const q = input.value.toLowerCase();
+                const filtered = historyData[fieldName].filter(v => v.toLowerCase().includes(q));
+                populateHistory(dropdown, filtered, input);
+                dropdown.classList.toggle('show', filtered.length > 0);
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        });
+
+        function populateHistory(dropdown, items, input) {
+            dropdown.innerHTML = items.map(v =>
+                `<div class="history-item">${escapeHtml(v)}</div>`
+            ).join('');
+            dropdown.querySelectorAll('.history-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    input.value = item.textContent;
+                    dropdown.classList.remove('show');
+                });
+            });
+        }
+
+        // Material search
+        const searchInput = document.getElementById('materialSearchInput');
+        const resultsDiv = document.getElementById('materialResults');
+        let searchTimeout;
+
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            const q = searchInput.value.trim();
+            if (q.length < 2) { resultsDiv.classList.remove('show'); return; }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`/submittal/api/materials-search/?q=${encodeURIComponent(q)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const filtered = data.results.filter(m => !selectedMaterials.find(s => s.id === m.id));
+                        resultsDiv.innerHTML = filtered.map(m =>
+                            `<div class="material-result-item" data-material='${JSON.stringify(m)}'>
+                                <span class="code">${escapeHtml(m.item_code)}</span> —
+                                <span class="desc">${escapeHtml(m.description)}</span>
+                                <span class="text-muted ms-2">${escapeHtml(m.brand)}</span>
+                            </div>`
+                        ).join('') || '<div class="p-2 text-muted">No results</div>';
+                        resultsDiv.classList.add('show');
+
+                        resultsDiv.querySelectorAll('.material-result-item').forEach(el => {
+                            el.addEventListener('click', () => {
+                                const mat = JSON.parse(el.dataset.material);
+                                addMaterial(mat);
+                                searchInput.value = '';
+                                resultsDiv.classList.remove('show');
+                            });
+                        });
+                    });
+            }, 300);
+        });
+
+        function addMaterial(mat) {
+            if (selectedMaterials.find(m => m.id === mat.id)) return;
+            selectedMaterials.push(mat);
+            renderMaterialsTable();
+        }
+
+        function removeMaterial(id) {
+            const idx = selectedMaterials.findIndex(m => m.id === id);
+            if (idx !== -1) selectedMaterials.splice(idx, 1);
+            renderMaterialsTable();
+        }
+
+        function renderMaterialsTable() {
+            const tbody = document.getElementById('selectedMaterialsBody');
+            const hiddenDiv = document.getElementById('materialHiddenInputs');
+
+            tbody.innerHTML = selectedMaterials.map((m, i) =>
+                `<tr>
+                    <td>${i + 1}</td>
+                    <td>${escapeHtml(m.item_code)}</td>
+                    <td>${escapeHtml(m.description)}</td>
+                    <td>${escapeHtml(m.brand)}</td>
+                    <td>${escapeHtml(m.size || '')}</td>
+                    <td>${escapeHtml(m.wras_number || '')}</td>
+                    <td><button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})"><i class="fas fa-times"></i></button></td>
+                </tr>`
+            ).join('');
+
+            hiddenDiv.innerHTML = selectedMaterials.map(m =>
+                `<input type="hidden" name="material_ids" value="${m.id}">`
+            ).join('');
+        }
+
+        window._removeMat = removeMaterial;
+
+        // Load preselected materials for edit mode
+        if (preselected.length > 0) {
+            fetch(`/submittal/api/materials-search/?q=*`)
+                .then(r => r.json())
+                .then(data => {
+                    preselected.forEach(id => {
+                        const mat = data.results.find(m => m.id === id);
+                        if (mat) addMaterial(mat);
+                    });
+                });
+        }
+
+        // Review builder
+        function buildReview() {
+            const form = document.getElementById('submittalForm');
+            const fd = new FormData(form);
+            const sections = [
+                { label: 'Project', value: fd.get('project') },
+                { label: 'Client', value: fd.get('client') },
+                { label: 'Consultant', value: fd.get('consultant') },
+                { label: 'Main Contractor', value: fd.get('main_contractor') },
+                { label: 'MEP Contractor', value: fd.get('mep_contractor') },
+                { label: 'Product', value: fd.get('product') },
+                { label: 'Index Format', value: fd.get('index_format') === 'standard' ? 'Standard (from storage)' : 'Client upload' },
+                { label: 'Company Profile', value: 'Auto-included' },
+                { label: 'Trade License', value: 'Auto-included' },
+                { label: 'Vendor List', value: fd.get('vendor_list_pdf')?.name || 'Skipped' },
+                { label: 'Comply Statement', value: fd.get('comply_statement_file')?.name || 'Skipped' },
+                { label: 'Area of Application', value: fd.get('area_of_application_pdf')?.name || 'Skipped' },
+                { label: 'Proposed Materials', value: `${selectedMaterials.length} item(s)` },
+                { label: 'Product Catalogue', value: 'Auto from materials' },
+                { label: 'Technical Details', value: 'Auto from materials' },
+                { label: 'Test Certificates', value: 'Auto from materials' },
+                { label: 'Country of Origin', value: 'Auto from materials' },
+                { label: 'Warranty Draft', value: fd.get('warranty_draft_pdf')?.name || 'Skipped' },
+                { label: 'Previous Approvals', value: 'Auto from materials' },
+            ];
+
+            document.getElementById('reviewSummary').innerHTML = sections.map(s =>
+                `<div class="review-item">
+                    <span class="review-label">${s.label}</span>
+                    <span class="review-value">${escapeHtml(s.value || '—')}</span>
+                </div>`
+            ).join('');
+        }
+
+        // Save & Generate
+        document.getElementById('btnSaveGenerate').addEventListener('click', () => {
+            const form = document.getElementById('submittalForm');
+            const fd = new FormData(form);
+            const btn = document.getElementById('btnSaveGenerate');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+            fetch('/submittal/save/', {
+                method: 'POST',
+                body: fd,
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert('Error: ' + JSON.stringify(data.errors || data.error));
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-save me-2"></i>Save & Generate PDF';
+                }
+            })
+            .catch(err => {
+                alert('Network error: ' + err);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save me-2"></i>Save & Generate PDF';
+            });
+        });
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    })();
+    </script>
+</body>
+</html>

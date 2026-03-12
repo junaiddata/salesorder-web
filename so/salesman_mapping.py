@@ -7,6 +7,8 @@ SALESMAN_MAPPING = {
     "B. MR.RAFIQ ABU- PROJ": "ABU BAQAR",
     "-No Sales Employee-": "DIP",
     "A.MR.RASHID": "RASHID",
+    "A. RAFIQ SHABBIR - RASHID": "RAFIQ",
+    "A. RAFIQ ABU - RASHID": "ABU BAQAR",
     "B.MR.NASHEER AHMAD": "NASHEER",
     "B.MR.MUZAIN": "MUZAIN",
     "A.MR.RAFIQ ABU-TRD": "ABU BAQAR",
