@@ -392,7 +392,7 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
         Paragraph('Qty', styles['th_c']),
         Paragraph('Unit Price', styles['th_r']),
         Paragraph('Rev. Price', styles['th_r']),
-        Paragraph('Total', styles['th_r']),
+        Paragraph('Rev.Total', styles['th_r']),
     ]
     table_data = [hdr]
 
@@ -400,15 +400,24 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
     for idx, it in enumerate(items_qs, 1):
         qty = _to_decimal(it.quantity)
         price = _to_decimal(it.price)
-        row_total = _to_decimal(it.row_total) if getattr(it, 'row_total', None) is not None else (qty * price)
+        orig_row = _to_decimal(it.row_total) if getattr(it, 'row_total', None) is not None else None
+        # Unit price: row_total/qty when available (more reliable), else price
+        if orig_row is not None and qty:
+            unit_price = (orig_row / qty).quantize(Decimal("0.01"))
+        else:
+            unit_price = price
         rev_price_raw = getattr(it, 'revised_price', None)
         rev_price = _to_decimal(rev_price_raw) if rev_price_raw is not None else None
         if rev_price is not None and rev_price == 0:
             rev_price = None
 
-        if (price == 0 or price is None) and qty:
+        # Use revised price for row total when available; otherwise use unit price
+        effective_price = rev_price if (rev_price is not None and rev_price > 0) else unit_price
+        row_total = (qty * effective_price).quantize(Decimal("0.01"))
+
+        if (price == 0 or price is None) and qty and orig_row is not None:
             try:
-                price = (row_total / qty).quantize(Decimal("0.01"))
+                price = (orig_row / qty).quantize(Decimal("0.01"))
             except Exception:
                 price = Decimal("0")
         subtotal += row_total
@@ -459,8 +468,8 @@ def _build_sap_summary_block(salesorder, subtotal, theme, styles, usable_width):
     value_w = 1.3 * inch
     spacer_w = usable_width - label_w - value_w
 
-    stored_row_total_sum = _to_decimal(getattr(salesorder, 'row_total_sum', None))
-    doc_total = (stored_row_total_sum if stored_row_total_sum else subtotal).quantize(Decimal("0.01"))
+    # Use computed subtotal (includes revised prices when set) for Document Total
+    doc_total = subtotal.quantize(Decimal("0.01"))
     vat_rate = Decimal("0.05")
     vat_amount = (doc_total * vat_rate).quantize(Decimal("0.01"))
     grand_total = (doc_total + vat_amount).quantize(Decimal("0.01"))
