@@ -595,9 +595,9 @@
                     </div>
                     
                     <div class="info-item">
-                        <span class="info-label">Total Amount</span>
+                        <span class="info-label">Grand Total (incl. 5% VAT)</span>
                         <span class="info-value" style="color: var(--sap-blue); font-size: 18px; font-weight: 600;">
-                            AED {{ quotation.total_amount|floatformat:2 }}
+                            AED {{ grand_total_with_vat|floatformat:2 }}
                         </span>
                     </div>
                 </div>
@@ -711,9 +711,21 @@
                         {% endfor %}
                         {% if quotation_items %}
                         <tr class="table-total-row">
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Quotation Total:</td>
-                            <td style="text-align: right; color: var(--sap-blue);">
-                                AED {{ quotation.total_amount|floatformat:2 }}
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Subtotal:</td>
+                            <td style="text-align: right;">
+                                AED {{ grand_total|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="table-total-row">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">VAT (5%):</td>
+                            <td style="text-align: right;">
+                                AED {{ vat_amount|floatformat:2 }}
+                            </td>
+                        </tr>
+                        <tr class="table-total-row">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Grand Total:</td>
+                            <td style="text-align: right; color: var(--sap-blue); font-weight: 700;">
+                                AED {{ grand_total_with_vat|floatformat:2 }}
                             </td>
                         </tr>
                         {% endif %}

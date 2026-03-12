@@ -153,6 +153,118 @@ def _draw_wrapped_text(c, text, x, y, max_width, font_size, leading):
 
 
 # ---------------------------------------------------------------------------
+# Index Page Generator (Section 2)
+# ---------------------------------------------------------------------------
+
+DEFAULT_INDEX_ITEMS = [
+    "Title Page",
+    "Index",
+    "Company Profile",
+    "Trade License",
+    "Highlighted Vendor List",
+    "Comply Statement with Project Specification",
+    "List of Proposed Material",
+    "Area of Application",
+    "Product Catalogue",
+    "Technical Details",
+    "Test Certificates",
+    "Country of Origin Certificate",
+    "Warranty Draft Letter",
+    "Previous Approvals",
+]
+
+
+def _build_index_page(items: list) -> BytesIO:
+    """
+    Generate the index / table of contents PDF page.
+    `items` is a list of strings (already filtered/ordered by the user).
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # ── Left decorative strips (matches title page) ──
+    c.setFillColor(HexColor('#CC0000'))
+    c.rect(0, 0, 12, PAGE_H, fill=1, stroke=0)
+    c.setFillColor(BLUE_DARK)
+    c.rect(12, 0, 8, PAGE_H, fill=1, stroke=0)
+
+    # ── Company header box ──
+    box_x, box_y = 60, PAGE_H - 170
+    box_w, box_h = PAGE_W - 120, 120
+    cx = PAGE_W / 2
+
+    c.setStrokeColor(BLUE_DARK)
+    c.setLineWidth(2)
+    c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
+
+    c.setFont('Helvetica-Bold', 15)
+    c.setFillColor(BLUE_DARK)
+    c.drawCentredString(cx, box_y + box_h - 26, 'JUNAID SAN & ELE MAT TRDG LLC')
+
+    c.setFont('Helvetica', 8.5)
+    c.setFillColor(colors.black)
+    for i, line in enumerate([
+        'P.O. Box 34862, Dubai, U.A.E.',
+        'Tel: +971 4 236 7723  Fax: +971 4 236 7750',
+        'E-mail: project@junaid.ae',
+    ]):
+        c.drawCentredString(cx, box_y + box_h - 46 - i * 13, line)
+
+    # ── "INDEX" title ──
+    title_y = box_y - 50
+    c.setFont('Helvetica-Bold', 20)
+    c.setFillColor(BLUE_DARK)
+    c.drawCentredString(cx, title_y, 'INDEX')
+
+    # Underline
+    tw = c.stringWidth('INDEX', 'Helvetica-Bold', 20)
+    c.setStrokeColor(BLUE_DARK)
+    c.setLineWidth(1.5)
+    c.line(cx - tw / 2, title_y - 4, cx + tw / 2, title_y - 4)
+
+    # ── Table of contents ──
+    row_x_left = 80
+    row_x_right = PAGE_W - 80
+    row_y = title_y - 36
+    row_h = 26
+
+    for idx, label in enumerate(items, 1):
+        # Alternating row backgrounds
+        bg = HexColor('#EEF2F8') if idx % 2 == 0 else WHITE
+        c.setFillColor(bg)
+        c.rect(row_x_left - 6, row_y - 6, row_x_right - row_x_left + 12, row_h, fill=1, stroke=0)
+
+        # Number badge
+        c.setFillColor(BLUE_DARK)
+        c.roundRect(row_x_left - 6, row_y - 4, 26, 20, 4, fill=1, stroke=0)
+        c.setFont('Helvetica-Bold', 9)
+        c.setFillColor(WHITE)
+        c.drawCentredString(row_x_left + 6, row_y + 3, str(idx))
+
+        # Label
+        c.setFont('Helvetica', 10)
+        c.setFillColor(colors.black)
+        c.drawString(row_x_left + 28, row_y + 3, label)
+
+        # Dotted separator line
+        c.setStrokeColor(HexColor('#CBD5E1'))
+        c.setLineWidth(0.5)
+        c.setDash([2, 3])
+        label_w = c.stringWidth(label, 'Helvetica', 10)
+        line_x1 = row_x_left + 30 + label_w + 6
+        line_x2 = row_x_right - 28
+        if line_x2 > line_x1:
+            c.line(line_x1, row_y + 7, line_x2, row_y + 7)
+        c.setDash()
+
+        row_y -= row_h
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+# ---------------------------------------------------------------------------
 # Proposed Materials Table (Section 7)
 # ---------------------------------------------------------------------------
 
@@ -177,31 +289,35 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
 
     elements = [Paragraph('LIST OF PROPOSED MATERIAL', style_title)]
 
-    materials = submittal.materials.all().order_by('display_order', 'description')
+    materials = submittal.materials.all().order_by('display_order', 'item_description')
 
     header = [
         Paragraph('S.No', style_header),
-        Paragraph('Item Code', style_header),
-        Paragraph('Description', style_header),
-        Paragraph('Brand', style_header),
+        Paragraph('Model No.', style_header),
+        Paragraph('Item Description', style_header),
+        Paragraph('Material', style_header),
         Paragraph('Size', style_header),
-        Paragraph('WRAS No.', style_header),
-        Paragraph('Other Certs', style_header),
+        Paragraph('WRAS NUMBER', style_header),
+        Paragraph('BRAND', style_header),
+        Paragraph('PRESSURE RATING', style_header),
+        Paragraph('Area of Application', style_header),
     ]
 
     data = [header]
     for idx, mat in enumerate(materials, 1):
         data.append([
             Paragraph(str(idx), style_cell),
-            Paragraph(mat.item_code, style_cell),
-            Paragraph(mat.description, style_cell),
-            Paragraph(mat.brand, style_cell),
+            Paragraph(mat.model_no, style_cell),
+            Paragraph(mat.item_description, style_cell),
+            Paragraph(mat.material, style_cell),
             Paragraph(mat.size, style_cell),
             Paragraph(mat.wras_number, style_cell),
-            Paragraph(mat.other_certifications, style_cell),
+            Paragraph(mat.brand, style_cell),
+            Paragraph(mat.pressure_rating, style_cell),
+            Paragraph(mat.area_of_application, style_cell),
         ])
 
-    col_widths = [30, 65, 160, 70, 50, 70, 80]
+    col_widths = [25, 55, 90, 55, 70, 55, 70, 55, 70]
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), BLUE_DARK),
@@ -264,12 +380,20 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     title_buf = _build_title_page(submittal)
     _append_pdf(merger, title_buf)
 
-    # ── Section 2: Index ──
-    if submittal.index_format == 'standard':
-        index_path = _safe_file_path(company_docs.index_standard_pdf)
-    else:
-        index_path = _safe_file_path(submittal.index_client_pdf)
-    _append_pdf(merger, index_path, section_num=2)
+    # ── Section 2: Index (generated from submittal.index_items) ──
+    raw_items = submittal.index_items or []
+    # support both plain strings and {label, included} dicts
+    index_labels = []
+    for entry in raw_items:
+        if isinstance(entry, dict):
+            if entry.get('included', True):
+                index_labels.append(entry.get('label', ''))
+        elif isinstance(entry, str):
+            index_labels.append(entry)
+    if not index_labels:
+        index_labels = list(DEFAULT_INDEX_ITEMS)
+    index_buf = _build_index_page(index_labels)
+    _append_pdf(merger, index_buf, section_num=2)
 
     # ── Section 3: Company Profile ──
     _append_pdf(merger, _safe_file_path(company_docs.company_profile_pdf), section_num=3)

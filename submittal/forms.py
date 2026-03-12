@@ -1,5 +1,4 @@
 from django import forms
-from .models import Submittal
 
 
 class TitlePageForm(forms.Form):
@@ -44,19 +43,6 @@ class TitlePageForm(forms.Form):
             'class': 'form-control',
             'placeholder': 'e.g. COSMOPLAST – UPVC PIPES AND FITTINGS'
         })
-    )
-
-
-class IndexForm(forms.Form):
-    """Step 2: Index page selection."""
-    index_format = forms.ChoiceField(
-        choices=Submittal.INDEX_FORMAT_CHOICES,
-        widget=forms.RadioSelect(attrs={'class': 'form-check-input'}),
-        initial='standard'
-    )
-    index_client_pdf = forms.FileField(
-        required=False,
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'})
     )
 
 

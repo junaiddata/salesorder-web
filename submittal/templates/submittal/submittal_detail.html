@@ -194,22 +194,28 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Item Code</th>
-                        <th>Description</th>
-                        <th>Brand</th>
+                        <th>Model No.</th>
+                        <th>Item Description</th>
+                        <th>Material</th>
                         <th>Size</th>
                         <th>WRAS No.</th>
+                        <th>Brand</th>
+                        <th>Pressure Rating</th>
+                        <th>Area of Application</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for mat in materials %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ mat.item_code }}</td>
-                        <td>{{ mat.description }}</td>
-                        <td>{{ mat.brand }}</td>
+                        <td>{{ mat.model_no }}</td>
+                        <td>{{ mat.item_description }}</td>
+                        <td>{{ mat.material }}</td>
                         <td>{{ mat.size }}</td>
                         <td>{{ mat.wras_number }}</td>
+                        <td>{{ mat.brand }}</td>
+                        <td>{{ mat.pressure_rating }}</td>
+                        <td>{{ mat.area_of_application }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

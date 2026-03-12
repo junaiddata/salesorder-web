@@ -16,11 +16,11 @@ def submittal_upload_path(instance, filename):
 
 
 def material_cert_path(instance, filename):
-    return f'submittal/certifications/{instance.material.item_code}/{instance.cert_type}/{filename}'
+    return f'submittal/certifications/{instance.material.model_no}/{instance.cert_type}/{filename}'
 
 
 def catalogue_upload_path(instance, filename):
-    return f'submittal/catalogue/{instance.item_code}/{filename}'
+    return f'submittal/catalogue/{instance.model_no}/{filename}'
 
 
 class CompanyDocuments(models.Model):
@@ -90,14 +90,18 @@ class SectionDivider(models.Model):
 
 class SubmittalMaterial(models.Model):
     """
-    Master list of materials available for submittals.
-    Each material has its own catalogue, technical details, and certifications.
+    Master list of materials (models) available for submittals.
+    Submittals are asked on Models, not individual items.
+    Each model has its own catalogue, technical details, and certifications.
     """
-    item_code = models.CharField(max_length=100, unique=True, db_index=True)
-    description = models.CharField(max_length=255)
-    brand = models.CharField(max_length=100, blank=True, default='')
-    size = models.CharField(max_length=100, blank=True, default='')
+    model_no = models.CharField(max_length=100, unique=True, db_index=True, help_text="Model No. (e.g. 10751, V8850)")
+    item_description = models.CharField(max_length=255, default='', blank=True, help_text="Item Description (e.g. Gate Valve)")
+    material = models.CharField(max_length=100, blank=True, default='', help_text="Material (e.g. Bronze, Ductile Iron)")
+    size = models.CharField(max_length=100, blank=True, default='', help_text="Size (e.g. 1/2'' to 2'', 2 1/2 to 12)")
     wras_number = models.CharField(max_length=100, blank=True, default='', help_text="WRAS certification number")
+    brand = models.CharField(max_length=100, blank=True, default='', help_text="Brand (e.g. PEGLER - UK)")
+    pressure_rating = models.CharField(max_length=50, blank=True, default='', help_text="Pressure rating (e.g. PN20, PN16)")
+    area_of_application = models.CharField(max_length=255, blank=True, default='', help_text="Area of application (e.g. As per approved Drawing)")
     other_certifications = models.TextField(blank=True, default='', help_text="Other cert numbers, comma-separated")
 
     catalogue_pdf = models.FileField(
@@ -113,10 +117,10 @@ class SubmittalMaterial(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['display_order', 'description']
+        ordering = ['display_order', 'item_description']
 
     def __str__(self):
-        return f"{self.item_code} - {self.description}"
+        return f"{self.model_no} - {self.item_description}"
 
 
 class MaterialCertification(models.Model):
@@ -142,7 +146,7 @@ class MaterialCertification(models.Model):
         ordering = ['material', 'cert_type', 'uploaded_at']
 
     def __str__(self):
-        return f"{self.material.item_code} - {self.get_cert_type_display()} - {self.description or self.file.name}"
+        return f"{self.material.model_no} - {self.get_cert_type_display()} - {self.description or self.file.name}"
 
 
 class ProjectContractorHistory(models.Model):
@@ -178,15 +182,10 @@ class Submittal(models.Model):
     mep_contractor = models.CharField(max_length=255, blank=True, default='')
     product = models.CharField(max_length=255, blank=True, default='')
 
-    # Section 2 - Index
-    INDEX_FORMAT_CHOICES = [
-        ('standard', 'Standard Format'),
-        ('client', 'Client Format'),
-    ]
-    index_format = models.CharField(max_length=10, choices=INDEX_FORMAT_CHOICES, default='standard')
-    index_client_pdf = models.FileField(
-        upload_to=submittal_upload_path, blank=True, null=True,
-        help_text="Client-provided index PDF"
+    # Section 2 - Index (ordered list of {label, included} dicts, generated with ReportLab)
+    index_items = models.JSONField(
+        default=list, blank=True,
+        help_text="Ordered list of index entries: [{label, included}]"
     )
 
     # Section 5 - Vendor List

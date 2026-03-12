@@ -29,8 +29,8 @@ class MaterialCertificationInline(admin.TabularInline):
 
 @admin.register(SubmittalMaterial)
 class SubmittalMaterialAdmin(admin.ModelAdmin):
-    list_display = ('item_code', 'description', 'brand', 'wras_number', 'display_order')
-    search_fields = ('item_code', 'description', 'brand')
+    list_display = ('model_no', 'item_description', 'material', 'brand', 'size', 'wras_number', 'pressure_rating', 'display_order')
+    search_fields = ('model_no', 'item_description', 'material', 'brand')
     list_filter = ('brand',)
     inlines = [MaterialCertificationInline]
 
@@ -39,7 +39,7 @@ class SubmittalMaterialAdmin(admin.ModelAdmin):
 class MaterialCertificationAdmin(admin.ModelAdmin):
     list_display = ('material', 'cert_type', 'description', 'uploaded_at')
     list_filter = ('cert_type',)
-    search_fields = ('material__item_code', 'material__description', 'description')
+    search_fields = ('material__model_no', 'material__item_description', 'description')
 
 
 @admin.register(ProjectContractorHistory)

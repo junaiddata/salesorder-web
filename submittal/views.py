@@ -8,7 +8,7 @@ from django.views.decorators.http import require_GET
 from .models import (
     Submittal, SubmittalMaterial, ProjectContractorHistory, CompanyDocuments,
 )
-from .forms import TitlePageForm, IndexForm, UploadsForm
+from .forms import TitlePageForm, UploadsForm
 from .services import get_history_values
 from .pdf_builder import build_submittal_pdf
 
@@ -31,8 +31,8 @@ def submittal_wizard(request, pk=None):
 
     # Pre-fill forms for edit
     initial_title = {}
-    initial_index = {}
     selected_material_ids = []
+    existing_index_items = []
 
     if submittal:
         initial_title = {
@@ -43,11 +43,10 @@ def submittal_wizard(request, pk=None):
             'mep_contractor': submittal.mep_contractor,
             'product': submittal.product,
         }
-        initial_index = {'index_format': submittal.index_format}
         selected_material_ids = list(submittal.materials.values_list('pk', flat=True))
+        existing_index_items = submittal.index_items or []
 
     title_form = TitlePageForm(initial=initial_title)
-    index_form = IndexForm(initial=initial_index)
     uploads_form = UploadsForm()
 
     # History values for dropdowns
@@ -60,14 +59,16 @@ def submittal_wizard(request, pk=None):
         'product': get_history_values('product'),
     }
 
+    from .pdf_builder import DEFAULT_INDEX_ITEMS
     context = {
         'submittal': submittal,
         'title_form': title_form,
-        'index_form': index_form,
         'uploads_form': uploads_form,
         'materials': materials,
         'selected_material_ids': json.dumps(selected_material_ids),
         'history': {k: json.dumps(v) for k, v in history.items()},
+        'default_index_items': json.dumps(list(DEFAULT_INDEX_ITEMS)),
+        'existing_index_items': json.dumps(existing_index_items),
     }
     return render(request, 'submittal/wizard.html', context)
 
@@ -79,7 +80,6 @@ def submittal_save(request):
         return redirect('submittal:wizard')
 
     title_form = TitlePageForm(request.POST)
-    index_form = IndexForm(request.POST, request.FILES)
     uploads_form = UploadsForm(request.POST, request.FILES)
 
     if not title_form.is_valid():
@@ -99,11 +99,14 @@ def submittal_save(request):
     submittal.mep_contractor = title_form.cleaned_data['mep_contractor']
     submittal.product = title_form.cleaned_data['product']
 
-    # Index
-    if index_form.is_valid():
-        submittal.index_format = index_form.cleaned_data['index_format']
-        if index_form.cleaned_data.get('index_client_pdf'):
-            submittal.index_client_pdf = index_form.cleaned_data['index_client_pdf']
+    # Index items (JSON list of {label, included} sent from wizard)
+    index_items_json = request.POST.get('index_items_json', '')
+    if index_items_json:
+        try:
+            import json as _json
+            submittal.index_items = _json.loads(index_items_json)
+        except (ValueError, TypeError):
+            pass
 
     # File uploads
     if uploads_form.is_valid():
@@ -172,19 +175,22 @@ def api_materials_search(request):
 
     from django.db.models import Q
     qs = SubmittalMaterial.objects.filter(
-        Q(description__icontains=q) |
-        Q(item_code__icontains=q) |
-        Q(brand__icontains=q)
+        Q(item_description__icontains=q) |
+        Q(model_no__icontains=q) |
+        Q(brand__icontains=q) |
+        Q(material__icontains=q)
     )[:20]
 
     results = [{
         'id': m.pk,
-        'item_code': m.item_code,
-        'description': m.description,
-        'brand': m.brand,
+        'model_no': m.model_no,
+        'item_description': m.item_description,
+        'material': m.material,
         'size': m.size,
         'wras_number': m.wras_number,
-        'other_certifications': m.other_certifications,
+        'brand': m.brand,
+        'pressure_rating': m.pressure_rating,
+        'area_of_application': m.area_of_application,
     } for m in qs]
 
     return JsonResponse({'results': results})

@@ -483,6 +483,11 @@ def view_quotation_details(request, quotation_id):
         total_margin = grand_total - total_cost
         margin_percent = (total_margin / grand_total * 100) if grand_total else 0.0
 
+    # Grand total with 5% VAT
+    vat_rate = 0.05
+    vat_amount = round(grand_total * vat_rate, 2)
+    grand_total_with_vat = round(grand_total + vat_amount, 2)
+
     # 🔹 Automatic approval if no undercost items
     if not has_undercost_items and quotation.status != 'Approved':
         quotation.status = 'Approved'
@@ -520,6 +525,8 @@ def view_quotation_details(request, quotation_id):
         "quotation": quotation,
         "quotation_items": quotation_items,
         "grand_total": grand_total,
+        "vat_amount": vat_amount,
+        "grand_total_with_vat": grand_total_with_vat,
         "has_undercost_items": has_undercost_items,
         "is_admin": is_admin,
         "has_zero_cost_items": has_zero_cost_items,
