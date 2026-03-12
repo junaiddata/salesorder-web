@@ -108,12 +108,12 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
 
         # Triangle bullet
         c.setFillColor(BLUE_DARK)
-        c.beginPath()
-        c.moveTo(label_x - 18, field_y + 4)
-        c.lineTo(label_x - 8, field_y + 8)
-        c.lineTo(label_x - 18, field_y + 12)
-        c.closePath()
-        c.fill()
+        p = c.beginPath()
+        p.moveTo(label_x - 18, field_y + 4)
+        p.lineTo(label_x - 8, field_y + 8)
+        p.lineTo(label_x - 18, field_y + 12)
+        p.close()
+        c.drawPath(p, fill=1, stroke=0)
 
         # Label
         c.setFont('Helvetica-Bold', 11)

@@ -773,7 +773,7 @@
                 <th>St</th>
                 <th class="num">Qty</th>
                 <th class="num">Price</th>
-                <!-- <th class="num" style="background:#fffef5;">Rev.Price</th> -->
+                <th class="num" style="background:#fffef5;">Rev.Price</th>
                 {% if is_admin %}
                 <th class="num">Cost</th>
                 <th class="num">Mgn%</th>
@@ -806,13 +806,13 @@
                 </td>
                 <td class="num">{{ it.quantity|floatformat:2 }}</td>
                 <td class="num">{{ it.unit_price|floatformat:2 }}</td>
-                <!-- <td class="num" style="background:#fffef5;">
+                <td class="num" style="background:#fffef5;">
                   <input type="number" class="revised-price-input" data-item-id="{{ it.id }}"
                     value="{% if it.revised_price %}{{ it.revised_price|floatformat:2 }}{% endif %}"
                     placeholder="—" min="0" step="0.01"
                     style="width:62px;padding:3px 5px;border:1.5px solid #e2e8f0;border-radius:4px;font-size:0.73rem;text-align:right;font-family:inherit;background:white;"
                   />
-                </td> -->
+                </td>
                 {% if is_admin %}
                 <td class="num">{{ it.item_cost|floatformat:2 }}</td>
                 <td class="num">{{ it.margin_pct|floatformat:1 }}%</td>
