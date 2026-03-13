@@ -1283,8 +1283,8 @@ def salesorder_detail(request, so_number):
         so_number=so_number
     )
 
-    # Enforce scope for non-staff users
-    if not (request.user.is_superuser or request.user.is_staff):
+    # Enforce scope for non-staff users; manager username can view any SO
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()
@@ -1443,6 +1443,8 @@ def salesorder_detail(request, so_number):
 
     # Admin-only: Customer Finance Summary and approval status
     is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
+    # Manager username can also edit remarks and use Telegram Send buttons
+    can_edit_remarks = is_admin or (request.user.username or '').strip().lower() == 'manager'
 
     # Admin-only: Total cost, total margin, margin % (like SAP Quotation)
     total_cost = Decimal("0.00")
@@ -1531,6 +1533,7 @@ def salesorder_detail(request, so_number):
         'total_margin': total_margin,
         'margin_percent': margin_percent,
         'has_zero_cost_items': has_zero_cost_items,
+        'can_edit_remarks': can_edit_remarks,
         'can_send_telegram': can_send_remarks_telegram(salesorder),
     }
 
@@ -2072,7 +2075,7 @@ def export_salesorder_list_excel(request):
 def salesorder_send_remarks_telegram(request, so_number):
     """Send Management Remarks to salesman's Telegram group. Returns JSON."""
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()
@@ -2095,7 +2098,7 @@ def salesorder_send_remarks_telegram(request, so_number):
 def salesorder_send_remarks_telegram_pdf(request, so_number):
     """Send Management Remarks + SO PDF to salesman's Telegram group. Returns JSON."""
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()
@@ -2117,8 +2120,8 @@ def salesorder_send_remarks_telegram_pdf(request, so_number):
 def salesorder_update_remarks(request, so_number):
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
 
-    # Enforce the same scope rules as detail view
-    if not (request.user.is_superuser or request.user.is_staff):
+    # Enforce the same scope rules as detail view; manager username can also update
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()

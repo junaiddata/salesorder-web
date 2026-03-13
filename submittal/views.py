@@ -27,7 +27,7 @@ def submittal_wizard(request, pk=None):
     All steps rendered on a single page; JS handles step navigation.
     """
     submittal = get_object_or_404(Submittal, pk=pk) if pk else None
-    materials = SubmittalMaterial.objects.all().order_by('display_order', 'description')
+    materials = SubmittalMaterial.objects.all().order_by('display_order', 'item_description')
 
     # Pre-fill forms for edit
     initial_title = {}
@@ -116,6 +116,12 @@ def submittal_save(request):
             if f:
                 setattr(submittal, field_name, f)
 
+    # Invalidate stored PDF when submittal is edited (next download will regenerate)
+    if submittal.pk and submittal.generated_pdf:
+        submittal.generated_pdf.delete(save=False)
+        submittal.generated_pdf = None
+        submittal.pdf_generated_at = None
+
     submittal.save()
 
     # Materials (M2M)
@@ -153,15 +159,69 @@ def submittal_detail(request, pk):
     })
 
 
+def _delete_temp_upload_files(submittal):
+    """Delete per-submittal upload files after they have been merged into the generated PDF."""
+    for field_name in ('vendor_list_pdf', 'comply_statement_file',
+                       'area_of_application_pdf', 'warranty_draft_pdf'):
+        field = getattr(submittal, field_name)
+        if field and field.name:
+            try:
+                field.delete(save=False)
+            except Exception:
+                pass
+            setattr(submittal, field_name, None)
+    submittal.save(update_fields=['vendor_list_pdf', 'comply_statement_file',
+                                  'area_of_application_pdf', 'warranty_draft_pdf'])
+
+
 @login_required
 def submittal_generate_pdf(request, pk):
-    """Generate and download the merged submittal PDF."""
+    """
+    Generate and download the merged submittal PDF.
+    Stores the PDF for fast future downloads; deletes temp upload files after merge.
+    Use ?regenerate=1 to force regeneration even when a stored PDF exists.
+    """
     submittal = get_object_or_404(Submittal, pk=pk)
-    pdf_buf = build_submittal_pdf(submittal.pk)
+    force_regenerate = request.GET.get('regenerate') == '1'
+    filename_download = f"Submittal_{submittal.project[:30].replace(' ', '_')}_{submittal.pk}.pdf"
 
-    filename = f"Submittal_{submittal.project[:30].replace(' ', '_')}_{submittal.pk}.pdf"
-    response = HttpResponse(pdf_buf.read(), content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    # Serve stored PDF if it exists and regeneration not forced
+    if not force_regenerate and submittal.generated_pdf and submittal.generated_pdf.name:
+        try:
+            from django.http import FileResponse
+            response = FileResponse(
+                submittal.generated_pdf.open('rb'),
+                content_type='application/pdf',
+                as_attachment=True,
+                filename=filename_download,
+            )
+            return response
+        except (ValueError, FileNotFoundError, OSError):
+            pass  # File missing; regenerate below
+
+    # Build PDF
+    pdf_buf = build_submittal_pdf(submittal.pk)
+    pdf_buf.seek(0)
+
+    # Store to generated_pdf
+    from django.core.files.base import ContentFile
+    from django.utils import timezone
+    from django.http import FileResponse
+    stored_name = f"Submittal_{submittal.pk}.pdf"
+    submittal.generated_pdf.save(stored_name, ContentFile(pdf_buf.read()), save=True)
+    submittal.pdf_generated_at = timezone.now()
+    submittal.save(update_fields=['pdf_generated_at'])
+
+    # Delete temp upload files (now merged into generated PDF)
+    _delete_temp_upload_files(submittal)
+
+    # Serve the freshly stored PDF
+    response = FileResponse(
+        submittal.generated_pdf.open('rb'),
+        content_type='application/pdf',
+        as_attachment=True,
+        filename=filename_download,
+    )
     return response
 
 

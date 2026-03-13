@@ -15,6 +15,10 @@ def submittal_upload_path(instance, filename):
     return f'submittal/uploads/{instance.pk or "new"}/{filename}'
 
 
+def generated_pdf_path(instance, filename):
+    return f'submittal/generated/submittal_{instance.pk}.pdf'
+
+
 def material_cert_path(instance, filename):
     return f'submittal/certifications/{instance.material.model_no}/{instance.cert_type}/{filename}'
 
@@ -214,6 +218,13 @@ class Submittal(models.Model):
         upload_to=submittal_upload_path, blank=True, null=True,
         help_text="Warranty draft letter PDF (placeholder)"
     )
+
+    # Stored output PDF — generated once, temp uploads deleted after
+    generated_pdf = models.FileField(
+        upload_to=generated_pdf_path, blank=True, null=True,
+        help_text="Final merged PDF; temp uploads are deleted after generation"
+    )
+    pdf_generated_at = models.DateTimeField(blank=True, null=True, help_text="When the PDF was last generated")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
