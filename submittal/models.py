@@ -175,6 +175,10 @@ class ProjectContractorHistory(models.Model):
         return f"{self.project[:50]} ({self.created_at:%Y-%m-%d})" if self.project else f"Entry {self.pk}"
 
 
+def section_upload_path(instance, filename):
+    return f'submittal/section_uploads/{instance.submittal_id or "new"}/{filename}'
+
+
 class Submittal(models.Model):
     """Main submittal document combining all sections."""
 
@@ -234,3 +238,22 @@ class Submittal(models.Model):
 
     def __str__(self):
         return f"Submittal: {self.project[:60]} ({self.created_at:%Y-%m-%d})" if self.created_at else f"Submittal: {self.project[:60]}"
+
+
+class SubmittalSectionUpload(models.Model):
+    """
+    Per-submittal uploaded PDF for a specific index section.
+    Used for custom sections and standard sections that need per-submittal content
+    (vendor list, comply statement, area of application, warranty draft, etc.).
+    """
+    submittal = models.ForeignKey(Submittal, on_delete=models.CASCADE, related_name='section_uploads')
+    index_label = models.CharField(max_length=255, help_text="Must match the index item label exactly")
+    file = models.FileField(upload_to=section_upload_path)
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('submittal', 'index_label')
+        ordering = ['submittal', 'index_label']
+
+    def __str__(self):
+        return f"{self.submittal_id} - {self.index_label}"

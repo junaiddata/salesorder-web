@@ -46,21 +46,3 @@ class TitlePageForm(forms.Form):
     )
 
 
-class UploadsForm(forms.Form):
-    """Steps 3-8: Various upload sections."""
-    vendor_list_pdf = forms.FileField(
-        required=False, label='Highlighted Vendor List (PDF)',
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'})
-    )
-    comply_statement_file = forms.FileField(
-        required=False, label='Comply Statement (PDF/Word)',
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf,.doc,.docx'})
-    )
-    area_of_application_pdf = forms.FileField(
-        required=False, label='Area of Application (PDF)',
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'})
-    )
-    warranty_draft_pdf = forms.FileField(
-        required=False, label='Warranty Draft Letter (PDF)',
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'})
-    )

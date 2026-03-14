@@ -8,7 +8,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
     <style>
         :root {
@@ -43,396 +42,101 @@
             align-items: center;
             justify-content: space-between;
         }
-
-        .top-bar h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .top-bar a {
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            font-size: 0.875rem;
-        }
-
+        .top-bar h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+        .top-bar a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.875rem; }
         .top-bar a:hover { color: #fff; }
 
-        .wizard-container {
-            max-width: 960px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
+        .wizard-container { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
 
-        /* Step indicator */
-        .step-indicator {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 2rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
-        }
-
-        .step-dot {
-            flex: 1;
-            min-width: 40px;
-            height: 6px;
-            border-radius: 3px;
-            background: var(--step-pending);
-            transition: background 0.3s;
-            cursor: pointer;
-        }
-
+        .step-indicator { display: flex; gap: 4px; margin-bottom: 2rem; overflow-x: auto; padding-bottom: 0.5rem; }
+        .step-dot { flex: 1; min-width: 40px; height: 6px; border-radius: 3px; background: var(--step-pending); transition: background 0.3s; cursor: pointer; }
         .step-dot.active { background: var(--step-active); }
         .step-dot.done { background: var(--step-done); }
 
-        .step-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-        }
-
-        .step-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-align: center;
-            flex: 1;
-        }
-
-        .step-label.active { color: var(--primary); font-weight: 600; }
-
-        /* Cards / Steps */
-        .step-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            display: none;
-        }
-
+        .step-card { background: var(--card-bg); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: none; }
         .step-card.active { display: block; }
+        .step-card h2 { font-size: 1.25rem; font-weight: 600; color: var(--primary); margin-bottom: 0.25rem; }
+        .step-card .step-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+        .step-card label { font-weight: 500; font-size: 0.875rem; margin-bottom: 0.25rem; }
 
-        .step-card h2 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--primary);
-            margin-bottom: 0.25rem;
-        }
-
-        .step-card .step-subtitle {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 1.5rem;
-        }
-
-        .step-card label {
-            font-weight: 500;
-            font-size: 0.875rem;
-            margin-bottom: 0.25rem;
-        }
-
-        /* Navigation */
-        .wizard-nav {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 1.5rem;
-        }
-
-        .btn-wizard {
-            padding: 0.6rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.9rem;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-prev {
-            background: var(--border);
-            color: var(--text);
-        }
+        .wizard-nav { display: flex; justify-content: space-between; margin-top: 1.5rem; }
+        .btn-wizard { padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 500; font-size: 0.9rem; border: none; cursor: pointer; transition: all 0.2s; }
+        .btn-prev { background: var(--border); color: var(--text); }
         .btn-prev:hover { background: #cbd5e1; }
-
-        .btn-next {
-            background: var(--primary);
-            color: #fff;
-        }
+        .btn-next { background: var(--primary); color: #fff; }
         .btn-next:hover { background: var(--primary-light); }
-
-        .btn-generate {
-            background: var(--step-done);
-            color: #fff;
-        }
+        .btn-generate { background: var(--step-done); color: #fff; }
         .btn-generate:hover { background: #059669; }
 
-        /* Material selector */
-        .material-search {
-            position: relative;
-            margin-bottom: 1rem;
-        }
-
-        .material-search input {
-            width: 100%;
-            padding: 0.6rem 0.75rem 0.6rem 2.5rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.9rem;
-        }
-
-        .material-search i {
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
-
-        .material-results {
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            display: none;
-        }
-
+        .material-search { position: relative; margin-bottom: 1rem; }
+        .material-search input { width: 100%; padding: 0.6rem 0.75rem 0.6rem 2.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
+        .material-search i { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .material-results { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; display: none; }
         .material-results.show { display: block; }
-
-        .material-result-item {
-            padding: 0.5rem 0.75rem;
-            cursor: pointer;
-            font-size: 0.85rem;
-            border-bottom: 1px solid var(--bg);
-        }
-
+        .material-result-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--bg); }
         .material-result-item:hover { background: var(--bg); }
-
         .material-result-item .code { font-weight: 600; color: var(--primary); }
         .material-result-item .desc { color: var(--text-muted); }
 
-        .selected-materials-table {
-            width: 100%;
-            margin-top: 1rem;
-        }
+        .selected-materials-table { width: 100%; margin-top: 1rem; }
+        .selected-materials-table th { background: var(--primary); color: #fff; font-size: 0.75rem; padding: 0.5rem; font-weight: 500; }
+        .selected-materials-table td { font-size: 0.8rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
 
-        .selected-materials-table th {
-            background: var(--primary);
-            color: #fff;
-            font-size: 0.75rem;
-            padding: 0.5rem;
-            font-weight: 500;
-        }
+        .btn-remove-material { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; }
+        .auto-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 500; background: #dbeafe; color: var(--primary); }
+        .auto-badge.from-db { background: #d1fae5; color: #065f46; }
 
-        .selected-materials-table td {
-            font-size: 0.8rem;
-            padding: 0.4rem 0.5rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .btn-remove-material {
-            background: none;
-            border: none;
-            color: var(--accent);
-            cursor: pointer;
-            font-size: 0.85rem;
-        }
-
-        .auto-badge {
-            display: inline-block;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 500;
-            background: #dbeafe;
-            color: var(--primary);
-        }
-
-        .auto-badge.from-db {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .section-source-info {
-            background: #f0f9ff;
-            border: 1px solid #bae6fd;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-            font-size: 0.85rem;
-            color: #0c4a6e;
-        }
-
+        .section-source-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: #0c4a6e; }
         .section-source-info i { margin-right: 0.5rem; }
 
-        /* History dropdown */
-        .history-dropdown {
-            position: absolute;
-            z-index: 50;
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            max-height: 200px;
-            overflow-y: auto;
-            width: 100%;
-            display: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
+        .history-dropdown { position: absolute; z-index: 50; background: #fff; border: 1px solid var(--border); border-radius: 8px; max-height: 200px; overflow-y: auto; width: 100%; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .history-dropdown.show { display: block; }
-
-        .history-item {
-            padding: 0.5rem 0.75rem;
-            cursor: pointer;
-            font-size: 0.85rem;
-        }
-
+        .history-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; }
         .history-item:hover { background: var(--bg); }
-
         .form-group-hist { position: relative; }
 
-        /* Review summary */
-        .review-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.6rem 0;
-            border-bottom: 1px solid var(--bg);
-            font-size: 0.85rem;
-        }
-
+        .review-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--bg); font-size: 0.85rem; }
         .review-label { font-weight: 500; color: var(--text-muted); }
         .review-value { font-weight: 500; }
 
-        /* ── Index Builder ── */
-        .index-builder {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .index-builder-header {
-            background: var(--primary);
-            color: #fff;
-            padding: 0.6rem 1rem;
-            font-size: 0.8rem;
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .index-item-row {
-            display: flex;
-            align-items: center;
-            padding: 0.55rem 0.75rem;
-            border-bottom: 1px solid var(--bg);
-            background: #fff;
-            gap: 0.5rem;
-            transition: background 0.15s;
-            cursor: default;
-        }
-
+        /* Index Builder */
+        .index-builder { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .index-builder-header { background: var(--primary); color: #fff; padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .index-item-row { display: flex; align-items: center; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--bg); background: #fff; gap: 0.5rem; transition: background 0.15s; cursor: default; }
         .index-item-row:last-child { border-bottom: none; }
         .index-item-row:nth-child(even) { background: #f8fafd; }
         .index-item-row.sortable-ghost { opacity: 0.4; background: #dbeafe; }
         .index-item-row.sortable-chosen { background: #eff6ff; box-shadow: 0 2px 8px rgba(0,51,153,0.15); }
-
-        .drag-handle {
-            color: #94a3b8;
-            cursor: grab;
-            font-size: 1rem;
-            padding: 0 4px;
-            flex-shrink: 0;
-        }
-
+        .drag-handle { color: #94a3b8; cursor: grab; font-size: 1rem; padding: 0 4px; flex-shrink: 0; }
         .drag-handle:active { cursor: grabbing; }
-
-        .index-num-badge {
-            background: var(--primary);
-            color: #fff;
-            border-radius: 4px;
-            min-width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.72rem;
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-
-        .index-item-label {
-            flex: 1;
-            font-size: 0.875rem;
-        }
-
+        .index-num-badge { background: var(--primary); color: #fff; border-radius: 4px; min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; flex-shrink: 0; }
+        .index-item-label { flex: 1; font-size: 0.875rem; }
         .index-item-label.custom-item { font-style: italic; color: #4f46e5; }
-
-        .index-item-check {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--primary);
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-
-        .btn-remove-idx {
-            background: none;
-            border: none;
-            color: #94a3b8;
-            cursor: pointer;
-            font-size: 0.8rem;
-            padding: 0 2px;
-            flex-shrink: 0;
-        }
-
+        .index-item-check { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
+        .btn-remove-idx { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem; padding: 0 2px; flex-shrink: 0; }
         .btn-remove-idx:hover { color: var(--accent); }
-
-        .add-custom-bar {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.75rem;
-        }
-
-        .add-custom-bar input {
-            flex: 1;
-            padding: 0.5rem 0.75rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.875rem;
-        }
-
-        .btn-add-custom {
-            background: var(--primary);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-
+        .add-custom-bar { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+        .add-custom-bar input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem; }
+        .btn-add-custom { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.875rem; cursor: pointer; font-weight: 500; white-space: nowrap; }
         .btn-add-custom:hover { background: var(--primary-light); }
+        .index-preview-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; }
 
-        .index-preview-note {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 0.5rem;
-        }
+        /* Upload rows in documents step */
+        .upload-row { padding: 0.75rem 0; border-bottom: 1px solid var(--bg); }
+        .upload-row:last-child { border-bottom: none; }
+        .upload-row label { font-weight: 600; font-size: 0.85rem; color: var(--primary); margin-bottom: 0.25rem; display: block; }
+        .upload-row .existing-file { font-size: 0.78rem; color: var(--step-done); margin-top: 2px; }
+        .no-uploads-msg { color: var(--text-muted); font-style: italic; font-size: 0.9rem; text-align: center; padding: 2rem 0; }
     </style>
 </head>
 <body>
     <div class="top-bar">
-        <div>
-            <a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Back to Submittals</a>
-        </div>
+        <div><a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Back to Submittals</a></div>
         <h1><i class="fas fa-file-pdf me-2"></i>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</h1>
         <div></div>
     </div>
 
     <div class="wizard-container">
-        <!-- Step indicator -->
         <div class="step-indicator" id="stepIndicator">
             <div class="step-dot active" data-step="0"></div>
             <div class="step-dot" data-step="1"></div>
@@ -449,7 +153,6 @@
             <div class="step-card active" data-step="0">
                 <h2><i class="fas fa-heading me-2"></i>Title Page</h2>
                 <p class="step-subtitle">Enter the project and contractor details for the cover page.</p>
-
                 {% for field in title_form %}
                 <div class="mb-3 form-group-hist">
                     <label for="id_{{ field.name }}">{{ field.label }}</label>
@@ -462,46 +165,39 @@
             <!-- STEP 1: Index Builder -->
             <div class="step-card" data-step="1">
                 <h2><i class="fas fa-list-ol me-2"></i>Index / Table of Contents</h2>
-                <p class="step-subtitle">Drag to reorder sections, uncheck to exclude, or add custom entries. The index PDF is generated automatically from this list.</p>
+                <p class="step-subtitle">Drag to reorder, uncheck to exclude, or add custom entries. The index PDF and all divider pages are generated automatically.</p>
 
                 <div class="index-builder" id="indexBuilder">
                     <div class="index-builder-header">
                         <span><i class="fas fa-grip-lines me-1"></i> Drag to reorder</span>
                         <span id="indexCountBadge" class="auto-badge from-db">14 sections</span>
                     </div>
-                    <div id="indexItemList">
-                        <!-- rendered by JS -->
-                    </div>
+                    <div id="indexItemList"></div>
                 </div>
 
                 <div class="add-custom-bar">
                     <input type="text" id="customIndexInput" placeholder="Type a custom section name and press Add…">
-                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex">
-                        <i class="fas fa-plus me-1"></i> Add
-                    </button>
+                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex"><i class="fas fa-plus me-1"></i> Add</button>
                 </div>
-                <p class="index-preview-note"><i class="fas fa-info-circle me-1"></i>Only checked items appear in the generated PDF. Unchecked items are hidden but kept for reference.</p>
+                <p class="index-preview-note"><i class="fas fa-info-circle me-1"></i>Only checked items appear in the generated PDF. Custom sections and upload-based sections will prompt for a file in the next step.</p>
 
                 <input type="hidden" name="index_items_json" id="indexItemsJson">
             </div>
 
-            <!-- STEP 2: Sections 3-6, 8 -->
+            <!-- STEP 2: Documents (dynamic based on index) -->
             <div class="step-card" data-step="2">
-                <h2><i class="fas fa-file-upload me-2"></i>Documents</h2>
-                <p class="step-subtitle">Company profile and trade license are pulled automatically. Upload optional documents below.</p>
+                <h2><i class="fas fa-file-upload me-2"></i>Section Documents</h2>
+                <p class="step-subtitle">Upload PDF files for the sections that require them. Auto-included sections are handled for you.</p>
 
                 <div class="section-source-info">
                     <i class="fas fa-check-circle"></i>
-                    <strong>Company Profile</strong> and <strong>Trade License</strong> are auto-included from storage.
+                    <strong>Title Page</strong>, <strong>Index</strong>, <strong>Company Profile</strong>, <strong>Trade License</strong>,
+                    <strong>Materials Table</strong>, <strong>Product Catalogue</strong>, <strong>Technical Details</strong>,
+                    <strong>Test Certificates</strong>, <strong>Country of Origin</strong>, and <strong>Previous Approvals</strong>
+                    are auto-generated or auto-included from the database.
                 </div>
 
-                {% for field in uploads_form %}
-                <div class="mb-3">
-                    <label>{{ field.label }}</label>
-                    {{ field }}
-                    <small class="text-muted">Leave empty to skip this section</small>
-                </div>
-                {% endfor %}
+                <div id="dynamicUploads"></div>
             </div>
 
             <!-- STEP 3: Materials -->
@@ -542,7 +238,6 @@
                     <span class="auto-badge from-db mt-1 me-1">Country of Origin</span>
                     <span class="auto-badge from-db mt-1">Previous Approvals</span>
                 </div>
-
                 <div id="materialHiddenInputs"></div>
             </div>
 
@@ -550,9 +245,7 @@
             <div class="step-card" data-step="4">
                 <h2><i class="fas fa-check-double me-2"></i>Review & Generate</h2>
                 <p class="step-subtitle">Review your submittal sections before generating the PDF.</p>
-
                 <div id="reviewSummary"></div>
-
                 <div class="text-center mt-4">
                     <button type="button" class="btn-wizard btn-generate" id="btnSaveGenerate" style="padding: 0.8rem 3rem; font-size: 1rem;">
                         <i class="fas fa-save me-2"></i>Save & Generate PDF
@@ -590,12 +283,23 @@
         };
 
         const preselected = {{ selected_material_ids|safe }};
+        const existingUploads = {{ existing_uploads|safe }};
 
-        // ── Index Builder ──────────────────────────────────────────────────
+        // ── Labels that are auto-provided (no upload needed) ──
+        const AUTO_LABELS = new Set([
+            'title page', 'index', 'company profile', 'trade license',
+            'list of proposed material', 'product catalogue', 'technical details',
+            'test certificates', 'country of origin certificate', 'previous approvals',
+        ]);
+
+        function labelNeedsUpload(label) {
+            return !AUTO_LABELS.has((label || '').trim().toLowerCase());
+        }
+
+        // ── Index Builder ──
         const DEFAULT_INDEX_ITEMS = {{ default_index_items|safe }};
         const EXISTING_INDEX_ITEMS = {{ existing_index_items|safe }};
 
-        // Build initial index state: [{label, included, custom}]
         let indexItems = [];
         if (EXISTING_INDEX_ITEMS && EXISTING_INDEX_ITEMS.length > 0) {
             indexItems = EXISTING_INDEX_ITEMS.map(e =>
@@ -614,27 +318,24 @@
                     <span class="drag-handle" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
                     <span class="index-num-badge" id="ibadge_${i}">${i + 1}</span>
                     <span class="index-item-label ${item.custom ? 'custom-item' : ''}">${escapeHtml(item.label)}</span>
-                    <input type="checkbox" class="index-item-check" data-idx="${i}" ${item.included ? 'checked' : ''} title="${item.included ? 'Included' : 'Excluded'}">
+                    <input type="checkbox" class="index-item-check" data-idx="${i}" ${item.included ? 'checked' : ''}>
                     ${item.custom ? `<button type="button" class="btn-remove-idx" data-idx="${i}" title="Remove"><i class="fas fa-times"></i></button>` : ''}
                 </div>
             `).join('');
 
-            // Checkboxes
             container.querySelectorAll('.index-item-check').forEach(cb => {
                 cb.addEventListener('change', () => {
-                    const idx = parseInt(cb.dataset.idx);
-                    indexItems[idx].included = cb.checked;
+                    indexItems[parseInt(cb.dataset.idx)].included = cb.checked;
                     updateIndexBadge();
                     serializeIndexItems();
                 });
             });
 
-            // Remove custom
             container.querySelectorAll('.btn-remove-idx').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const idx = parseInt(btn.dataset.idx);
-                    indexItems.splice(idx, 1);
+                    indexItems.splice(parseInt(btn.dataset.idx), 1);
                     renderIndexList();
+                    initSortable();
                     serializeIndexItems();
                 });
             });
@@ -647,11 +348,10 @@
             const count = indexItems.filter(i => i.included).length;
             const badge = document.getElementById('indexCountBadge');
             if (badge) badge.textContent = `${count} section${count !== 1 ? 's' : ''}`;
-            // Renumber visible badges
             let num = 1;
             document.querySelectorAll('#indexItemList .index-item-row').forEach((row, i) => {
-                const badge = document.getElementById(`ibadge_${i}`);
-                if (badge) badge.textContent = num++;
+                const b = document.getElementById(`ibadge_${i}`);
+                if (b) b.textContent = num++;
             });
         }
 
@@ -659,7 +359,6 @@
             document.getElementById('indexItemsJson').value = JSON.stringify(indexItems);
         }
 
-        // Init Sortable
         function initSortable() {
             const el = document.getElementById('indexItemList');
             if (!el) return;
@@ -669,21 +368,17 @@
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 onEnd: () => {
-                    // Rebuild indexItems from DOM order
                     const rows = el.querySelectorAll('.index-item-row');
                     const newOrder = [];
-                    rows.forEach(row => {
-                        const idx = parseInt(row.dataset.idx);
-                        newOrder.push(indexItems[idx]);
-                    });
+                    rows.forEach(row => newOrder.push(indexItems[parseInt(row.dataset.idx)]));
                     indexItems = newOrder;
                     renderIndexList();
+                    initSortable();
                     serializeIndexItems();
                 }
             });
         }
 
-        // Add custom item
         document.getElementById('btnAddCustomIndex').addEventListener('click', () => {
             const input = document.getElementById('customIndexInput');
             const label = input.value.trim();
@@ -696,17 +391,37 @@
         });
 
         document.getElementById('customIndexInput').addEventListener('keydown', e => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.getElementById('btnAddCustomIndex').click();
-            }
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddCustomIndex').click(); }
         });
 
-        // Initialize on page load
         renderIndexList();
         initSortable();
 
-        // Step navigation
+        // ── Dynamic uploads builder ──
+        function buildDynamicUploads() {
+            const container = document.getElementById('dynamicUploads');
+            const uploadItems = indexItems.filter(it => it.included && labelNeedsUpload(it.label));
+
+            if (uploadItems.length === 0) {
+                container.innerHTML = '<div class="no-uploads-msg"><i class="fas fa-check-circle me-2"></i>All included sections are auto-provided. No uploads needed.</div>';
+                return;
+            }
+
+            container.innerHTML = uploadItems.map(it => {
+                const safeKey = it.label;
+                const fieldName = `section_upload__${safeKey}`;
+                const existing = existingUploads[safeKey] || '';
+                return `
+                    <div class="upload-row">
+                        <label><i class="fas fa-file-pdf me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+                        <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                        ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Upload a PDF for this section (leave empty to skip)</small>'}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ── Step navigation ──
         const dots = document.querySelectorAll('.step-dot');
         const cards = document.querySelectorAll('.step-card');
         const btnPrev = document.getElementById('btnPrev');
@@ -716,16 +431,15 @@
             currentStep = step;
             cards.forEach(c => c.classList.remove('active'));
             cards[step].classList.add('active');
-
             dots.forEach((d, i) => {
                 d.classList.remove('active', 'done');
                 if (i < step) d.classList.add('done');
                 if (i === step) d.classList.add('active');
             });
-
             btnPrev.style.display = step === 0 ? 'none' : 'inline-block';
             btnNext.style.display = step === TOTAL_STEPS - 1 ? 'none' : 'inline-block';
 
+            if (step === 2) buildDynamicUploads();
             if (step === TOTAL_STEPS - 1) buildReview();
         }
 
@@ -733,7 +447,7 @@
         btnNext.addEventListener('click', () => { if (currentStep < TOTAL_STEPS - 1) showStep(currentStep + 1); });
         btnPrev.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
 
-        // History dropdowns
+        // ── History dropdowns ──
         document.querySelectorAll('.form-group-hist input, .form-group-hist textarea').forEach(input => {
             const fieldName = input.name;
             const dropdown = document.getElementById('hist_' + fieldName);
@@ -743,34 +457,25 @@
                 populateHistory(dropdown, historyData[fieldName], input);
                 dropdown.classList.add('show');
             });
-
             input.addEventListener('input', () => {
                 const q = input.value.toLowerCase();
                 const filtered = historyData[fieldName].filter(v => v.toLowerCase().includes(q));
                 populateHistory(dropdown, filtered, input);
                 dropdown.classList.toggle('show', filtered.length > 0);
             });
-
-            document.addEventListener('click', (e) => {
-                if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-                    dropdown.classList.remove('show');
-                }
+            document.addEventListener('click', e => {
+                if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('show');
             });
         });
 
         function populateHistory(dropdown, items, input) {
-            dropdown.innerHTML = items.map(v =>
-                `<div class="history-item">${escapeHtml(v)}</div>`
-            ).join('');
+            dropdown.innerHTML = items.map(v => `<div class="history-item">${escapeHtml(v)}</div>`).join('');
             dropdown.querySelectorAll('.history-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    input.value = item.textContent;
-                    dropdown.classList.remove('show');
-                });
+                item.addEventListener('click', () => { input.value = item.textContent; dropdown.classList.remove('show'); });
             });
         }
 
-        // Material search
+        // ── Material search ──
         const searchInput = document.getElementById('materialSearchInput');
         const resultsDiv = document.getElementById('materialResults');
         let searchTimeout;
@@ -779,7 +484,6 @@
             clearTimeout(searchTimeout);
             const q = searchInput.value.trim();
             if (q.length < 2) { resultsDiv.classList.remove('show'); return; }
-
             searchTimeout = setTimeout(() => {
                 fetch(`/submittal/api/materials-search/?q=${encodeURIComponent(q)}`)
                     .then(r => r.json())
@@ -793,11 +497,9 @@
                             </div>`
                         ).join('') || '<div class="p-2 text-muted">No results</div>';
                         resultsDiv.classList.add('show');
-
                         resultsDiv.querySelectorAll('.material-result-item').forEach(el => {
                             el.addEventListener('click', () => {
-                                const mat = JSON.parse(el.dataset.material);
-                                addMaterial(mat);
+                                addMaterial(JSON.parse(el.dataset.material));
                                 searchInput.value = '';
                                 resultsDiv.classList.remove('show');
                             });
@@ -821,7 +523,6 @@
         function renderMaterialsTable() {
             const tbody = document.getElementById('selectedMaterialsBody');
             const hiddenDiv = document.getElementById('materialHiddenInputs');
-
             tbody.innerHTML = selectedMaterials.map((m, i) =>
                 `<tr>
                     <td>${i + 1}</td>
@@ -836,15 +537,11 @@
                     <td><button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})"><i class="fas fa-times"></i></button></td>
                 </tr>`
             ).join('');
-
-            hiddenDiv.innerHTML = selectedMaterials.map(m =>
-                `<input type="hidden" name="material_ids" value="${m.id}">`
-            ).join('');
+            hiddenDiv.innerHTML = selectedMaterials.map(m => `<input type="hidden" name="material_ids" value="${m.id}">`).join('');
         }
 
         window._removeMat = removeMaterial;
 
-        // Load preselected materials for edit mode
         if (preselected.length > 0) {
             fetch(`/submittal/api/materials-search/?q=*`)
                 .then(r => r.json())
@@ -856,41 +553,39 @@
                 });
         }
 
-        // Review builder
+        // ── Review builder ──
         function buildReview() {
-            const form = document.getElementById('submittalForm');
-            const fd = new FormData(form);
-            const sections = [
-                { label: 'Project', value: fd.get('project') },
-                { label: 'Client', value: fd.get('client') },
-                { label: 'Consultant', value: fd.get('consultant') },
-                { label: 'Main Contractor', value: fd.get('main_contractor') },
-                { label: 'MEP Contractor', value: fd.get('mep_contractor') },
-                { label: 'Product', value: fd.get('product') },
-                { label: 'Index', value: `${indexItems.filter(i=>i.included).length} section(s) — generated PDF` },
-                { label: 'Company Profile', value: 'Auto-included' },
-                { label: 'Trade License', value: 'Auto-included' },
-                { label: 'Vendor List', value: fd.get('vendor_list_pdf')?.name || 'Skipped' },
-                { label: 'Comply Statement', value: fd.get('comply_statement_file')?.name || 'Skipped' },
-                { label: 'Area of Application', value: fd.get('area_of_application_pdf')?.name || 'Skipped' },
-                { label: 'Proposed Materials', value: `${selectedMaterials.length} item(s)` },
-                { label: 'Product Catalogue', value: 'Auto from materials' },
-                { label: 'Technical Details', value: 'Auto from materials' },
-                { label: 'Test Certificates', value: 'Auto from materials' },
-                { label: 'Country of Origin', value: 'Auto from materials' },
-                { label: 'Warranty Draft', value: fd.get('warranty_draft_pdf')?.name || 'Skipped' },
-                { label: 'Previous Approvals', value: 'Auto from materials' },
-            ];
+            const sections = [];
+            indexItems.forEach(it => {
+                if (!it.included) return;
+                const isAuto = AUTO_LABELS.has(it.label.trim().toLowerCase());
+                let status;
+                if (isAuto) {
+                    status = '<span class="auto-badge from-db">Auto-included</span>';
+                } else {
+                    const fieldName = `section_upload__${it.label}`;
+                    const fileInput = document.querySelector(`input[name="${CSS.escape(fieldName)}"]`);
+                    const hasNew = fileInput && fileInput.files && fileInput.files.length > 0;
+                    const hasExisting = existingUploads[it.label];
+                    if (hasNew) {
+                        status = `<span class="auto-badge" style="background:#dbeafe">${escapeHtml(fileInput.files[0].name)}</span>`;
+                    } else if (hasExisting) {
+                        status = `<span class="auto-badge" style="background:#fef3c7;color:#92400e">${escapeHtml(hasExisting)} (existing)</span>`;
+                    } else {
+                        status = '<span style="color:var(--accent);font-size:0.8rem">No file uploaded</span>';
+                    }
+                }
+                sections.push({ label: it.label, value: status });
+            });
+
+            sections.push({ label: 'Proposed Materials', value: `<strong>${selectedMaterials.length}</strong> item(s) selected` });
 
             document.getElementById('reviewSummary').innerHTML = sections.map(s =>
-                `<div class="review-item">
-                    <span class="review-label">${s.label}</span>
-                    <span class="review-value">${escapeHtml(s.value || '—')}</span>
-                </div>`
+                `<div class="review-item"><span class="review-label">${escapeHtml(s.label)}</span><span class="review-value">${s.value}</span></div>`
             ).join('');
         }
 
-        // Save & Generate
+        // ── Save & Generate ──
         document.getElementById('btnSaveGenerate').addEventListener('click', () => {
             const form = document.getElementById('submittalForm');
             const fd = new FormData(form);

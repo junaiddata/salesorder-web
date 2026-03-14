@@ -3822,6 +3822,23 @@ def quotation_detail(request, q_number):
     # Get items - optimized query (convert to list to avoid multiple DB hits)
     items = list(quotation.items.all().order_by('id'))
 
+    # --- Batch load live stock from Items model (Stock, DIP) ---
+    item_codes = [str(it.item_no).strip() for it in items if it.item_no]
+    stock_lookup = {}
+    if item_codes:
+        for item in Items.objects.filter(item_code__in=item_codes).only(
+            'item_code', 'total_available_stock', 'dip_warehouse_stock'
+        ):
+            stock_lookup[item.item_code] = {
+                'total_available_stock': item.total_available_stock or 0,
+                'dip_warehouse_stock': item.dip_warehouse_stock or 0,
+            }
+    for it in items:
+        item_code = str(it.item_no).strip() if it.item_no else ''
+        stock_data = stock_lookup.get(item_code, {})
+        it.total_available_stock = stock_data.get('total_available_stock', 0)
+        it.dip_warehouse_stock = stock_data.get('dip_warehouse_stock', 0)
+
     # --- Cost Price per item + Total Est. Cost (from Items model) - Admin only ---
     total_estimated_cost = 0.0
     is_admin = hasattr(request.user, 'role') and request.user.role.role == 'Admin'

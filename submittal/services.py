@@ -1,22 +1,9 @@
-from .models import (
-    CompanyDocuments, SectionDivider, SubmittalMaterial, MaterialCertification,
-)
+from .models import CompanyDocuments, SubmittalMaterial, MaterialCertification
 
 
 def get_company_documents():
     """Return the singleton CompanyDocuments instance."""
     return CompanyDocuments.get_instance()
-
-
-def get_divider_pdf(section_num):
-    """Return the file path for a section divider, or None."""
-    try:
-        divider = SectionDivider.objects.get(section_num=section_num)
-        if divider.divider_pdf:
-            return divider.divider_pdf.path
-    except SectionDivider.DoesNotExist:
-        pass
-    return None
 
 
 def get_catalogue_pdf(material):

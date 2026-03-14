@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
-    CompanyDocuments, SectionDivider, SubmittalMaterial,
+    CompanyDocuments, SubmittalMaterial,
     MaterialCertification, ProjectContractorHistory, Submittal,
+    SubmittalSectionUpload,
 )
 
 
@@ -14,12 +15,6 @@ class CompanyDocumentsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
-
-@admin.register(SectionDivider)
-class SectionDividerAdmin(admin.ModelAdmin):
-    list_display = ('section_num', 'section_name', 'divider_pdf')
-    ordering = ('section_num',)
 
 
 class MaterialCertificationInline(admin.TabularInline):
@@ -48,8 +43,14 @@ class ProjectContractorHistoryAdmin(admin.ModelAdmin):
     search_fields = ('project', 'client', 'main_contractor')
 
 
+class SubmittalSectionUploadInline(admin.TabularInline):
+    model = SubmittalSectionUpload
+    extra = 0
+
+
 @admin.register(Submittal)
 class SubmittalAdmin(admin.ModelAdmin):
     list_display = ('project', 'client', 'product', 'created_at')
     search_fields = ('project', 'client', 'product')
     filter_horizontal = ('materials',)
+    inlines = [SubmittalSectionUploadInline]
