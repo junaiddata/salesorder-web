@@ -1,0 +1,89 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Upload Historical Sales (2020-2023)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --danger: #ef4444;
+      --radius: 8px;
+    }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 1.5rem; }
+    .upload-card { max-width: 600px; background: var(--surface); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .alert { padding: 1rem; border-radius: var(--radius); margin-bottom: 1rem; }
+    .alert-error { background: #fee2e2; color: #dc2626; }
+    .alert-success { background: #d1fae5; color: #059669; }
+    .columns { margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary); }
+    .columns ul { margin: 0.5rem 0 0 1rem; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .header h1 { font-size: 1.25rem; margin: 0; }
+    .btn-back { color: var(--primary); text-decoration: none; font-size: 0.875rem; }
+    .btn-back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="upload-card">
+    <div class="header">
+      <h1><i class="fas fa-upload"></i> Upload Historical Sales (2020-2023)</h1>
+      <a href="{% url 'historical_sales_analysis' %}" class="btn-back"><i class="fas fa-arrow-left"></i> Back to Analysis</a>
+    </div>
+    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+      Upload Excel (.xlsx, .xls) or CSV file with Invoice and Credit Memo data for years 2020-2023. Re-uploading updates existing documents.
+    </p>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{% if msg.tags == 'error' %}error{% else %}success{% endif %}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+    {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="excel_file" class="form-label fw-medium">Excel or CSV File</label>
+        <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls,.csv" required class="form-control">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-upload"></i> Upload
+        </button>
+        <a href="{% url 'historical_sales_analysis' %}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+
+    <div class="columns">
+      <strong>Required columns:</strong>
+      <ul>
+        <li>DocumentTypeCode (optional: 13=Invoice, 14/96010=Credit Memo)</li>
+        <li>Document Type (A/R Invoice, A/R Credit Memo)</li>
+        <li>Document Number</li>
+        <li>PostingDate (e.g. 25.08.23, 30.01.20)</li>
+        <li>Customer Code</li>
+        <li>Customer Name</li>
+        <li>Sales Employee</li>
+        <li>ItemCode</li>
+        <li>Item Description</li>
+        <li>Item Manufacturer</li>
+        <li>Quantity</li>
+        <li>Net Sales</li>
+        <li>Gross Profit</li>
+      </ul>
+      <p><strong>Note:</strong> Only rows with PostingDate in 2020-2023 are imported.</p>
+    </div>
+  </div>
+</body>
+</html>

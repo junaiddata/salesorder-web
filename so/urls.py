@@ -12,6 +12,7 @@ from . import credit_memo_analysis_views
 from . import purchase_stock_requirement_views
 from . import quotation_item_analysis_views
 from . import item_quoted_analysis_pdf_export
+from . import historical_sales_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -211,6 +212,12 @@ urlpatterns += [
     path('api/items-search/', items_search_api, name='api_items_search'),
 
 
+
+    # Historical Sales (2020-2023)
+    path('historical-sales/upload/', historical_sales_views.historical_sales_upload, name='historical_sales_upload'),
+    path('historical-sales/analysis/', historical_sales_views.historical_sales_analysis_dashboard, name='historical_sales_analysis'),
+    path('historical-sales/item-analysis/', historical_sales_views.historical_item_analysis, name='historical_sales_item_analysis'),
+    path('historical-sales/customer-analysis/', historical_sales_views.historical_customer_analysis, name='historical_sales_customer_analysis'),
 
     path('dashboard/open-so/', views.open_so_dashboard, name='open_so_dashboard'),
     path('dashboard/upload-so/', views.upload_so_data, name='upload_so_data'), # New path

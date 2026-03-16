@@ -976,3 +976,51 @@ class ProposedQuantity(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.item_code}: {self.proposed_qty}"
+
+
+class HistoricalSalesLine(models.Model):
+    """Historical sales data (2020-2023) from Excel/CSV upload."""
+    DOC_TYPE_CHOICES = [
+        ('Invoice', 'Invoice'),
+        ('Credit Memo', 'Credit Memo'),
+    ]
+
+    document_type = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES)
+    document_type_code = models.CharField(max_length=20, blank=True, null=True)
+    document_number = models.CharField(max_length=100, db_index=True)
+    posting_date = models.DateField(db_index=True)
+
+    customer = models.ForeignKey(
+        'Customer',
+        on_delete=models.CASCADE,
+        related_name='historical_sales_lines',
+    )
+    customer_code = models.CharField(max_length=100, blank=True, null=True)
+    customer_name = models.CharField(max_length=255, blank=True, null=True)
+
+    sales_employee = models.CharField(max_length=255, blank=True, null=True)
+
+    item = models.ForeignKey(
+        'Items',
+        on_delete=models.CASCADE,
+        related_name='historical_sales_lines',
+    )
+    item_code = models.CharField(max_length=100, blank=True, null=True)
+    item_description = models.CharField(max_length=500, blank=True, null=True)
+    item_manufacturer = models.CharField(max_length=255, blank=True, null=True)
+
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    gross_profit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['document_type', 'document_number']),
+            models.Index(fields=['posting_date']),
+            models.Index(fields=['sales_employee']),
+        ]
+
+    def __str__(self):
+        return f"{self.document_type} {self.document_number} - {self.customer_name or self.customer.customer_name}"

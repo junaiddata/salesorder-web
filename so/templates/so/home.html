@@ -915,6 +915,38 @@
                     </li>
                 </ul>
             </li>
+            <!-- <li class="has-submenu">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-history"></i>
+                    2020-2023 Analysis
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{% url 'historical_sales_analysis' %}">
+                            <i class="fas fa-chart-line"></i>
+                            Sales Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'historical_sales_item_analysis' %}">
+                            <i class="fas fa-chart-bar"></i>
+                            Item Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'historical_sales_customer_analysis' %}">
+                            <i class="fas fa-users"></i>
+                            Customer Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'historical_sales_upload' %}">
+                            <i class="fas fa-upload"></i>
+                            Upload Data
+                        </a>
+                    </li>
+                </ul>
+            </li> -->
             <!-- <li>
                 <a href="{% url 'open_so_dashboard' %}">
                     <i class="fas fa-list-alt"></i>
@@ -953,12 +985,12 @@
                     Settings
                 </a>
             </li>
-            <!-- <li>
+            <li>
                 <a href="{% url 'alabama:home' %}">
                     <i class="fas fa-building"></i>
                     Alabama
                 </a>
-            </li> -->
+            </li>
             <li class="logout-btn">
                 <a href="{% url 'logout' %}">
                     <i class="fas fa-sign-out-alt"></i>
@@ -1149,6 +1181,12 @@
                         <h3 class="action-title">Detailed Sales Analysis</h3>
                     </a>
                     {% endif %}
+                    <a href="{% url 'historical_sales_analysis' %}" class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <h3 class="action-title">2020-2023 Analysis</h3>
+                    </a>
                 </div>
             </div>
 

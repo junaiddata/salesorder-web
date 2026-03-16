@@ -1,0 +1,262 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Historical Sales Analysis (2020-2023)</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 16px 16px 40px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .header-left h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .header-left p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; text-decoration: none; border: none; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); border-color: var(--primary); color: var(--primary); }
+    .year-filter-tiles, .filter-tiles-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .year-tile, .store-tile, .month-tile, .salesman-tile { padding: 8px 16px; border-radius: var(--radius-sm); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.875rem; font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.15s ease; }
+    .year-tile:hover, .store-tile:hover, .month-tile:hover, .salesman-tile:hover { border-color: var(--primary); color: var(--primary); }
+    .year-tile.active, .store-tile.active, .month-tile.active, .salesman-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
+    .month-tile, .salesman-tile { padding: 6px 12px; font-size: 0.813rem; }
+    .tiles-label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px; }
+    .summary-box { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-md); color: white; }
+    .summary-box h2 { font-size: 1rem; font-weight: 600; margin: 0 0 20px 0; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; }
+    .summary-item { text-align: center; }
+    .summary-label { font-size: 0.875rem; opacity: 0.9; margin-bottom: 8px; font-weight: 500; }
+    .summary-value { font-size: 2rem; font-weight: 700; margin: 0; }
+    .filters-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 24px; box-shadow: var(--shadow); }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+    .field label { font-size: 0.813rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; display: block; }
+    .field select, .field input { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; width: 100%; }
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 16px; }
+    .table-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 12px; text-align: left; font-size: 0.813rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; background: var(--bg); border-bottom: 2px solid var(--border); }
+    td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+    tbody tr:hover { background: var(--bg); }
+    .rank { font-weight: 700; color: var(--primary); width: 40px; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Historical Sales Analysis (2020-2023)</h1>
+        <p>Uploaded sales data - Invoices and Credit Memos combined</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'historical_sales_item_analysis' %}" class="btn btn-secondary"><i class="fas fa-cube"></i> Item Analysis</a>
+        <a href="{% url 'historical_sales_customer_analysis' %}" class="btn btn-secondary"><i class="fas fa-users"></i> Customer Analysis</a>
+        <a href="{% url 'historical_sales_upload' %}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload Data</a>
+        <a href="{% url 'home' %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Home</a>
+      </div>
+    </div>
+
+    <div class="year-filter-tiles">
+      {% for y in years %}
+      <a href="?year={{ y }}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == y|stringformat:'d' %}active{% endif %}">{{ y }}</a>
+      {% endfor %}
+      <a href="?year=Total{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == 'Total' or not filters.year %}active{% endif %}">Total</a>
+    </div>
+
+    <!-- Store Filter Tiles -->
+    <div class="filters-card" style="margin-bottom: 16px; padding: 16px 20px;">
+      <div class="filter-tiles-row">
+        <span class="tiles-label">Store:</span>
+        <button type="button" class="store-tile {% if not filters.store or filters.store == 'Total' %}active{% endif %}" data-store="">All</button>
+        <button type="button" class="store-tile {% if filters.store == 'HO' %}active{% endif %}" data-store="HO">HO</button>
+        <button type="button" class="store-tile {% if filters.store == 'Others' %}active{% endif %}" data-store="Others">Others</button>
+      </div>
+    </div>
+
+    <!-- Salesman Filter Tiles -->
+    <div class="filters-card" style="margin-bottom: 16px; padding: 16px 20px;">
+      <div class="filter-tiles-row">
+        <span class="tiles-label">Salesman:</span>
+        {% for s in salesmen %}
+        <button type="button" class="salesman-tile {% if s in filters.salesmen_filter %}active{% endif %}" data-salesman="{{ s }}">{{ s }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Month Filter Tiles -->
+    <div class="filters-card" style="margin-bottom: 16px; padding: 16px 20px;">
+      <div class="filter-tiles-row">
+        <span class="tiles-label">Month:</span>
+        <button type="button" class="month-tile {% if '1' in filters.month %}active{% endif %}" data-month="1">Jan</button>
+        <button type="button" class="month-tile {% if '2' in filters.month %}active{% endif %}" data-month="2">Feb</button>
+        <button type="button" class="month-tile {% if '3' in filters.month %}active{% endif %}" data-month="3">Mar</button>
+        <button type="button" class="month-tile {% if '4' in filters.month %}active{% endif %}" data-month="4">Apr</button>
+        <button type="button" class="month-tile {% if '5' in filters.month %}active{% endif %}" data-month="5">May</button>
+        <button type="button" class="month-tile {% if '6' in filters.month %}active{% endif %}" data-month="6">Jun</button>
+        <button type="button" class="month-tile {% if '7' in filters.month %}active{% endif %}" data-month="7">Jul</button>
+        <button type="button" class="month-tile {% if '8' in filters.month %}active{% endif %}" data-month="8">Aug</button>
+        <button type="button" class="month-tile {% if '9' in filters.month %}active{% endif %}" data-month="9">Sep</button>
+        <button type="button" class="month-tile {% if '10' in filters.month %}active{% endif %}" data-month="10">Oct</button>
+        <button type="button" class="month-tile {% if '11' in filters.month %}active{% endif %}" data-month="11">Nov</button>
+        <button type="button" class="month-tile {% if '12' in filters.month %}active{% endif %}" data-month="12">Dec</button>
+      </div>
+    </div>
+
+    <div class="filters-card">
+      <form id="filters-form" method="GET" action="{% url 'historical_sales_analysis' %}">
+        <input type="hidden" name="year" id="year-input" value="{{ filters.year|default:'Total' }}">
+        <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
+        <div id="salesman-inputs">{% for s in filters.salesmen_filter %}<input type="hidden" name="salesman" value="{{ s }}">{% endfor %}</div>
+        <div id="month-inputs">{% for m in filters.month %}<input type="hidden" name="month" value="{{ m }}">{% endfor %}</div>
+        <div class="filters-grid">
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" id="start-date" value="{{ filters.start }}">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" id="end-date" value="{{ filters.end }}">
+          </div>
+          <div class="field" style="align-self:end;">
+            <button class="btn btn-primary" type="submit">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="summary-box">
+      <h2>Total Summary</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">Net Sales</div>
+          <div class="summary-value">{{ total_sales|default:0|floatformat:2|intcomma }}</div>
+          <div class="summary-label" style="margin-top: 4px;">AED</div>
+        </div>
+        {% if is_admin %}
+        <div class="summary-item">
+          <div class="summary-label">Gross Profit</div>
+          <div class="summary-value">{{ total_gp|default:0|floatformat:2|intcomma }}</div>
+          <div class="summary-label" style="margin-top: 4px;">AED</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
+      <div class="table-card">
+        <div class="table-title">Top 5 Customers</div>
+        <table>
+          <thead>
+            <tr><th class="rank">#</th><th>Customer</th><th class="num">Net Sales</th>{% if is_admin %}<th class="num">GP</th>{% endif %}</tr>
+          </thead>
+          <tbody>
+            {% for c in top_customers %}
+            <tr>
+              <td class="rank">{{ forloop.counter }}</td>
+              <td>{{ c.customer_code }} - {{ c.customer_name|truncatewords:5 }}</td>
+              <td class="num">{{ c.total_sales|floatformat:2|intcomma }}</td>
+              {% if is_admin %}<td class="num">{{ c.total_gp|floatformat:2|intcomma }}</td>{% endif %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-card">
+        <div class="table-title">Top 5 Items</div>
+        <table>
+          <thead>
+            <tr><th class="rank">#</th><th>Item</th><th class="num">Net Sales</th>{% if is_admin %}<th class="num">GP</th>{% endif %}</tr>
+          </thead>
+          <tbody>
+            {% for i in top_items %}
+            <tr>
+              <td class="rank">{{ forloop.counter }}</td>
+              <td>{{ i.item_code }} - {{ i.item_description|truncatewords:4 }}</td>
+              <td class="num">{{ i.total_sales|floatformat:2|intcomma }}</td>
+              {% if is_admin %}<td class="num">{{ i.total_gp|floatformat:2|intcomma }}</td>{% endif %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var form = document.getElementById('filters-form');
+    var yearInput = document.getElementById('year-input');
+    var storeInput = document.getElementById('store-input');
+    var salesmanInputs = document.getElementById('salesman-inputs');
+    var monthInputs = document.getElementById('month-inputs');
+
+    function syncFormAndSubmit() {
+      form.submit();
+    }
+
+    // Store tiles: single-select
+    document.querySelectorAll('.store-tile').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.store-tile').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        storeInput.value = this.getAttribute('data-store') || '';
+        syncFormAndSubmit();
+      });
+    });
+
+    // Salesman tiles: multiselect
+    document.querySelectorAll('.salesman-tile').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        var selected = [];
+        document.querySelectorAll('.salesman-tile.active').forEach(function(b) {
+          selected.push(b.getAttribute('data-salesman'));
+        });
+        salesmanInputs.innerHTML = selected.map(function(v) {
+          return '<input type="hidden" name="salesman" value="' + (v || '').replace(/"/g, '&quot;') + '">';
+        }).join('');
+        syncFormAndSubmit();
+      });
+    });
+
+    // Month tiles: multiselect
+    document.querySelectorAll('.month-tile').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        var selected = [];
+        document.querySelectorAll('.month-tile.active').forEach(function(b) {
+          selected.push(b.getAttribute('data-month'));
+        });
+        monthInputs.innerHTML = selected.map(function(v) {
+          return '<input type="hidden" name="month" value="' + (v || '').replace(/"/g, '&quot;') + '">';
+        }).join('');
+        syncFormAndSubmit();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

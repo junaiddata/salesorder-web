@@ -1,0 +1,36 @@
+{% load humanize %}
+<tbody>
+  <tr class="totals-row">
+    <td class="sticky-col" style="left: 0; font-weight: 700; background: #eff6ff;">TOTAL</td>
+    <td class="sticky-col" style="left: 180px; font-weight: 700; background: #eff6ff;"></td>
+    {% for totals in totals_list %}
+      <td class="text-right" style="font-weight: 700; background: #eff6ff;">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
+      {% if is_admin %}<td class="text-right" style="font-weight: 700; background: #eff6ff;">{{ totals.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+      {% if is_admin %}<td class="text-right" style="font-weight: 700; background: #eff6ff;">{{ totals.total_gp_percent|default:0|floatformat:2 }}%</td>{% endif %}
+    {% endfor %}
+  </tr>
+  {% for customer in customers %}
+  <tr>
+    <td class="sticky-col" style="left: 0;">
+      <div class="customer-name">{{ customer.customer_name|default:"Unknown" }}</div>
+      {% if customer.customer_code %}
+      <div class="customer-code">{{ customer.customer_code }}</div>
+      {% endif %}
+    </td>
+    <td class="sticky-col" style="left: 180px;">
+      {% with first_year=customer.year_list.0 %}
+      {{ first_year.salesman|default:"—" }}
+      {% endwith %}
+    </td>
+    {% for year_data in customer.year_list %}
+      <td class="text-right">{{ year_data.total_sales|default:0|floatformat:2|intcomma }}</td>
+      {% if is_admin %}<td class="text-right">{{ year_data.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
+      {% if is_admin %}<td class="text-right">{{ year_data.gp_percent|default:0|floatformat:2 }}%</td>{% endif %}
+    {% endfor %}
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="20" class="empty-state">No customer data available</td>
+  </tr>
+  {% endfor %}
+</tbody>

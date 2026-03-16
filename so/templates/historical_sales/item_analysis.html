@@ -1,0 +1,130 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Historical Item Analysis (2020-2023)</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root { --bg: #f8fafc; --surface: #fff; --text: #1e293b; --text-secondary: #64748b; --border: #e2e8f0; --primary: #3b82f6; --primary-light: #eff6ff; --radius: 8px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+    .container { max-width: 1800px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .header h1 { font-size: 1.5rem; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: var(--radius); font-size: 0.875rem; text-decoration: none; border: none; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .filters-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .field input, .field select { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); width: 100%; font-size: 0.875rem; }
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+    th { background: var(--bg); font-weight: 600; color: var(--text-secondary); text-align: left; }
+    th.text-right, td.text-right { text-align: right; }
+    .sticky-col { position: sticky; background: var(--surface); z-index: 9; }
+    .item-code { font-weight: 600; color: var(--primary); }
+    .item-description { color: var(--text-secondary); font-size: 0.75rem; }
+    .totals-row { background: var(--primary-light); font-weight: 700; }
+    .totals-row td { background: var(--primary-light); }
+    .year-group { text-align: center; background: rgba(59,130,246,0.08); }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
+    .pagination a { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--primary); text-decoration: none; }
+    .pagination a:hover { background: var(--primary-light); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Historical Item Analysis (2020-2023)</h1>
+      <div style="display:flex; gap:8px;">
+        <a href="{% url 'historical_sales_analysis' %}" class="btn btn-secondary"><i class="fas fa-chart-line"></i> Sales Analysis</a>
+        <a href="{% url 'historical_sales_customer_analysis' %}" class="btn btn-secondary"><i class="fas fa-users"></i> Customer Analysis</a>
+        <a href="{% url 'historical_sales_upload' %}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
+        <a href="{% url 'home' %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Home</a>
+      </div>
+    </div>
+
+    <div class="filters-card">
+      <form method="GET" action="{% url 'historical_sales_item_analysis' %}" id="filters-form">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="Code or Description">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <select name="salesman" multiple style="height: 70px;">
+              {% for s in salesmen %}
+              <option value="{{ s }}" {% if s in filters.salesman %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Firm</label>
+            <select name="firm" multiple style="height: 70px;">
+              {% for f in firms %}
+              <option value="{{ f }}" {% if f in filters.firm %}selected{% endif %}>{{ f }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" value="{{ filters.start }}">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" value="{{ filters.end }}">
+          </div>
+          <div class="field" style="align-self:end;">
+            <button class="btn btn-primary" type="submit">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th class="sticky-col" style="left:0;">Item Code</th>
+            <th class="sticky-col" style="left:110px;">Description</th>
+            {% for year in years %}
+            <th colspan="{% if is_admin %}5{% else %}3{% endif %}" class="year-group">{{ year }}</th>
+            {% endfor %}
+          </tr>
+          <tr>
+            <th class="sticky-col" style="left:0;"></th>
+            <th class="sticky-col" style="left:110px;"></th>
+            {% for year in years %}
+            <th class="text-right">Sales</th>
+            {% if is_admin %}<th class="text-right">GP</th><th class="text-right">GP%</th>{% endif %}
+            <th class="text-right">Qty</th>
+            <th class="text-right">Avg Rate</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        {% include 'historical_sales/_item_analysis_table.html' with items=page_obj years=years is_admin=is_admin totals_list=totals_list %}
+      </table>
+      <div id="pagination-container">
+        {% include 'historical_sales/_item_analysis_pagination.html' with page_obj=page_obj %}
+      </div>
+      <p style="padding: 12px; font-size: 0.875rem; color: var(--text-secondary);">Showing {{ page_obj|length }} of {{ total_count|intcomma }} items</p>
+    </div>
+  </div>
+  <script>
+    document.querySelectorAll('.pagination a[data-page]').forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var url = new URL(window.location.href);
+        url.searchParams.set('page', this.getAttribute('data-page'));
+        window.location.href = url.toString();
+      });
+    });
+  </script>
+</body>
+</html>
