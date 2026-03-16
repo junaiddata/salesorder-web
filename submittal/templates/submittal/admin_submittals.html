@@ -1,0 +1,74 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Submittals{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> <a href="{% url 'submittal:admin_submittals' %}">Submittals</a>{% endblock %}
+{% block content %}
+
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1>All Submittals</h1>
+        <div class="page-sub">Manage and download submittal packages</div>
+    </div>
+    <a href="{% url 'submittal:wizard' %}" class="btn btn-admin btn-admin-primary">
+        <i class="fas fa-plus"></i> New Submittal
+    </a>
+</div>
+
+<div class="admin-card">
+    <form method="get" class="d-flex gap-2 mb-4" style="max-width:400px;">
+        <div style="position:relative;flex:1;">
+            <i class="fas fa-search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:0.8rem;"></i>
+            <input type="search" name="q" value="{{ search_q }}" class="form-control form-control-sm" placeholder="Search project, client, product…" style="padding-left:2.2rem;">
+        </div>
+        <button type="submit" class="btn btn-admin btn-admin-outline" style="padding:0.4rem 0.85rem;font-size:0.82rem;">Search</button>
+        {% if search_q %}<a href="{% url 'submittal:admin_submittals' %}" class="btn btn-admin btn-admin-outline" style="padding:0.4rem 0.75rem;font-size:0.82rem;">Clear</a>{% endif %}
+    </form>
+
+    {% if submittals %}
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width:35%">Project</th>
+                    <th>Client</th>
+                    <th>Product</th>
+                    <th>Created</th>
+                    <th>PDF</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in submittals %}
+                <tr>
+                    <td style="font-weight:500;">{{ s.project|truncatewords:8 }}</td>
+                    <td>{{ s.client|default:"—" }}</td>
+                    <td>{{ s.product|default:"—" }}</td>
+                    <td style="white-space:nowrap;">{{ s.created_at|date:"d M Y" }}</td>
+                    <td>
+                        {% if s.pdf_generated_at %}
+                        <span class="badge" style="background:#dcfce7;color:#166534;font-size:0.7rem;font-weight:500;padding:0.25rem 0.5rem;">Ready</span>
+                        {% else %}
+                        <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:0.7rem;font-weight:500;padding:0.25rem 0.5rem;">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'submittal:detail' s.pk %}" class="btn btn-sm btn-outline-primary" title="View"><i class="fas fa-eye"></i></a>
+                        <a href="{% url 'submittal:edit' s.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="fas fa-edit"></i></a>
+                        <a href="{% url 'submittal:generate_pdf' s.pk %}" class="btn btn-sm btn-outline-success" title="Download PDF"><i class="fas fa-download"></i></a>
+                        <form method="post" action="{% url 'submittal:delete' s.pk %}" class="d-inline" onsubmit="return confirm('Delete this submittal? This cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
+        <p class="mb-0">{% if search_q %}No submittals match "{{ search_q }}".{% else %}No submittals yet. <a href="{% url 'submittal:wizard' %}">Create your first.</a>{% endif %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

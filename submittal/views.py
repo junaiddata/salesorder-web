@@ -4,13 +4,13 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse, FileResponse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
 from .models import (
     Submittal, SubmittalMaterial, SubmittalBrand, ProjectContractorHistory,
-    SubmittalSectionUpload,
+    SubmittalSectionUpload, ComplianceOption, RemarkOption,
 )
 from .forms import TitlePageForm
 from .services import get_history_values
@@ -33,6 +33,9 @@ def submittal_wizard(request, pk=None):
     existing_index_items = []
     existing_uploads = {}
 
+    existing_compliance_rows = []
+    existing_compliance_brand_id = None
+
     if submittal:
         initial_title = {
             'project': submittal.project,
@@ -46,6 +49,8 @@ def submittal_wizard(request, pk=None):
         existing_index_items = submittal.index_items or []
         for up in submittal.section_uploads.all():
             existing_uploads[up.index_label] = up.file.name.split('/')[-1] if up.file else ''
+        existing_compliance_rows = submittal.compliance_rows or []
+        existing_compliance_brand_id = submittal.compliance_brand_id
 
     title_form = TitlePageForm(initial=initial_title)
 
@@ -59,6 +64,9 @@ def submittal_wizard(request, pk=None):
     }
 
     existing_materials_columns = submittal.materials_columns if submittal else []
+    existing_warranty_brand_id = submittal.warranty_brand_id if submittal else None
+    existing_warranty_date_type = getattr(submittal, 'warranty_date_type', 'toc') or 'toc' if submittal else 'toc'
+    existing_warranty_materials_columns = submittal.warranty_materials_columns if submittal else []
     # Column definitions from all brands (for wizard column selector)
     brands = SubmittalBrand.objects.order_by('display_order')
     all_columns = []
@@ -69,6 +77,14 @@ def submittal_wizard(request, pk=None):
             if k and k not in seen:
                 seen.add(k)
                 all_columns.append({'key': k, 'label': col.get('label', k)})
+
+    compliance_options = list(ComplianceOption.objects.values('pk', 'label'))
+    brands = SubmittalBrand.objects.order_by('display_order', 'name')
+    remark_options_by_brand = {
+        b.pk: list(b.remark_options.values('pk', 'label'))
+        for b in brands
+    }
+    warranty_brands_with_format = [b.pk for b in brands if getattr(b, 'use_generated_warranty', False)]
 
     context = {
         'submittal': submittal,
@@ -81,6 +97,17 @@ def submittal_wizard(request, pk=None):
         'existing_uploads': json.dumps(existing_uploads),
         'existing_materials_columns': json.dumps(existing_materials_columns),
         'all_column_definitions': json.dumps(all_columns),
+        # Compliance statement
+        'brands_json': json.dumps([{'pk': b.pk, 'name': b.name} for b in brands]),
+        'compliance_options_json': json.dumps(compliance_options),
+        'remark_options_by_brand_json': json.dumps(remark_options_by_brand),
+        'existing_compliance_rows_json': json.dumps(existing_compliance_rows),
+        'existing_compliance_brand_id': existing_compliance_brand_id or '',
+        # Warranty section
+        'existing_warranty_brand_id': existing_warranty_brand_id or '',
+        'existing_warranty_date_type': existing_warranty_date_type,
+        'existing_warranty_materials_columns': json.dumps(existing_warranty_materials_columns),
+        'warranty_brands_with_format': json.dumps(warranty_brands_with_format),
     }
     return render(request, 'submittal/wizard.html', context)
 
@@ -117,6 +144,39 @@ def submittal_save(request):
             submittal.materials_columns = json.loads(materials_columns_json)
         except (ValueError, TypeError):
             pass
+
+    compliance_rows_json = request.POST.get('compliance_rows_json', '')
+    if compliance_rows_json:
+        try:
+            submittal.compliance_rows = json.loads(compliance_rows_json)
+        except (ValueError, TypeError):
+            submittal.compliance_rows = []
+    else:
+        submittal.compliance_rows = []
+
+    compliance_brand_id = request.POST.get('compliance_brand_id', '')
+    if compliance_brand_id and compliance_brand_id.isdigit():
+        submittal.compliance_brand_id = int(compliance_brand_id)
+    else:
+        submittal.compliance_brand_id = None
+
+    # Warranty section
+    warranty_brand_id = request.POST.get('warranty_brand_id', '')
+    if warranty_brand_id and warranty_brand_id.isdigit():
+        submittal.warranty_brand_id = int(warranty_brand_id)
+    else:
+        submittal.warranty_brand_id = None
+    warranty_date_type = request.POST.get('warranty_date_type', 'toc')
+    if warranty_date_type in ('toc', 'invoice'):
+        submittal.warranty_date_type = warranty_date_type
+    warranty_materials_columns_json = request.POST.get('warranty_materials_columns_json', '')
+    if warranty_materials_columns_json:
+        try:
+            submittal.warranty_materials_columns = json.loads(warranty_materials_columns_json)
+        except (ValueError, TypeError):
+            submittal.warranty_materials_columns = []
+    else:
+        submittal.warranty_materials_columns = []
 
     # Invalidate stored PDF on edit
     if submittal.pk and submittal.generated_pdf:
@@ -284,7 +344,7 @@ def api_materials_search(request):
             'material': d.get('material', ''),
             'size': d.get('size', ''),
             'wras_number': d.get('wras_number', ''),
-            'brand': m.brand.name if m.brand else '',
+            'brand': m.get('brand') or (m.brand.name if m.brand else ''),
             'pressure_rating': d.get('pressure_rating', ''),
             'area_of_application': d.get('area_of_application', ''),
         }
@@ -311,19 +371,18 @@ def submittal_items_list(request, brand_code=None):
         {'key': 'wras_number', 'label': 'WRAS No.'}, {'key': 'brand', 'label': 'Brand'},
         {'key': 'pressure_rating', 'label': 'Pressure Rating'}, {'key': 'area_of_application', 'label': 'Area of Application'},
     ]
-    materials_rows = []
+    materials_with_rows = []
     for mat in materials:
         row = []
         for col in cols:
             k = col.get('key', '')
             row.append(mat.model_no if k == 'model_no' else mat.get(k, ''))
-        materials_rows.append(row)
+        materials_with_rows.append((mat, row))
     return render(request, 'submittal/items_list.html', {
         'brands': brands,
         'brand': brand,
-        'materials': materials,
+        'materials_with_rows': materials_with_rows,
         'columns': cols,
-        'materials_rows': materials_rows,
     })
 
 
@@ -420,3 +479,332 @@ def api_history_suggestions(request):
     if field not in valid_fields:
         return JsonResponse({'values': []})
     return JsonResponse({'values': get_history_values(field)})
+
+
+# ---------------------------------------------------------------------------
+# Compliance Settings page
+# ---------------------------------------------------------------------------
+
+@login_required
+def submittal_settings(request):
+    """In-app settings page for Compliance Options and Remark Options per brand."""
+    from .models import ComplianceOption, RemarkOption
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        # ── Compliance Options ──
+        if action == 'add_compliance':
+            label = request.POST.get('label', '').strip()
+            if label:
+                order = ComplianceOption.objects.count()
+                ComplianceOption.objects.get_or_create(label=label, defaults={'display_order': order})
+            return redirect('submittal:settings')
+
+        if action == 'delete_compliance':
+            pk = request.POST.get('pk')
+            if pk:
+                ComplianceOption.objects.filter(pk=pk).delete()
+            return redirect('submittal:settings')
+
+        if action == 'reorder_compliance':
+            order_data = request.POST.getlist('order[]')
+            for i, pk in enumerate(order_data):
+                ComplianceOption.objects.filter(pk=pk).update(display_order=i)
+            return JsonResponse({'ok': True})
+
+        # ── Remark Options ──
+        if action == 'add_remark':
+            brand_id = request.POST.get('brand_id')
+            label = request.POST.get('label', '').strip()
+            if brand_id and label:
+                order = RemarkOption.objects.filter(brand_id=brand_id).count()
+                RemarkOption.objects.create(brand_id=brand_id, label=label, display_order=order)
+            return redirect('submittal:settings')
+
+        if action == 'delete_remark':
+            pk = request.POST.get('pk')
+            if pk:
+                RemarkOption.objects.filter(pk=pk).delete()
+            return redirect('submittal:settings')
+
+        if action == 'reorder_remark':
+            order_data = request.POST.getlist('order[]')
+            for i, pk in enumerate(order_data):
+                RemarkOption.objects.filter(pk=pk).update(display_order=i)
+            return JsonResponse({'ok': True})
+
+    brands = SubmittalBrand.objects.order_by('display_order', 'name')
+    compliance_options = ComplianceOption.objects.all()
+    remark_options_by_brand = {
+        b.pk: list(b.remark_options.values('pk', 'label', 'display_order'))
+        for b in brands
+    }
+
+    return render(request, 'submittal/settings.html', {
+        'brands': brands,
+        'compliance_options': compliance_options,
+        'remark_options_by_brand': json.dumps(remark_options_by_brand),
+    })
+
+
+@require_GET
+@login_required
+def api_remark_options(request):
+    """Return remark options for a given brand_id."""
+    from .models import RemarkOption
+    brand_id = request.GET.get('brand_id')
+    if not brand_id:
+        return JsonResponse({'options': []})
+    opts = list(RemarkOption.objects.filter(brand_id=brand_id).values('pk', 'label'))
+    return JsonResponse({'options': opts})
+
+
+# ---------------------------------------------------------------------------
+# In-App Admin Panel
+# ---------------------------------------------------------------------------
+
+@login_required
+def admin_index(request):
+    """Admin dashboard."""
+    submittal_count = Submittal.objects.count()
+    material_count = SubmittalMaterial.objects.count()
+    brand_count = SubmittalBrand.objects.count()
+    return render(request, 'submittal/admin_index.html', {
+        'submittal_count': submittal_count,
+        'material_count': material_count,
+        'brand_count': brand_count,
+    })
+
+
+@login_required
+def admin_submittals(request):
+    """Admin submittals list with search and delete."""
+    q = request.GET.get('q', '').strip()
+    submittals = Submittal.objects.all().order_by('-created_at')
+    if q:
+        from django.db.models import Q
+        submittals = submittals.filter(
+            Q(project__icontains=q) | Q(client__icontains=q) | Q(product__icontains=q)
+        )
+    return render(request, 'submittal/admin_submittals.html', {
+        'submittals': submittals,
+        'search_q': q,
+    })
+
+
+@require_POST
+@login_required
+def submittal_delete(request, pk):
+    """Delete submittal and its generated PDF. Called via POST with JS confirmation."""
+    submittal = get_object_or_404(Submittal, pk=pk)
+    project_name = (submittal.project or '')[:50]
+    if submittal.generated_pdf and submittal.generated_pdf.name:
+        try:
+            submittal.generated_pdf.delete(save=False)
+        except Exception:
+            pass
+    _delete_temp_upload_files(submittal)
+    submittal.delete()
+    messages.success(request, f'Submittal "{project_name}..." has been deleted.')
+    return redirect('submittal:admin_submittals')
+
+
+@login_required
+def admin_items(request):
+    """Admin materials list - redirect to items with brand filter or show all."""
+    brands = SubmittalBrand.objects.order_by('display_order', 'name')
+    brand_code = request.GET.get('brand', '')
+    if brand_code:
+        brand = get_object_or_404(SubmittalBrand, code=brand_code)
+        materials = SubmittalMaterial.objects.filter(brand=brand).order_by('display_order', 'model_no')
+    else:
+        brand = None
+        materials = SubmittalMaterial.objects.select_related('brand').all().order_by('display_order', 'model_no')
+
+    cols = (brand.column_definitions if brand and brand.column_definitions else []) or [
+        {'key': 'model_no', 'label': 'Model No.'}, {'key': 'item_description', 'label': 'Item Description'},
+        {'key': 'material', 'label': 'Material'}, {'key': 'size', 'label': 'Size'},
+        {'key': 'wras_number', 'label': 'WRAS No.'}, {'key': 'brand', 'label': 'Brand'},
+    ]
+    materials_with_rows = []
+    for mat in materials:
+        row = []
+        for col in cols:
+            k = col.get('key', '')
+            row.append(mat.model_no if k == 'model_no' else mat.get(k, ''))
+        materials_with_rows.append((mat, row))
+
+    return render(request, 'submittal/admin_items.html', {
+        'brands': brands,
+        'brand': brand,
+        'materials_with_rows': materials_with_rows,
+        'columns': cols,
+    })
+
+
+@login_required
+def admin_item_detail(request, pk):
+    """Item/material detail page with uploads for catalogue, technical PDF, and certifications."""
+    from .models import MaterialCertification
+
+    material = get_object_or_404(SubmittalMaterial, pk=pk)
+    material.brand  # ensure prefetch
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+        f = request.FILES.get('file')
+
+        if action == 'catalogue' and f:
+            if material.catalogue_pdf and material.catalogue_pdf.name:
+                material.catalogue_pdf.delete(save=False)
+            material.catalogue_pdf = f
+            material.save()
+            messages.success(request, 'Catalogue PDF updated.')
+
+        elif action == 'technical' and f:
+            if material.technical_pdf and material.technical_pdf.name:
+                material.technical_pdf.delete(save=False)
+            material.technical_pdf = f
+            material.save()
+            messages.success(request, 'Technical PDF updated.')
+
+        elif action == 'cert' and f:
+            cert_type = request.POST.get('cert_type', '')
+            if cert_type in ['test_certificate', 'country_of_origin', 'previous_approval']:
+                MaterialCertification.objects.create(
+                    material=material,
+                    cert_type=cert_type,
+                    file=f,
+                    description=request.POST.get('description', '')[:255],
+                )
+                messages.success(request, f'{dict(MaterialCertification.CERT_TYPE_CHOICES).get(cert_type)} added.')
+
+        elif action == 'delete_cert':
+            cert_id = request.POST.get('cert_id')
+            if cert_id:
+                cert = MaterialCertification.objects.filter(pk=cert_id, material=material).first()
+                if cert:
+                    if cert.file and cert.file.name:
+                        cert.file.delete(save=False)
+                    cert.delete()
+                    messages.success(request, 'Certificate removed.')
+
+        return redirect('submittal:admin_item_detail', pk=pk)
+
+    certifications = material.certifications.all().order_by('cert_type', 'uploaded_at')
+    cols = (material.brand.column_definitions or []) or [
+        {'key': 'model_no', 'label': 'Model No.'}, {'key': 'item_description', 'label': 'Item Description'},
+        {'key': 'material', 'label': 'Material'}, {'key': 'size', 'label': 'Size'},
+    ]
+    detail_rows = []
+    for col in cols:
+        k = col.get('key', '')
+        val = material.model_no if k == 'model_no' else material.get(k, '')
+        detail_rows.append({'label': col.get('label', k), 'value': val})
+
+    return render(request, 'submittal/admin_item_detail.html', {
+        'material': material,
+        'certifications': certifications,
+        'detail_rows': detail_rows,
+    })
+
+
+@login_required
+def admin_brands(request):
+    """Admin brands list and CRUD."""
+    brands = SubmittalBrand.objects.order_by('display_order', 'name')
+    return render(request, 'submittal/admin_brands.html', {'brands': brands})
+
+
+@login_required
+def admin_brand_add(request):
+    """Add new brand."""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper().replace(' ', '_')
+        if name and code:
+            if SubmittalBrand.objects.filter(code=code).exists():
+                messages.error(request, f'Brand with code "{code}" already exists.')
+            else:
+                use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
+                SubmittalBrand.objects.create(name=name, code=code, use_generated_warranty=use_generated_warranty)
+                messages.success(request, f'Brand "{name}" added.')
+                return redirect('submittal:admin_brands')
+        else:
+            messages.error(request, 'Name and code are required.')
+    return render(request, 'submittal/admin_brand_form.html', {'brand': None})
+
+
+@login_required
+def admin_brand_edit(request, pk):
+    """Edit brand."""
+    brand = get_object_or_404(SubmittalBrand, pk=pk)
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper().replace(' ', '_')
+        if name and code:
+            if SubmittalBrand.objects.filter(code=code).exclude(pk=pk).exists():
+                messages.error(request, f'Brand with code "{code}" already exists.')
+            else:
+                brand.name = name
+                brand.code = code
+                brand.use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
+                brand.save()
+                messages.success(request, f'Brand "{name}" updated.')
+                return redirect('submittal:admin_brands')
+        else:
+            messages.error(request, 'Name and code are required.')
+    return render(request, 'submittal/admin_brand_form.html', {'brand': brand})
+
+
+@login_required
+def admin_brand_delete(request, pk):
+    """Delete brand (only if no materials)."""
+    if request.method != 'POST':
+        return redirect('submittal:admin_brands')
+    brand = get_object_or_404(SubmittalBrand, pk=pk)
+    if brand.materials.exists():
+        messages.error(request, f'Cannot delete "{brand.name}" - it has materials. Delete materials first.')
+        return redirect('submittal:admin_brands')
+    name = brand.name
+    brand.delete()
+    messages.success(request, f'Brand "{name}" deleted.')
+    return redirect('submittal:admin_brands')
+
+
+@login_required
+def admin_company_docs(request):
+    """Manage company documents (profile, trade license)."""
+    import os
+    from .models import CompanyDocuments
+    docs = CompanyDocuments.get_instance()
+    if request.method == 'POST':
+        field = request.POST.get('field', '')
+        f = request.FILES.get('file')
+        if field and f:
+            valid = ['company_profile_pdf', 'trade_license_pdf', 'index_standard_pdf']
+            if field in valid:
+                old = getattr(docs, field)
+                if old and old.name:
+                    old.delete(save=False)
+                setattr(docs, field, f)
+                docs.save()
+                messages.success(request, f'Updated {field.replace("_", " ").title()}.')
+        return redirect('submittal:admin_company_docs')
+
+    def _basename(ff):
+        return os.path.basename(ff.name) if ff and ff.name else None
+
+    upload_fields = [
+        ('company_profile_pdf', 'Company Profile PDF', _basename(docs.company_profile_pdf)),
+        ('trade_license_pdf', 'Trade License PDF', _basename(docs.trade_license_pdf)),
+        ('index_standard_pdf', 'Index Standard PDF', _basename(docs.index_standard_pdf)),
+    ]
+    return render(request, 'submittal/admin_company_docs.html', {
+        'docs': docs,
+        'upload_fields': upload_fields,
+        'company_profile_name': _basename(docs.company_profile_pdf),
+        'trade_license_name': _basename(docs.trade_license_pdf),
+        'index_standard_name': _basename(docs.index_standard_pdf),
+    })

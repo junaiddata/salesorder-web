@@ -22,7 +22,7 @@
     <div class="top-bar">
         <a href="{% url 'submittal:list' %}" style="color:rgba(255,255,255,0.9);text-decoration:none;"><i class="fas fa-arrow-left me-2"></i>Back</a>
         <h1 style="margin:0;font-size:1.2rem;"><i class="fas fa-boxes-stacked me-2"></i>Submittal Items{% if brand %} - {{ brand.name }}{% endif %}</h1>
-        <span></span>
+        <a href="{% url 'submittal:admin_index' %}" style="color:rgba(255,255,255,0.9);text-decoration:none;font-size:0.9rem;">Admin</a>
     </div>
 
     <div class="container-main">
@@ -47,8 +47,8 @@
         {% endif %}
 
         <div class="detail-card">
-            <h2 class="mb-3">{% if brand %}{{ brand.name }}{% else %}All{% endif %} Materials ({{ materials|length }})</h2>
-            {% if materials %}
+            <h2 class="mb-3">{% if brand %}{{ brand.name }}{% else %}All{% endif %} Materials ({{ materials_with_rows|length }})</h2>
+            {% if materials_with_rows %}
             <div class="table-responsive">
                 <table class="materials-table">
                     <thead>
@@ -57,15 +57,19 @@
                             {% for col in columns %}
                             <th>{{ col.label }}</th>
                             {% endfor %}
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for row in materials_rows %}
+                        {% for mat, row in materials_with_rows %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
                             {% for val in row %}
                             <td>{{ val|default:"—" }}</td>
                             {% endfor %}
+                            <td>
+                                <a href="{% url 'submittal:admin_item_detail' mat.pk %}" class="btn btn-sm btn-outline-primary">View / Upload</a>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

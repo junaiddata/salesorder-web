@@ -21,7 +21,7 @@ from .models import HistoricalSalesLine, Customer, Items
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_YEARS = [2020, 2021, 2022, 2023]
+ALLOWED_YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
 
 
 def _parse_date(val):
@@ -36,7 +36,14 @@ def _parse_date(val):
         except Exception:
             pass
     s = str(val).strip()
-    for fmt in ['%d.%m.%y', '%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%d-%m-%y', '%Y%m%d']:
+    # Excel serial number (e.g. 44927 or "44927.0")
+    try:
+        f = float(s)
+        return pd.Timestamp(f).date()
+    except (ValueError, TypeError):
+        pass
+    for fmt in ['%d.%m.%y', '%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%d-%m-%y', '%Y%m%d',
+                '%d-%b-%Y', '%d-%b-%y', '%d %b %Y', '%b %d %Y', '%Y-%m-%d %H:%M:%S', '%m-%d-%Y', '%m/%d/%y']:
         try:
             return datetime.strptime(s, fmt).date()
         except ValueError:
@@ -45,10 +52,28 @@ def _parse_date(val):
 
 
 def _to_decimal(x):
-    if pd.isna(x):
+    """Parse decimal from string/number. Handles US (1,234.56) and European (1.234,56) formats."""
+    if pd.isna(x) or x is None or (isinstance(x, str) and not x.strip()):
         return Decimal('0')
     try:
-        return Decimal(str(x).replace(',', '').strip())
+        s = str(x).strip()
+        # European format: 1.234,56 (dot=thousands, comma=decimal)
+        if ',' in s and '.' in s:
+            # Both present: last one is decimal separator
+            if s.rfind(',') > s.rfind('.'):
+                s = s.replace('.', '').replace(',', '.')  # 1.234,56 -> 1234.56
+            else:
+                s = s.replace(',', '')  # 1,234.56 -> 1234.56
+        elif ',' in s:
+            # Only comma: could be thousands (1,234) or decimal (1,23)
+            parts = s.split(',')
+            if len(parts) == 2 and len(parts[1]) <= 2:
+                s = s.replace(',', '.')  # decimal: 1,23 -> 1.23
+            else:
+                s = s.replace(',', '')  # thousands: 1,234 -> 1234
+        else:
+            s = s.replace(',', '')  # US thousands only
+        return Decimal(s)
     except Exception:
         return Decimal('0')
 
@@ -83,6 +108,19 @@ def _resolve_document_type(doc_type_code_raw, doc_type_raw):
 
 
 @login_required
+def historical_sales_clear_all(request):
+    """Delete all Historical Sales data. Requires POST with confirm=yes."""
+    if request.method != 'POST':
+        return redirect('historical_sales_upload')
+    if request.POST.get('confirm') != 'yes':
+        messages.error(request, 'Deletion cancelled. Please confirm to delete all data.')
+        return redirect('historical_sales_upload')
+    count, _ = HistoricalSalesLine.objects.all().delete()
+    messages.success(request, f'Deleted all {count} historical sales records. You can now upload fresh data.')
+    return redirect('historical_sales_upload')
+
+
+@login_required
 def historical_sales_upload(request):
     """Upload Excel/CSV file for Historical Sales (2020-2023)."""
     if request.method != 'POST':
@@ -107,8 +145,8 @@ def historical_sales_upload(request):
             'item_description': ['item description', 'itemdescription'],
             'item_manufacturer': ['item manufacturer', 'itemmanufacturer', 'manufacturer'],
             'quantity': ['quantity', 'qty'],
-            'net_sales': ['net sales', 'netsales'],
-            'gross_profit': ['gross profit', 'grossprofit', 'gp'],
+            'net_sales': ['net sales', 'netsales', 'amount', 'net amount', 'line total'],
+            'gross_profit': ['gross profit', 'grossprofit', 'gp', 'gross margin', 'margin'],
         }
         for col in df.columns:
             c = str(col).strip().lower().replace('\ufeff', '').replace('\xa0', ' ')
@@ -140,90 +178,160 @@ def historical_sales_upload(request):
         if doc_type_code_col:
             rev_map['document_type_code'] = doc_type_code_col
 
-        def get_val(row, key):
+        # Get column indices for itertuples (10-100x faster than iterrows)
+        def _col_index(col_name):
+            if col_name not in df.columns:
+                return -1
+            try:
+                return list(df.columns).index(col_name)
+            except ValueError:
+                return -1
+
+        def get_val_tuple(tup, key):
             col = rev_map.get(key)
-            if col is None:
+            if col is None or col not in df.columns:
                 return ''
-            return row.get(col, '')
+            idx = _col_index(col)
+            if idx < 0:
+                return ''
+            try:
+                v = tup[idx]
+                return '' if pd.isna(v) else str(v).strip()
+            except (IndexError, TypeError):
+                return ''
 
+        # First pass: collect unique customers, items, and valid rows
+        unique_customers = {}  # cust_code -> cust_name
+        unique_items = {}      # item_code -> (item_desc, item_manu)
         docs_to_replace = set()
-        rows_to_insert = []
+        raw_rows = []
         skipped_outside_year = 0
+        skip_reasons = {'no_doc_no': 0, 'no_date': 0, 'year_outside': 0, 'no_cust': 0, 'no_item': 0}
 
-        for idx, row in df.iterrows():
-            doc_type_code_raw = get_val(row, 'document_type_code') if 'document_type_code' in rev_map else ''
-            doc_type_raw = get_val(row, 'document_type')
+        for tup in df.itertuples(index=False):
+            doc_type_code_raw = get_val_tuple(tup, 'document_type_code') if doc_type_code_col else ''
+            doc_type_raw = get_val_tuple(tup, 'document_type')
             doc_type, doc_type_code = _resolve_document_type(doc_type_code_raw, doc_type_raw)
-            doc_no = _to_str(get_val(row, 'document_number'))
+            doc_no = _to_str(get_val_tuple(tup, 'document_number'))
             if not doc_no:
+                skip_reasons['no_doc_no'] += 1
                 continue
-            posting_d = _parse_date(get_val(row, 'postingdate'))
+            posting_d = _parse_date(get_val_tuple(tup, 'postingdate'))
             if not posting_d:
+                skip_reasons['no_date'] += 1
                 continue
             if posting_d.year not in ALLOWED_YEARS:
                 skipped_outside_year += 1
+                skip_reasons['year_outside'] += 1
                 continue
-            cust_code = _to_str(get_val(row, 'customer_code'))
-            cust_name = _to_str(get_val(row, 'customer_name'))
+            cust_code = _to_str(get_val_tuple(tup, 'customer_code'))
+            cust_name = _to_str(get_val_tuple(tup, 'customer_name'))
             if not cust_code or not cust_name:
+                skip_reasons['no_cust'] += 1
                 continue
-            sales_emp = _to_str(get_val(row, 'sales_employee')) or None
-            item_code = _to_str(get_val(row, 'itemcode'))
-            item_desc = _to_str(get_val(row, 'item_description'))
-            item_manu = _to_str(get_val(row, 'item_manufacturer'))
+            item_code = _to_str(get_val_tuple(tup, 'itemcode'))
             if not item_code:
+                skip_reasons['no_item'] += 1
                 continue
-
-            qty = _to_decimal(get_val(row, 'quantity'))
-            net_sales = _to_decimal(get_val(row, 'net_sales'))
-            gp = _to_decimal(get_val(row, 'gross_profit'))
 
             docs_to_replace.add((doc_type, doc_no))
+            unique_customers[cust_code] = cust_name
+            item_desc = _to_str(get_val_tuple(tup, 'item_description'))
+            item_manu = _to_str(get_val_tuple(tup, 'item_manufacturer'))
+            if item_code not in unique_items:
+                unique_items[item_code] = (item_desc, item_manu)
 
-            customer, _ = Customer.objects.get_or_create(
-                customer_code=cust_code,
-                defaults={'customer_name': cust_name}
-            )
-            item, _ = Items.objects.get_or_create(
-                item_code=item_code,
-                defaults={
-                    'item_description': item_desc or item_code,
-                    'item_firm': item_manu or '',
-                }
-            )
-
-            rows_to_insert.append({
-                'document_type': doc_type,
-                'document_type_code': doc_type_code,
-                'document_number': doc_no,
-                'posting_date': posting_d,
-                'customer': customer,
-                'customer_code': cust_code,
-                'customer_name': cust_name,
-                'sales_employee': sales_emp,
-                'item': item,
+            raw_rows.append({
+                'doc_type': doc_type,
+                'doc_type_code': doc_type_code,
+                'doc_no': doc_no,
+                'posting_d': posting_d,
+                'cust_code': cust_code,
+                'cust_name': cust_name,
+                'sales_emp': _to_str(get_val_tuple(tup, 'sales_employee')) or None,
                 'item_code': item_code,
-                'item_description': item_desc,
-                'item_manufacturer': item_manu,
-                'quantity': qty,
-                'net_sales': net_sales,
-                'gross_profit': gp,
+                'item_desc': item_desc,
+                'item_manu': item_manu,
+                'qty': _to_decimal(get_val_tuple(tup, 'quantity')),
+                'net_sales': _to_decimal(get_val_tuple(tup, 'net_sales')),
+                'gp': _to_decimal(get_val_tuple(tup, 'gross_profit')),
+            })
+
+        # Batch fetch/create customers and items (2-4 queries total instead of 2 per row)
+        existing_customers = {c.customer_code: c for c in Customer.objects.filter(customer_code__in=unique_customers.keys())}
+        existing_items = {i.item_code: i for i in Items.objects.filter(item_code__in=unique_items.keys())}
+
+        new_customer_codes = [c for c in unique_customers if c not in existing_customers]
+        if new_customer_codes:
+            Customer.objects.bulk_create([
+                Customer(customer_code=code, customer_name=unique_customers[code])
+                for code in new_customer_codes
+            ])
+            for c in Customer.objects.filter(customer_code__in=new_customer_codes):
+                existing_customers[c.customer_code] = c
+
+        new_item_codes = [c for c in unique_items if c not in existing_items]
+        if new_item_codes:
+            Items.objects.bulk_create([
+                Items(item_code=code, item_description=unique_items[code][0] or code, item_firm=unique_items[code][1] or '')
+                for code in new_item_codes
+            ])
+            for i in Items.objects.filter(item_code__in=new_item_codes):
+                existing_items[i.item_code] = i
+
+        rows_to_insert = []
+        for r in raw_rows:
+            customer = existing_customers.get(r['cust_code'])
+            item = existing_items.get(r['item_code'])
+            if not customer or not item:
+                continue
+            rows_to_insert.append({
+                'document_type': r['doc_type'],
+                'document_type_code': r['doc_type_code'],
+                'document_number': r['doc_no'],
+                'posting_date': r['posting_d'],
+                'customer': customer,
+                'customer_code': r['cust_code'],
+                'customer_name': r['cust_name'],
+                'sales_employee': r['sales_emp'],
+                'item': item,
+                'item_code': r['item_code'],
+                'item_description': r['item_desc'],
+                'item_manufacturer': r['item_manu'],
+                'quantity': r['qty'],
+                'net_sales': r['net_sales'],
+                'gross_profit': r['gp'],
             })
 
         if not rows_to_insert:
-            msg = f'No valid rows found. Check: (1) Dates must be in 2020-2023, (2) Document Number, Customer Code, Customer Name, Item Code must not be empty. Found {len(df)} rows in file.'
+            msg = f'No valid rows found. Found {len(df)} rows in file.'
             if skipped_outside_year:
-                msg += f' Skipped {skipped_outside_year} rows outside 2020-2023.'
+                msg += f' Skipped {skipped_outside_year} rows outside allowed years ({min(ALLOWED_YEARS)}-{max(ALLOWED_YEARS)}).'
+            parts = []
+            if skip_reasons['no_doc_no']:
+                parts.append(f"{skip_reasons['no_doc_no']} with empty Document Number")
+            if skip_reasons['no_date']:
+                parts.append(f"{skip_reasons['no_date']} with unparseable date")
+            if skip_reasons['year_outside']:
+                parts.append(f"{skip_reasons['year_outside']} outside allowed years")
+            if skip_reasons['no_cust']:
+                parts.append(f"{skip_reasons['no_cust']} with empty Customer Code/Name")
+            if skip_reasons['no_item']:
+                parts.append(f"{skip_reasons['no_item']} with empty Item Code")
+            if parts:
+                msg += ' Reasons: ' + '; '.join(parts) + '.'
             return render(request, 'historical_sales/upload.html', {'error': msg})
 
         with transaction.atomic():
-            for doc_type, doc_no in docs_to_replace:
-                HistoricalSalesLine.objects.filter(
-                    document_type=doc_type, document_number=doc_no
-                ).delete()
-                HistoricalSalesLine.objects.bulk_create([
-                    HistoricalSalesLine(**r) for r in rows_to_insert
-                ])
+            # Bulk delete: one query instead of one per document
+            if docs_to_replace:
+                q = Q()
+                for doc_type, doc_no in docs_to_replace:
+                    q |= Q(document_type=doc_type, document_number=doc_no)
+                HistoricalSalesLine.objects.filter(q).delete()
+            HistoricalSalesLine.objects.bulk_create([
+                HistoricalSalesLine(**r) for r in rows_to_insert
+            ])
 
         msg = f'Successfully uploaded {len(rows_to_insert)} line items from {len(docs_to_replace)} documents.'
         if skipped_outside_year:

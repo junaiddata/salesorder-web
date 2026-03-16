@@ -40,6 +40,10 @@ class SubmittalBrand(models.Model):
         help_text='[{"key": "model_no", "label": "Model No.", "order": 1}, ...]'
     )
     display_order = models.IntegerField(default=0)
+    use_generated_warranty = models.BooleanField(
+        default=False,
+        help_text="When enabled, warranty letter is auto-generated from materials table instead of PDF upload. Configure in Admin."
+    )
 
     class Meta:
         ordering = ['display_order', 'name']
@@ -253,6 +257,31 @@ class Submittal(models.Model):
         upload_to=submittal_upload_path, blank=True, null=True,
         help_text="Warranty draft letter PDF (placeholder)"
     )
+    warranty_brand = models.ForeignKey(
+        'SubmittalBrand', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='warranty_submittals',
+        help_text="Brand with generated warranty format. When set and brand has use_generated_warranty, letter is auto-generated. Otherwise use PDF upload."
+    )
+    warranty_date_type = models.CharField(
+        max_length=20, default='toc', blank=True,
+        choices=[('toc', 'Date of TOC'), ('invoice', 'Date of Invoice')],
+        help_text="Warranty period wording: from date of TOC or Invoice"
+    )
+    warranty_materials_columns = models.JSONField(
+        default=list, blank=True,
+        help_text="Column keys for warranty materials table. Empty = use materials_columns."
+    )
+
+    # Section 6 - Compliance Statement (form-based rows, optional)
+    compliance_rows = models.JSONField(
+        default=list, blank=True,
+        help_text="Compliance statement rows: [{specification, compliance, remarks}, ...]"
+    )
+    compliance_brand = models.ForeignKey(
+        'SubmittalBrand', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='compliance_submittals',
+        help_text="Brand used for remark options in compliance statement"
+    )
 
     # Stored output PDF — generated once, temp uploads deleted after
     generated_pdf = models.FileField(
@@ -288,3 +317,39 @@ class SubmittalSectionUpload(models.Model):
 
     def __str__(self):
         return f"{self.submittal_id} - {self.index_label}"
+
+
+# ---------------------------------------------------------------------------
+# Compliance Statement options
+# ---------------------------------------------------------------------------
+
+class ComplianceOption(models.Model):
+    """Global options for the Compliance dropdown in the compliance statement form."""
+    label = models.CharField(max_length=255, unique=True)
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'label']
+        verbose_name = "Compliance Option"
+        verbose_name_plural = "Compliance Options"
+
+    def __str__(self):
+        return self.label
+
+
+class RemarkOption(models.Model):
+    """Brand-specific options for the Remarks dropdown in the compliance statement form."""
+    brand = models.ForeignKey(
+        SubmittalBrand, on_delete=models.CASCADE, related_name='remark_options',
+        help_text="Brand this remark belongs to"
+    )
+    label = models.TextField(help_text="Remark text (can be multi-line)")
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['brand', 'display_order', 'label']
+        verbose_name = "Remark Option"
+        verbose_name_plural = "Remark Options"
+
+    def __str__(self):
+        return f"{self.brand.name}: {self.label[:60]}"

@@ -213,7 +213,8 @@ urlpatterns += [
 
 
 
-    # Historical Sales (2020-2023)
+    # Historical Sales (2020-2025)
+    path('historical-sales/clear/', historical_sales_views.historical_sales_clear_all, name='historical_sales_clear_all'),
     path('historical-sales/upload/', historical_sales_views.historical_sales_upload, name='historical_sales_upload'),
     path('historical-sales/analysis/', historical_sales_views.historical_sales_analysis_dashboard, name='historical_sales_analysis'),
     path('historical-sales/item-analysis/', historical_sales_views.historical_item_analysis, name='historical_sales_item_analysis'),

@@ -1,0 +1,101 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Compliance Settings{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> Compliance Settings{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1>Compliance Settings</h1>
+    <div class="page-sub">Manage dropdown options for compliance statements</div>
+</div>
+
+<!-- Compliance Options -->
+<div class="admin-card">
+    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-check-circle me-2" style="color:var(--primary);opacity:0.8;"></i>Compliance Options</h2>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Global options for the Compliance dropdown on the compliance statement form.</p>
+
+    <div style="display:flex;flex-direction:column;gap:0.4rem;" id="complianceList">
+        {% for opt in compliance_options %}
+        <div style="display:flex;align-items:center;gap:0.6rem;padding:0.55rem 0.75rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:0.875rem;">
+            <i class="fas fa-check-circle" style="color:#10b981;font-size:0.75rem;flex-shrink:0;"></i>
+            <span style="flex:1;">{{ opt.label }}</span>
+            <form method="post" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_compliance">
+                <input type="hidden" name="pk" value="{{ opt.pk }}">
+                <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:0.85rem;" title="Remove" onclick="return confirm('Remove this option?');">
+                    <i class="fas fa-times"></i>
+                </button>
+            </form>
+        </div>
+        {% empty %}
+        <p style="color:var(--text-muted);font-size:0.85rem;font-style:italic;padding:0.5rem 0;">No compliance options yet. Add some below.</p>
+        {% endfor %}
+    </div>
+
+    <form method="post" class="d-flex gap-2 mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_compliance">
+        <input type="text" name="label" placeholder='e.g. "Comply as Noted"' required class="form-control form-control-sm" style="max-width:340px;">
+        <button type="submit" class="btn btn-admin btn-admin-primary" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add</button>
+    </form>
+</div>
+
+<!-- Remark Options by Brand -->
+<div class="admin-card">
+    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-tag me-2" style="color:var(--primary);opacity:0.8;"></i>Remark Options by Brand</h2>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Remarks dropdown options per brand. Each brand has its own set of remark texts.</p>
+
+    {% if brands %}
+    <ul class="nav nav-tabs mb-0" id="brandTabs" role="tablist" style="border-bottom:2px solid var(--border);">
+        {% for brand in brands %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if forloop.first %}active{% endif %}"
+                id="tab-{{ brand.pk }}"
+                data-bs-toggle="tab"
+                data-bs-target="#pane-{{ brand.pk }}"
+                type="button" role="tab"
+                style="font-size:0.85rem;font-weight:500;padding:0.5rem 1rem;">
+                {{ brand.name }}
+            </button>
+        </li>
+        {% endfor %}
+    </ul>
+    <div class="tab-content" style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:1.25rem;">
+        {% for brand in brands %}
+        <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ brand.pk }}" role="tabpanel">
+            <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.75rem;" id="remarkList-{{ brand.pk }}">
+                {% for opt in brand.remark_options.all %}
+                <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:0.82rem;">
+                    <i class="fas fa-quote-left" style="color:#94a3b8;font-size:0.7rem;flex-shrink:0;margin-top:3px;"></i>
+                    <span style="flex:1;white-space:pre-wrap;" title="{{ opt.label }}">{{ opt.label|truncatechars:120 }}</span>
+                    <form method="post" style="margin:0;flex-shrink:0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_remark">
+                        <input type="hidden" name="pk" value="{{ opt.pk }}">
+                        <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:0.82rem;" title="Remove" onclick="return confirm('Remove this remark?');">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </form>
+                </div>
+                {% empty %}
+                <p style="color:var(--text-muted);font-size:0.85rem;font-style:italic;">No remarks yet for {{ brand.name }}.</p>
+                {% endfor %}
+            </div>
+            <form method="post" class="d-flex gap-2 align-items-end">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_remark">
+                <input type="hidden" name="brand_id" value="{{ brand.pk }}">
+                <textarea name="label" rows="2" placeholder='e.g. "We proposed 10751 Bronze Gate Valve. Comply with bronze body..."' required class="form-control form-control-sm" style="resize:vertical;min-height:52px;max-width:500px;"></textarea>
+                <button type="submit" class="btn btn-admin btn-admin-primary" style="white-space:nowrap;align-self:flex-end;"><i class="fas fa-plus"></i> Add</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:2rem;">
+        <div class="empty-icon"><i class="fas fa-tags"></i></div>
+        <p class="mb-0">No brands configured. <a href="{% url 'submittal:admin_brands' %}">Add brands first.</a></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

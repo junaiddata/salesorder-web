@@ -71,7 +71,7 @@
         .material-search { position: relative; margin-bottom: 1rem; }
         .material-search input { width: 100%; padding: 0.6rem 0.75rem 0.6rem 2.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
         .material-search i { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
-        .material-results { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; display: none; }
+        .material-results { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; display: none; position: relative; z-index: 100; background: #fff; }
         .material-results.show { display: block; }
         .material-result-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--bg); }
         .material-result-item:hover { background: var(--bg); }
@@ -89,11 +89,20 @@
         .section-source-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: #0c4a6e; }
         .section-source-info i { margin-right: 0.5rem; }
 
-        .history-dropdown { position: absolute; z-index: 50; background: #fff; border: 1px solid var(--border); border-radius: 8px; max-height: 200px; overflow-y: auto; width: 100%; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .history-dropdown.show { display: block; }
-        .history-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; }
-        .history-item:hover { background: var(--bg); }
         .form-group-hist { position: relative; }
+        .title-field-mode { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
+        .title-field-mode label { display: flex; align-items: center; gap: 0.4rem; font-weight: 500; font-size: 0.85rem; cursor: pointer; }
+        .title-field-mode input[type="radio"] { accent-color: var(--primary); }
+        .btn-browse-existing { padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 6px; background: #e0f2fe; color: var(--primary); border: 1px solid #bae6fd; cursor: pointer; }
+        .btn-browse-existing:hover { background: #bae6fd; }
+        .existing-list-panel { margin-top: 0.5rem; padding: 0.75rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; display: none; }
+        .existing-list-panel.show { display: block; }
+        .existing-list-search { width: 100%; padding: 0.4rem 0.6rem; margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+        .existing-list-items { max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+        .existing-list-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--bg); }
+        .existing-list-item:last-child { border-bottom: none; }
+        .existing-list-item:hover { background: #dbeafe; }
+        .existing-list-empty { padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem; }
 
         .review-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--bg); font-size: 0.85rem; }
         .review-label { font-weight: 500; color: var(--text-muted); }
@@ -127,13 +136,32 @@
         .upload-row label { font-weight: 600; font-size: 0.85rem; color: var(--primary); margin-bottom: 0.25rem; display: block; }
         .upload-row .existing-file { font-size: 0.78rem; color: var(--step-done); margin-top: 2px; }
         .no-uploads-msg { color: var(--text-muted); font-style: italic; font-size: 0.9rem; text-align: center; padding: 2rem 0; }
+
+        /* Compliance form */
+        .comply-form-block { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 0.5rem; }
+        .comply-form-block thead th { font-size: 0.75rem; padding: 0.4rem 0.5rem; }
+        .comply-form-block .table { margin-bottom: 0.5rem; }
+        .comply-section > label { margin-bottom: 0.75rem; }
+        .spec-format-toolbar { display: flex; gap: 2px; margin-bottom: 4px; }
+        .spec-format-toolbar .btn-spec-fmt {
+            width: 28px; height: 26px; padding: 0; font-size: 0.75rem; font-weight: 700;
+            border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .spec-format-toolbar .btn-spec-fmt:hover { background: #e2e8f0; border-color: var(--primary); color: var(--primary); }
+        .spec-format-toolbar .btn-spec-fmt.bold { font-weight: 700; }
+        .spec-format-toolbar .btn-spec-fmt.italic { font-style: italic; font-weight: 400; }
     </style>
 </head>
 <body>
     <div class="top-bar">
-        <div><a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Back to Submittals</a></div>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Submittals</a>
+        </div>
         <h1><i class="fas fa-file-pdf me-2"></i>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</h1>
-        <div></div>
+        <div>
+            <a href="{% url 'home' %}" style="color:rgba(255,255,255,0.7);text-decoration:none;font-size:0.82rem;padding:0.35rem 0.75rem;border:1px solid rgba(255,255,255,0.25);border-radius:6px;transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#fff';" onmouseout="this.style.background='';this.style.color='rgba(255,255,255,0.7)';"><i class="fas fa-home me-1"></i>SO Home</a>
+        </div>
     </div>
 
     <div class="wizard-container">
@@ -152,12 +180,22 @@
             <!-- STEP 0: Title Page -->
             <div class="step-card active" data-step="0">
                 <h2><i class="fas fa-heading me-2"></i>Title Page</h2>
-                <p class="step-subtitle">Enter the project and contractor details for the cover page.</p>
+                <p class="step-subtitle">Enter the project and contractor details. Choose Existing to pick from previous entries, or New to type fresh.</p>
                 {% for field in title_form %}
-                <div class="mb-3 form-group-hist">
-                    <label for="id_{{ field.name }}">{{ field.label }}</label>
-                    {{ field }}
-                    <div class="history-dropdown" id="hist_{{ field.name }}"></div>
+                <div class="mb-4 form-group-hist" data-field="{{ field.name }}">
+                    <label class="d-block mb-2">{{ field.label }}</label>
+                    <div class="title-field-mode mb-2">
+                        <label><input type="radio" name="mode_{{ field.name }}" value="existing" class="mode-radio"> Existing</label>
+                        <label><input type="radio" name="mode_{{ field.name }}" value="new" class="mode-radio" checked> New</label>
+                    </div>
+                    <div class="d-flex gap-2 mb-1 align-items-start">
+                        <div class="flex-grow-1">{{ field }}</div>
+                        <button type="button" class="btn-browse-existing btn-select-existing" data-field="{{ field.name }}" style="display:none;">Select from list</button>
+                    </div>
+                    <div class="existing-list-panel" id="panel_{{ field.name }}">
+                        <input type="text" class="existing-list-search" placeholder="Search..." data-field="{{ field.name }}">
+                        <div class="existing-list-items" id="list_{{ field.name }}"></div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -281,6 +319,13 @@
         const existingUploads = {{ existing_uploads|safe }};
         const ALL_COLUMN_DEFS = {{ all_column_definitions|safe }};
         const EXISTING_MATERIALS_COLUMNS = {{ existing_materials_columns|safe }};
+
+        // ── Compliance statement data ──
+        const BRANDS_LIST = {{ brands_json|safe }};
+        const COMPLIANCE_OPTIONS = {{ compliance_options_json|safe }};
+        const REMARK_OPTIONS_BY_BRAND = {{ remark_options_by_brand_json|safe }};
+        let complianceRows = {{ existing_compliance_rows_json|safe }} || [];
+        let complianceBrandId = '{{ existing_compliance_brand_id }}';
 
         // ── Labels that are auto-provided (no upload needed) ──
         const AUTO_LABELS = new Set([
@@ -451,6 +496,146 @@
             if (sel) sel.value = showAllColumns ? '[]' : JSON.stringify(selectedColumnKeys);
         }
 
+        // ── Compliance form helpers ──
+        const COMPLY_LABELS = new Set(['comply statement', 'comply statement with project specification']);
+
+        function isComplyStatement(label) {
+            return COMPLY_LABELS.has((label || '').trim().toLowerCase());
+        }
+
+        // ── Warranty section data ──
+        const EXISTING_WARRANTY_BRAND_ID = '{{ existing_warranty_brand_id|default:"" }}';
+        const EXISTING_WARRANTY_DATE_TYPE = '{{ existing_warranty_date_type|default:"toc" }}';
+        const EXISTING_WARRANTY_MATERIALS_COLUMNS = {{ existing_warranty_materials_columns|safe }};
+        const WARRANTY_BRANDS_WITH_FORMAT = {{ warranty_brands_with_format|safe }};
+
+        function isWarrantyDraftLetter(label) {
+            return (label || '').trim().toLowerCase() === 'warranty draft letter';
+        }
+
+        function getRemarkOptions(brandId) {
+            if (!brandId) return [];
+            const key = parseInt(brandId, 10);
+            return REMARK_OPTIONS_BY_BRAND[key] || [];
+        }
+
+        function remarkPreview(text, maxLen) {
+            if (!text) return '';
+            const t = String(text).trim().replace(/\s+/g, ' ');
+            return t.length <= (maxLen || 45) ? t : t.substring(0, maxLen || 45) + '…';
+        }
+
+        function renderComplianceTable() {
+            const tbody = document.getElementById('complianceTbody');
+            if (!tbody) return;
+            tbody.innerHTML = complianceRows.map((row, i) => {
+                const remarkOpts = getRemarkOptions(complianceBrandId);
+                const complianceSelect = `
+                    <select class="form-select form-select-sm cs-compliance" data-idx="${i}">
+                        <option value="">— Leave Blank —</option>
+                        ${COMPLIANCE_OPTIONS.map(o =>
+                            `<option value="${escapeHtml(o.label)}" ${row.compliance === o.label ? 'selected' : ''}>${escapeHtml(o.label)}</option>`
+                        ).join('')}
+                    </select>`;
+                const remarkSelect = `
+                    <select class="form-select form-select-sm cs-remark" data-idx="${i}">
+                        <option value="">— Leave Blank —</option>
+                        ${remarkOpts.map(o =>
+                            `<option value="${escapeHtml(o.label)}" ${row.remarks === o.label ? 'selected' : ''} title="${escapeHtml(o.label)}">${escapeHtml(remarkPreview(o.label, 45))}</option>`
+                        ).join('')}
+                    </select>`;
+                return `
+                    <tr>
+                        <td style="width:36px;text-align:center;vertical-align:top;padding-top:10px;">${i + 1}</td>
+                        <td style="vertical-align:top;">
+                            <div class="spec-format-toolbar">
+                                <button type="button" class="btn-spec-fmt bold" data-cmd="bold" title="Bold – select text then click (e.g. 2.8 GATE VALVES)"><strong>B</strong></button>
+                                <button type="button" class="btn-spec-fmt italic" data-cmd="italic" title="Italic – select text then click"><em>I</em></button>
+                                <button type="button" class="btn-spec-fmt" data-cmd="heading" title="Heading – bold (same as B)"><strong>H</strong></button>
+                            </div>
+                            <textarea class="form-control form-control-sm cs-spec" data-idx="${i}" rows="3" style="resize:vertical;">${escapeHtml(row.specification || '')}</textarea>
+                        </td>
+                        <td style="width:150px;vertical-align:top;">${complianceSelect}</td>
+                        <td style="width:220px;vertical-align:top;">${remarkSelect}</td>
+                        <td style="width:36px;text-align:center;vertical-align:top;padding-top:6px;">
+                            <button type="button" class="btn btn-sm btn-outline-danger cs-remove-row" data-idx="${i}" title="Remove row"><i class="fas fa-times"></i></button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            tbody.querySelectorAll('.cs-spec').forEach(el => {
+                el.addEventListener('input', () => {
+                    complianceRows[parseInt(el.dataset.idx)].specification = el.value;
+                    serializeComplianceRows();
+                });
+            });
+            tbody.querySelectorAll('.cs-compliance').forEach(el => {
+                el.addEventListener('change', () => {
+                    complianceRows[parseInt(el.dataset.idx)].compliance = el.value;
+                    serializeComplianceRows();
+                });
+            });
+            tbody.querySelectorAll('.cs-remark').forEach(el => {
+                el.addEventListener('change', () => {
+                    complianceRows[parseInt(el.dataset.idx)].remarks = el.value;
+                    serializeComplianceRows();
+                });
+            });
+            tbody.querySelectorAll('.cs-remove-row').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    complianceRows.splice(parseInt(btn.dataset.idx), 1);
+                    renderComplianceTable();
+                    serializeComplianceRows();
+                });
+            });
+
+            tbody.querySelectorAll('.btn-spec-fmt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.closest('tr').querySelector('.cs-spec')?.dataset.idx ?? -1);
+                    if (idx < 0) return;
+                    const ta = btn.closest('tr').querySelector('.cs-spec');
+                    if (!ta) return;
+                    const start = ta.selectionStart, end = ta.selectionEnd;
+                    const cmd = btn.dataset.cmd;
+                    let before = ta.value.substring(0, start), sel = ta.value.substring(start, end), after = ta.value.substring(end);
+                    let wrapStart = '', wrapEnd = '';
+                    if (cmd === 'bold' || cmd === 'heading') { wrapStart = '<b>'; wrapEnd = '</b>'; }
+                    else if (cmd === 'italic') { wrapStart = '<i>'; wrapEnd = '</i>'; }
+                    const newVal = before + wrapStart + sel + wrapEnd + after;
+                    ta.value = newVal;
+                    complianceRows[idx].specification = newVal;
+                    serializeComplianceRows();
+                    ta.focus();
+                    ta.setSelectionRange(start + wrapStart.length, end + wrapStart.length);
+                });
+            });
+        }
+
+        function serializeComplianceRows() {
+            const el = document.getElementById('complianceRowsJson');
+            if (el) el.value = JSON.stringify(complianceRows);
+        }
+
+        function initComplianceForm() {
+            const brandSel = document.getElementById('complianceBrandSelect');
+            if (brandSel) {
+                brandSel.value = complianceBrandId || '';
+                brandSel.addEventListener('change', () => {
+                    complianceBrandId = brandSel.value;
+                    const hidBrand = document.getElementById('complianceBrandId');
+                    if (hidBrand) hidBrand.value = complianceBrandId;
+                    renderComplianceTable();
+                });
+            }
+            document.getElementById('btnAddComplianceRow')?.addEventListener('click', () => {
+                complianceRows.push({ specification: '', compliance: '', remarks: '' });
+                renderComplianceTable();
+                serializeComplianceRows();
+            });
+            serializeComplianceRows();
+            renderComplianceTable();
+        }
+
         // ── Dynamic uploads builder ──
         function buildDynamicUploads() {
             const container = document.getElementById('dynamicUploads');
@@ -465,6 +650,118 @@
                 const safeKey = it.label;
                 const fieldName = `section_upload__${safeKey}`;
                 const existing = existingUploads[safeKey] || '';
+
+                if (isWarrantyDraftLetter(it.label)) {
+                    // Warranty: Select brand. Brands with generated format show column options; else upload PDF.
+                    const warrantyColDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
+                        {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
+                        {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
+                        {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
+                    ];
+                    const warrantyCols = EXISTING_WARRANTY_MATERIALS_COLUMNS || [];
+                    const warrantyBrandId = String(EXISTING_WARRANTY_BRAND_ID || '');
+                    const warrantyDateType = EXISTING_WARRANTY_DATE_TYPE || 'toc';
+                    const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
+                    const hasGeneratedFormat = warrantyBrandId && brandsWithFormat.includes(parseInt(warrantyBrandId));
+                    const brandOptions = BRANDS_LIST.map(b => {
+                        const hasFormat = brandsWithFormat.includes(b.pk);
+                        const suffix = hasFormat ? ' (generated format)' : '';
+                        return `<option value="${b.pk}" ${String(b.pk) === warrantyBrandId ? 'selected' : ''}>${escapeHtml(b.name)}${suffix}</option>`;
+                    }).join('');
+                    const colCheckboxes = warrantyColDefs.map(c => {
+                        const checked = !warrantyCols.length || warrantyCols.includes(c.key);
+                        return `<label class="me-3 d-inline-block mb-1"><input type="checkbox" class="warranty-col-check" data-key="${escapeHtml(c.key)}" ${checked ? 'checked' : ''}> ${escapeHtml(c.label)}</label>`;
+                    }).join('');
+                    return `
+                        <div class="upload-row warranty-section">
+                            <label><i class="fas fa-file-contract me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+
+                            <div class="mb-3">
+                                <div class="mb-2">
+                                    <label class="fw-semibold" style="font-size:0.85rem;">Brand</label>
+                                    <select id="warrantyBrandSelect" name="warranty_brand_id" class="form-select form-select-sm" style="max-width:280px;">
+                                        <option value="">— Upload PDF —</option>
+                                        ${brandOptions}
+                                    </select>
+                                    <small class="text-muted d-block mt-1">Select a brand with generated format, or leave as "Upload PDF" to upload your own.</small>
+                                </div>
+                                <div class="warranty-upload-area" style="${hasGeneratedFormat ? 'display:none;' : ''}">
+                                    <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                                    ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Upload a PDF for this section</small>'}
+                                </div>
+                                <div class="mb-3">
+                                    <div class="mb-2 fw-semibold" style="font-size:0.85rem;">Warranty period wording</div>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <label class="d-flex align-items-center gap-2"><input type="radio" name="warranty_date_type" value="toc" ${warrantyDateType === 'toc' ? 'checked' : ''}> from date of TOC</label>
+                                        <label class="d-flex align-items-center gap-2"><input type="radio" name="warranty_date_type" value="invoice" ${warrantyDateType === 'invoice' ? 'checked' : ''}> from date of Invoice</label>
+                                    </div>
+                                </div>
+                                <div class="warranty-generate-area mt-3" style="${hasGeneratedFormat ? '' : 'display:none;'}">
+                                    <div class="mb-2 fw-semibold" style="font-size:0.85rem;">Columns to show in warranty materials table</div>
+                                    <div id="warrantyColumnCheckboxes" class="mb-3">${colCheckboxes}</div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="warrantyMaterialsColumnsJson" name="warranty_materials_columns_json" value="${escapeHtml(JSON.stringify(warrantyCols.length ? warrantyCols : warrantyColDefs.map(c => c.key)))}">
+                        </div>
+                    `;
+                }
+
+                if (isComplyStatement(it.label)) {
+                    // Render PDF upload + compliance form
+                    const brandOptions = BRANDS_LIST.map(b =>
+                        `<option value="${b.pk}" ${String(b.pk) === String(complianceBrandId) ? 'selected' : ''}>${escapeHtml(b.name)}</option>`
+                    ).join('');
+                    return `
+                        <div class="upload-row comply-section">
+                            <label><i class="fas fa-file-contract me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="fas fa-upload text-muted" style="font-size:0.85rem;"></i>
+                                    <span class="fw-semibold" style="font-size:0.85rem;">PDF Upload <span class="text-muted fw-normal">(optional — shown first in PDF)</span></span>
+                                </div>
+                                <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                                ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Leave empty to skip</small>'}
+                            </div>
+
+                            <div class="comply-form-block">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="fas fa-table text-muted" style="font-size:0.85rem;"></i>
+                                    <span class="fw-semibold" style="font-size:0.85rem;">Compliance Form <span class="text-muted fw-normal">(optional — generated table appended after PDF)</span></span>
+                                </div>
+
+                                <div class="mb-2 d-flex align-items-center gap-3">
+                                    <label style="font-size:0.82rem;font-weight:500;margin:0;">Brand (for Remarks):</label>
+                                    <select id="complianceBrandSelect" class="form-select form-select-sm" style="max-width:220px;">
+                                        <option value="">— Select Brand —</option>
+                                        ${brandOptions}
+                                    </select>
+                                    <input type="hidden" id="complianceBrandId" name="compliance_brand_id" value="${escapeHtml(String(complianceBrandId || ''))}">
+                                    <input type="hidden" id="complianceRowsJson" name="compliance_rows_json" value="">
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm" style="font-size:0.82rem;">
+                                        <thead style="background:#000;color:#fff;">
+                                            <tr>
+                                                <th style="width:36px;">SR.<br>NO.</th>
+                                                <th>SPECIFICATION</th>
+                                                <th style="width:150px;">COMPLIANCE</th>
+                                                <th style="width:220px;">REMARKS</th>
+                                                <th style="width:36px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="complianceTbody"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" id="btnAddComplianceRow" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-plus me-1"></i> Add Row
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 return `
                     <div class="upload-row">
                         <label><i class="fas fa-file-pdf me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
@@ -473,6 +770,50 @@
                     </div>
                 `;
             }).join('');
+
+            // Init compliance form if it was rendered
+            if (uploadItems.some(it => isComplyStatement(it.label))) {
+                initComplianceForm();
+            }
+            // Init warranty form if it was rendered
+            if (uploadItems.some(it => isWarrantyDraftLetter(it.label))) {
+                initWarrantyForm();
+            }
+        }
+
+        function initWarrantyForm() {
+            const uploadArea = document.querySelector('.warranty-upload-area');
+            const generateArea = document.querySelector('.warranty-generate-area');
+            const brandSelect = document.getElementById('warrantyBrandSelect');
+            const colBox = document.getElementById('warrantyColumnCheckboxes');
+            const hiddenInput = document.getElementById('warrantyMaterialsColumnsJson');
+            const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
+
+            function toggleAreas() {
+                const brandId = brandSelect?.value ? parseInt(brandSelect.value, 10) : null;
+                const hasFormat = brandId && brandsWithFormat.includes(brandId);
+                if (uploadArea) uploadArea.style.display = hasFormat ? 'none' : 'block';
+                if (generateArea) generateArea.style.display = hasFormat ? 'block' : 'none';
+            }
+
+            brandSelect?.addEventListener('change', toggleAreas);
+
+            function serializeWarrantyColumns() {
+                if (!colBox || !hiddenInput) return;
+                const colDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
+                    {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
+                    {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
+                    {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
+                ];
+                const selected = [];
+                colBox.querySelectorAll('.warranty-col-check:checked').forEach(cb => selected.push(cb.dataset.key));
+                hiddenInput.value = JSON.stringify(selected.length ? selected : colDefs.map(c => c.key));
+            }
+
+            colBox?.querySelectorAll('.warranty-col-check').forEach(cb => {
+                cb.addEventListener('change', serializeWarrantyColumns);
+            });
+            serializeWarrantyColumns();
         }
 
         // ── Step navigation ──
@@ -502,33 +843,68 @@
         btnNext.addEventListener('click', () => { if (currentStep < TOTAL_STEPS - 1) showStep(currentStep + 1); });
         btnPrev.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
 
-        // ── History dropdowns ──
-        document.querySelectorAll('.form-group-hist input, .form-group-hist textarea').forEach(input => {
-            const fieldName = input.name;
-            const dropdown = document.getElementById('hist_' + fieldName);
-            if (!dropdown || !historyData[fieldName]) return;
+        // ── Title page: Existing / New + list panel ──
+        const TITLE_FIELDS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor', 'product'];
 
-            input.addEventListener('focus', () => {
-                populateHistory(dropdown, historyData[fieldName], input);
-                dropdown.classList.add('show');
+        TITLE_FIELDS.forEach(fieldName => {
+            const input = document.querySelector(`input[name="${fieldName}"], textarea[name="${fieldName}"]`);
+            if (!input) return;
+
+            const modeExisting = document.querySelector(`input[name="mode_${fieldName}"][value="existing"]`);
+            const modeNew = document.querySelector(`input[name="mode_${fieldName}"][value="new"]`);
+            const btnSelect = document.querySelector(`.btn-select-existing[data-field="${fieldName}"]`);
+            const panel = document.getElementById(`panel_${fieldName}`);
+            const listEl = document.getElementById(`list_${fieldName}`);
+            const searchEl = panel?.querySelector('.existing-list-search');
+            const items = (historyData[fieldName] || []).filter((v, i, a) => a.indexOf(v) === i);
+
+            function renderList(filter) {
+                if (!listEl) return;
+                const q = (filter || '').toLowerCase();
+                const filtered = q ? items.filter(v => (v || '').toLowerCase().includes(q)) : items;
+                listEl.innerHTML = filtered.length
+                    ? filtered.map((v, i) => `<div class="existing-list-item" data-idx="${i}">${escapeHtml(v)}</div>`).join('')
+                    : '<div class="existing-list-empty">No matching entries. Use New to type.</div>';
+                listEl.querySelectorAll('.existing-list-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const idx = parseInt(el.dataset.idx, 10);
+                        const val = filtered[idx];
+                        if (val != null) {
+                            input.value = val;
+                            panel.classList.remove('show');
+                        }
+                    });
+                });
+            }
+
+            const origPlaceholder = input.placeholder || '';
+            modeExisting?.addEventListener('change', () => {
+                btnSelect.style.display = modeExisting.checked ? 'inline-block' : 'none';
+                input.placeholder = modeExisting.checked ? 'Select from list below' : origPlaceholder;
             });
-            input.addEventListener('input', () => {
-                const q = input.value.toLowerCase();
-                const filtered = historyData[fieldName].filter(v => v.toLowerCase().includes(q));
-                populateHistory(dropdown, filtered, input);
-                dropdown.classList.toggle('show', filtered.length > 0);
+            modeNew?.addEventListener('change', () => {
+                btnSelect.style.display = 'none';
+                panel.classList.remove('show');
+                input.placeholder = origPlaceholder;
             });
+
+            btnSelect?.addEventListener('click', () => {
+                const isOpen = panel.classList.toggle('show');
+                if (isOpen) {
+                    renderList(searchEl?.value || '');
+                    searchEl?.focus();
+                }
+            });
+
+            searchEl?.addEventListener('input', () => renderList(searchEl.value));
+
             document.addEventListener('click', e => {
-                if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('show');
+                if (panel?.classList.contains('show') && !panel.contains(e.target) && !btnSelect?.contains(e.target))
+                    panel.classList.remove('show');
             });
-        });
 
-        function populateHistory(dropdown, items, input) {
-            dropdown.innerHTML = items.map(v => `<div class="history-item">${escapeHtml(v)}</div>`).join('');
-            dropdown.querySelectorAll('.history-item').forEach(item => {
-                item.addEventListener('click', () => { input.value = item.textContent; dropdown.classList.remove('show'); });
-            });
-        }
+            renderList();
+        });
 
         // ── Material search ──
         const searchInput = document.getElementById('materialSearchInput');
@@ -543,9 +919,9 @@
                 fetch(`/submittal/api/materials-search/?q=${encodeURIComponent(q)}`)
                     .then(r => r.json())
                     .then(data => {
-                        const filtered = data.results.filter(m => !selectedMaterials.find(s => s.id === m.id));
-                        resultsDiv.innerHTML = filtered.map(m =>
-                            `<div class="material-result-item" data-material='${JSON.stringify(m)}'>
+                        const filtered = (data.results || []).filter(m => !selectedMaterials.find(s => s.id === m.id));
+                        resultsDiv.innerHTML = filtered.map((m, idx) =>
+                            `<div class="material-result-item" data-id="${m.id}" data-index="${idx}">
                                 <span class="code">${escapeHtml(m.model_no)}</span> —
                                 <span class="desc">${escapeHtml(m.item_description)}</span>
                                 <span class="text-muted ms-2">${escapeHtml(m.brand)}</span>
@@ -554,9 +930,13 @@
                         resultsDiv.classList.add('show');
                         resultsDiv.querySelectorAll('.material-result-item').forEach(el => {
                             el.addEventListener('click', () => {
-                                addMaterial(JSON.parse(el.dataset.material));
-                                searchInput.value = '';
-                                resultsDiv.classList.remove('show');
+                                const idx = parseInt(el.dataset.index, 10);
+                                const mat = filtered[idx];
+                                if (mat) {
+                                    addMaterial(mat);
+                                    searchInput.value = '';
+                                    resultsDiv.classList.remove('show');
+                                }
                             });
                         });
                     });

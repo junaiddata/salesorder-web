@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Upload Historical Sales (2020-2023)</title>
+  <title>Upload Historical Sales (2020-2025)</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -35,11 +35,11 @@
 <body>
   <div class="upload-card">
     <div class="header">
-      <h1><i class="fas fa-upload"></i> Upload Historical Sales (2020-2023)</h1>
+      <h1><i class="fas fa-upload"></i> Upload Historical Sales (2020-2025)</h1>
       <a href="{% url 'historical_sales_analysis' %}" class="btn-back"><i class="fas fa-arrow-left"></i> Back to Analysis</a>
     </div>
     <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-      Upload Excel (.xlsx, .xls) or CSV file with Invoice and Credit Memo data for years 2020-2023. Re-uploading updates existing documents.
+      Upload Excel (.xlsx, .xls) or CSV file with Invoice and Credit Memo data for years 2020-2025. Re-uploading updates existing documents.
     </p>
 
     {% if messages %}
@@ -51,18 +51,29 @@
       <div class="alert alert-error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" id="upload-form">
       {% csrf_token %}
       <div class="mb-3">
         <label for="excel_file" class="form-label fw-medium">Excel or CSV File</label>
         <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls,.csv" required class="form-control">
       </div>
-      <div style="display:flex; gap:10px;">
-        <button type="submit" class="btn btn-primary">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-primary" id="upload-btn">
           <i class="fas fa-upload"></i> Upload
         </button>
+        <span id="upload-spinner" style="display:none; color:var(--primary);">
+          <i class="fas fa-spinner fa-spin"></i> Processing... Please wait.
+        </span>
         <a href="{% url 'historical_sales_analysis' %}" class="btn btn-secondary">Cancel</a>
+        <button type="button" class="btn btn-outline-danger" id="clear-btn" title="Delete all historical data">
+          <i class="fas fa-trash-alt"></i> Delete All Data
+        </button>
       </div>
+    </form>
+
+    <form method="post" action="{% url 'historical_sales_clear_all' %}" id="clear-form" style="display:none;">
+      {% csrf_token %}
+      <input type="hidden" name="confirm" value="yes">
     </form>
 
     <div class="columns">
@@ -82,8 +93,23 @@
         <li>Net Sales</li>
         <li>Gross Profit</li>
       </ul>
-      <p><strong>Note:</strong> Only rows with PostingDate in 2020-2023 are imported.</p>
+      <p><strong>Note:</strong> Only rows with PostingDate in 2020-2025 are imported.</p>
     </div>
   </div>
+  <script>
+    document.getElementById('upload-form').addEventListener('submit', function() {
+      var btn = document.getElementById('upload-btn');
+      var spinner = document.getElementById('upload-spinner');
+      if (btn && spinner) {
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+      }
+    });
+    document.getElementById('clear-btn').addEventListener('click', function() {
+      if (confirm('Delete ALL historical sales data? This cannot be undone. You will need to re-upload your Excel files.')) {
+        document.getElementById('clear-form').submit();
+      }
+    });
+  </script>
 </body>
 </html>

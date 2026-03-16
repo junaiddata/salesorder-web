@@ -1,0 +1,41 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}{% if brand %}Edit{% else %}Add{% endif %} Brand{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> <a href="{% url 'submittal:admin_brands' %}">Brands</a> <span class="sep">/</span> {% if brand %}Edit{% else %}Add{% endif %}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1>{% if brand %}Edit Brand{% else %}Add Brand{% endif %}</h1>
+    <div class="page-sub">{% if brand %}Update brand details and settings{% else %}Add a new brand to the materials library{% endif %}</div>
+</div>
+
+<div class="admin-card" style="max-width:520px;">
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.875rem;">Brand Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" value="{{ brand.name|default:'' }}" required placeholder="e.g. Pegler">
+        </div>
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.875rem;">Brand Code <span class="text-danger">*</span></label>
+            <input type="text" name="code" class="form-control" value="{{ brand.code|default:'' }}" required placeholder="e.g. PEGLER" style="text-transform:uppercase;font-family:monospace;">
+            <div class="form-text">Unique identifier — letters, numbers, underscores only. Used for file paths.</div>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label fw-semibold d-block" style="font-size:0.875rem;">Warranty</label>
+            <div class="form-check" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem 0.75rem 2.5rem;">
+                <input type="checkbox" name="use_generated_warranty" id="use_generated_warranty" class="form-check-input" {% if brand and brand.use_generated_warranty %}checked{% endif %}>
+                <label class="form-check-label" for="use_generated_warranty" style="font-size:0.875rem;font-weight:500;">Use generated warranty letter</label>
+                <div class="form-text mt-1">When enabled, the warranty section in submittals for this brand will auto-generate a formatted letter from the materials table instead of requiring a PDF upload.</div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-admin btn-admin-primary">
+                <i class="fas fa-save"></i> {% if brand %}Update{% else %}Add{% endif %} Brand
+            </button>
+            <a href="{% url 'submittal:admin_brands' %}" class="btn btn-admin btn-admin-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

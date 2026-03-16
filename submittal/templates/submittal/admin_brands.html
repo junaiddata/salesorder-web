@@ -1,0 +1,73 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Brands{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> <a href="{% url 'submittal:admin_brands' %}">Brands</a>{% endblock %}
+{% block content %}
+
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1>Brands</h1>
+        <div class="page-sub">Manage product brands and their column definitions</div>
+    </div>
+    <a href="{% url 'submittal:admin_brand_add' %}" class="btn btn-admin btn-admin-primary">
+        <i class="fas fa-plus"></i> Add Brand
+    </a>
+</div>
+
+<div class="admin-card">
+    {% if brands %}
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Brand Name</th>
+                    <th>Code</th>
+                    <th>Generated Warranty</th>
+                    <th>Materials</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in brands %}
+                <tr>
+                    <td style="font-weight:500;">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="width:30px;height:30px;background:#eff4ff;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:0.75rem;font-weight:700;">{{ b.code|slice:":2" }}</div>
+                            {{ b.name }}
+                        </div>
+                    </td>
+                    <td><code style="background:#f1f5f9;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.8rem;">{{ b.code }}</code></td>
+                    <td>
+                        {% if b.use_generated_warranty %}
+                        <span class="badge" style="background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;"><i class="fas fa-check me-1"></i>Enabled</span>
+                        {% else %}
+                        <span style="color:#94a3b8;font-size:0.82rem;">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-weight:600;">{{ b.materials.count }}</span>
+                        <span style="color:var(--text-muted);font-size:0.8rem;"> items</span>
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'submittal:items_by_brand' b.code %}" class="btn btn-sm btn-outline-primary" title="View Items"><i class="fas fa-boxes-stacked"></i></a>
+                        <a href="{% url 'submittal:items_import' b.code %}" class="btn btn-sm btn-outline-success" title="Import from Excel"><i class="fas fa-file-excel"></i></a>
+                        <a href="{% url 'submittal:admin_brand_edit' b.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit Brand"><i class="fas fa-edit"></i></a>
+                        {% if not b.materials.exists %}
+                        <form method="post" action="{% url 'submittal:admin_brand_delete' b.pk %}" class="d-inline" onsubmit="return confirm('Delete brand {{ b.name }}?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-tags"></i></div>
+        <p class="mb-0">No brands yet. <a href="{% url 'submittal:admin_brand_add' %}">Add your first brand.</a></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

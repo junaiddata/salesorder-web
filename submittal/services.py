@@ -29,12 +29,12 @@ def get_certifications(material, cert_type):
 
 
 def get_history_values(field_name):
-    """Return distinct previous values for a title-page field, most recent first."""
+    """Return distinct previous values for a title-page field (unique only)."""
     from .models import ProjectContractorHistory
-    return list(
-        ProjectContractorHistory.objects
-        .exclude(**{field_name: ''})
-        .values_list(field_name, flat=True)
-        .distinct()
-        .order_by(f'-pk')[:50]
-    )
+    seen = set()
+    result = []
+    for v in ProjectContractorHistory.objects.exclude(**{field_name: ''}).order_by('-pk').values_list(field_name, flat=True)[:200]:
+        if v and v not in seen:
+            seen.add(v)
+            result.append(v)
+    return result[:100]

@@ -1,0 +1,81 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Company Documents{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> Company Documents{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1>Company Documents</h1>
+    <div class="page-sub">Upload company-wide PDFs used in all submittals</div>
+</div>
+
+{% for field_name, label, current_name in upload_fields %}
+<div class="admin-card">
+    <div class="d-flex align-items-start justify-content-between mb-3">
+        <div>
+            <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;">{{ label }}</h2>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Used in section auto-generation for all submittals</div>
+        </div>
+        {% if current_name %}
+        <span class="badge" style="background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;white-space:nowrap;"><i class="fas fa-check me-1"></i>Uploaded</span>
+        {% else %}
+        <span class="badge" style="background:#fef3c7;color:#92400e;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;white-space:nowrap;"><i class="fas fa-exclamation me-1"></i>Not uploaded</span>
+        {% endif %}
+    </div>
+
+    {% if current_name %}
+    <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background:#f8fafc;border:1px solid var(--border);font-size:0.82rem;">
+        <i class="fas fa-file-pdf text-danger"></i>
+        <span style="color:var(--text-muted);">Current file:</span>
+        <span style="font-weight:500;">{{ current_name }}</span>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2 flex-wrap">
+        {% csrf_token %}
+        <input type="hidden" name="field" value="{{ field_name }}">
+        <input type="file" name="file" class="form-control form-control-sm" accept=".pdf" style="max-width:380px;">
+        <button type="submit" class="btn btn-admin btn-admin-primary" style="white-space:nowrap;">
+            <i class="fas fa-upload"></i> {% if current_name %}Replace{% else %}Upload{% endif %}
+        </button>
+    </form>
+</div>
+{% empty %}
+<!-- Fallback for old template context without upload_fields -->
+<div class="admin-card">
+    <p class="text-muted mb-4" style="font-size:0.875rem;">Upload company-wide PDFs used in all submittals.</p>
+
+    <form method="post" enctype="multipart/form-data" class="mb-4 pb-4 border-bottom">
+        {% csrf_token %}
+        <label class="form-label fw-semibold" style="font-size:0.875rem;">Company Profile PDF</label>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="file" name="file" class="form-control form-control-sm" accept=".pdf" style="max-width:380px;">
+            <input type="hidden" name="field" value="company_profile_pdf">
+            <button type="submit" class="btn btn-admin btn-admin-primary"><i class="fas fa-upload"></i> Upload</button>
+        </div>
+        {% if company_profile_name %}<small class="text-success mt-1 d-block"><i class="fas fa-check me-1"></i>{{ company_profile_name }}</small>{% endif %}
+    </form>
+
+    <form method="post" enctype="multipart/form-data" class="mb-4 pb-4 border-bottom">
+        {% csrf_token %}
+        <label class="form-label fw-semibold" style="font-size:0.875rem;">Trade License PDF</label>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="file" name="file" class="form-control form-control-sm" accept=".pdf" style="max-width:380px;">
+            <input type="hidden" name="field" value="trade_license_pdf">
+            <button type="submit" class="btn btn-admin btn-admin-primary"><i class="fas fa-upload"></i> Upload</button>
+        </div>
+        {% if trade_license_name %}<small class="text-success mt-1 d-block"><i class="fas fa-check me-1"></i>{{ trade_license_name }}</small>{% endif %}
+    </form>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label class="form-label fw-semibold" style="font-size:0.875rem;">Index Standard PDF</label>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="file" name="file" class="form-control form-control-sm" accept=".pdf" style="max-width:380px;">
+            <input type="hidden" name="field" value="index_standard_pdf">
+            <button type="submit" class="btn btn-admin btn-admin-primary"><i class="fas fa-upload"></i> Upload</button>
+        </div>
+        {% if index_standard_name %}<small class="text-success mt-1 d-block"><i class="fas fa-check me-1"></i>{{ index_standard_name }}</small>{% endif %}
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

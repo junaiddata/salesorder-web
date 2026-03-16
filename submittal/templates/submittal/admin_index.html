@@ -1,0 +1,96 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block breadcrumb %}<span class="sep">/</span> Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <div class="page-sub">Overview of the submittal system</div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-value">{{ submittal_count }}</div>
+                    <div class="stat-label">Total Submittals</div>
+                </div>
+                <div class="stat-icon"><i class="fas fa-file-pdf"></i></div>
+            </div>
+            <a href="{% url 'submittal:admin_submittals' %}" class="btn btn-admin btn-admin-outline mt-3 w-100" style="justify-content:center;">View All</a>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-value">{{ material_count }}</div>
+                    <div class="stat-label">Materials in Library</div>
+                </div>
+                <div class="stat-icon"><i class="fas fa-boxes-stacked"></i></div>
+            </div>
+            <a href="{% url 'submittal:admin_items' %}" class="btn btn-admin btn-admin-outline mt-3 w-100" style="justify-content:center;">View All</a>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-value">{{ brand_count }}</div>
+                    <div class="stat-label">Brands</div>
+                </div>
+                <div class="stat-icon"><i class="fas fa-tags"></i></div>
+            </div>
+            <a href="{% url 'submittal:admin_brands' %}" class="btn btn-admin btn-admin-outline mt-3 w-100" style="justify-content:center;">View All</a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="admin-card">
+            <h5 class="mb-1" style="font-size:0.95rem;font-weight:600;">Quick Actions</h5>
+            <p class="text-muted mb-3" style="font-size:0.82rem;">Common tasks at a glance</p>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'submittal:wizard' %}" class="btn btn-admin btn-admin-primary">
+                    <i class="fas fa-plus"></i> New Submittal
+                </a>
+                <a href="{% url 'submittal:admin_items' %}" class="btn btn-admin btn-admin-outline">
+                    <i class="fas fa-file-excel"></i> Import Items
+                </a>
+                <a href="{% url 'submittal:admin_company_docs' %}" class="btn btn-admin btn-admin-outline">
+                    <i class="fas fa-building"></i> Company Docs
+                </a>
+                <a href="{% url 'submittal:settings' %}" class="btn btn-admin btn-admin-outline">
+                    <i class="fas fa-check-double"></i> Compliance
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="admin-card">
+            <h5 class="mb-1" style="font-size:0.95rem;font-weight:600;">Setup Checklist</h5>
+            <p class="text-muted mb-3" style="font-size:0.82rem;">Things to configure before generating submittals</p>
+            <ul class="list-unstyled mb-0" style="font-size:0.875rem;">
+                <li class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:#f1f5f9!important;">
+                    <i class="fas fa-circle-check text-success"></i> Upload Company Profile &amp; Trade License
+                    <a href="{% url 'submittal:admin_company_docs' %}" class="ms-auto text-primary" style="font-size:0.78rem;">Manage →</a>
+                </li>
+                <li class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:#f1f5f9!important;">
+                    <i class="fas fa-circle-check text-success"></i> Add Brands &amp; enable warranty format
+                    <a href="{% url 'submittal:admin_brands' %}" class="ms-auto text-primary" style="font-size:0.78rem;">Manage →</a>
+                </li>
+                <li class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:#f1f5f9!important;">
+                    <i class="fas fa-circle-check text-success"></i> Import Materials library
+                    <a href="{% url 'submittal:admin_items' %}" class="ms-auto text-primary" style="font-size:0.78rem;">Manage →</a>
+                </li>
+                <li class="d-flex align-items-center gap-2 py-1">
+                    <i class="fas fa-circle-check text-success"></i> Configure Compliance options
+                    <a href="{% url 'submittal:settings' %}" class="ms-auto text-primary" style="font-size:0.78rem;">Manage →</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

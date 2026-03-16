@@ -1442,9 +1442,10 @@ def salesorder_detail(request, so_number):
     balance_amount = (row_total_sum - total_pi_amount).quantize(Decimal("0.01")) if row_total_sum is not None else Decimal("0.00")
 
     # Admin-only: Customer Finance Summary and approval status
-    is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
-    # Manager username can also edit remarks and use Telegram Send buttons
-    can_edit_remarks = is_admin or (request.user.username or '').strip().lower() == 'manager'
+    # Manager username sees everything Admin sees (cost, margin, remarks, Send buttons, etc.)
+    _is_manager = (request.user.username or '').strip().lower() == 'manager'
+    is_admin = _is_manager or (hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin')
+    can_edit_remarks = is_admin
 
     # Admin-only: Total cost, total margin, margin % (like SAP Quotation)
     total_cost = Decimal("0.00")

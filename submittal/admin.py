@@ -2,13 +2,14 @@ from django.contrib import admin
 from .models import (
     CompanyDocuments, SubmittalBrand, SubmittalMaterial,
     MaterialCertification, ProjectContractorHistory, Submittal,
-    SubmittalSectionUpload,
+    SubmittalSectionUpload, ComplianceOption, RemarkOption,
 )
 
 
 @admin.register(SubmittalBrand)
 class SubmittalBrandAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'display_order')
+    list_display = ('name', 'code', 'use_generated_warranty', 'display_order')
+    list_editable = ('use_generated_warranty',)
     ordering = ('display_order', 'name')
 
 
@@ -68,3 +69,20 @@ class SubmittalAdmin(admin.ModelAdmin):
     search_fields = ('project', 'client', 'product')
     filter_horizontal = ('materials',)
     inlines = [SubmittalSectionUploadInline]
+
+
+@admin.register(ComplianceOption)
+class ComplianceOptionAdmin(admin.ModelAdmin):
+    list_display = ('label', 'display_order')
+    ordering = ('display_order', 'label')
+
+
+@admin.register(RemarkOption)
+class RemarkOptionAdmin(admin.ModelAdmin):
+    list_display = ('brand', 'label_short', 'display_order')
+    list_filter = ('brand',)
+    ordering = ('brand', 'display_order')
+
+    def label_short(self, obj):
+        return obj.label[:80]
+    label_short.short_description = 'Label'
