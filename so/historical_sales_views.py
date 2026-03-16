@@ -21,7 +21,7 @@ from .models import HistoricalSalesLine, Customer, Items
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
+ALLOWED_YEARS = [2020, 2021, 2022, 2023]
 
 
 def _parse_date(val):

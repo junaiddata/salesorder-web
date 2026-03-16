@@ -10,31 +10,42 @@
   <style>
     :root { --bg: #f8fafc; --surface: #fff; --text: #1e293b; --text-secondary: #64748b; --border: #e2e8f0; --primary: #3b82f6; --primary-light: #eff6ff; --radius: 8px; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
-    .container { max-width: 1800px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-    .header h1 { font-size: 1.5rem; }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: var(--radius); font-size: 0.875rem; text-decoration: none; border: none; cursor: pointer; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 12px; }
+    .container { max-width: 100%; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .header h1 { font-size: 1.25rem; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius); font-size: 0.8rem; text-decoration: none; border: none; cursor: pointer; }
     .btn-primary { background: var(--primary); color: white; }
     .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-    .filters-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
-    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
-    .field input, .field select { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); width: 100%; font-size: 0.875rem; }
-    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px 10px; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
-    th { background: var(--bg); font-weight: 600; color: var(--text-secondary); text-align: left; }
-    th.text-right, td.text-right { text-align: right; }
-    .sticky-col { position: sticky; background: var(--surface); z-index: 9; }
+    .filters-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .field label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .field input, .field select { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); width: 100%; font-size: 0.8rem; }
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+    .table-card:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; table-layout: auto; }
+    th, td { padding: 6px 8px; font-size: 0.75rem; border-bottom: 1px solid var(--border); }
+    th { background: var(--bg); font-weight: 600; color: var(--text-secondary); text-align: left; white-space: nowrap; }
+    th.text-right, td.text-right { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sticky-col { position: sticky; z-index: 10; box-shadow: 2px 0 4px rgba(0,0,0,0.06); }
+    .sticky-col:first-child { left: 0; background: var(--surface); min-width: 80px; }
+    .sticky-col:nth-child(2) { left: 80px; background: var(--surface); min-width: 120px; max-width: 180px; border-right: 2px solid var(--primary); }
     .item-code { font-weight: 600; color: var(--primary); }
-    .item-description { color: var(--text-secondary); font-size: 0.75rem; }
+    .item-description { color: var(--text-secondary); font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
     .totals-row { background: var(--primary-light); font-weight: 700; }
     .totals-row td { background: var(--primary-light); }
-    .year-group { text-align: center; background: rgba(59,130,246,0.08); }
-    .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
-    .pagination a { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--primary); text-decoration: none; }
+    .year-group { text-align: center; background: rgba(59,130,246,0.08); white-space: nowrap; border-right: 2px solid var(--primary); }
+    .year-divider { border-right: 2px solid var(--primary); }
+    .year-col { min-width: 70px; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; flex-wrap: wrap; }
+    .pagination a { padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--primary); text-decoration: none; font-size: 0.8rem; }
     .pagination a:hover { background: var(--primary-light); }
+    @media (max-width: 768px) {
+      body { padding: 8px; }
+      .header h1 { font-size: 1.1rem; }
+      .header > div { flex-wrap: wrap; }
+      .sticky-col:nth-child(2) { max-width: 100px; }
+    }
   </style>
 </head>
 <body>
@@ -87,24 +98,24 @@
       </form>
     </div>
 
-    <div class="table-card">
+    <div class="table-card" role="region" aria-label="Scrollable table">
       <table>
         <thead>
           <tr>
             <th class="sticky-col" style="left:0;">Item Code</th>
-            <th class="sticky-col" style="left:110px;">Description</th>
+            <th class="sticky-col" style="left:80px;">Description</th>
             {% for year in years %}
             <th colspan="{% if is_admin %}5{% else %}3{% endif %}" class="year-group">{{ year }}</th>
             {% endfor %}
           </tr>
           <tr>
             <th class="sticky-col" style="left:0;"></th>
-            <th class="sticky-col" style="left:110px;"></th>
+            <th class="sticky-col" style="left:80px;"></th>
             {% for year in years %}
             <th class="text-right">Sales</th>
             {% if is_admin %}<th class="text-right">GP</th><th class="text-right">GP%</th>{% endif %}
             <th class="text-right">Qty</th>
-            <th class="text-right">Avg Rate</th>
+            <th class="text-right year-divider">Avg Rate</th>
             {% endfor %}
           </tr>
         </thead>
