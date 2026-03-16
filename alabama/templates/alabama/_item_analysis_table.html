@@ -3,7 +3,7 @@
   <!-- Totals Row -->
   <tr class="totals-row">
     <td class="sticky-col" style="left: 0; font-weight: 700; background: var(--primary-light);">TOTAL</td>
-    <td class="sticky-col" style="left: 150px; font-weight: 700; background: var(--primary-light);"></td>
+    <td class="sticky-col" style="left: 120px; font-weight: 700; background: var(--primary-light);"></td>
     {% for totals in totals_list %}
       <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
       {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
@@ -20,7 +20,7 @@
       <div class="item-upc">UPC: {{ item.upc_code }}</div>
       {% endif %}
     </td>
-    <td class="sticky-col item-description" style="left: 150px;">{{ item.item_description|default:"Unknown" }}</td>
+    <td class="sticky-col item-description" style="left: 120px;">{{ item.item_description|default:"Unknown" }}</td>
     {% for year_data in item.year_list %}
       <td class="text-right">{{ year_data.total_sales|default:0|floatformat:2|intcomma }}</td>
       {% if is_admin %}<td class="text-right">{{ year_data.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}

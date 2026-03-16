@@ -1,0 +1,80 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submittal Items{% if brand %} - {{ brand.name }}{% endif %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --primary: #003399; --bg: #f1f5f9; --card-bg: #fff; --border: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; }
+        .top-bar { background: var(--primary); color: #fff; padding: 1rem 2rem; }
+        .container-main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+        .detail-card { background: var(--card-bg); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .materials-table { width: 100%; border-collapse: collapse; }
+        .materials-table th { background: var(--primary); color: #fff; padding: 0.5rem; font-size: 0.8rem; }
+        .materials-table td { padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <a href="{% url 'submittal:list' %}" style="color:rgba(255,255,255,0.9);text-decoration:none;"><i class="fas fa-arrow-left me-2"></i>Back</a>
+        <h1 style="margin:0;font-size:1.2rem;"><i class="fas fa-boxes-stacked me-2"></i>Submittal Items{% if brand %} - {{ brand.name }}{% endif %}</h1>
+        <span></span>
+    </div>
+
+    <div class="container-main">
+        <div class="mb-3">
+            {% for b in brands %}
+            <a href="{% url 'submittal:items_by_brand' b.code %}" class="btn {% if brand and brand.code == b.code %}btn-primary{% else %}btn-outline-primary{% endif %} me-2">{{ b.name }}</a>
+            {% endfor %}
+        </div>
+
+        {% if brand %}
+        <div class="mb-3">
+            <a href="{% url 'submittal:items_import' brand.code %}" class="btn btn-success">
+                <i class="fas fa-file-excel me-1"></i>Import from Excel
+            </a>
+        </div>
+        {% endif %}
+
+        {% if messages %}
+        {% for m in messages %}
+        <div class="alert alert-success">{{ m }}</div>
+        {% endfor %}
+        {% endif %}
+
+        <div class="detail-card">
+            <h2 class="mb-3">{% if brand %}{{ brand.name }}{% else %}All{% endif %} Materials ({{ materials|length }})</h2>
+            {% if materials %}
+            <div class="table-responsive">
+                <table class="materials-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            {% for col in columns %}
+                            <th>{{ col.label }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in materials_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            {% for val in row %}
+                            <td>{{ val|default:"—" }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No materials yet. {% if brand %}<a href="{% url 'submittal:items_import' brand.code %}">Import from Excel</a>{% endif %}</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -11,6 +11,10 @@ urlpatterns = [
     path('save/', views.submittal_save, name='save'),
     path('<int:pk>/generate-pdf/', views.submittal_generate_pdf, name='generate_pdf'),
 
+    path('items/', views.submittal_items_list, name='items'),
+    path('items/<slug:brand_code>/', views.submittal_items_list, name='items_by_brand'),
+    path('items/<slug:brand_code>/import/', views.submittal_items_import, name='items_import'),
+
     # AJAX
     path('api/materials-search/', views.api_materials_search, name='api_materials_search'),
     path('api/history-suggestions/', views.api_history_suggestions, name='api_history_suggestions'),

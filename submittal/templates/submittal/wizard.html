@@ -211,23 +211,18 @@
                 </div>
                 <div class="material-results" id="materialResults"></div>
 
+                <div class="mb-3 column-selector-box" id="columnSelectorBox">
+                    <label class="d-block mb-2"><i class="fas fa-columns me-2"></i>Columns to show in PDF</label>
+                    <label class="me-3"><input type="checkbox" id="showAllColumns" checked> Show all columns</label>
+                    <div id="columnCheckboxes" class="mt-2" style="display:none;"></div>
+                </div>
+
                 <table class="selected-materials-table" id="selectedMaterialsTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Model No.</th>
-                            <th>Item Description</th>
-                            <th>Material</th>
-                            <th>Size</th>
-                            <th>WRAS No.</th>
-                            <th>Brand</th>
-                            <th>Pressure Rating</th>
-                            <th>Area of Application</th>
-                            <th></th>
-                        </tr>
-                    </thead>
+                    <thead><tr id="materialsTableHead"></tr></thead>
                     <tbody id="selectedMaterialsBody"></tbody>
                 </table>
+
+                <input type="hidden" name="materials_columns_json" id="materialsColumnsJson">
 
                 <div class="section-source-info mt-3">
                     <i class="fas fa-magic"></i>
@@ -284,6 +279,8 @@
 
         const preselected = {{ selected_material_ids|safe }};
         const existingUploads = {{ existing_uploads|safe }};
+        const ALL_COLUMN_DEFS = {{ all_column_definitions|safe }};
+        const EXISTING_MATERIALS_COLUMNS = {{ existing_materials_columns|safe }};
 
         // ── Labels that are auto-provided (no upload needed) ──
         const AUTO_LABELS = new Set([
@@ -397,6 +394,63 @@
         renderIndexList();
         initSortable();
 
+        // ── Column selector ──
+        let showAllColumns = true;
+        let selectedColumnKeys = EXISTING_MATERIALS_COLUMNS && EXISTING_MATERIALS_COLUMNS.length ? EXISTING_MATERIALS_COLUMNS : [];
+
+        const colDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
+            {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
+            {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
+            {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
+        ];
+
+        function getEffectiveColumns() {
+            if (showAllColumns) return colDefs.map(c => c.key);
+            return selectedColumnKeys.length ? selectedColumnKeys : colDefs.map(c => c.key);
+        }
+
+        function buildColumnSelector() {
+            const box = document.getElementById('columnCheckboxes');
+            const cbAll = document.getElementById('showAllColumns');
+            if (EXISTING_MATERIALS_COLUMNS && EXISTING_MATERIALS_COLUMNS.length) {
+                showAllColumns = false;
+                selectedColumnKeys = EXISTING_MATERIALS_COLUMNS;
+                if (cbAll) cbAll.checked = false;
+            }
+            if (cbAll) {
+                cbAll.checked = showAllColumns;
+                cbAll.addEventListener('change', () => {
+                    showAllColumns = cbAll.checked;
+                    box.style.display = showAllColumns ? 'none' : 'block';
+                    if (!showAllColumns) selectedColumnKeys = getEffectiveColumns();
+                    serializeMaterialsColumns();
+                    renderMaterialsTable();
+                });
+            }
+            box.innerHTML = colDefs.map(c => `
+                <label class="me-3 d-inline-block mb-1">
+                    <input type="checkbox" class="col-check" data-key="${escapeHtml(c.key)}" ${(showAllColumns || selectedColumnKeys.includes(c.key)) ? 'checked' : ''}>
+                    ${escapeHtml(c.label)}
+                </label>
+            `).join('');
+            box.style.display = showAllColumns ? 'none' : 'block';
+            box.querySelectorAll('.col-check').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const k = cb.dataset.key;
+                    if (cb.checked) selectedColumnKeys.push(k);
+                    else selectedColumnKeys = selectedColumnKeys.filter(x => x !== k);
+                    serializeMaterialsColumns();
+                    renderMaterialsTable();
+                });
+            });
+            serializeMaterialsColumns();
+        }
+
+        function serializeMaterialsColumns() {
+            const sel = document.getElementById('materialsColumnsJson');
+            if (sel) sel.value = showAllColumns ? '[]' : JSON.stringify(selectedColumnKeys);
+        }
+
         // ── Dynamic uploads builder ──
         function buildDynamicUploads() {
             const container = document.getElementById('dynamicUploads');
@@ -440,6 +494,7 @@
             btnNext.style.display = step === TOTAL_STEPS - 1 ? 'none' : 'inline-block';
 
             if (step === 2) buildDynamicUploads();
+            if (step === 3) buildColumnSelector();
             if (step === TOTAL_STEPS - 1) buildReview();
         }
 
@@ -521,35 +576,31 @@
         }
 
         function renderMaterialsTable() {
+            const keys = getEffectiveColumns();
+            const thead = document.getElementById('materialsTableHead');
             const tbody = document.getElementById('selectedMaterialsBody');
             const hiddenDiv = document.getElementById('materialHiddenInputs');
-            tbody.innerHTML = selectedMaterials.map((m, i) =>
-                `<tr>
-                    <td>${i + 1}</td>
-                    <td>${escapeHtml(m.model_no)}</td>
-                    <td>${escapeHtml(m.item_description)}</td>
-                    <td>${escapeHtml(m.material || '')}</td>
-                    <td>${escapeHtml(m.size || '')}</td>
-                    <td>${escapeHtml(m.wras_number || '')}</td>
-                    <td>${escapeHtml(m.brand || '')}</td>
-                    <td>${escapeHtml(m.pressure_rating || '')}</td>
-                    <td>${escapeHtml(m.area_of_application || '')}</td>
-                    <td><button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})"><i class="fas fa-times"></i></button></td>
-                </tr>`
-            ).join('');
+
+            const labels = {};
+            colDefs.forEach(c => { labels[c.key] = c.label; });
+
+            thead.innerHTML = '<th>#</th>' + keys.map(k => `<th>${escapeHtml(labels[k] || k)}</th>`).join('') + '<th></th>';
+
+            tbody.innerHTML = selectedMaterials.map((m, i) => {
+                const cells = keys.map(k => escapeHtml(k === 'model_no' ? m.model_no : (m[k] || '')));
+                return `<tr><td>${i + 1}</td>${cells.map(c => `<td>${c}</td>`).join('')}<td><button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})"><i class="fas fa-times"></i></button></td></tr>`;
+            }).join('');
+
             hiddenDiv.innerHTML = selectedMaterials.map(m => `<input type="hidden" name="material_ids" value="${m.id}">`).join('');
         }
 
         window._removeMat = removeMaterial;
 
         if (preselected.length > 0) {
-            fetch(`/submittal/api/materials-search/?q=*`)
+            fetch(`/submittal/api/materials-search/?ids=${preselected.join(',')}`)
                 .then(r => r.json())
                 .then(data => {
-                    preselected.forEach(id => {
-                        const mat = data.results.find(m => m.id === id);
-                        if (mat) addMaterial(mat);
-                    });
+                    (data.results || []).forEach(mat => addMaterial(mat));
                 });
         }
 

@@ -189,33 +189,23 @@
 
         {% if materials %}
         <div class="detail-card">
-            <h2><i class="fas fa-boxes-stacked me-2"></i>Proposed Materials ({{ materials.count }})</h2>
+            <h2><i class="fas fa-boxes-stacked me-2"></i>Proposed Materials ({{ materials|length }})</h2>
             <table class="materials-table">
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Model No.</th>
-                        <th>Item Description</th>
-                        <th>Material</th>
-                        <th>Size</th>
-                        <th>WRAS No.</th>
-                        <th>Brand</th>
-                        <th>Pressure Rating</th>
-                        <th>Area of Application</th>
+                        {% for key, label in materials_columns %}
+                        <th>{{ label }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for mat in materials %}
+                    {% for row in materials_rows %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ mat.model_no }}</td>
-                        <td>{{ mat.item_description }}</td>
-                        <td>{{ mat.material }}</td>
-                        <td>{{ mat.size }}</td>
-                        <td>{{ mat.wras_number }}</td>
-                        <td>{{ mat.brand }}</td>
-                        <td>{{ mat.pressure_rating }}</td>
-                        <td>{{ mat.area_of_application }}</td>
+                        {% for val in row %}
+                        <td>{{ val|default:'' }}</td>
+                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -20,11 +20,32 @@ def generated_pdf_path(instance, filename):
 
 
 def material_cert_path(instance, filename):
-    return f'submittal/certifications/{instance.material.model_no}/{instance.cert_type}/{filename}'
+    brand_code = getattr(instance.material.brand, 'code', 'unknown') if instance.material.brand else 'unknown'
+    return f'submittal/certifications/{brand_code}/{instance.material.model_no}/{instance.cert_type}/{filename}'
 
 
 def catalogue_upload_path(instance, filename):
-    return f'submittal/catalogue/{instance.model_no}/{filename}'
+    brand_code = getattr(instance.brand, 'code', 'unknown') if instance.brand else 'unknown'
+    return f'submittal/catalogue/{brand_code}/{instance.model_no}/{filename}'
+
+
+class SubmittalBrand(models.Model):
+    """
+    Brand for submittal materials. Each brand has its own column definitions.
+    """
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    column_definitions = models.JSONField(
+        default=list, blank=True,
+        help_text='[{"key": "model_no", "label": "Model No.", "order": 1}, ...]'
+    )
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'name']
+
+    def __str__(self):
+        return self.name
 
 
 class CompanyDocuments(models.Model):
@@ -95,18 +116,18 @@ class SectionDivider(models.Model):
 class SubmittalMaterial(models.Model):
     """
     Master list of materials (models) available for submittals.
-    Submittals are asked on Models, not individual items.
-    Each model has its own catalogue, technical details, and certifications.
+    Each material belongs to a brand; attribute columns are stored in data JSON.
+    Legacy fields (item_description, material, etc.) kept for migration only.
     """
-    model_no = models.CharField(max_length=100, unique=True, db_index=True, help_text="Model No. (e.g. 10751, V8850)")
-    item_description = models.CharField(max_length=255, default='', blank=True, help_text="Item Description (e.g. Gate Valve)")
-    material = models.CharField(max_length=100, blank=True, default='', help_text="Material (e.g. Bronze, Ductile Iron)")
-    size = models.CharField(max_length=100, blank=True, default='', help_text="Size (e.g. 1/2'' to 2'', 2 1/2 to 12)")
-    wras_number = models.CharField(max_length=100, blank=True, default='', help_text="WRAS certification number")
-    brand = models.CharField(max_length=100, blank=True, default='', help_text="Brand (e.g. PEGLER - UK)")
-    pressure_rating = models.CharField(max_length=50, blank=True, default='', help_text="Pressure rating (e.g. PN20, PN16)")
-    area_of_application = models.CharField(max_length=255, blank=True, default='', help_text="Area of application (e.g. As per approved Drawing)")
-    other_certifications = models.TextField(blank=True, default='', help_text="Other cert numbers, comma-separated")
+    brand = models.ForeignKey(
+        SubmittalBrand, on_delete=models.CASCADE, related_name='materials',
+        help_text="Brand (e.g. Pegler)"
+    )
+    model_no = models.CharField(max_length=100, db_index=True, help_text="Model No. (e.g. 10751, V8850)")
+    data = models.JSONField(
+        default=dict, blank=True,
+        help_text="Attribute columns as key-value, e.g. {item_description, material, size, ...}"
+    )
 
     catalogue_pdf = models.FileField(
         upload_to=catalogue_upload_path, blank=True, null=True,
@@ -121,10 +142,16 @@ class SubmittalMaterial(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['display_order', 'item_description']
+        ordering = ['display_order', 'model_no']
+        unique_together = [('brand', 'model_no')]
 
     def __str__(self):
-        return f"{self.model_no} - {self.item_description}"
+        desc = (self.data or {}).get('item_description', '')
+        return f"{self.model_no} - {desc}" if desc else str(self.model_no)
+
+    def get(self, key, default=''):
+        """Get attribute from data."""
+        return (self.data or {}).get(key, default)
 
 
 class MaterialCertification(models.Model):
@@ -210,6 +237,10 @@ class Submittal(models.Model):
 
     # Section 7 - Proposed Materials
     materials = models.ManyToManyField(SubmittalMaterial, blank=True, related_name='submittals')
+    materials_columns = models.JSONField(
+        default=list, blank=True,
+        help_text="Column keys to show in materials table. Empty = show all."
+    )
 
     # Section 8 - Area of Application
     area_of_application_pdf = models.FileField(

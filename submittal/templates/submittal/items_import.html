@@ -1,0 +1,46 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import {{ brand.name }} Items</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-light">
+    <div class="container py-5" style="max-width: 600px;">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title mb-4"><i class="fas fa-file-excel me-2"></i>Import {{ brand.name }} Items</h2>
+
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+
+                <p class="text-muted">Upload an Excel file (.xlsx) with columns matching your brand format.</p>
+                {% if brand.column_definitions %}
+                <p class="small text-muted mb-2">Expected columns:</p>
+                <ul class="small text-muted mb-4">
+                    {% for col in brand.column_definitions %}
+                    <li>{{ col.label }} ({{ col.key }})</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Excel File</label>
+                        <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-1"></i>Import</button>
+                        <a href="{% url 'submittal:items_by_brand' brand.code %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

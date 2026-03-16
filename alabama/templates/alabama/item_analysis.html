@@ -28,10 +28,6 @@
       --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
       --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
       --transition: 150ms ease;
-
-      /* Column widths — single source of truth */
-      --col-code-w: 110px;
-      --col-desc-w: 170px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,53 +57,50 @@
     .table-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
     .table-title { font-size: 1.125rem; font-weight: 600; color: var(--text); }
 
-    /* ── Table core ── */
-    .table-wrapper { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    /* ── Table core (match Junaid: auto layout, horizontal scroll, no truncation) ── */
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
     thead { background: var(--bg); position: sticky; top: 0; z-index: 10; }
-    th { padding: 10px 10px; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border); white-space: nowrap; }
-    th.text-right { text-align: right; }
+    th { padding: 12px 16px; text-align: left; font-size: 0.813rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border); white-space: nowrap; }
+    th.text-right { text-align: right; min-width: 90px; }
     tbody tr { border-bottom: 1px solid var(--border); transition: background var(--transition); }
     tbody tr:hover { background: var(--bg); }
-    td { padding: 8px 10px; font-size: 0.825rem; color: var(--text); }
-    td.text-right { text-align: right; font-variant-numeric: tabular-nums; }
+    td { padding: 12px 16px; font-size: 0.875rem; color: var(--text); }
+    td.text-right { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 90px; }
 
-    /* ── Sticky columns ── */
+    /* ── Sticky columns (match Junaid) ── */
     th.sticky-col,
     td.sticky-col {
       position: sticky;
       z-index: 11;
       background: inherit;
-      box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
     }
-    /* First sticky col — Item Code */
     th.sticky-col:first-child,
     td.sticky-col:first-child {
       left: 0;
-      min-width: var(--col-code-w);
-      max-width: var(--col-code-w);
-      width: var(--col-code-w);
+      min-width: 120px;
     }
-    /* Second sticky col — Item Description */
+    th.sticky-col:first-child { background: var(--bg); }
+    td.sticky-col:first-child { background: var(--surface); z-index: 9; }
     th.sticky-col:nth-child(2),
     td.sticky-col:nth-child(2) {
-      left: var(--col-code-w);
-      min-width: var(--col-desc-w);
-      max-width: var(--col-desc-w);
-      width: var(--col-desc-w);
+      left: 120px;
+      min-width: 180px;
     }
-    td.sticky-col { background: var(--surface); z-index: 9; font-weight: 500; padding: 6px 8px; }
+    th.sticky-col:nth-child(2) { background: var(--bg); }
+    td.sticky-col:nth-child(2) { background: var(--surface); z-index: 9; font-weight: 500; }
     tbody tr:hover td.sticky-col { background: var(--bg); }
 
     /* ── Cell content ── */
     .item-code {
       font-weight: 600;
       color: var(--primary);
-      font-size: 0.725rem;
+      font-size: 0.75rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 100%;
+      max-width: 150px;
       line-height: 1.4;
     }
     .item-upc {
@@ -119,9 +112,9 @@
     }
     .item-description {
       color: var(--text-secondary);
-      font-size: 0.725rem;
+      font-size: 0.75rem;
       line-height: 1.3;
-      max-width: 100%;
+      max-width: 200px;
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
@@ -149,6 +142,7 @@
     /* ── Totals row ── */
     .totals-row { background: var(--primary-light); border-top: 2px solid var(--primary); border-bottom: 2px solid var(--primary); font-weight: 700; }
     .totals-row td { background: var(--primary-light); font-weight: 700; }
+    .totals-row td.sticky-col { background: var(--primary-light); }
     .totals-row:hover { background: var(--primary-light); }
 
     /* ── Filters card ── */
@@ -206,11 +200,12 @@
     /* ── Showing X of Y ── */
     .total-count { padding: 0 24px 18px; text-align: center; color: var(--text-secondary); font-size: 0.825rem; }
 
-    /* ── Responsive tweaks ── */
+    /* ── Responsive (horizontal scroll on small screens, no truncation) ── */
     @media (max-width: 768px) {
       .header { flex-direction: column; align-items: flex-start; }
       .header-right { width: 100%; justify-content: flex-start; }
-      :root { --col-code-w: 90px; --col-desc-w: 140px; }
+      table { min-width: 700px; }
+      td.text-right { min-width: 80px; }
     }
   </style>
 </head>
@@ -352,7 +347,7 @@
             </tr>
             <tr>
               <th class="sticky-col" style="left: 0;"></th>
-              <th class="sticky-col" style="left: var(--col-code-w);"></th>
+              <th class="sticky-col" style="left: 120px;"></th>
               {% for year in years %}
               <th class="text-right">Sales</th>
               {% if is_admin %}<th class="text-right">GP</th>{% endif %}

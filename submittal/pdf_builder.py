@@ -346,6 +346,44 @@ def _build_divider_page(section_number: int, section_name: str) -> BytesIO:
 # Proposed Materials Table (Section 7)
 # ---------------------------------------------------------------------------
 
+def _get_effective_columns(submittal):
+    """Return list of (key, label) for materials table. Uses materials_columns if set."""
+    materials = submittal.materials.select_related('brand').all()
+    if not materials:
+        return [('model_no', 'Model No.'), ('item_description', 'Item Description')]
+
+    seen_keys = {}
+    for mat in materials:
+        if not mat.brand or not mat.brand.column_definitions:
+            continue
+        for col in mat.brand.column_definitions:
+            key = col.get('key') or col.get('label', '')
+            if key and key not in seen_keys:
+                seen_keys[key] = col.get('label', key)
+
+    if not seen_keys:
+        return [('model_no', 'Model No.'), ('item_description', 'Item Description')]
+
+    first_brand = next((m.brand for m in materials if m.brand and m.brand.column_definitions), None)
+    if first_brand:
+        ordered = []
+        for col in first_brand.column_definitions:
+            key = col.get('key')
+            if key and key in seen_keys:
+                ordered.append((key, seen_keys[key]))
+        for k in seen_keys:
+            if k not in [x[0] for x in ordered]:
+                ordered.append((k, seen_keys[k]))
+        cols = ordered
+    else:
+        cols = list(seen_keys.items())
+
+    sel = submittal.materials_columns or []
+    if sel:
+        cols = [(k, lbl) for k, lbl in cols if k in sel]
+    return cols if cols else [('model_no', 'Model No.')]
+
+
 def _build_materials_table(submittal: Submittal) -> BytesIO:
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -360,35 +398,26 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
     style_header = ParagraphStyle('MatHeader', fontSize=8, fontName='Helvetica-Bold', textColor=WHITE, leading=10)
 
     elements = [Paragraph('LIST OF PROPOSED MATERIAL', style_title)]
-    materials = submittal.materials.all().order_by('display_order', 'item_description')
+    materials = submittal.materials.select_related('brand').all().order_by('display_order', 'model_no')
 
-    header = [
-        Paragraph('S.No', style_header),
-        Paragraph('Model No.', style_header),
-        Paragraph('Item Description', style_header),
-        Paragraph('Material', style_header),
-        Paragraph('Size', style_header),
-        Paragraph('WRAS NUMBER', style_header),
-        Paragraph('BRAND', style_header),
-        Paragraph('PRESSURE RATING', style_header),
-        Paragraph('Area of Application', style_header),
+    cols = _get_effective_columns(submittal)
+    header = [Paragraph('S.No', style_header)] + [
+        Paragraph(lbl, style_header) for _, lbl in cols
     ]
 
     data = [header]
     for idx, mat in enumerate(materials, 1):
-        data.append([
-            Paragraph(str(idx), style_cell),
-            Paragraph(mat.model_no, style_cell),
-            Paragraph(mat.item_description, style_cell),
-            Paragraph(mat.material, style_cell),
-            Paragraph(mat.size, style_cell),
-            Paragraph(mat.wras_number, style_cell),
-            Paragraph(mat.brand, style_cell),
-            Paragraph(mat.pressure_rating, style_cell),
-            Paragraph(mat.area_of_application, style_cell),
-        ])
+        row = [Paragraph(str(idx), style_cell)]
+        for key, _ in cols:
+            if key == 'model_no':
+                val = mat.model_no
+            else:
+                val = mat.get(key, '')
+            row.append(Paragraph(str(val or ''), style_cell))
+        data.append(row)
 
-    col_widths = [25, 55, 90, 55, 70, 55, 70, 55, 70]
+    ncols = len(cols) + 1
+    col_widths = [25] + [max(40, 500 // ncols)] * (ncols - 1)
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), BLUE_DARK),
