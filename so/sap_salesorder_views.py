@@ -8589,16 +8589,12 @@ def export_item_analysis_pdf(request):
         invoice_qs = invoice_qs.filter(posting_date__lte=end_date_parsed)
         creditmemo_qs = creditmemo_qs.filter(posting_date__lte=end_date_parsed)
     
+    # Firm filter is applied at item level inside the year loop (same as item_analysis view)
+    firm_item_codes = None
     if firm_filter:
         clean_firms = [f for f in firm_filter if f.strip()]
         if clean_firms:
-            firm_item_codes = Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True)
-            if firm_item_codes:
-                invoice_qs = invoice_qs.filter(items__item_code__in=firm_item_codes).distinct()
-                creditmemo_qs = creditmemo_qs.filter(items__item_code__in=firm_item_codes).distinct()
-            else:
-                invoice_qs = invoice_qs.none()
-                creditmemo_qs = creditmemo_qs.none()
+            firm_item_codes = list(Items.objects.filter(item_firm__in=clean_firms).values_list('item_code', flat=True))
     
     # Build item data (simplified version)
     item_data = {}
@@ -8645,6 +8641,15 @@ def export_item_analysis_pdf(request):
             latest_description=Max('item_description'),
             latest_posting_date=Max('credit_memo__posting_date')
         )
+        
+        # Apply firm filter at item level (same as item_analysis view)
+        if firm_item_codes is not None:
+            if firm_item_codes:
+                invoice_items = invoice_items.filter(item_code__in=firm_item_codes)
+                creditmemo_items = creditmemo_items.filter(item_code__in=firm_item_codes)
+            else:
+                invoice_items = invoice_items.none()
+                creditmemo_items = creditmemo_items.none()
         
         if search_query:
             search_item_codes = Items.objects.filter(
