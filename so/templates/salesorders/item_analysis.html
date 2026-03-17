@@ -660,11 +660,11 @@
           <i class="fas fa-users"></i>
           Customer Analysis
         </a>
-        <a href="{% url 'export_item_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
+        <a href="{% url 'export_item_analysis_pdf' %}?{{ request.GET.urlencode }}" id="export-pdf-link" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
           <i class="fas fa-file-pdf"></i>
           Export PDF
         </a>
-        <a href="{% url 'export_item_analysis_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success">
+        <a href="{% url 'export_item_analysis_excel' %}?{{ request.GET.urlencode }}" id="export-excel-link" class="btn btn-success">
           <i class="fas fa-file-excel"></i>
           Export Excel
         </a>
@@ -1245,6 +1245,12 @@
             
             // Update URL without reload
             window.history.pushState({}, '', '{% url "item_analysis" %}?' + params.toString());
+            // Update Export PDF/Excel links so they use current filters
+            const qs = params.toString();
+            const exportPdfLink = document.getElementById('export-pdf-link');
+            const exportExcelLink = document.getElementById('export-excel-link');
+            if (exportPdfLink) exportPdfLink.href = '{% url "export_item_analysis_pdf" %}' + (qs ? '?' + qs : '');
+            if (exportExcelLink) exportExcelLink.href = '{% url "export_item_analysis_excel" %}' + (qs ? '?' + qs : '');
           }
         })
         .catch(error => {
@@ -1308,6 +1314,12 @@
             
             // Update URL without reload
             window.history.pushState({}, '', '{% url "item_analysis" %}?' + currentParams.toString());
+            // Update Export PDF/Excel links so they use current filters
+            const qs = currentParams.toString();
+            const exportPdfLink = document.getElementById('export-pdf-link');
+            const exportExcelLink = document.getElementById('export-excel-link');
+            if (exportPdfLink) exportPdfLink.href = '{% url "export_item_analysis_pdf" %}' + (qs ? '?' + qs : '');
+            if (exportExcelLink) exportExcelLink.href = '{% url "export_item_analysis_excel" %}' + (qs ? '?' + qs : '');
           }
         })
         .catch(error => {

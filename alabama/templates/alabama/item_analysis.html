@@ -225,10 +225,10 @@
         <p>Item performance by year (current and previous)</p>
       </div>
       <div class="header-right">
-        <a href="{% url 'alabama:export_item_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-danger">
+        <a href="{% url 'alabama:export_item_analysis_pdf' %}?{{ request.GET.urlencode }}" id="export-pdf-link" class="btn btn-danger">
           <i class="fas fa-file-pdf"></i> Export PDF
         </a>
-        <a href="{% url 'alabama:export_item_analysis_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success">
+        <a href="{% url 'alabama:export_item_analysis_excel' %}?{{ request.GET.urlencode }}" id="export-excel-link" class="btn btn-success">
           <i class="fas fa-file-excel"></i> Export Excel
         </a>
         <a href="{% url 'alabama:home' %}" class="btn btn-secondary">
@@ -473,6 +473,11 @@
               if (tc) tc.innerHTML = data.total_count_html;
             }
             window.history.pushState({}, '', itemAnalysisUrl + '?' + params.toString());
+            var qsStr = params.toString();
+            var pdfLink = qs('#export-pdf-link');
+            var excelLink = qs('#export-excel-link');
+            if (pdfLink) pdfLink.href = '{% url "alabama:export_item_analysis_pdf" %}' + (qsStr ? '?' + qsStr : '');
+            if (excelLink) excelLink.href = '{% url "alabama:export_item_analysis_excel" %}' + (qsStr ? '?' + qsStr : '');
           }
         })
         .catch(function() { window.location.href = itemAnalysisUrl + '?' + params.toString(); });

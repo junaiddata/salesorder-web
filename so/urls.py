@@ -219,6 +219,8 @@ urlpatterns += [
     path('historical-sales/analysis/', historical_sales_views.historical_sales_analysis_dashboard, name='historical_sales_analysis'),
     path('historical-sales/item-analysis/', historical_sales_views.historical_item_analysis, name='historical_sales_item_analysis'),
     path('historical-sales/customer-analysis/', historical_sales_views.historical_customer_analysis, name='historical_sales_customer_analysis'),
+    path('historical-sales/item-analysis/export-pdf/', historical_sales_views.export_historical_item_analysis_pdf, name='historical_sales_item_analysis_export_pdf'),
+    path('historical-sales/customer-analysis/export-pdf/', historical_sales_views.export_historical_customer_analysis_pdf, name='historical_sales_customer_analysis_export_pdf'),
 
     path('dashboard/open-so/', views.open_so_dashboard, name='open_so_dashboard'),
     path('dashboard/upload-so/', views.upload_so_data, name='upload_so_data'), # New path

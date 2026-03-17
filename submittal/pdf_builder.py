@@ -151,6 +151,103 @@ def _draw_company_header(c, box_y=None, box_h=120, use_black=False):
 
 
 # ---------------------------------------------------------------------------
+# Colour constants
+# ---------------------------------------------------------------------------
+BLUE_DARK = colors.HexColor('#000080')      # Navy blue for company name / title
+BLUE_STRIP_DARK = colors.HexColor('#1a5276')  # Dark blue strip
+BLUE_STRIP_MED = colors.HexColor('#2e86c1')   # Medium blue strip
+BLUE_STRIP_LIGHT = colors.HexColor('#85c1e9') # Light blue strip
+GREY_STRIP = colors.HexColor('#b0b0b0')       # Grey strip
+
+
+# ---------------------------------------------------------------------------
+# Decorative corner strips (diagonal bars – left-top & right-bottom)
+# ---------------------------------------------------------------------------
+
+def _draw_corner_strips(c):
+    """Draw diagonal decorative strips at top-left and bottom-right corners."""
+    
+    # ── Top-left corner strips ────────────────────────────────────────
+    strip_colors_tl = [
+        BLUE_STRIP_DARK,
+        BLUE_STRIP_MED,
+        BLUE_STRIP_LIGHT,
+        GREY_STRIP,
+    ]
+    strip_w = 38
+    for i, col in enumerate(strip_colors_tl):
+        c.saveState()
+        c.setFillColor(col)
+        c.setStrokeColor(col)
+        x_offset = i * strip_w
+        p = c.beginPath()
+        p.moveTo(x_offset, PAGE_H)
+        p.lineTo(x_offset + strip_w, PAGE_H)
+        p.lineTo(x_offset + strip_w, PAGE_H - 180)
+        p.lineTo(x_offset, PAGE_H - 130)
+        p.close()
+        c.drawPath(p, fill=1, stroke=0)
+        c.restoreState()
+
+    # ── Bottom-right corner strips ────────────────────────────────────
+    strip_colors_br = [
+        GREY_STRIP,
+        BLUE_STRIP_LIGHT,
+        BLUE_STRIP_MED,
+        BLUE_STRIP_DARK,
+    ]
+    for i, col in enumerate(strip_colors_br):
+        c.saveState()
+        c.setFillColor(col)
+        x_start = PAGE_W - (len(strip_colors_br) - i) * strip_w
+        p = c.beginPath()
+        p.moveTo(x_start, 0)
+        p.lineTo(x_start + strip_w, 0)
+        p.lineTo(x_start + strip_w, 130)
+        p.lineTo(x_start, 180)
+        p.close()
+        c.drawPath(p, fill=1, stroke=0)
+        c.restoreState()
+
+
+# ---------------------------------------------------------------------------
+# Outer border
+# ---------------------------------------------------------------------------
+
+def _draw_outer_border(c):
+    """Draw thin black outer border with margin."""
+    margin = 20
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(1)
+    c.rect(margin, margin, PAGE_W - 2 * margin, PAGE_H - 2 * margin, fill=0, stroke=1)
+
+
+# ---------------------------------------------------------------------------
+# Text wrapping helper
+# ---------------------------------------------------------------------------
+
+def _draw_wrapped(c, text, x, y, max_width, font_size, leading):
+    """Draw text with word wrapping. Returns final y position."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    words = str(text).split()
+    line = ''
+    current_y = y
+    for word in words:
+        test = (line + ' ' + word).strip()
+        if stringWidth(test, c._fontname, font_size) < max_width:
+            line = test
+        else:
+            if line:
+                c.drawString(x, current_y, line)
+                current_y -= leading
+            line = word
+    if line:
+        c.drawString(x, current_y, line)
+        current_y -= leading
+    return current_y
+
+
+# ---------------------------------------------------------------------------
 # Title Page (Section 1)
 # ---------------------------------------------------------------------------
 
@@ -159,69 +256,119 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
 
-    _draw_left_strips(c)
+    # ── Outer border ─────────────────────────────────────────────────
+    _draw_outer_border(c)
 
-    box_y = PAGE_H - 180
-    box_x, box_w, box_h = 60, PAGE_W - 120, 130
+    # ── Decorative corner strips ─────────────────────────────────────
+    _draw_corner_strips(c)
+
+    # ── Company header box ───────────────────────────────────────────
+    box_h = 120
+    box_w = PAGE_W - 140
+    box_x = 70
+    box_y = PAGE_H - 200
 
     c.setStrokeColor(BLUE_DARK)
-    c.setLineWidth(2)
+    c.setLineWidth(1.5)
     c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
 
-    c.setFont('Helvetica-Bold', 16)
+    # Company name – large navy bold
+    c.setFont('Helvetica-Bold', 18)
     c.setFillColor(BLUE_DARK)
-    c.drawCentredString(cx, box_y + box_h - 30, 'JUNAID SAN & ELE MAT TRDG LLC')
+    c.drawCentredString(cx, box_y + box_h - 28, 'JUNAID SAN & ELE MAT TRDG LLC')
 
+    # Sublines – black, smaller
     c.setFont('Helvetica', 9)
     c.setFillColor(colors.black)
-    for i, line in enumerate([
+    sub_lines = [
         'Dealers in Plumbing & Sanitary ware Products',
         'P.O. Box 34862, Dubai, U.A.E.',
         'Tel: 04-2367723  Fax: 04-2367250',
-        'E-mail: project@junaid.ae',
-        'Web: www.junaidworld.com',
-    ]):
-        c.drawCentredString(cx, box_y + box_h - 50 - i * 14, line)
+    ]
+    for i, line in enumerate(sub_lines):
+        c.drawCentredString(cx, box_y + box_h - 48 - i * 14, line)
 
-    title_y = box_y - 60
-    c.setFont('Helvetica-Bold', 22)
+    # Email with blue link look
+    email_y = box_y + box_h - 48 - len(sub_lines) * 14
+    c.setFont('Helvetica', 9)
+    c.setFillColor(colors.black)
+    c.drawCentredString(cx - 30, email_y, 'E-mail:')
+    c.setFillColor(colors.blue)
+    c.drawString(cx - 5, email_y, 'project@junaid.ae')
+
+    # Web line
+    web_y = email_y - 14
+    c.setFillColor(colors.black)
+    c.setFont('Helvetica', 9)
+    c.drawCentredString(cx, web_y, 'Web: www.junaidworld.com')
+
+    # ── MATERIAL SUBMITTAL title ──────────────────────────────────────
+    title_y = box_y - 50
+    c.setFont('Helvetica-Bold', 20)
     c.setFillColor(BLUE_DARK)
-    c.drawCentredString(cx, title_y, 'MATERIAL SUBMITTAL')
+    title_text = 'MATERIAL SUBMITTAL'
+    c.drawCentredString(cx, title_y, title_text)
 
+    # Underline the title (double underline for the old-English feel)
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    tw = stringWidth(title_text, 'Helvetica-Bold', 20)
+    ul_x1 = cx - tw / 2
+    ul_x2 = cx + tw / 2
+    c.setStrokeColor(BLUE_DARK)
+    c.setLineWidth(1)
+    c.line(ul_x1, title_y - 3, ul_x2, title_y - 3)
+    c.line(ul_x1, title_y - 6, ul_x2, title_y - 6)
+
+    # ── Fields section ────────────────────────────────────────────────
     fields = [
         ('Project', submittal.project),
-        ('Client', submittal.client),
+        ('Employer', submittal.client),
         ('Consultant', submittal.consultant),
-        ('Main Contractor', submittal.main_contractor),
+        ('Contractor', submittal.main_contractor),
         ('MEP Contractor', submittal.mep_contractor),
         ('Product', submittal.product),
+        ('Manufacturer', getattr(submittal, 'manufacturer', '')),
     ]
 
-    field_y = title_y - 60
-    label_x, colon_x, value_x = 90, 210, 220
+    field_y = title_y - 55
+    arrow_x = 58        # arrow ">"
+    label_x = 72        # underlined label
+    colon_x = 175       # colon ":"
+    value_x = 185       # value text start
     max_w = PAGE_W - value_x - 60
 
     for label, value in fields:
         if not value:
             continue
-        c.setFillColor(BLUE_DARK)
-        p = c.beginPath()
-        p.moveTo(label_x - 18, field_y + 4)
-        p.lineTo(label_x - 8, field_y + 8)
-        p.lineTo(label_x - 18, field_y + 12)
-        p.close()
-        c.drawPath(p, fill=1, stroke=0)
 
-        c.setFont('Helvetica-Bold', 11)
+        # ── Arrow ">" in blue ────────────────────────────────────────
+        c.setFillColor(BLUE_DARK)
+        c.setFont('Helvetica-Bold', 12)
+        c.drawString(arrow_x, field_y, '\u276F')   # ❯ right-pointing angle
+
+        # ── Underlined label in black ────────────────────────────────
         c.setFillColor(colors.black)
+        c.setFont('Helvetica-Bold', 10)
         c.drawString(label_x, field_y, label)
+
+        # Draw underline under label
+        lw = stringWidth(label, 'Helvetica-Bold', 10)
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(0.5)
+        c.line(label_x, field_y - 1.5, label_x + lw, field_y - 1.5)
+
+        # ── Colon ───────────────────────────────────────────────────
+        c.setFont('Helvetica-Bold', 10)
         c.drawString(colon_x, field_y, ':')
 
+        # ── Value text (wrapped) ─────────────────────────────────────
         c.setFont('Helvetica', 10)
-        _draw_wrapped(c, value, value_x, field_y, max_w, 10, 14)
+        c.setFillColor(colors.black)
+        end_y = _draw_wrapped(c, str(value), value_x, field_y, max_w, 10, 14)
 
-        line_count = max(1, len(value) * 6 / max_w + 1)
-        field_y -= max(40, int(line_count) * 16 + 10)
+        # Calculate how many lines the value took
+        lines_used = max(1, int((field_y - end_y) / 14) + 1)
+        field_y -= max(32, lines_used * 14 + 12)
 
     c.save()
     buf.seek(0)
@@ -753,29 +900,124 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     return buf
 
 
-# ---------------------------------------------------------------------------
-# Warranty Letter PDF (Section 13 - Pegler-style generated)
-# ---------------------------------------------------------------------------
+import os
+from io import BytesIO
+from datetime import date
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+)
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import mm, inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate, Frame
 
-def _build_warranty_letter_pdf(submittal: Submittal) -> BytesIO:
+
+PAGE_W, PAGE_H = A4
+
+
+def _draw_draft_watermark(c, doc):
+    """Draw DRAFT watermark and logo on every page."""
+    c.saveState()
+
+    # ── DRAFT watermark ──────────────────────────────────────────────
+    c.setFont('Helvetica-Bold', 72)
+    c.setFillColor(colors.Color(0.75, 0.75, 0.75, alpha=0.35))
+    c.translate(PAGE_W / 2, PAGE_H / 2)
+    c.rotate(45)
+    c.drawCentredString(0, 0, 'DRAFT')
+    c.restoreState()
+
+    c.saveState()
+
+    # ── Logo top-right ───────────────────────────────────────────────
+    logo_path = os.path.join('media', 'footer-logo1.png')
+    if os.path.exists(logo_path):
+        logo_w = 160
+        logo_h = 55
+        c.drawImage(
+            logo_path,
+            PAGE_W - 36 - logo_w,
+            PAGE_H - 36 - logo_h,
+            width=logo_w,
+            height=logo_h,
+            preserveAspectRatio=True,
+            mask='auto',
+        )
+
+    c.restoreState()
+
+
+class _WarrantyDocTemplate(BaseDocTemplate):
+    """Custom doc template that injects watermark + logo on every page."""
+
+    def __init__(self, buf, **kwargs):
+        super().__init__(buf, **kwargs)
+        frame = Frame(
+            self.leftMargin,
+            self.bottomMargin,
+            self.width,
+            self.height,
+            id='normal',
+        )
+        template = PageTemplate(
+            id='warranty',
+            frames=[frame],
+            onPage=_draw_draft_watermark,
+        )
+        self.addPageTemplates([template])
+
+
+def _build_warranty_letter_pdf(submittal) -> BytesIO:
     """
-    Build a black-and-white warranty certificate letter with full proposed materials table.
-    Replaces single material line with the whole materials table.
+    Build a black-and-white warranty certificate letter styled after the
+    Pegler reference image (logo top-right, DRAFT watermark, label table,
+    materials table in body, TOC bold note, Mr. Junaid Nasheer sign-off).
     """
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=36, rightMargin=36,
-                            topMargin=50, bottomMargin=50)
+    doc = _WarrantyDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=80,   # leave room for logo
+        bottomMargin=50,
+    )
 
-    # Black-and-white styles only
-    style_cell = ParagraphStyle('WarrCell', fontSize=8, fontName='Helvetica', leading=10)
-    style_header = ParagraphStyle('WarrHeader', fontSize=8, fontName='Helvetica-Bold', textColor=colors.black, leading=10)
-    style_body = ParagraphStyle('WarrBody', fontSize=9, fontName='Helvetica', leading=12)
+    # ── Shared styles ────────────────────────────────────────────────
+    style_body = ParagraphStyle(
+        'WBody', fontSize=10, fontName='Helvetica', leading=14, spaceAfter=6,
+    )
+    style_title = ParagraphStyle(
+        'WTitle', fontSize=11, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, spaceAfter=14,
+        textColor=colors.black,
+    )
+    style_label = ParagraphStyle(
+        'WLabel', fontSize=10, fontName='Helvetica', leading=14,
+    )
+    style_label_val = ParagraphStyle(
+        'WLabelVal', fontSize=10, fontName='Helvetica', leading=14,
+    )
+    style_cell = ParagraphStyle(
+        'WarrCell', fontSize=8, fontName='Helvetica', leading=10,
+    )
+    style_header = ParagraphStyle(
+        'WarrHeader', fontSize=8, fontName='Helvetica-Bold',
+        textColor=colors.black, leading=10,
+    )
 
-    materials = submittal.materials.select_related('brand').all().order_by('display_order', 'model_no')
+    # ── Fetch materials ───────────────────────────────────────────────
+    materials = (
+        submittal.materials
+        .select_related('brand')
+        .all()
+        .order_by('display_order', 'model_no')
+    )
     cols = _get_warranty_columns(submittal)
 
-    # Build materials table - black text on white, no background colors
+    # ── Build materials table ─────────────────────────────────────────
     header_row = [Paragraph('S.No', style_header)] + [
         Paragraph(lbl, style_header) for _, lbl in cols
     ]
@@ -791,53 +1033,113 @@ def _build_warranty_letter_pdf(submittal: Submittal) -> BytesIO:
     col_widths = [25] + [max(40, 500 // ncols)] * (ncols - 1)
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 8),
+        ('TEXTCOLOR',     (0, 0), (-1, -1), colors.black),
+        ('GRID',          (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
 
-    date_type = getattr(submittal, 'warranty_date_type', 'toc') or 'toc'
-    date_word = 'Invoice' if date_type == 'invoice' else 'TOC'
+    # ── Date ─────────────────────────────────────────────────────────
+    today = date.today().strftime('%B %d, %Y')
 
+    # ── date_type / date_word ─────────────────────────────────────────
+    date_type = getattr(submittal, 'warranty_date_type', 'toc') or 'toc'
+    date_word = 'INVOICE' if date_type == 'invoice' else 'TOC'
+
+    # ── Project / Employer label table ───────────────────────────────
+    lbl_w = 110   # label column
+    col_w = 10    # colon column
+    val_w = doc.width - lbl_w - col_w
+
+    def _lbl_row(label, value):
+        return [
+            Paragraph(label, style_label),
+            Paragraph(':', style_label),
+            Paragraph(value, style_label_val),
+        ]
+
+    info_data = [
+        _lbl_row('Project',  submittal.project or ''),
+        _lbl_row('Employer', submittal.client  or ''),
+        _lbl_row('Subject',  'Warranty Certificate for Plumbing Valves'),
+    ]
+    info_tbl = Table(info_data, colWidths=[lbl_w, col_w, val_w])
+    info_tbl.setStyle(TableStyle([
+        ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR',     (0, 0), (-1, -1), colors.black),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+    ]))
+
+    # ── Assemble flowables ────────────────────────────────────────────
     elements = [
-        Paragraph('TO WHOM IT MAY CONCERN', ParagraphStyle(
-            'WarrTitle', fontSize=14, fontName='Helvetica-Bold',
-            textColor=colors.black, alignment=TA_CENTER, spaceAfter=16,
-        )),
-        Paragraph(f'<b>Project:</b> {submittal.project or ""}', style_body),
-        Paragraph(f'<b>Employer:</b> {submittal.client or ""}', style_body),
-        Paragraph('<b>Subject:</b> Warranty Certificate for Plumbing Valves', style_body),
+        # Date – top left
+        Paragraph(today, style_body),
+        Spacer(1, 10),
+
+        # Title
+        Paragraph('<u>TO WHOM IT MAY CONCERN</u>', style_title),
+
+        # Project / Employer / Subject
+        info_tbl,
         Spacer(1, 12),
+
+        # Intro sentence
         Paragraph(
-            'This is to confirm that the below following items are manufactured in accordance with ISO 9001:2015 Quality Management Systems.',
+            'This is to confirm that the below following items are manufactured in '
+            'accordance with ISO 9001:2015 Quality Management Systems.',
             style_body,
         ),
-        Spacer(1, 12),
+        Spacer(1, 10),
+
+        # ── Materials table sits here (replaces brand line) ───────────
         tbl,
         Spacer(1, 12),
+
+        # Warranty duration
         Paragraph(
             f'It carries warranty for a period of 5 years from date of {date_word}. '
             'This warranty covers defects rising due to faulty manufacture.',
             style_body,
         ),
+
+        # TOC bold note
         Paragraph(
-            'It does not extend to defects arising due to incorrect installation/application, misuse or normal wear and tear.',
+            '<b>TOC DATE cannot be exceeded 6 months from the date of invoice</b>.',
             style_body,
         ),
+        Spacer(1, 6),
+
+        # Exclusions
+        Paragraph(
+            'It does not extend to defects arising due to incorrect installation/application, '
+            'misuse or normal wear and tear.',
+            style_body,
+        ),
+        Spacer(1, 6),
+
         Paragraph(
             'As per the manufacturer guidelines all warranty given as per the supply/invoice date.',
             style_body,
         ),
+        Spacer(1, 6),
+
         Paragraph(
-            "And Manufacturer's instructions manual must be strictly complied for warranty claim.",
+            "And Manufacturer\u2019s instructions manual must be strictly complied for warranty claim.",
             style_body,
         ),
-        Spacer(1, 24),
+        Spacer(1, 30),
+
+        # Sign-off
         Paragraph('For M/s. Junaid Sanitary Electrical Material Trading LLC', style_body),
+        Spacer(1, 36),   # signature gap
         Paragraph('Mr. Junaid Nasheer', style_body),
         Paragraph('Sales Manager', style_body),
     ]

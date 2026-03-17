@@ -1056,3 +1056,702 @@ def historical_customer_analysis(request):
         'categories_for_tiles': categories_for_tiles,
     }
     return render(request, 'historical_sales/customer_analysis.html', context)
+
+
+def _build_historical_item_analysis_data(request):
+    """Build filtered item analysis data for PDF export. Returns (items_list, totals_list, is_admin)."""
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    category_filter = request.GET.getlist('category')
+    store_filter = request.GET.get('store', '').strip()
+    firm_filter = request.GET.getlist('firm')
+    month_filter = request.GET.getlist('month')
+    start_str = request.GET.get('start', '').strip()
+    end_str = request.GET.get('end', '').strip()
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    qs = HistoricalSalesLine.objects.all().select_related('item')
+    if store_filter == 'HO':
+        qs = qs.exclude(sales_employee__istartswith='R.').exclude(sales_employee__istartswith='E.')
+    elif store_filter == 'Others':
+        qs = qs.filter(Q(sales_employee__istartswith='R.') | Q(sales_employee__istartswith='E.'))
+    if category_filter:
+        clean_cats = [c for c in category_filter if c.strip()]
+        if clean_cats:
+            cat_conditions = Q()
+            for cat in clean_cats:
+                if cat == 'Trading':
+                    cat_conditions |= Q(sales_employee__istartswith='A.')
+                elif cat == 'Project':
+                    cat_conditions |= Q(sales_employee__istartswith='B.')
+                elif cat == 'Retail':
+                    cat_conditions |= Q(sales_employee__istartswith='R.')
+                elif cat == 'Export':
+                    cat_conditions |= Q(sales_employee__istartswith='E.')
+                elif cat == 'Others':
+                    cat_conditions |= ~Q(sales_employee__istartswith='A.') & ~Q(sales_employee__istartswith='B.') & ~Q(sales_employee__istartswith='R.') & ~Q(sales_employee__istartswith='E.')
+            qs = qs.filter(cat_conditions)
+    if salesmen_filter:
+        clean = [s for s in salesmen_filter if s.strip()]
+        if clean:
+            qs = qs.filter(sales_employee__in=clean)
+    if month_filter:
+        try:
+            month_nums = [int(m) for m in month_filter if m.strip()]
+            if month_nums:
+                qs = qs.filter(posting_date__month__in=month_nums)
+        except (ValueError, TypeError):
+            pass
+    start_date = parse_date(start_str)
+    end_date = parse_date(end_str)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
+    )
+
+    item_data = {}
+    for year in ALLOWED_YEARS:
+        year_qs = qs.filter(posting_date__year=year)
+        agg = year_qs.values('item').annotate(
+            total_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
+            total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+            total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
+        )
+        for row in agg:
+            item_id = row['item']
+            if not item_id:
+                continue
+            try:
+                item = Items.objects.get(pk=item_id)
+            except Items.DoesNotExist:
+                continue
+            code = item.item_code or ''
+            if not code or _is_null_item_code(code):
+                continue
+            if firm_filter:
+                clean_firms = [f for f in firm_filter if f.strip()]
+                if clean_firms and (item.item_firm or '') not in clean_firms:
+                    continue
+            if search_query:
+                sq = search_query.lower()
+                if sq not in (item.item_code or '').lower() and sq not in (item.item_description or '').lower():
+                    continue
+            key = code
+            if key not in item_data:
+                item_data[key] = {
+                    'item_code': code,
+                    'item_description': item.item_description or 'Unknown',
+                    'years': {},
+                }
+            if year not in item_data[key]['years']:
+                item_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'total_quantity': Decimal('0'),
+                }
+            item_data[key]['years'][year]['total_sales'] += row['total_sales'] or Decimal('0')
+            item_data[key]['years'][year]['total_gp'] += row['total_gp'] or Decimal('0')
+            item_data[key]['years'][year]['total_quantity'] += row['total_quantity'] or Decimal('0')
+
+    items_list = []
+    for key, data in item_data.items():
+        item_row = {
+            'item_code': data['item_code'],
+            'item_description': data['item_description'],
+            'years_data': {},
+        }
+        for year in ALLOWED_YEARS:
+            yd = data['years'].get(year, {'total_sales': Decimal('0'), 'total_gp': Decimal('0'), 'total_quantity': Decimal('0')})
+            total_sales = yd['total_sales']
+            total_gp = yd['total_gp']
+            total_quantity = yd['total_quantity']
+            gp_percent = (total_gp / total_sales * 100) if total_sales else Decimal('0')
+            avg_rate = (total_sales / total_quantity) if total_quantity else Decimal('0')
+            item_row['years_data'][year] = {
+                'total_sales': total_sales,
+                'total_gp': total_gp,
+                'gp_percent': gp_percent,
+                'avg_rate': avg_rate,
+                'total_quantity': total_quantity,
+            }
+        items_list.append(item_row)
+
+    items_list = [i for i in items_list if i['item_code'] and not _is_null_item_code(i['item_code'])]
+    items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
+
+    year_totals = {}
+    for year in ALLOWED_YEARS:
+        year_totals[year] = {
+            'total_sales': sum(i['years_data'][year]['total_sales'] for i in items_list),
+            'total_gp': sum(i['years_data'][year]['total_gp'] for i in items_list),
+            'total_quantity': sum(i['years_data'][year]['total_quantity'] for i in items_list),
+        }
+        yt = year_totals[year]
+        yt['total_avg_rate'] = (yt['total_sales'] / yt['total_quantity']) if yt['total_quantity'] else Decimal('0')
+        yt['total_gp_percent'] = (yt['total_gp'] / yt['total_sales'] * 100) if yt['total_sales'] else Decimal('0')
+
+    totals_list = [year_totals[y] for y in ALLOWED_YEARS]
+    for item in items_list:
+        item['year_list'] = [item['years_data'][y] for y in ALLOWED_YEARS]
+
+    return items_list, totals_list, is_admin
+
+
+def _build_historical_customer_analysis_data(request):
+    """Build filtered customer analysis data for PDF export. Returns (customers_list, totals_list, is_admin)."""
+    search_query = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
+    category_filter = request.GET.getlist('category')
+    store_filter = request.GET.get('store', '').strip()
+    firm_filter = request.GET.getlist('firm')
+    item_filter = request.GET.getlist('item')
+    month_filter = request.GET.getlist('month')
+    start_str = request.GET.get('start', '').strip()
+    end_str = request.GET.get('end', '').strip()
+
+    def parse_date(s):
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    qs = HistoricalSalesLine.objects.all().select_related('customer', 'item')
+    if store_filter == 'HO':
+        qs = qs.exclude(sales_employee__istartswith='R.').exclude(sales_employee__istartswith='E.')
+    elif store_filter == 'Others':
+        qs = qs.filter(Q(sales_employee__istartswith='R.') | Q(sales_employee__istartswith='E.'))
+    if category_filter:
+        clean_cats = [c for c in category_filter if c.strip()]
+        if clean_cats:
+            cat_conditions = Q()
+            for cat in clean_cats:
+                if cat == 'Trading':
+                    cat_conditions |= Q(sales_employee__istartswith='A.')
+                elif cat == 'Project':
+                    cat_conditions |= Q(sales_employee__istartswith='B.')
+                elif cat == 'Retail':
+                    cat_conditions |= Q(sales_employee__istartswith='R.')
+                elif cat == 'Export':
+                    cat_conditions |= Q(sales_employee__istartswith='E.')
+                elif cat == 'Others':
+                    cat_conditions |= ~Q(sales_employee__istartswith='A.') & ~Q(sales_employee__istartswith='B.') & ~Q(sales_employee__istartswith='R.') & ~Q(sales_employee__istartswith='E.')
+            qs = qs.filter(cat_conditions)
+    if salesmen_filter:
+        clean = [s for s in salesmen_filter if s.strip()]
+        if clean:
+            qs = qs.filter(sales_employee__in=clean)
+    if month_filter:
+        try:
+            month_nums = [int(m) for m in month_filter if m.strip()]
+            if month_nums:
+                qs = qs.filter(posting_date__month__in=month_nums)
+        except (ValueError, TypeError):
+            pass
+    start_date = parse_date(start_str)
+    end_date = parse_date(end_str)
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+    if firm_filter:
+        clean_firms = [f for f in firm_filter if f.strip()]
+        if clean_firms:
+            firm_item_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
+            qs = qs.filter(item_id__in=firm_item_ids)
+    if item_filter:
+        clean_items = [i for i in item_filter if i.strip()]
+        if clean_items:
+            item_ids = set(Items.objects.filter(item_code__in=clean_items).values_list('pk', flat=True))
+            if item_ids:
+                qs = qs.filter(item_id__in=item_ids)
+            else:
+                qs = qs.none()
+
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
+    )
+
+    customer_data = {}
+    for year in ALLOWED_YEARS:
+        year_qs = qs.filter(posting_date__year=year)
+        if search_query:
+            search_ids = set(
+                Customer.objects.filter(
+                    Q(customer_code__icontains=search_query) | Q(customer_name__icontains=search_query)
+                ).values_list('pk', flat=True)
+            )
+            if search_ids:
+                year_qs = year_qs.filter(customer_id__in=search_ids)
+            else:
+                year_qs = year_qs.none()
+
+        doc_agg = year_qs.values('customer', 'document_type', 'document_number').annotate(
+            doc_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
+            doc_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
+        )
+        customer_totals = {}
+        customer_salesman = {}
+        for row in doc_agg:
+            cid = row['customer']
+            if not cid:
+                continue
+            if cid not in customer_totals:
+                customer_totals[cid] = {'total_sales': Decimal('0'), 'total_gp': Decimal('0'), 'doc_count': 0}
+            customer_totals[cid]['total_sales'] += row['doc_sales'] or Decimal('0')
+            customer_totals[cid]['total_gp'] += row['doc_gp'] or Decimal('0')
+            customer_totals[cid]['doc_count'] += 1
+
+        for cid in customer_totals:
+            latest = year_qs.filter(customer_id=cid).order_by('-posting_date').values('sales_employee').first()
+            if latest:
+                customer_salesman[cid] = latest.get('sales_employee') or ''
+
+        cust_map = {c.pk: c for c in Customer.objects.filter(pk__in=list(customer_totals.keys()))}
+
+        for cid, totals in customer_totals.items():
+            cust = cust_map.get(cid)
+            code = cust.customer_code if cust else ''
+            name = cust.customer_name if cust else 'Unknown'
+            if not code:
+                continue
+            key = code
+            if key not in customer_data:
+                customer_data[key] = {
+                    'customer_code': code,
+                    'customer_name': name,
+                    'years': {},
+                }
+            if year not in customer_data[key]['years']:
+                customer_data[key]['years'][year] = {
+                    'total_sales': Decimal('0'),
+                    'total_gp': Decimal('0'),
+                    'doc_count': 0,
+                    'salesman': '',
+                }
+            customer_data[key]['years'][year]['total_sales'] = totals['total_sales']
+            customer_data[key]['years'][year]['total_gp'] = totals['total_gp']
+            customer_data[key]['years'][year]['doc_count'] = totals['doc_count']
+            customer_data[key]['years'][year]['salesman'] = customer_salesman.get(cid, '')
+
+    customers_list = []
+    for key, data in customer_data.items():
+        cust_row = {
+            'customer_code': data['customer_code'],
+            'customer_name': data['customer_name'],
+            'years_data': {},
+        }
+        for year in ALLOWED_YEARS:
+            yd = data['years'].get(year, {'total_sales': Decimal('0'), 'total_gp': Decimal('0'), 'doc_count': 0, 'salesman': ''})
+            total_sales = yd['total_sales']
+            total_gp = yd['total_gp']
+            gp_percent = (total_gp / total_sales * 100) if total_sales else Decimal('0')
+            cust_row['years_data'][year] = {
+                'total_sales': total_sales,
+                'total_gp': total_gp,
+                'gp_percent': gp_percent,
+                'doc_count': yd['doc_count'],
+                'salesman': yd.get('salesman', ''),
+            }
+        customers_list.append(cust_row)
+
+    customers_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
+
+    year_totals = {}
+    for year in ALLOWED_YEARS:
+        year_totals[year] = {
+            'total_sales': sum(c['years_data'][year]['total_sales'] for c in customers_list),
+            'total_gp': sum(c['years_data'][year]['total_gp'] for c in customers_list),
+        }
+        yt = year_totals[year]
+        yt['total_gp_percent'] = (yt['total_gp'] / yt['total_sales'] * 100) if yt['total_sales'] else Decimal('0')
+
+    totals_list = [year_totals[y] for y in ALLOWED_YEARS]
+    for c in customers_list:
+        c['year_list'] = [c['years_data'][y] for y in ALLOWED_YEARS]
+
+    return customers_list, totals_list, is_admin
+
+
+@login_required
+def export_historical_item_analysis_pdf(request):
+    """Export Historical Item Analysis to PDF with all current filters applied."""
+    from io import BytesIO
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+    items_list, totals_list, is_admin = _build_historical_item_analysis_data(request)
+
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Historical_Item_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=0.5 * inch,
+        leftMargin=0.5 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.5 * inch
+    )
+
+    elements = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("Historical Item Analysis (2020-2023)", title_style))
+    elements.append(Spacer(1, 0.15 * inch))
+
+    filter_info = []
+    store_filter = request.GET.get('store', '').strip()
+    category_filter = request.GET.getlist('category')
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    month_filter = request.GET.getlist('month')
+    start_str = request.GET.get('start', '').strip()
+    end_str = request.GET.get('end', '').strip()
+    search_query = request.GET.get('q', '').strip()
+    if store_filter:
+        filter_info.append(f"Store: {store_filter}")
+    if category_filter:
+        filter_info.append(f"Category: {', '.join(category_filter[:3])}{'...' if len(category_filter) > 3 else ''}")
+    if salesmen_filter:
+        filter_info.append(f"Salesmen: {', '.join(salesmen_filter[:2])}{'...' if len(salesmen_filter) > 2 else ''}")
+    if firm_filter:
+        filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
+    if month_filter:
+        filter_info.append(f"Months: {', '.join(month_filter)}")
+    if start_str or end_str:
+        filter_info.append(f"Date: {start_str or 'Start'} to {end_str or 'End'}")
+    if search_query:
+        filter_info.append(f"Search: {search_query}")
+
+    if filter_info:
+        filter_style = ParagraphStyle(
+            'FilterStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_LEFT
+        )
+        elements.append(Paragraph("Filters: " + " | ".join(filter_info), filter_style))
+        elements.append(Spacer(1, 0.15 * inch))
+
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.whitesmoke,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    wrap_style = ParagraphStyle(
+        'WrapStyle',
+        parent=styles['Normal'],
+        fontSize=6.5,
+        leading=8,
+        alignment=TA_LEFT
+    )
+
+    header_row = [
+        Paragraph('Item Code', header_style),
+        Paragraph('Description', header_style),
+    ]
+    for year in ALLOWED_YEARS:
+        if is_admin:
+            header_row.extend([
+                Paragraph(f'{year} Sales', header_style),
+                Paragraph(f'{year} GP', header_style),
+                Paragraph(f'{year} GP%', header_style),
+                Paragraph(f'{year} Qty', header_style),
+                Paragraph(f'{year} Avg Rate', header_style),
+            ])
+        else:
+            header_row.extend([
+                Paragraph(f'{year} Sales', header_style),
+                Paragraph(f'{year} Qty', header_style),
+                Paragraph(f'{year} Avg Rate', header_style),
+            ])
+
+    table_data = [header_row]
+
+    for item in items_list:
+        row = [
+            Paragraph(str(item['item_code'])[:30], wrap_style),
+            Paragraph((item['item_description'] or '')[:50], wrap_style),
+        ]
+        for year_data in item['year_list']:
+            sales = year_data.get('total_sales', Decimal('0'))
+            gp = year_data.get('total_gp', Decimal('0'))
+            qty = year_data.get('total_quantity', Decimal('0'))
+            avg_rate = year_data.get('avg_rate', Decimal('0'))
+            row.append(Paragraph(f"{sales:,.2f}", wrap_style))
+            if is_admin:
+                row.append(Paragraph(f"{gp:,.2f}", wrap_style))
+                gp_pct = year_data.get('gp_percent', Decimal('0'))
+                row.append(Paragraph(f"{gp_pct:.2f}%", wrap_style))
+            row.append(Paragraph(f"{qty:,.0f}", wrap_style))
+            row.append(Paragraph(f"{avg_rate:,.2f}", wrap_style))
+        table_data.append(row)
+
+    totals_row = [
+        Paragraph('TOTAL', wrap_style),
+        Paragraph('', wrap_style),
+    ]
+    for totals in totals_list:
+        totals_row.append(Paragraph(f"{totals.get('total_sales', 0):,.2f}", wrap_style))
+        if is_admin:
+            totals_row.append(Paragraph(f"{totals.get('total_gp', 0):,.2f}", wrap_style))
+            totals_row.append(Paragraph(f"{totals.get('total_gp_percent', 0):.2f}%", wrap_style))
+        totals_row.append(Paragraph('-', wrap_style))
+        totals_row.append(Paragraph('-', wrap_style))
+    table_data.append(totals_row)
+
+    col_widths = [0.7 * inch, 1.8 * inch]
+    for _ in ALLOWED_YEARS:
+        col_widths.append(0.7 * inch)
+        if is_admin:
+            col_widths.append(0.6 * inch)
+            col_widths.append(0.5 * inch)
+        col_widths.append(0.5 * inch)
+        col_widths.append(0.6 * inch)
+
+    total_width = sum(col_widths)
+    available_width = 10.69 * inch
+    if total_width > available_width:
+        scale_factor = available_width / total_width
+        col_widths = [w * scale_factor for w in col_widths]
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (1, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#eff6ff')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ])
+    table.setStyle(table_style)
+    elements.append(table)
+
+    doc.build(elements)
+    response.write(buffer.getvalue())
+    buffer.close()
+    return response
+
+
+@login_required
+def export_historical_customer_analysis_pdf(request):
+    """Export Historical Customer Analysis to PDF with all current filters applied."""
+    from io import BytesIO
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+
+    customers_list, totals_list, is_admin = _build_historical_customer_analysis_data(request)
+
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"Historical_Customer_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=0.5 * inch,
+        leftMargin=0.5 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.5 * inch
+    )
+
+    elements = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("Historical Customer Analysis (2020-2023)", title_style))
+    elements.append(Spacer(1, 0.15 * inch))
+
+    filter_info = []
+    store_filter = request.GET.get('store', '').strip()
+    category_filter = request.GET.getlist('category')
+    salesmen_filter = request.GET.getlist('salesman')
+    firm_filter = request.GET.getlist('firm')
+    item_filter = request.GET.getlist('item')
+    month_filter = request.GET.getlist('month')
+    start_str = request.GET.get('start', '').strip()
+    end_str = request.GET.get('end', '').strip()
+    search_query = request.GET.get('q', '').strip()
+    if store_filter:
+        filter_info.append(f"Store: {store_filter}")
+    if category_filter:
+        filter_info.append(f"Category: {', '.join(category_filter[:3])}{'...' if len(category_filter) > 3 else ''}")
+    if salesmen_filter:
+        filter_info.append(f"Salesmen: {', '.join(salesmen_filter[:2])}{'...' if len(salesmen_filter) > 2 else ''}")
+    if firm_filter:
+        filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
+    if item_filter:
+        filter_info.append(f"Items: {', '.join(item_filter[:2])}{'...' if len(item_filter) > 2 else ''}")
+    if month_filter:
+        filter_info.append(f"Months: {', '.join(month_filter)}")
+    if start_str or end_str:
+        filter_info.append(f"Date: {start_str or 'Start'} to {end_str or 'End'}")
+    if search_query:
+        filter_info.append(f"Search: {search_query}")
+
+    if filter_info:
+        filter_style = ParagraphStyle(
+            'FilterStyle',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_LEFT
+        )
+        elements.append(Paragraph("Filters: " + " | ".join(filter_info), filter_style))
+        elements.append(Spacer(1, 0.15 * inch))
+
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.whitesmoke,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    wrap_style = ParagraphStyle(
+        'WrapStyle',
+        parent=styles['Normal'],
+        fontSize=6.5,
+        leading=8,
+        alignment=TA_LEFT
+    )
+
+    header_row = [
+        Paragraph('Customer', header_style),
+        Paragraph('Salesman', header_style),
+    ]
+    for year in ALLOWED_YEARS:
+        header_row.append(Paragraph(f'{year} Sales', header_style))
+        if is_admin:
+            header_row.extend([
+                Paragraph(f'{year} GP', header_style),
+                Paragraph(f'{year} GP%', header_style),
+            ])
+
+    table_data = [header_row]
+
+    for customer in customers_list:
+        first_salesman = customer['year_list'][0].get('salesman', '') if customer['year_list'] else ''
+        row = [
+            Paragraph(f"{customer['customer_name'] or 'Unknown'} ({customer['customer_code']})"[:60], wrap_style),
+            Paragraph(str(first_salesman)[:25], wrap_style),
+        ]
+        for year_data in customer['year_list']:
+            sales = year_data.get('total_sales', Decimal('0'))
+            gp = year_data.get('total_gp', Decimal('0'))
+            gp_pct = year_data.get('gp_percent', Decimal('0'))
+            row.append(Paragraph(f"{sales:,.2f}", wrap_style))
+            if is_admin:
+                row.append(Paragraph(f"{gp:,.2f}", wrap_style))
+                row.append(Paragraph(f"{gp_pct:.2f}%", wrap_style))
+        table_data.append(row)
+
+    totals_row = [
+        Paragraph('TOTAL', wrap_style),
+        Paragraph('', wrap_style),
+    ]
+    for totals in totals_list:
+        totals_row.append(Paragraph(f"{totals.get('total_sales', 0):,.2f}", wrap_style))
+        if is_admin:
+            totals_row.append(Paragraph(f"{totals.get('total_gp', 0):,.2f}", wrap_style))
+            totals_row.append(Paragraph(f"{totals.get('total_gp_percent', 0):.2f}%", wrap_style))
+    table_data.append(totals_row)
+
+    col_widths = [2.2 * inch, 1.2 * inch]
+    for _ in ALLOWED_YEARS:
+        col_widths.append(0.85 * inch)
+        if is_admin:
+            col_widths.append(0.7 * inch)
+            col_widths.append(0.55 * inch)
+
+    total_width = sum(col_widths)
+    available_width = 10.69 * inch
+    if total_width > available_width:
+        scale_factor = available_width / total_width
+        col_widths = [w * scale_factor for w in col_widths]
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table_style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (1, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#eff6ff')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ])
+    table.setStyle(table_style)
+    elements.append(table)
+
+    doc.build(elements)
+    response.write(buffer.getvalue())
+    buffer.close()
+    return response

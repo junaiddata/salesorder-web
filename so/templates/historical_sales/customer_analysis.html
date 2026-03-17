@@ -59,6 +59,7 @@
     <div class="header">
       <h1>Historical Customer Analysis (2020-2023)</h1>
       <div style="display:flex; gap:8px;">
+        <a href="{% url 'historical_sales_customer_analysis_export_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Export PDF</a>
         <a href="{% url 'historical_sales_analysis' %}" class="btn btn-secondary"><i class="fas fa-chart-line"></i> Sales Analysis</a>
         <a href="{% url 'historical_sales_item_analysis' %}" class="btn btn-secondary"><i class="fas fa-cube"></i> Item Analysis</a>
         <a href="{% url 'historical_sales_upload' %}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
