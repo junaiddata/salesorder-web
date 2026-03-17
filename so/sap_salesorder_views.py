@@ -8726,8 +8726,6 @@ def export_item_analysis_pdf(request):
             item_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
             item_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
             item_data[key]['years'][year]['total_quantity'] += item.get('total_quantity', Decimal('0'))
-            if item.get('avg_rate'):
-                item_data[key]['years'][year]['avg_rate'] = item.get('avg_rate', Decimal('0'))
         
         for item in creditmemo_items_list:
             code = item['item_code'] or ''
@@ -8768,8 +8766,13 @@ def export_item_analysis_pdf(request):
             item_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
             item_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
             item_data[key]['years'][year]['total_quantity'] += item.get('total_quantity', Decimal('0'))
-            if item.get('avg_rate'):
-                item_data[key]['years'][year]['avg_rate'] = item.get('avg_rate', Decimal('0'))
+    
+    # Calculate avg_rate = total_sales / total_quantity (same as app - avoids negative from creditmemo Avg(price))
+    for data in item_data.values():
+        for year, year_data in data['years'].items():
+            ts = year_data.get('total_sales', Decimal('0'))
+            tq = year_data.get('total_quantity', Decimal('0'))
+            year_data['avg_rate'] = (ts / tq) if tq and tq != 0 else Decimal('0')
     
     # Convert to sorted list
     items_list = sorted(
