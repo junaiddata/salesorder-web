@@ -35,6 +35,23 @@
     .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
     .pagination a { padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--primary); text-decoration: none; }
     .pagination a:hover { background: var(--primary-light); }
+    /* Multi-select with search */
+    .multi-select { position: relative; width: 100%; }
+    .select-box { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; transition: all 0.15s ease; }
+    .select-box:hover { border-color: var(--primary); }
+    .select-box::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.7rem; color: var(--text-secondary); }
+    .options-container { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto; z-index: 1000; display: none; margin-top: 4px; }
+    .options-container.active { display: block; }
+    .option-label { display: block; padding: 6px 10px; cursor: pointer; font-size: 0.8rem; transition: background 0.15s; }
+    .option-label:hover { background: var(--bg); }
+    .option-label input[type="checkbox"] { margin-right: 8px; accent-color: var(--primary); }
+    .option-label.hidden { display: none; }
+    .search-box-container { padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 10; }
+    .search-box { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.75rem; font-family: inherit; background: var(--bg); }
+    .search-box:focus { outline: none; border-color: var(--primary); }
+    .store-tile, .category-tile { padding: 6px 12px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .store-tile:hover, .category-tile:hover { border-color: var(--primary); color: var(--primary); }
+    .store-tile.active, .category-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
   </style>
 </head>
 <body>
@@ -49,8 +66,24 @@
       </div>
     </div>
 
+    <!-- Store & Category Tiles -->
+    <div class="filters-card" style="margin-bottom: 12px; padding: 12px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+        <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">Store:</span>
+        <button type="button" class="store-tile {% if not filters.store %}active{% endif %}" data-store="">All</button>
+        <button type="button" class="store-tile {% if filters.store == 'HO' %}active{% endif %}" data-store="HO">HO</button>
+        <button type="button" class="store-tile {% if filters.store == 'Others' %}active{% endif %}" data-store="Others">Others</button>
+        <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-left: 12px;">Category:</span>
+        {% for cat in categories_for_tiles %}
+        <button type="button" class="category-tile {% if cat in filters.category %}active{% endif %}" data-category="{{ cat }}">{{ cat }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="filters-card">
       <form method="GET" action="{% url 'historical_sales_customer_analysis' %}" id="filters-form">
+        <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
+        <div id="category-inputs">{% for c in filters.category %}<input type="hidden" name="category" value="{{ c }}">{% endfor %}</div>
         <div class="filters-grid">
           <div class="field">
             <label>Search</label>
@@ -58,27 +91,66 @@
           </div>
           <div class="field">
             <label>Salesman</label>
-            <select name="salesman" multiple style="height: 70px;">
-              {% for s in salesmen %}
-              <option value="{{ s }}" {% if s in filters.salesman %}selected{% endif %}>{{ s }}</option>
-              {% endfor %}
-            </select>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen…" autocomplete="off">
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for s in salesmen %}
+                  <label class="option-label" data-value="{{ s }}">
+                    <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesman %}checked{% endif %}>
+                    <span class="option-text">{{ s }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>Firm</label>
-            <select name="firm" multiple style="height: 70px;">
-              {% for f in firms %}
-              <option value="{{ f }}" {% if f in filters.firm %}selected{% endif %}>{{ f }}</option>
-              {% endfor %}
-            </select>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger">
+                <span id="firm-text">All Firms</span>
+              </div>
+              <div class="options-container" id="firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="firm-search" class="search-box" placeholder="Search firms…" autocomplete="off">
+                </div>
+                <div class="options-list" id="firm-options-list">
+                  {% for f in firms %}
+                  <label class="option-label" data-value="{{ f }}">
+                    <input type="checkbox" name="firm" value="{{ f }}" {% if f in filters.firm %}checked{% endif %}>
+                    <span class="option-text">{{ f }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>Item</label>
-            <select name="item" multiple style="height: 70px;">
-              {% for i in items %}
-              <option value="{{ i.code }}" {% if i.code in filters.item %}selected{% endif %}>{{ i.code }} - {{ i.description|truncatewords:3 }}</option>
-              {% endfor %}
-            </select>
+            <div class="multi-select" id="item-wrapper">
+              <div class="select-box" id="item-trigger">
+                <span id="item-text">All Items</span>
+              </div>
+              <div class="options-container" id="item-options">
+                <div class="search-box-container">
+                  <input type="text" id="item-search" class="search-box" placeholder="Search items…" autocomplete="off">
+                </div>
+                <div class="options-list" id="item-options-list">
+                  {% for i in items %}
+                  <label class="option-label" data-value="{{ i.code }}">
+                    <input type="checkbox" name="item" value="{{ i.code }}" {% if i.code in filters.item %}checked{% endif %}>
+                    <span class="option-text">{{ i.code }} - {{ i.description|truncatewords:4 }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>Start Date</label>
@@ -88,7 +160,8 @@
             <label>End Date</label>
             <input type="date" name="end" value="{{ filters.end }}">
           </div>
-          <div class="field" style="align-self:end;">
+          <div class="field" style="align-self:end; display:flex; gap:8px;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
             <button class="btn btn-primary" type="submit">Apply</button>
           </div>
         </div>
@@ -123,12 +196,107 @@
     </div>
   </div>
   <script>
-    document.querySelectorAll('.pagination a[data-page]').forEach(function(a) {
-      a.addEventListener('click', function(e) {
-        e.preventDefault();
-        var url = new URL(window.location.href);
-        url.searchParams.set('page', this.getAttribute('data-page'));
-        window.location.href = url.toString();
+    document.addEventListener('DOMContentLoaded', function() {
+      function qs(sel) { return document.querySelector(sel); }
+      function qsa(sel) { return document.querySelectorAll(sel); }
+
+      /* Store tiles: clear categories when switching (they differ per store) */
+      qsa('.store-tile').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          qsa('.store-tile').forEach(function(b) { b.classList.remove('active'); });
+          this.classList.add('active');
+          qs('#store-input').value = this.getAttribute('data-store') || '';
+          qs('#category-inputs').innerHTML = '';
+          qsa('.category-tile').forEach(function(b) { b.classList.remove('active'); });
+          qs('#filters-form').submit();
+        });
+      });
+
+      /* Category tiles */
+      qsa('.category-tile').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          this.classList.toggle('active');
+          var selected = [];
+          qsa('.category-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-category')); });
+          qs('#category-inputs').innerHTML = selected.map(function(v) {
+            return '<input type="hidden" name="category" value="' + (v || '').replace(/"/g, '&quot;') + '">';
+          }).join('');
+          qs('#filters-form').submit();
+        });
+      });
+
+      /* Multi-select: toggle dropdowns */
+      qs('#salesman-trigger').addEventListener('click', function(e) {
+        e.stopPropagation();
+        qs('#salesman-options').classList.toggle('active');
+        qs('#firm-options').classList.remove('active');
+        qs('#item-options').classList.remove('active');
+      });
+      qs('#firm-trigger').addEventListener('click', function(e) {
+        e.stopPropagation();
+        qs('#firm-options').classList.toggle('active');
+        qs('#salesman-options').classList.remove('active');
+        qs('#item-options').classList.remove('active');
+      });
+      qs('#item-trigger').addEventListener('click', function(e) {
+        e.stopPropagation();
+        qs('#item-options').classList.toggle('active');
+        qs('#salesman-options').classList.remove('active');
+        qs('#firm-options').classList.remove('active');
+      });
+      qs('#item-search').addEventListener('input', function() {
+        var t = this.value.toLowerCase();
+        qsa('#item-options-list .option-label').forEach(function(l) {
+          l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(t));
+        });
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!qs('#salesman-wrapper').contains(e.target)) qs('#salesman-options').classList.remove('active');
+        if (!qs('#firm-wrapper').contains(e.target)) qs('#firm-options').classList.remove('active');
+        if (!qs('#item-wrapper').contains(e.target)) qs('#item-options').classList.remove('active');
+      });
+
+      /* Multi-select: search filter */
+      qs('#salesman-search').addEventListener('input', function() {
+        var t = this.value.toLowerCase();
+        qsa('#salesman-options-list .option-label').forEach(function(l) {
+          l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(t));
+        });
+      });
+      qs('#firm-search').addEventListener('input', function() {
+        var t = this.value.toLowerCase();
+        qsa('#firm-options-list .option-label').forEach(function(l) {
+          l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(t));
+        });
+      });
+
+      function updateLabel(cbs, textEl, allText) {
+        var checked = Array.from(cbs).filter(function(x) { return x.checked; });
+        textEl.textContent = checked.length === 0 ? allText : (checked.length === 1 ? checked[0].value : checked.length + ' Selected');
+        textEl.style.opacity = checked.length ? '1' : '0.6';
+      }
+      function refreshLabels() {
+        updateLabel(qsa('#salesman-options-list input[type="checkbox"]'), qs('#salesman-text'), 'All Salesmen');
+        updateLabel(qsa('#firm-options-list input[type="checkbox"]'), qs('#firm-text'), 'All Firms');
+        updateLabel(qsa('#item-options-list input[type="checkbox"]'), qs('#item-text'), 'All Items');
+      }
+      qsa('#salesman-options-list input[type="checkbox"]').forEach(function(b) { b.addEventListener('change', refreshLabels); });
+      qsa('#firm-options-list input[type="checkbox"]').forEach(function(b) { b.addEventListener('change', refreshLabels); });
+      qsa('#item-options-list input[type="checkbox"]').forEach(function(b) { b.addEventListener('change', refreshLabels); });
+      refreshLabels();
+
+      qs('#clear-filters').addEventListener('click', function() {
+        window.location.href = '{% url "historical_sales_customer_analysis" %}';
+      });
+
+      document.querySelectorAll('.pagination a[data-page]').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          var url = new URL(window.location.href);
+          url.searchParams.set('page', this.getAttribute('data-page'));
+          window.location.href = url.toString();
+        });
       });
     });
   </script>

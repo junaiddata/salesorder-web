@@ -35,10 +35,10 @@
     .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
     .btn-secondary:hover { background: var(--bg); border-color: var(--primary); color: var(--primary); }
     .year-filter-tiles, .filter-tiles-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
-    .year-tile, .store-tile, .month-tile, .salesman-tile { padding: 8px 16px; border-radius: var(--radius-sm); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.875rem; font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.15s ease; }
-    .year-tile:hover, .store-tile:hover, .month-tile:hover, .salesman-tile:hover { border-color: var(--primary); color: var(--primary); }
-    .year-tile.active, .store-tile.active, .month-tile.active, .salesman-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
-    .month-tile, .salesman-tile { padding: 6px 12px; font-size: 0.813rem; }
+    .year-tile, .store-tile, .month-tile, .category-tile, .salesman-tile { padding: 8px 16px; border-radius: var(--radius-sm); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.875rem; font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.15s ease; }
+    .year-tile:hover, .store-tile:hover, .month-tile:hover, .category-tile:hover, .salesman-tile:hover { border-color: var(--primary); color: var(--primary); }
+    .year-tile.active, .store-tile.active, .month-tile.active, .category-tile.active, .salesman-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
+    .month-tile, .category-tile, .salesman-tile { padding: 6px 12px; font-size: 0.813rem; }
     .tiles-label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px; }
     .summary-box { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow-md); color: white; }
     .summary-box h2 { font-size: 1rem; font-weight: 600; margin: 0 0 20px 0; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -77,9 +77,9 @@
 
     <div class="year-filter-tiles">
       {% for y in years %}
-      <a href="?year={{ y }}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == y|stringformat:'d' %}active{% endif %}">{{ y }}</a>
+      <a href="?year={{ y }}{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.category_filter %}{% for c in filters.category_filter %}&category={{ c }}{% endfor %}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == y|stringformat:'d' %}active{% endif %}">{{ y }}</a>
       {% endfor %}
-      <a href="?year=Total{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == 'Total' or not filters.year %}active{% endif %}">Total</a>
+      <a href="?year=Total{% if filters.store %}&store={{ filters.store }}{% endif %}{% if filters.category_filter %}{% for c in filters.category_filter %}&category={{ c }}{% endfor %}{% endif %}{% if filters.salesmen_filter %}{% for s in filters.salesmen_filter %}&salesman={{ s }}{% endfor %}{% endif %}{% if filters.month %}{% for m in filters.month %}&month={{ m }}{% endfor %}{% endif %}{% if filters.start %}&start={{ filters.start }}{% endif %}{% if filters.end %}&end={{ filters.end }}{% endif %}" class="year-tile {% if filters.year == 'Total' or not filters.year %}active{% endif %}">Total</a>
     </div>
 
     <!-- Store Filter Tiles -->
@@ -92,7 +92,17 @@
       </div>
     </div>
 
-    <!-- Salesman Filter Tiles -->
+    <!-- Salesman Category Tiles (Project, Trading, Export, Retail, Others) -->
+    <div class="filters-card" style="margin-bottom: 16px; padding: 16px 20px;">
+      <div class="filter-tiles-row">
+        <span class="tiles-label">Category:</span>
+        {% for cat in categories_for_tiles %}
+        <button type="button" class="category-tile {% if cat in filters.category_filter %}active{% endif %}" data-category="{{ cat }}">{{ cat }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Salesman Tiles (individual salesmen for current store) -->
     <div class="filters-card" style="margin-bottom: 16px; padding: 16px 20px;">
       <div class="filter-tiles-row">
         <span class="tiles-label">Salesman:</span>
@@ -125,6 +135,7 @@
       <form id="filters-form" method="GET" action="{% url 'historical_sales_analysis' %}">
         <input type="hidden" name="year" id="year-input" value="{{ filters.year|default:'Total' }}">
         <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
+        <div id="category-inputs">{% for c in filters.category_filter %}<input type="hidden" name="category" value="{{ c }}">{% endfor %}</div>
         <div id="salesman-inputs">{% for s in filters.salesmen_filter %}<input type="hidden" name="salesman" value="{{ s }}">{% endfor %}</div>
         <div id="month-inputs">{% for m in filters.month %}<input type="hidden" name="month" value="{{ m }}">{% endfor %}</div>
         <div class="filters-grid">
@@ -210,19 +221,40 @@
     var form = document.getElementById('filters-form');
     var yearInput = document.getElementById('year-input');
     var storeInput = document.getElementById('store-input');
-    var salesmanInputs = document.getElementById('salesman-inputs');
+    var categoryInputs = document.getElementById('category-inputs');
     var monthInputs = document.getElementById('month-inputs');
 
     function syncFormAndSubmit() {
       form.submit();
     }
 
-    // Store tiles: single-select
+    var salesmanInputs = document.getElementById('salesman-inputs');
+
+    // Store tiles: single-select, clear categories & salesmen when switching (they differ per store)
     document.querySelectorAll('.store-tile').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.store-tile').forEach(function(b) { b.classList.remove('active'); });
         this.classList.add('active');
         storeInput.value = this.getAttribute('data-store') || '';
+        categoryInputs.innerHTML = '';
+        if (salesmanInputs) salesmanInputs.innerHTML = '';
+        document.querySelectorAll('.category-tile').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.salesman-tile').forEach(function(b) { b.classList.remove('active'); });
+        syncFormAndSubmit();
+      });
+    });
+
+    // Category tiles: multiselect (Project, Trading, Export, Retail, Others)
+    document.querySelectorAll('.category-tile').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        var selected = [];
+        document.querySelectorAll('.category-tile.active').forEach(function(b) {
+          selected.push(b.getAttribute('data-category'));
+        });
+        categoryInputs.innerHTML = selected.map(function(v) {
+          return '<input type="hidden" name="category" value="' + (v || '').replace(/"/g, '&quot;') + '">';
+        }).join('');
         syncFormAndSubmit();
       });
     });
@@ -235,9 +267,11 @@
         document.querySelectorAll('.salesman-tile.active').forEach(function(b) {
           selected.push(b.getAttribute('data-salesman'));
         });
-        salesmanInputs.innerHTML = selected.map(function(v) {
-          return '<input type="hidden" name="salesman" value="' + (v || '').replace(/"/g, '&quot;') + '">';
-        }).join('');
+        if (salesmanInputs) {
+          salesmanInputs.innerHTML = selected.map(function(v) {
+            return '<input type="hidden" name="salesman" value="' + (v || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;') + '">';
+          }).join('');
+        }
         syncFormAndSubmit();
       });
     });

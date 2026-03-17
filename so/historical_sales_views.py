@@ -23,6 +23,56 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_YEARS = [2020, 2021, 2022, 2023]
 
+# Salesman categories: A.=Trading, B.=Project, R.=Retail, E.=Export, else Others
+# HO = Project + Trading + Others (excludes Retail R. and Export E.)
+SALESMAN_CATEGORIES = [
+    ('Trading', 'Trading'),   # A.
+    ('Project', 'Project'),   # B.
+    ('Retail', 'Retail'),     # R.
+    ('Export', 'Export'),     # E.
+    ('Others', 'Others'),     # fallback
+]
+
+
+def _salesman_category(name):
+    """Return category for salesman: Trading, Project, Retail, Export, or Others."""
+    if not name or not str(name).strip():
+        return 'Others'
+    s = str(name).strip()
+    if s.upper().startswith('A.'):
+        return 'Trading'
+    if s.upper().startswith('B.'):
+        return 'Project'
+    if s.upper().startswith('R.'):
+        return 'Retail'
+    if s.upper().startswith('E.'):
+        return 'Export'
+    return 'Others'
+
+
+def _is_ho_salesman(name):
+    """HO = Project + Trading + Others. Excludes Retail (R.) and Export (E.)."""
+    cat = _salesman_category(name)
+    return cat in ('Trading', 'Project', 'Others')
+
+
+def _get_salesmen_by_category(salesmen_list):
+    """Group salesmen by category. Returns dict {category: [salesmen]}."""
+    by_cat = {c[0]: [] for c in SALESMAN_CATEGORIES}
+    for s in salesmen_list:
+        cat = _salesman_category(s)
+        by_cat.setdefault(cat, []).append(s)
+    return by_cat
+
+
+def _get_salesmen_for_store(salesmen_list, store):
+    """When store=HO, return only HO salesmen. When store=Others, return only Retail+Export."""
+    if store == 'HO':
+        return [s for s in salesmen_list if _is_ho_salesman(s)]
+    if store == 'Others':
+        return [s for s in salesmen_list if _salesman_category(s) in ('Retail', 'Export')]
+    return salesmen_list
+
 
 def _parse_date(val):
     """Parse date from various formats."""
@@ -358,19 +408,13 @@ def historical_sales_analysis_dashboard(request):
     )
 
     salesmen_filter = request.GET.getlist('salesman')
+    category_filter = request.GET.getlist('category')
     month_filter = request.GET.getlist('month')
     store_filter = request.GET.get('store', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     period = request.GET.get('period', '').strip()
     year_filter = request.GET.get('year', 'Total').strip()
-
-    def _store_from_salesman(sales_employee):
-        """Derive store from sales_employee: R. or E. prefix = Others, else HO."""
-        if not sales_employee or not str(sales_employee).strip():
-            return 'HO'
-        s = str(sales_employee).strip()
-        return 'Others' if (s.startswith('R.') or s.startswith('E.')) else 'HO'
 
     def parse_date(s):
         if not s:
@@ -391,6 +435,22 @@ def historical_sales_analysis_dashboard(request):
                 qs = qs.exclude(sales_employee__istartswith='R.').exclude(sales_employee__istartswith='E.')
             elif store_filter == 'Others':
                 qs = qs.filter(Q(sales_employee__istartswith='R.') | Q(sales_employee__istartswith='E.'))
+        if category_filter:
+            clean_cats = [c for c in category_filter if c.strip()]
+            if clean_cats:
+                cat_conditions = Q()
+                for cat in clean_cats:
+                    if cat == 'Trading':
+                        cat_conditions |= Q(sales_employee__istartswith='A.')
+                    elif cat == 'Project':
+                        cat_conditions |= Q(sales_employee__istartswith='B.')
+                    elif cat == 'Retail':
+                        cat_conditions |= Q(sales_employee__istartswith='R.')
+                    elif cat == 'Export':
+                        cat_conditions |= Q(sales_employee__istartswith='E.')
+                    elif cat == 'Others':
+                        cat_conditions |= ~Q(sales_employee__istartswith='A.') & ~Q(sales_employee__istartswith='B.') & ~Q(sales_employee__istartswith='R.') & ~Q(sales_employee__istartswith='E.')
+                qs = qs.filter(cat_conditions)
         if salesmen_filter:
             clean = [s for s in salesmen_filter if s.strip()]
             if clean:
@@ -477,13 +537,23 @@ def historical_sales_analysis_dashboard(request):
         for r in item_agg
     ]
 
-    salesmen = list(
+    all_salesmen = list(
         lines_qs.exclude(sales_employee__isnull=True)
         .exclude(sales_employee='')
         .values_list('sales_employee', flat=True)
         .distinct()
         .order_by('sales_employee')
     )
+    salesmen_by_category = _get_salesmen_by_category(all_salesmen)
+    # Salesmen tiles: filtered by store (HO = Project+Trading+Others; Others = Retail+Export; All = all)
+    salesmen = _get_salesmen_for_store(all_salesmen, store_filter or '')
+    # When HO: only Project, Trading, Others. When Others: only Retail, Export. All: show all 5.
+    if store_filter == 'HO':
+        categories_for_tiles = ['Project', 'Trading', 'Others']
+    elif store_filter == 'Others':
+        categories_for_tiles = ['Retail', 'Export']
+    else:
+        categories_for_tiles = [c[0] for c in SALESMAN_CATEGORIES]
 
     context = {
         'total_sales': total_sales,
@@ -491,10 +561,14 @@ def historical_sales_analysis_dashboard(request):
         'top_customers': top_customers,
         'top_items': top_items,
         'salesmen': salesmen,
+        'salesmen_by_category': salesmen_by_category,
+        'categories_for_tiles': categories_for_tiles,
+        'salesman_categories': SALESMAN_CATEGORIES,
         'is_admin': is_admin,
         'years': ALLOWED_YEARS,
         'filters': {
             'salesmen_filter': salesmen_filter,
+            'category_filter': category_filter,
             'month': month_filter,
             'store': store_filter,
             'start': start,
@@ -519,6 +593,8 @@ def historical_item_analysis(request):
     """Item Analysis for 2020-2023 historical data."""
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
+    category_filter = request.GET.getlist('category')
+    store_filter = request.GET.get('store', '').strip()
     firm_filter = request.GET.getlist('firm')
     month_filter = request.GET.getlist('month')
     start_str = request.GET.get('start', '').strip()
@@ -533,6 +609,26 @@ def historical_item_analysis(request):
             return None
 
     qs = HistoricalSalesLine.objects.all().select_related('item')
+    if store_filter == 'HO':
+        qs = qs.exclude(sales_employee__istartswith='R.').exclude(sales_employee__istartswith='E.')
+    elif store_filter == 'Others':
+        qs = qs.filter(Q(sales_employee__istartswith='R.') | Q(sales_employee__istartswith='E.'))
+    if category_filter:
+        clean_cats = [c for c in category_filter if c.strip()]
+        if clean_cats:
+            cat_conditions = Q()
+            for cat in clean_cats:
+                if cat == 'Trading':
+                    cat_conditions |= Q(sales_employee__istartswith='A.')
+                elif cat == 'Project':
+                    cat_conditions |= Q(sales_employee__istartswith='B.')
+                elif cat == 'Retail':
+                    cat_conditions |= Q(sales_employee__istartswith='R.')
+                elif cat == 'Export':
+                    cat_conditions |= Q(sales_employee__istartswith='E.')
+                elif cat == 'Others':
+                    cat_conditions |= ~Q(sales_employee__istartswith='A.') & ~Q(sales_employee__istartswith='B.') & ~Q(sales_employee__istartswith='R.') & ~Q(sales_employee__istartswith='E.')
+            qs = qs.filter(cat_conditions)
     if salesmen_filter:
         clean = [s for s in salesmen_filter if s.strip()]
         if clean:
@@ -555,13 +651,20 @@ def historical_item_analysis(request):
         hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
     )
 
-    salesmen = list(
+    all_salesmen = list(
         HistoricalSalesLine.objects.exclude(sales_employee__isnull=True)
         .exclude(sales_employee='')
         .values_list('sales_employee', flat=True)
         .distinct()
         .order_by('sales_employee')
     )
+    salesmen = _get_salesmen_for_store(all_salesmen, store_filter)
+    if store_filter == 'HO':
+        categories_for_tiles = ['Project', 'Trading', 'Others']
+    elif store_filter == 'Others':
+        categories_for_tiles = ['Retail', 'Export']
+    else:
+        categories_for_tiles = [c[0] for c in SALESMAN_CATEGORIES]
     firms = list(Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='').values_list('item_firm', flat=True).distinct().order_by('item_firm'))
 
     item_data = {}
@@ -683,11 +786,14 @@ def historical_item_analysis(request):
         'years': ALLOWED_YEARS,
         'is_admin': is_admin,
         'salesmen': salesmen,
+        'categories_for_tiles': categories_for_tiles,
         'firms': firms,
         'totals_list': totals_list,
         'filters': {
             'q': search_query,
             'salesman': salesmen_filter,
+            'category': category_filter,
+            'store': store_filter,
             'firm': firm_filter,
             'month': month_filter,
             'start': start_str,
@@ -702,6 +808,8 @@ def historical_customer_analysis(request):
     """Customer Analysis for 2020-2023 historical data."""
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
+    category_filter = request.GET.getlist('category')
+    store_filter = request.GET.get('store', '').strip()
     firm_filter = request.GET.getlist('firm')
     item_filter = request.GET.getlist('item')
     month_filter = request.GET.getlist('month')
@@ -717,6 +825,26 @@ def historical_customer_analysis(request):
             return None
 
     qs = HistoricalSalesLine.objects.all().select_related('customer', 'item')
+    if store_filter == 'HO':
+        qs = qs.exclude(sales_employee__istartswith='R.').exclude(sales_employee__istartswith='E.')
+    elif store_filter == 'Others':
+        qs = qs.filter(Q(sales_employee__istartswith='R.') | Q(sales_employee__istartswith='E.'))
+    if category_filter:
+        clean_cats = [c for c in category_filter if c.strip()]
+        if clean_cats:
+            cat_conditions = Q()
+            for cat in clean_cats:
+                if cat == 'Trading':
+                    cat_conditions |= Q(sales_employee__istartswith='A.')
+                elif cat == 'Project':
+                    cat_conditions |= Q(sales_employee__istartswith='B.')
+                elif cat == 'Retail':
+                    cat_conditions |= Q(sales_employee__istartswith='R.')
+                elif cat == 'Export':
+                    cat_conditions |= Q(sales_employee__istartswith='E.')
+                elif cat == 'Others':
+                    cat_conditions |= ~Q(sales_employee__istartswith='A.') & ~Q(sales_employee__istartswith='B.') & ~Q(sales_employee__istartswith='R.') & ~Q(sales_employee__istartswith='E.')
+            qs = qs.filter(cat_conditions)
     if salesmen_filter:
         clean = [s for s in salesmen_filter if s.strip()]
         if clean:
@@ -752,13 +880,20 @@ def historical_customer_analysis(request):
         hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
     )
 
-    salesmen = list(
+    all_salesmen = list(
         HistoricalSalesLine.objects.exclude(sales_employee__isnull=True)
         .exclude(sales_employee='')
         .values_list('sales_employee', flat=True)
         .distinct()
         .order_by('sales_employee')
     )
+    salesmen = _get_salesmen_for_store(all_salesmen, store_filter)
+    if store_filter == 'HO':
+        categories_for_tiles = ['Project', 'Trading', 'Others']
+    elif store_filter == 'Others':
+        categories_for_tiles = ['Retail', 'Export']
+    else:
+        categories_for_tiles = [c[0] for c in SALESMAN_CATEGORIES]
     firms = list(Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='').values_list('item_firm', flat=True).distinct().order_by('item_firm'))
     items_from_lines = (
         HistoricalSalesLine.objects.exclude(item__isnull=True)
@@ -910,11 +1045,14 @@ def historical_customer_analysis(request):
         'filters': {
             'q': search_query,
             'salesman': salesmen_filter,
+            'category': category_filter,
+            'store': store_filter,
             'firm': firm_filter,
             'item': item_filter,
             'month': month_filter,
             'start': start_str,
             'end': end_str,
         },
+        'categories_for_tiles': categories_for_tiles,
     }
     return render(request, 'historical_sales/customer_analysis.html', context)
