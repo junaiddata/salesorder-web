@@ -248,140 +248,198 @@ def _draw_wrapped(c, text, x, y, max_width, font_size, leading):
 
 
 # ---------------------------------------------------------------------------
-# Title Page (Section 1)
+# Font Registration (add this at the top of your file)
 # ---------------------------------------------------------------------------
+import os
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# ── Download these fonts and save in media/fonts/ ─────────────────────────
+# Option 1: Playfair Display (elegant, similar to MATERIAL SUBMITTAL style)
+# Option 2: Montserrat (modern, clean)
+# Download from: https://fonts.google.com/
+
+FONT_DIR = os.path.join('media', 'fonts')
+
+def _register_custom_fonts():
+    """Register custom fonts. Call once at startup."""
+    font_map = {
+        # Title font (like MATERIAL SUBMITTAL in image)
+        'PlayfairDisplay':       'PlayfairDisplay-Regular.ttf',
+        'PlayfairDisplay-Bold':  'PlayfairDisplay-Bold.ttf',
+
+        # Modern body font
+        'Montserrat':            'Montserrat-Regular.ttf',
+        'Montserrat-Bold':       'Montserrat-Bold.ttf',
+        'Montserrat-SemiBold':   'Montserrat-SemiBold.ttf',
+
+        # Alternative: Poppins (very modern, clean)
+        'Poppins':               'Poppins-Regular.ttf',
+        'Poppins-Bold':          'Poppins-Bold.ttf',
+        'Poppins-SemiBold':      'Poppins-SemiBold.ttf',
+    }
+
+    for font_name, filename in font_map.items():
+        font_path = os.path.join(FONT_DIR, filename)
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+            except Exception:
+                pass  # Fall back to Helvetica if font not found
+
+
+# Call once at module load
+_register_custom_fonts()
+
+
+# ---------------------------------------------------------------------------
+# Font availability helper
+# ---------------------------------------------------------------------------
+
+def _get_font(preferred, fallback='Helvetica'):
+    """Return preferred font if registered, else fallback."""
+    try:
+        pdfmetrics.getFont(preferred)
+        return preferred
+    except KeyError:
+        return fallback
+
+
+def _get_font_bold(preferred, fallback='Helvetica-Bold'):
+    try:
+        pdfmetrics.getFont(preferred)
+        return preferred
+    except KeyError:
+        return fallback
+
+
+# ── Resolved font names ──────────────────────────────────────────────────
+FONT_TITLE       = _get_font('PlayfairDisplay-Bold', 'Helvetica-Bold')
+FONT_LABEL_BOLD  = _get_font_bold('Montserrat-Bold', 'Helvetica-Bold')
+FONT_LABEL       = _get_font('Montserrat-SemiBold', 'Helvetica-Bold')
+FONT_BODY        = _get_font('Montserrat', 'Helvetica')
+FONT_BODY_BOLD   = _get_font_bold('Montserrat-Bold', 'Helvetica-Bold')
+
+
+# ---------------------------------------------------------------------------
+# Text wrapping helper (updated with font param)
+# ---------------------------------------------------------------------------
+
+def _draw_wrapped(c, text, x, y, max_width, font_name, font_size, leading):
+    """Draw text with word wrapping using specified font. Returns final y."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    words = str(text).split()
+    line = ''
+    current_y = y
+    c.setFont(font_name, font_size)
+    for word in words:
+        test = (line + ' ' + word).strip()
+        if stringWidth(test, font_name, font_size) < max_width:
+            line = test
+        else:
+            if line:
+                c.drawString(x, current_y, line)
+                current_y -= leading
+            line = word
+    if line:
+        c.drawString(x, current_y, line)
+        current_y -= leading
+    return current_y
+
+
+# ---------------------------------------------------------------------------
+# Title Page (Section 1) – Background image + modern font overlay
+# ---------------------------------------------------------------------------
+
+BLUE_DARK = colors.HexColor('#000080')
 
 def _build_title_page(submittal: Submittal) -> BytesIO:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
 
-    # ── Outer border ─────────────────────────────────────────────────
-    _draw_outer_border(c)
+    # ── Draw background image (full page) ─────────────────────────────
+    bg_path = os.path.join('media', 'title_page_bg1.png')
+    if os.path.exists(bg_path):
+        c.drawImage(
+            bg_path,
+            0, 0,
+            width=PAGE_W,
+            height=PAGE_H,
+            preserveAspectRatio=False,
+            mask='auto',
+        )
 
-    # ── Decorative corner strips ─────────────────────────────────────
-    _draw_corner_strips(c)
-
-    # ── Company header box ───────────────────────────────────────────
-    box_h = 120
-    box_w = PAGE_W - 140
-    box_x = 70
-    box_y = PAGE_H - 200
-
-    c.setStrokeColor(BLUE_DARK)
-    c.setLineWidth(1.5)
-    c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
-
-    # Company name – large navy bold
-    c.setFont('Helvetica-Bold', 18)
-    c.setFillColor(BLUE_DARK)
-    c.drawCentredString(cx, box_y + box_h - 28, 'JUNAID SAN & ELE MAT TRDG LLC')
-
-    # Sublines – black, smaller
-    c.setFont('Helvetica', 9)
-    c.setFillColor(colors.black)
-    sub_lines = [
-        'Dealers in Plumbing & Sanitary ware Products',
-        'P.O. Box 34862, Dubai, U.A.E.',
-        'Tel: 04-2367723  Fax: 04-2367250',
-    ]
-    for i, line in enumerate(sub_lines):
-        c.drawCentredString(cx, box_y + box_h - 48 - i * 14, line)
-
-    # Email with blue link look
-    email_y = box_y + box_h - 48 - len(sub_lines) * 14
-    c.setFont('Helvetica', 9)
-    c.setFillColor(colors.black)
-    c.drawCentredString(cx - 30, email_y, 'E-mail:')
-    c.setFillColor(colors.blue)
-    c.drawString(cx - 5, email_y, 'project@junaid.ae')
-
-    # Web line
-    web_y = email_y - 14
-    c.setFillColor(colors.black)
-    c.setFont('Helvetica', 9)
-    c.drawCentredString(cx, web_y, 'Web: www.junaidworld.com')
-
-    # ── MATERIAL SUBMITTAL title ──────────────────────────────────────
-    title_y = box_y - 50
-    c.setFont('Helvetica-Bold', 20)
-    c.setFillColor(BLUE_DARK)
-    title_text = 'MATERIAL SUBMITTAL'
-    c.drawCentredString(cx, title_y, title_text)
-
-    # Underline the title (double underline for the old-English feel)
     from reportlab.pdfbase.pdfmetrics import stringWidth
-    tw = stringWidth(title_text, 'Helvetica-Bold', 20)
-    ul_x1 = cx - tw / 2
-    ul_x2 = cx + tw / 2
-    c.setStrokeColor(BLUE_DARK)
-    c.setLineWidth(1)
-    c.line(ul_x1, title_y - 3, ul_x2, title_y - 3)
-    c.line(ul_x1, title_y - 6, ul_x2, title_y - 6)
 
-    # ── Fields section ────────────────────────────────────────────────
+    # ── Dynamic fields ────────────────────────────────────────────────
     fields = [
-        ('Project', submittal.project),
-        ('Employer', submittal.client),
-        ('Consultant', submittal.consultant),
-        ('Contractor', submittal.main_contractor),
+        ('Project',        submittal.project),
+        ('Employer',       submittal.client),
+        ('Consultant',     submittal.consultant),
+        ('Contractor',     submittal.main_contractor),
         ('MEP Contractor', submittal.mep_contractor),
-        ('Product', submittal.product),
-        ('Manufacturer', getattr(submittal, 'manufacturer', '')),
+        ('Product',        submittal.product),
+        ('Manufacturer',   getattr(submittal, 'manufacturer', '')),
     ]
 
-    field_y = title_y - 55
-    arrow_x = 58        # arrow ">"
-    label_x = 72        # underlined label
-    colon_x = 175       # colon ":"
-    value_x = 185       # value text start
+    # Starting Y position below "MATERIAL SUBMITTAL" in background
+    field_y = PAGE_H - 370
+    arrow_x = 58
+    label_x = 72
+    colon_x = 178
+    value_x = 188
     max_w = PAGE_W - value_x - 60
 
     for label, value in fields:
         if not value:
             continue
 
-        # ── Arrow ">" in blue ────────────────────────────────────────
+        # ── Arrow "❯" ────────────────────────────────────────────────
         c.setFillColor(BLUE_DARK)
-        c.setFont('Helvetica-Bold', 12)
-        c.drawString(arrow_x, field_y, '\u276F')   # ❯ right-pointing angle
+        c.setFont(FONT_BODY_BOLD, 12)
+        c.drawString(arrow_x, field_y, '\u276F')
 
-        # ── Underlined label in black ────────────────────────────────
+        # ── Underlined label ─────────────────────────────────────────
         c.setFillColor(colors.black)
-        c.setFont('Helvetica-Bold', 10)
+        c.setFont(FONT_LABEL, 10)
         c.drawString(label_x, field_y, label)
 
-        # Draw underline under label
-        lw = stringWidth(label, 'Helvetica-Bold', 10)
+        # Underline
+        lw = stringWidth(label, FONT_LABEL, 10)
         c.setStrokeColor(colors.black)
         c.setLineWidth(0.5)
-        c.line(label_x, field_y - 1.5, label_x + lw, field_y - 1.5)
+        c.line(label_x, field_y - 2, label_x + lw, field_y - 2)
 
         # ── Colon ───────────────────────────────────────────────────
-        c.setFont('Helvetica-Bold', 10)
+        c.setFont(FONT_LABEL_BOLD, 10)
         c.drawString(colon_x, field_y, ':')
 
-        # ── Value text (wrapped) ─────────────────────────────────────
-        c.setFont('Helvetica', 10)
+        # ── Value (wrapped, modern body font) ────────────────────────
         c.setFillColor(colors.black)
-        end_y = _draw_wrapped(c, str(value), value_x, field_y, max_w, 10, 14)
+        end_y = _draw_wrapped(
+            c, str(value),
+            value_x, field_y,
+            max_w,
+            FONT_BODY_BOLD, 10, 15,
+        )
 
-        # Calculate how many lines the value took
-        lines_used = max(1, int((field_y - end_y) / 14) + 1)
-        field_y -= max(32, lines_used * 14 + 12)
+        lines_used = max(1, int((field_y - end_y) / 15) + 1)
+        field_y -= max(34, lines_used * 15 + 12)
 
     c.save()
     buf.seek(0)
     return buf
 
 
-def _draw_wrapped(c, text, x, y, max_w, fs, leading):
-    words = text.split()
+def _draw_wrapped(c, text, x, y, max_w, font_name, font_size, leading):
+    words = str(text).split()
     line = ''
     cy = y
+    c.setFont(font_name, font_size)
     for w in words:
         test = f'{line} {w}'.strip()
-        if c.stringWidth(test, 'Helvetica', fs) > max_w:
+        if c.stringWidth(test, font_name, font_size) > max_w:
             c.drawString(x, cy, line)
             cy -= leading
             line = w
@@ -389,6 +447,7 @@ def _draw_wrapped(c, text, x, y, max_w, fs, leading):
             line = test
     if line:
         c.drawString(x, cy, line)
+    return cy
 
 
 # ---------------------------------------------------------------------------
@@ -767,7 +826,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
             c.drawString(label_x, field_y, lbl)
             c.drawString(colon_x, field_y, ':')
             c.setFont('Helvetica', 9)
-            _draw_wrapped(c, val, value_x, field_y, max_w, 9, 12)
+            _draw_wrapped(c, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
             field_y -= 16
 
         # Page X of Y at bottom (small)
