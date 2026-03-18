@@ -26,6 +26,7 @@ SALESMAN_TELEGRAM_GROUPS = {
     "A.MR.RAFIQ ABU-TRD": "-5195382862",
     "B. MR.RAFIQ ABU- PROJ": "-5195382862",
     "A. RAFIQ ABU - RASHID": "-5195382862",
+    "A.RAFIQ ABU - RASHID": "-5195382862",  # normalized form
     
 
 
@@ -59,7 +60,14 @@ def get_chat_id_for_salesman(salesman_name):
     if not salesman_name:
         return None
     key = _normalize_salesman_name(salesman_name)
-    return SALESMAN_TELEGRAM_GROUPS.get(key)
+    # Direct lookup first
+    if key in SALESMAN_TELEGRAM_GROUPS:
+        return SALESMAN_TELEGRAM_GROUPS[key]
+    # Fallback: match against normalized dict keys (handles "A. RAFIQ" vs "A.RAFIQ")
+    for dict_key, chat_id in SALESMAN_TELEGRAM_GROUPS.items():
+        if _normalize_salesman_name(dict_key) == key:
+            return chat_id
+    return None
 
 
 def can_send_remarks_telegram(salesorder):
