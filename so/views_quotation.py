@@ -1010,6 +1010,150 @@ def export_quotation_to_pdf(request, quotation_id):
     response.write(pdf_content)
     return response
 
+
+def export_quotation_to_excel(request, quotation_id):
+    """Export a single quotation to Excel (.xlsx)."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+    quotation_items = quotation.items.select_related('item').all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Quotation_{quotation.quotation_number[:30]}"
+
+    # Styles
+    header_font = Font(name='Arial', size=16, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    table_header_font = Font(name='Arial', size=11, bold=True, color="FFFFFF")
+    table_header_fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    table_header_alignment = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    thick_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thick'), bottom=Side(style='thin')
+    )
+    currency_format = '#,##0.00'
+
+    row_num = 1
+
+    # Header
+    ws.merge_cells(f'A{row_num}:G{row_num}')
+    company_cell = ws[f'A{row_num}']
+    company_cell.value = "QUOTATION"
+    company_cell.font = header_font
+    company_cell.fill = header_fill
+    company_cell.alignment = header_alignment
+    ws.row_dimensions[row_num].height = 30
+    row_num += 2
+
+    # Quotation info
+    display_name = quotation.customer_display_name or quotation.customer.customer_name
+    order_info = [
+        ("Quotation Number:", quotation.quotation_number),
+        ("Date:", quotation.quotation_date.strftime("%d-%m-%Y")),
+        ("Customer:", display_name),
+        ("Customer Code:", quotation.customer.customer_code),
+        ("Salesman:", quotation.salesman.salesman_name if quotation.salesman else "N/A"),
+        ("Division:", quotation.division or "N/A"),
+    ]
+    for label, value in order_info:
+        ws[f'A{row_num}'] = label
+        ws[f'A{row_num}'].font = Font(bold=True, size=10)
+        ws[f'B{row_num}'] = value
+        ws[f'B{row_num}'].font = Font(size=10)
+        ws.merge_cells(f'B{row_num}:D{row_num}')
+        row_num += 1
+
+    if quotation.remarks:
+        row_num += 1
+        ws[f'A{row_num}'] = "Remarks:"
+        ws[f'A{row_num}'].font = Font(bold=True, size=10)
+        row_num += 1
+        ws[f'A{row_num}'] = quotation.remarks
+        ws.merge_cells(f'A{row_num}:G{row_num}')
+        ws[f'A{row_num}'].alignment = Alignment(wrap_text=True, vertical="top")
+        row_num += 1
+
+    row_num += 1
+
+    # Items table header
+    headers = ['S.No', 'Item Code', 'Item Description', 'Qty', 'Unit', 'Unit Price', 'Total']
+    col_widths = [8, 15, 40, 10, 8, 15, 15]
+    for col_num, (header, width) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=row_num, column=col_num, value=header)
+        cell.font = table_header_font
+        cell.fill = table_header_fill
+        cell.alignment = table_header_alignment
+        cell.border = thin_border
+        ws.column_dimensions[get_column_letter(col_num)].width = width
+    row_num += 1
+
+    # Item rows
+    subtotal = 0.0
+    for idx, qi in enumerate(quotation_items, 1):
+        line_total = qi.quantity * qi.price
+        subtotal += line_total
+        desc = qi.item.item_description if qi.item else "N/A"
+        code = qi.item.item_code if qi.item else "N/A"
+        row_data = [idx, code, desc, qi.quantity, qi.unit or 'pcs', float(qi.price), float(line_total)]
+        for col_num, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_num, column=col_num, value=value)
+            cell.border = thin_border
+            cell.alignment = Alignment(
+                horizontal="center" if col_num in [1, 4, 5] else "left",
+                vertical="center"
+            )
+            if col_num in [6, 7]:
+                cell.number_format = currency_format
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+        row_num += 1
+
+    # Summary
+    row_num += 1
+    vat_rate = 0.05
+    vat_amount = round(subtotal * vat_rate, 2)
+    grand_total = round(subtotal + vat_amount, 2)
+
+    ws[f'E{row_num}'] = "Subtotal:"
+    ws[f'E{row_num}'].font = Font(bold=True, size=10)
+    ws[f'E{row_num}'].alignment = Alignment(horizontal="right")
+    ws[f'G{row_num}'] = float(subtotal)
+    ws[f'G{row_num}'].number_format = currency_format
+    ws[f'G{row_num}'].font = Font(bold=True, size=10)
+    ws[f'G{row_num}'].border = thick_border
+    row_num += 1
+
+    ws[f'E{row_num}'] = f"VAT ({vat_rate:.0%}):"
+    ws[f'E{row_num}'].font = Font(size=10)
+    ws[f'E{row_num}'].alignment = Alignment(horizontal="right")
+    ws[f'G{row_num}'] = float(vat_amount)
+    ws[f'G{row_num}'].number_format = currency_format
+    ws[f'G{row_num}'].border = thin_border
+    row_num += 1
+
+    ws[f'E{row_num}'] = "Grand Total:"
+    ws[f'E{row_num}'].font = Font(bold=True, size=12)
+    ws[f'E{row_num}'].alignment = Alignment(horizontal="right")
+    ws[f'G{row_num}'] = float(grand_total)
+    ws[f'G{row_num}'].number_format = currency_format
+    ws[f'G{row_num}'].font = Font(bold=True, size=12, color="2C3E50")
+    ws[f'G{row_num}'].fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+    ws[f'G{row_num}'].border = thin_border
+
+    # Response
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
 # ==========================================
 # 2. JUNAID GENERATOR (Green/White Theme)
 # ==========================================
