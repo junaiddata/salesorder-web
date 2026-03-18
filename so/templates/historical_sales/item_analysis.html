@@ -56,9 +56,9 @@
     .search-box:focus { outline: none; border-color: var(--primary); }
     .store-tile, .category-tile { padding: 6px 12px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
     .store-tile:hover, .category-tile:hover { border-color: var(--primary); color: var(--primary); }
-    .store-tile.active, .category-tile.active, .salesman-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
-    .salesman-tile { padding: 5px 10px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-    .salesman-tile:hover { border-color: var(--primary); color: var(--primary); }
+    .store-tile.active, .category-tile.active, .salesman-tile.active, .month-tile.active { border-color: var(--primary); background: var(--primary); color: white; }
+    .salesman-tile, .month-tile { padding: 5px 10px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .salesman-tile:hover, .month-tile:hover { border-color: var(--primary); color: var(--primary); }
     @media (max-width: 768px) {
       body { padding: 8px; }
       .header h1 { font-size: 1.1rem; }
@@ -98,6 +98,21 @@
         <button type="button" class="salesman-tile {% if s in filters.salesman %}active{% endif %}" data-salesman="{{ s }}">{{ s }}</button>
         {% endfor %}
       </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">Month:</span>
+        <button type="button" class="month-tile {% if '1' in filters.month %}active{% endif %}" data-month="1">Jan</button>
+        <button type="button" class="month-tile {% if '2' in filters.month %}active{% endif %}" data-month="2">Feb</button>
+        <button type="button" class="month-tile {% if '3' in filters.month %}active{% endif %}" data-month="3">Mar</button>
+        <button type="button" class="month-tile {% if '4' in filters.month %}active{% endif %}" data-month="4">Apr</button>
+        <button type="button" class="month-tile {% if '5' in filters.month %}active{% endif %}" data-month="5">May</button>
+        <button type="button" class="month-tile {% if '6' in filters.month %}active{% endif %}" data-month="6">Jun</button>
+        <button type="button" class="month-tile {% if '7' in filters.month %}active{% endif %}" data-month="7">Jul</button>
+        <button type="button" class="month-tile {% if '8' in filters.month %}active{% endif %}" data-month="8">Aug</button>
+        <button type="button" class="month-tile {% if '9' in filters.month %}active{% endif %}" data-month="9">Sep</button>
+        <button type="button" class="month-tile {% if '10' in filters.month %}active{% endif %}" data-month="10">Oct</button>
+        <button type="button" class="month-tile {% if '11' in filters.month %}active{% endif %}" data-month="11">Nov</button>
+        <button type="button" class="month-tile {% if '12' in filters.month %}active{% endif %}" data-month="12">Dec</button>
+      </div>
     </div>
 
     <div class="filters-card">
@@ -105,6 +120,7 @@
         <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
         <div id="category-inputs">{% for c in filters.category %}<input type="hidden" name="category" value="{{ c }}">{% endfor %}</div>
         <div id="salesman-inputs">{% for s in filters.salesman %}<input type="hidden" name="salesman" value="{{ s }}">{% endfor %}</div>
+        <div id="month-inputs">{% for m in filters.month %}<input type="hidden" name="month" value="{{ m }}">{% endfor %}</div>
         <div class="filters-grid">
           <div class="field">
             <label>Search</label>
@@ -216,6 +232,19 @@
           qsa('.salesman-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-salesman')); });
           qs('#salesman-inputs').innerHTML = selected.map(function(v) {
             return '<input type="hidden" name="salesman" value="' + (v || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;') + '">';
+          }).join('');
+          qs('#filters-form').submit();
+        });
+      });
+
+      /* Month tiles: multiselect, submit form */
+      qsa('.month-tile').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          this.classList.toggle('active');
+          var selected = [];
+          qsa('.month-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-month')); });
+          qs('#month-inputs').innerHTML = selected.map(function(v) {
+            return '<input type="hidden" name="month" value="' + (v || '').replace(/"/g, '&quot;') + '">';
           }).join('');
           qs('#filters-form').submit();
         });
