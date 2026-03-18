@@ -7,327 +7,1274 @@
     <title>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
     <style>
         :root {
-            --primary: #003399;
-            --primary-light: #335cbf;
-            --accent: #CC0000;
-            --bg: #f1f5f9;
+            --primary: #1a56db;
+            --primary-dark: #1e3a8a;
+            --primary-light: #3b82f6;
+            --primary-subtle: #dbeafe;
+            --primary-ghost: #eff6ff;
+            --accent: #dc2626;
+            --accent-light: #fef2f2;
+            --success: #059669;
+            --success-light: #d1fae5;
+            --success-dark: #065f46;
+            --warning: #d97706;
+            --warning-light: #fef3c7;
+            --warning-dark: #92400e;
+            --bg: #f8fafc;
+            --bg-alt: #f1f5f9;
             --card-bg: #ffffff;
             --border: #e2e8f0;
-            --text: #1e293b;
+            --border-light: #f1f5f9;
+            --text: #0f172a;
+            --text-secondary: #334155;
             --text-muted: #64748b;
-            --step-done: #10b981;
-            --step-active: #003399;
-            --step-pending: #cbd5e1;
+            --text-light: #94a3b8;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+            --radius-sm: 6px;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 18px;
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg);
             color: var(--text);
-            margin: 0;
             min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
+        /* ─── Top Navigation Bar ─── */
         .top-bar {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--primary-light) 100%);
             color: #fff;
-            padding: 1rem 2rem;
+            padding: 0 2rem;
+            height: 64px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(26,86,219,0.25);
         }
-        .top-bar h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
-        .top-bar a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.875rem; }
-        .top-bar a:hover { color: #fff; }
 
-        .wizard-container { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
 
-        .step-indicator { display: flex; gap: 4px; margin-bottom: 2rem; overflow-x: auto; padding-bottom: 0.5rem; }
-        .step-dot { flex: 1; min-width: 40px; height: 6px; border-radius: 3px; background: var(--step-pending); transition: background 0.3s; cursor: pointer; }
-        .step-dot.active { background: var(--step-active); }
-        .step-dot.done { background: var(--step-done); }
+        .top-bar-back {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255,255,255,0.85);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.4rem 0.75rem;
+            border-radius: var(--radius-sm);
+            transition: all var(--transition);
+            border: 1px solid transparent;
+        }
 
-        .step-card { background: var(--card-bg); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: none; }
+        .top-bar-back:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .top-bar-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .top-bar-title .title-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .top-bar-home {
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding: 0.4rem 0.85rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: var(--radius-sm);
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .top-bar-home:hover {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+            border-color: rgba(255,255,255,0.35);
+        }
+
+        /* ─── Wizard Container ─── */
+        .wizard-container {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 2rem 1.25rem 4rem;
+        }
+
+        /* ─── Step Indicator (Progress Bar) ─── */
+        .step-progress {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1.25rem 1.5rem;
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .step-item:last-child { flex: 0; }
+
+        .step-circle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            background: var(--bg-alt);
+            color: var(--text-light);
+            border: 2px solid var(--border);
+            transition: all var(--transition);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-item.active .step-circle {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-subtle);
+        }
+
+        .step-item.done .step-circle {
+            background: var(--success);
+            color: #fff;
+            border-color: var(--success);
+        }
+
+        .step-label {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-light);
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            transition: color var(--transition);
+        }
+
+        .step-item.active .step-label { color: var(--primary); }
+        .step-item.done .step-label { color: var(--success-dark); }
+
+        .step-line {
+            flex: 1;
+            height: 3px;
+            background: var(--border);
+            margin: 0 0.5rem;
+            border-radius: 2px;
+            transition: background var(--transition);
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-item.done + .step-item .step-line,
+        .step-item.done .step-line {
+            background: var(--success);
+        }
+
+        /* ─── Step Card ─── */
+        .step-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-xl);
+            padding: 2rem 2.25rem;
+            box-shadow: var(--shadow-md);
+            display: none;
+            animation: fadeSlideIn 0.35s ease;
+            border: 1px solid var(--border-light);
+        }
+
         .step-card.active { display: block; }
-        .step-card h2 { font-size: 1.25rem; font-weight: 600; color: var(--primary); margin-bottom: 0.25rem; }
-        .step-card .step-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
-        .step-card label { font-weight: 500; font-size: 0.875rem; margin-bottom: 0.25rem; }
 
-        .wizard-nav { display: flex; justify-content: space-between; margin-top: 1.5rem; }
-        .btn-wizard { padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 500; font-size: 0.9rem; border: none; cursor: pointer; transition: all 0.2s; }
-        .btn-prev { background: var(--border); color: var(--text); }
-        .btn-prev:hover { background: #cbd5e1; }
-        .btn-next { background: var(--primary); color: #fff; }
-        .btn-next:hover { background: var(--primary-light); }
-        .btn-generate { background: var(--step-done); color: #fff; }
-        .btn-generate:hover { background: #059669; }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-        .material-search { position: relative; margin-bottom: 1rem; }
-        .material-search input { width: 100%; padding: 0.6rem 0.75rem 0.6rem 2.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; }
-        .material-search i { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
-        .material-results { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; display: none; position: relative; z-index: 100; background: #fff; }
-        .material-results.show { display: block; }
-        .material-result-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--bg); }
-        .material-result-item:hover { background: var(--bg); }
-        .material-result-item .code { font-weight: 600; color: var(--primary); }
-        .material-result-item .desc { color: var(--text-muted); }
+        .step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1.75rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border-light);
+        }
 
-        .selected-materials-table { width: 100%; margin-top: 1rem; }
-        .selected-materials-table th { background: var(--primary); color: #fff; font-size: 0.75rem; padding: 0.5rem; font-weight: 500; }
-        .selected-materials-table td { font-size: 0.8rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+        .step-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
 
-        .btn-remove-material { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; }
-        .auto-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 500; background: #dbeafe; color: var(--primary); }
-        .auto-badge.from-db { background: #d1fae5; color: #065f46; }
+        .step-icon.blue { background: var(--primary-subtle); color: var(--primary); }
+        .step-icon.green { background: var(--success-light); color: var(--success); }
+        .step-icon.amber { background: var(--warning-light); color: var(--warning); }
+        .step-icon.red { background: var(--accent-light); color: var(--accent); }
 
-        .section-source-info { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: #0c4a6e; }
-        .section-source-info i { margin-right: 0.5rem; }
+        .step-header-text h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.01em;
+        }
 
-        .form-group-hist { position: relative; }
-        .title-field-mode { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
-        .title-field-mode label { display: flex; align-items: center; gap: 0.4rem; font-weight: 500; font-size: 0.85rem; cursor: pointer; }
-        .title-field-mode input[type="radio"] { accent-color: var(--primary); }
-        .btn-browse-existing { padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 6px; background: #e0f2fe; color: var(--primary); border: 1px solid #bae6fd; cursor: pointer; }
-        .btn-browse-existing:hover { background: #bae6fd; }
-        .existing-list-panel { margin-top: 0.5rem; padding: 0.75rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; display: none; }
+        .step-header-text .step-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* ─── Form Elements ─── */
+        .form-field {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-field:last-child { margin-bottom: 0; }
+
+        .form-field > label,
+        .field-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            letter-spacing: 0.01em;
+        }
+
+        .form-field input[type="text"],
+        .form-field input[type="email"],
+        .form-field textarea,
+        .form-field select,
+        .form-control {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            background: var(--card-bg);
+            transition: all var(--transition);
+            outline: none;
+        }
+
+        .form-field input:focus,
+        .form-field textarea:focus,
+        .form-field select:focus,
+        .form-control:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px var(--primary-subtle);
+        }
+
+        .form-field input::placeholder,
+        .form-field textarea::placeholder {
+            color: var(--text-light);
+        }
+
+        /* ─── Mode Toggle (Existing / New) ─── */
+        .mode-toggle {
+            display: inline-flex;
+            background: var(--bg-alt);
+            border-radius: var(--radius);
+            padding: 3px;
+            margin-bottom: 0.6rem;
+            border: 1px solid var(--border);
+        }
+
+        .mode-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 7px;
+            transition: all var(--transition);
+            user-select: none;
+        }
+
+        .mode-toggle label:has(input:checked) {
+            background: var(--card-bg);
+            color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .mode-toggle input[type="radio"] {
+            display: none;
+        }
+
+        .btn-browse-existing {
+            padding: 0.45rem 0.85rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: var(--radius);
+            background: var(--primary-subtle);
+            color: var(--primary);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+
+        .btn-browse-existing:hover {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        /* ─── Existing List Panel ─── */
+        .existing-list-panel {
+            margin-top: 0.5rem;
+            padding: 0.85rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: none;
+            animation: fadeSlideIn 0.2s ease;
+        }
+
         .existing-list-panel.show { display: block; }
-        .existing-list-search { width: 100%; padding: 0.4rem 0.6rem; margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
-        .existing-list-items { max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
-        .existing-list-item { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid var(--bg); }
-        .existing-list-item:last-child { border-bottom: none; }
-        .existing-list-item:hover { background: #dbeafe; }
-        .existing-list-empty { padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem; }
 
-        .review-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--bg); font-size: 0.85rem; }
-        .review-label { font-weight: 500; color: var(--text-muted); }
+        .existing-list-search {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.6rem;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color var(--transition);
+        }
+
+        .existing-list-search:focus {
+            border-color: var(--primary-light);
+        }
+
+        .existing-list-items {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .existing-list-item {
+            padding: 0.55rem 0.85rem;
+            cursor: pointer;
+            font-size: 0.82rem;
+            border-bottom: 1px solid var(--border-light);
+            transition: all var(--transition);
+        }
+
+        .existing-list-item:last-child { border-bottom: none; }
+        .existing-list-item:hover { background: var(--primary-subtle); color: var(--primary); }
+        .existing-list-empty { padding: 1rem; color: var(--text-muted); font-size: 0.82rem; text-align: center; }
+
+        /* ─── Info Banner ─── */
+        .info-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.82rem;
+            line-height: 1.5;
+            margin-bottom: 1.25rem;
+        }
+
+        .info-banner.blue {
+            background: var(--primary-ghost);
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
+
+        .info-banner.green {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: var(--success-dark);
+        }
+
+        .info-banner.amber {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: var(--warning-dark);
+        }
+
+        .info-banner i { margin-top: 2px; flex-shrink: 0; }
+
+        /* ─── Material Search ─── */
+        .material-search {
+            position: relative;
+            margin-bottom: 0.75rem;
+        }
+
+        .material-search input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.75rem;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            font-size: 0.9rem;
+            font-family: 'Inter', sans-serif;
+            transition: all var(--transition);
+            outline: none;
+            background: var(--bg);
+        }
+
+        .material-search input:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 4px var(--primary-subtle);
+            background: #fff;
+        }
+
+        .material-search i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .material-results {
+            max-height: 280px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: none;
+            position: relative;
+            z-index: 100;
+            background: #fff;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 1rem;
+        }
+
+        .material-results.show { display: block; }
+
+        .material-result-item {
+            padding: 0.65rem 1rem;
+            cursor: pointer;
+            font-size: 0.82rem;
+            border-bottom: 1px solid var(--border-light);
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .material-result-item:last-child { border-bottom: none; }
+        .material-result-item:hover { background: var(--primary-ghost); }
+
+        .material-result-item .code {
+            font-weight: 700;
+            color: var(--primary);
+            min-width: 100px;
+        }
+
+        .material-result-item .desc {
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        .material-result-item .brand-tag {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            background: var(--bg-alt);
+            color: var(--text-muted);
+            border-radius: 4px;
+        }
+
+        /* ─── Materials Table ─── */
+        .materials-table-wrapper {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+
+        .selected-materials-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .selected-materials-table th {
+            background: var(--primary-dark);
+            color: #fff;
+            font-size: 0.7rem;
+            padding: 0.6rem 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+
+        .selected-materials-table td {
+            font-size: 0.8rem;
+            padding: 0.55rem 0.65rem;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-secondary);
+        }
+
+        .selected-materials-table tbody tr:hover { background: var(--primary-ghost); }
+        .selected-materials-table tbody tr:nth-child(even) { background: var(--bg); }
+        .selected-materials-table tbody tr:nth-child(even):hover { background: var(--primary-ghost); }
+
+        .btn-remove-material {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            font-size: 0.85rem;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition);
+        }
+
+        .btn-remove-material:hover {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .empty-table-msg {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--text-light);
+            font-size: 0.85rem;
+        }
+
+        .empty-table-msg i { font-size: 2rem; margin-bottom: 0.75rem; display: block; opacity: 0.4; }
+
+        /* ─── Column Selector ─── */
+        .column-selector-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.85rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .column-selector-box label {
+            font-size: 0.82rem;
+        }
+
+        /* ─── Badges ─── */
+        .auto-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 5px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .auto-badge.blue { background: var(--primary-subtle); color: var(--primary); }
+        .auto-badge.green { background: var(--success-light); color: var(--success-dark); }
+        .auto-badge.amber { background: var(--warning-light); color: var(--warning-dark); }
+        .auto-badge.red { background: var(--accent-light); color: var(--accent); }
+
+        /* ─── Index Builder ─── */
+        .index-builder {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .index-builder-header {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            color: #fff;
+            padding: 0.7rem 1.25rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .index-item-row {
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border-light);
+            background: #fff;
+            gap: 0.65rem;
+            transition: all var(--transition);
+        }
+
+        .index-item-row:last-child { border-bottom: none; }
+        .index-item-row:nth-child(even) { background: var(--bg); }
+        .index-item-row:hover { background: var(--primary-ghost); }
+        .index-item-row.sortable-ghost { opacity: 0.35; background: var(--primary-subtle); }
+        .index-item-row.sortable-chosen { background: var(--primary-ghost); box-shadow: 0 2px 12px rgba(26,86,219,0.15); z-index: 10; }
+
+        .drag-handle {
+            color: var(--text-light);
+            cursor: grab;
+            font-size: 0.95rem;
+            padding: 0 2px;
+            flex-shrink: 0;
+            transition: color var(--transition);
+        }
+
+        .drag-handle:hover { color: var(--primary); }
+        .drag-handle:active { cursor: grabbing; }
+
+        .index-num-badge {
+            background: var(--primary);
+            color: #fff;
+            border-radius: 5px;
+            min-width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .index-item-label {
+            flex: 1;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .index-item-label.custom-item {
+            color: #7c3aed;
+            font-weight: 600;
+        }
+
+        .index-item-label.custom-item::before {
+            content: '★ ';
+            font-size: 0.7rem;
+        }
+
+        .index-item-check {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .btn-rename-idx,
+        .btn-remove-idx {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.78rem;
+            padding: 4px 6px;
+            border-radius: 5px;
+            transition: all var(--transition);
+            flex-shrink: 0;
+        }
+
+        .btn-rename-idx { color: var(--text-light); }
+        .btn-rename-idx:hover { color: var(--primary); background: var(--primary-subtle); }
+        .btn-remove-idx { color: var(--text-light); }
+        .btn-remove-idx:hover { color: var(--accent); background: var(--accent-light); }
+
+        .add-custom-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .add-custom-bar input {
+            flex: 1;
+            padding: 0.6rem 0.85rem;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.85rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: border-color var(--transition);
+        }
+
+        .add-custom-bar input:focus { border-color: var(--primary-light); }
+
+        .btn-add-custom {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius);
+            padding: 0.6rem 1.25rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn-add-custom:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+        .helper-note {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.65rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.4rem;
+            line-height: 1.5;
+        }
+
+        .helper-note i { margin-top: 2px; flex-shrink: 0; color: var(--text-light); }
+
+        /* ─── Upload Rows ─── */
+        .upload-row {
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 0.75rem;
+            background: #fff;
+            transition: all var(--transition);
+        }
+
+        .upload-row:hover { border-color: var(--primary-light); box-shadow: var(--shadow); }
+
+        .upload-row > label {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--primary-dark);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .upload-row .existing-file {
+            font-size: 0.78rem;
+            color: var(--success);
+            margin-top: 0.35rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .no-uploads-msg {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-align: center;
+            padding: 3rem 1rem;
+            background: var(--bg);
+            border-radius: var(--radius);
+            border: 2px dashed var(--border);
+        }
+
+        .no-uploads-msg i {
+            display: block;
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--success);
+            opacity: 0.6;
+        }
+
+        /* ─── Compliance Form ─── */
+        .comply-form-block {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-top: 0.75rem;
+        }
+
+        .comply-form-block .table { margin-bottom: 0.75rem; }
+        .comply-form-block thead th { font-size: 0.72rem; padding: 0.5rem 0.5rem; }
+
+        .spec-format-toolbar {
+            display: flex;
+            gap: 3px;
+            margin-bottom: 4px;
+        }
+
+        .btn-spec-fmt {
+            width: 28px;
+            height: 26px;
+            padding: 0;
+            font-size: 0.72rem;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: #fff;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition);
+        }
+
+        .btn-spec-fmt:hover {
+            background: var(--primary-subtle);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* ─── Review Section ─── */
+        .review-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
+            transition: background var(--transition);
+        }
+
+        .review-item:nth-child(odd) { background: var(--bg); }
+        .review-item:hover { background: var(--primary-ghost); }
+
+        .review-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
         .review-value { font-weight: 500; }
 
-        /* Index Builder */
-        .index-builder { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-        .index-builder-header { background: var(--primary); color: #fff; padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-        .index-item-row { display: flex; align-items: center; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--bg); background: #fff; gap: 0.5rem; transition: background 0.15s; cursor: default; }
-        .index-item-row:last-child { border-bottom: none; }
-        .index-item-row:nth-child(even) { background: #f8fafd; }
-        .index-item-row.sortable-ghost { opacity: 0.4; background: #dbeafe; }
-        .index-item-row.sortable-chosen { background: #eff6ff; box-shadow: 0 2px 8px rgba(0,51,153,0.15); }
-        .drag-handle { color: #94a3b8; cursor: grab; font-size: 1rem; padding: 0 4px; flex-shrink: 0; }
-        .drag-handle:active { cursor: grabbing; }
-        .index-num-badge { background: var(--primary); color: #fff; border-radius: 4px; min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; flex-shrink: 0; }
-        .index-item-label { flex: 1; font-size: 0.875rem; }
-        .index-item-label.custom-item { font-style: italic; color: #4f46e5; }
-        .index-item-check { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
-        .btn-remove-idx { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.8rem; padding: 0 2px; flex-shrink: 0; }
-        .btn-remove-idx:hover { color: var(--accent); }
-        .add-custom-bar { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-        .add-custom-bar input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem; }
-        .btn-add-custom { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.875rem; cursor: pointer; font-weight: 500; white-space: nowrap; }
-        .btn-add-custom:hover { background: var(--primary-light); }
-        .index-preview-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; }
-
-        /* Upload rows in documents step */
-        .upload-row { padding: 0.75rem 0; border-bottom: 1px solid var(--bg); }
-        .upload-row:last-child { border-bottom: none; }
-        .upload-row label { font-weight: 600; font-size: 0.85rem; color: var(--primary); margin-bottom: 0.25rem; display: block; }
-        .upload-row .existing-file { font-size: 0.78rem; color: var(--step-done); margin-top: 2px; }
-        .no-uploads-msg { color: var(--text-muted); font-style: italic; font-size: 0.9rem; text-align: center; padding: 2rem 0; }
-
-        /* Compliance form */
-        .comply-form-block { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 0.5rem; }
-        .comply-form-block thead th { font-size: 0.75rem; padding: 0.4rem 0.5rem; }
-        .comply-form-block .table { margin-bottom: 0.5rem; }
-        .comply-section > label { margin-bottom: 0.75rem; }
-        .spec-format-toolbar { display: flex; gap: 2px; margin-bottom: 4px; }
-        .spec-format-toolbar .btn-spec-fmt {
-            width: 28px; height: 26px; padding: 0; font-size: 0.75rem; font-weight: 700;
-            border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text);
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        /* ─── Wizard Navigation ─── */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.75rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border-light);
         }
-        .spec-format-toolbar .btn-spec-fmt:hover { background: #e2e8f0; border-color: var(--primary); color: var(--primary); }
-        .spec-format-toolbar .btn-spec-fmt.bold { font-weight: 700; }
-        .spec-format-toolbar .btn-spec-fmt.italic { font-style: italic; font-weight: 400; }
+
+        .btn-wizard {
+            padding: 0.7rem 1.75rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 0.88rem;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-prev {
+            background: var(--bg-alt);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-prev:hover {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-next {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(26,86,219,0.3);
+        }
+
+        .btn-next:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(26,86,219,0.35);
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, var(--success), #047857);
+            color: #fff;
+            padding: 0.85rem 3rem;
+            font-size: 1rem;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 14px rgba(5,150,105,0.35);
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(5,150,105,0.4);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.7;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .step-counter-text {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* ─── Scrollbar Styling ─── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            .top-bar { padding: 0 1rem; height: 56px; }
+            .top-bar-title { font-size: 0.95rem; }
+            .top-bar-title .title-icon { display: none; }
+            .wizard-container { padding: 1.25rem 0.75rem 3rem; }
+            .step-card { padding: 1.5rem 1.25rem; border-radius: var(--radius-lg); }
+            .step-progress { padding: 1rem; flex-wrap: wrap; gap: 0.25rem; }
+            .step-label { display: none; }
+            .step-circle { width: 30px; height: 30px; font-size: 0.72rem; }
+            .btn-wizard { padding: 0.6rem 1.25rem; font-size: 0.82rem; }
+            .step-header { flex-direction: column; gap: 0.75rem; }
+            .upload-row { padding: 0.85rem 1rem; }
+        }
+
+        @media (max-width: 480px) {
+            .top-bar-left { gap: 0.75rem; }
+            .top-bar-back span { display: none; }
+            .top-bar-home span { display: none; }
+            .wizard-nav { flex-wrap: wrap; gap: 0.75rem; }
+            .add-custom-bar { flex-direction: column; }
+            .mode-toggle { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
+
+    <!-- ─── Top Bar ─── -->
     <div class="top-bar">
-        <div style="display:flex;align-items:center;gap:1rem;">
-            <a href="{% url 'submittal:list' %}"><i class="fas fa-arrow-left me-2"></i>Submittals</a>
+        <div class="top-bar-left">
+            <a href="{% url 'submittal:list' %}" class="top-bar-back">
+                <i class="fas fa-arrow-left"></i>
+                <span>Submittals</span>
+            </a>
         </div>
-        <h1><i class="fas fa-file-pdf me-2"></i>{% if submittal %}Edit{% else %}New{% endif %} Material Submittal</h1>
-        <div>
-            <a href="{% url 'home' %}" style="color:rgba(255,255,255,0.7);text-decoration:none;font-size:0.82rem;padding:0.35rem 0.75rem;border:1px solid rgba(255,255,255,0.25);border-radius:6px;transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#fff';" onmouseout="this.style.background='';this.style.color='rgba(255,255,255,0.7)';"><i class="fas fa-home me-1"></i>SO Home</a>
+        <div class="top-bar-title">
+            <div class="title-icon"><i class="fas fa-file-pdf"></i></div>
+            {% if submittal %}Edit{% else %}New{% endif %} Material Submittal
         </div>
+        <a href="{% url 'home' %}" class="top-bar-home">
+            <i class="fas fa-home"></i>
+            <span>SO Home</span>
+        </a>
     </div>
 
     <div class="wizard-container">
-        <div class="step-indicator" id="stepIndicator">
-            <div class="step-dot active" data-step="0"></div>
-            <div class="step-dot" data-step="1"></div>
-            <div class="step-dot" data-step="2"></div>
-            <div class="step-dot" data-step="3"></div>
-            <div class="step-dot" data-step="4"></div>
+
+        <!-- ─── Step Progress Indicator ─── -->
+        <div class="step-progress" id="stepIndicator">
+            <div class="step-item active" data-step="0">
+                <div class="step-circle">1</div>
+                <div class="step-label">Title</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="1">
+                <div class="step-circle">2</div>
+                <div class="step-label">Index</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="2">
+                <div class="step-circle">3</div>
+                <div class="step-label">Documents</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="3">
+                <div class="step-circle">4</div>
+                <div class="step-label">Materials</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="4">
+                <div class="step-circle">5</div>
+                <div class="step-label">Review</div>
+            </div>
         </div>
 
         <form id="submittalForm" method="post" enctype="multipart/form-data">
             {% csrf_token %}
             {% if submittal %}<input type="hidden" name="submittal_id" value="{{ submittal.pk }}">{% endif %}
 
-            <!-- STEP 0: Title Page -->
+            <!-- ═══ STEP 0: Title Page ═══ -->
             <div class="step-card active" data-step="0">
-                <h2><i class="fas fa-heading me-2"></i>Title Page</h2>
-                <p class="step-subtitle">Enter the project and contractor details. Choose Existing to pick from previous entries, or New to type fresh.</p>
-                {% for field in title_form %}
-                <div class="mb-4 form-group-hist" data-field="{{ field.name }}">
-                    <label class="d-block mb-2">{{ field.label }}</label>
-                    <div class="title-field-mode mb-2">
-                        <label><input type="radio" name="mode_{{ field.name }}" value="existing" class="mode-radio"> Existing</label>
-                        <label><input type="radio" name="mode_{{ field.name }}" value="new" class="mode-radio" checked> New</label>
+                <div class="step-header">
+                    <div class="step-icon blue"><i class="fas fa-heading"></i></div>
+                    <div class="step-header-text">
+                        <h2>Title Page Details</h2>
+                        <p class="step-subtitle">Enter the project and contractor details. Toggle between <strong>Existing</strong> to pick from previous entries, or <strong>New</strong> to type fresh values.</p>
                     </div>
-                    <div class="d-flex gap-2 mb-1 align-items-start">
+                </div>
+
+                {% for field in title_form %}
+                <div class="form-field form-group-hist" data-field="{{ field.name }}">
+                    <label class="field-label">{{ field.label }}</label>
+                    <div class="mode-toggle mb-2">
+                        <label>
+                            <input type="radio" name="mode_{{ field.name }}" value="existing" class="mode-radio">
+                            <i class="fas fa-folder-open" style="font-size:0.72rem;"></i> Existing
+                        </label>
+                        <label>
+                            <input type="radio" name="mode_{{ field.name }}" value="new" class="mode-radio" checked>
+                            <i class="fas fa-pen" style="font-size:0.72rem;"></i> New
+                        </label>
+                    </div>
+                    <div class="d-flex gap-2 align-items-start">
                         <div class="flex-grow-1">{{ field }}</div>
-                        <button type="button" class="btn-browse-existing btn-select-existing" data-field="{{ field.name }}" style="display:none;">Select from list</button>
+                        <button type="button" class="btn-browse-existing btn-select-existing" data-field="{{ field.name }}" style="display:none;">
+                            <i class="fas fa-list"></i> Browse
+                        </button>
                     </div>
                     <div class="existing-list-panel" id="panel_{{ field.name }}">
-                        <input type="text" class="existing-list-search" placeholder="Search..." data-field="{{ field.name }}">
+                        <input type="text" class="existing-list-search" placeholder="Type to filter…" data-field="{{ field.name }}">
                         <div class="existing-list-items" id="list_{{ field.name }}"></div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- STEP 1: Index Builder -->
+            <!-- ═══ STEP 1: Index Builder ═══ -->
             <div class="step-card" data-step="1">
-                <h2><i class="fas fa-list-ol me-2"></i>Index / Table of Contents</h2>
-                <p class="step-subtitle">Drag to reorder, uncheck to exclude, or add custom entries. The index PDF and all divider pages are generated automatically.</p>
+                <div class="step-header">
+                    <div class="step-icon green"><i class="fas fa-list-ol"></i></div>
+                    <div class="step-header-text">
+                        <h2>Index / Table of Contents</h2>
+                        <p class="step-subtitle">Drag to reorder, uncheck to exclude, add custom entries, or rename sections. The index PDF and divider pages are generated automatically.</p>
+                    </div>
+                </div>
 
                 <div class="index-builder" id="indexBuilder">
                     <div class="index-builder-header">
-                        <span><i class="fas fa-grip-lines me-1"></i> Drag to reorder</span>
-                        <span id="indexCountBadge" class="auto-badge from-db">14 sections</span>
+                        <span><i class="fas fa-grip-lines me-1"></i> Drag to reorder sections</span>
+                        <span id="indexCountBadge" class="auto-badge green">14 sections</span>
                     </div>
                     <div id="indexItemList"></div>
                 </div>
 
                 <div class="add-custom-bar">
-                    <input type="text" id="customIndexInput" placeholder="Type a custom section name and press Add…">
-                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex"><i class="fas fa-plus me-1"></i> Add</button>
+                    <input type="text" id="customIndexInput" placeholder="Type a custom section name…">
+                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex">
+                        <i class="fas fa-plus"></i> Add Section
+                    </button>
                 </div>
-                <p class="index-preview-note"><i class="fas fa-info-circle me-1"></i>Only checked items appear in the generated PDF. Custom sections and upload-based sections will prompt for a file in the next step.</p>
+
+                <div class="helper-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Only checked items appear in the generated PDF. Custom sections and upload-based sections will prompt for a file in the next step.</span>
+                </div>
 
                 <input type="hidden" name="index_items_json" id="indexItemsJson">
             </div>
 
-            <!-- STEP 2: Documents (dynamic based on index) -->
+            <!-- ═══ STEP 2: Documents ═══ -->
             <div class="step-card" data-step="2">
-                <h2><i class="fas fa-file-upload me-2"></i>Section Documents</h2>
-                <p class="step-subtitle">Upload PDF files for the sections that require them. Auto-included sections are handled for you.</p>
+                <div class="step-header">
+                    <div class="step-icon amber"><i class="fas fa-file-upload"></i></div>
+                    <div class="step-header-text">
+                        <h2>Section Documents</h2>
+                        <p class="step-subtitle">Upload PDF files for sections that require them. Auto-included sections are handled for you.</p>
+                    </div>
+                </div>
 
-                <div class="section-source-info">
+                <div class="info-banner green">
                     <i class="fas fa-check-circle"></i>
-                    <strong>Title Page</strong>, <strong>Index</strong>, <strong>Company Profile</strong>, <strong>Trade License</strong>,
-                    <strong>Materials Table</strong>, <strong>Product Catalogue</strong>, <strong>Technical Details</strong>,
-                    <strong>Test Certificates</strong>, <strong>Country of Origin</strong>, and <strong>Previous Approvals</strong>
-                    are auto-generated or auto-included from the database.
+                    <div>
+                        <strong>Auto-included sections:</strong> Title Page, Index, Company Profile, Trade License, Materials Table, Product Catalogue, Technical Details, Test Certificates, Country of Origin, and Previous Approvals are generated or pulled from the database automatically.
+                    </div>
                 </div>
 
                 <div id="dynamicUploads"></div>
             </div>
 
-            <!-- STEP 3: Materials -->
+            <!-- ═══ STEP 3: Materials ═══ -->
             <div class="step-card" data-step="3">
-                <h2><i class="fas fa-boxes-stacked me-2"></i>Proposed Materials</h2>
-                <p class="step-subtitle">Search and select materials. Certifications, catalogues, and technical details are auto-linked.</p>
+                <div class="step-header">
+                    <div class="step-icon blue"><i class="fas fa-boxes-stacked"></i></div>
+                    <div class="step-header-text">
+                        <h2>Proposed Materials</h2>
+                        <p class="step-subtitle">Search and select materials. Certifications, catalogues, and technical details are auto-linked from the database.</p>
+                    </div>
+                </div>
 
                 <div class="material-search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="materialSearchInput" placeholder="Search by model no., description, material, or brand...">
+                    <input type="text" id="materialSearchInput" placeholder="Search by model no., description, material, or brand…">
                 </div>
                 <div class="material-results" id="materialResults"></div>
 
-                <div class="mb-3 column-selector-box" id="columnSelectorBox">
-                    <label class="d-block mb-2"><i class="fas fa-columns me-2"></i>Columns to show in PDF</label>
-                    <label class="me-3"><input type="checkbox" id="showAllColumns" checked> Show all columns</label>
+                <div class="column-selector-box" id="columnSelectorBox">
+                    <label class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fas fa-columns" style="color:var(--text-muted);"></i>
+                        <strong style="font-size:0.85rem;">PDF Table Columns</strong>
+                    </label>
+                    <label class="d-flex align-items-center gap-2 mb-1" style="font-size:0.82rem;">
+                        <input type="checkbox" id="showAllColumns" checked style="accent-color:var(--primary);"> Show all columns
+                    </label>
                     <div id="columnCheckboxes" class="mt-2" style="display:none;"></div>
                 </div>
 
-                <table class="selected-materials-table" id="selectedMaterialsTable">
-                    <thead><tr id="materialsTableHead"></tr></thead>
-                    <tbody id="selectedMaterialsBody"></tbody>
-                </table>
+                <div class="materials-table-wrapper">
+                    <table class="selected-materials-table" id="selectedMaterialsTable">
+                        <thead><tr id="materialsTableHead"></tr></thead>
+                        <tbody id="selectedMaterialsBody">
+                            <tr><td colspan="99" class="empty-table-msg">
+                                <i class="fas fa-inbox"></i>
+                                No materials selected yet. Use the search above to add materials.
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <input type="hidden" name="materials_columns_json" id="materialsColumnsJson">
 
-                <div class="section-source-info mt-3">
+                <div class="info-banner blue mt-3">
                     <i class="fas fa-magic"></i>
-                    The following are auto-included for selected materials:<br>
-                    <span class="auto-badge from-db mt-1 me-1">Product Catalogue</span>
-                    <span class="auto-badge from-db mt-1 me-1">Technical Details</span>
-                    <span class="auto-badge from-db mt-1 me-1">Test Certificates</span>
-                    <span class="auto-badge from-db mt-1 me-1">Country of Origin</span>
-                    <span class="auto-badge from-db mt-1">Previous Approvals</span>
+                    <div>
+                        <strong>Auto-linked for selected materials:</strong><br>
+                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Product Catalogue</span>
+                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Technical Details</span>
+                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Test Certificates</span>
+                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Country of Origin</span>
+                        <span class="auto-badge green mt-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Previous Approvals</span>
+                    </div>
                 </div>
                 <div id="materialHiddenInputs"></div>
             </div>
 
-            <!-- STEP 4: Review & Generate -->
+            <!-- ═══ STEP 4: Review & Generate ═══ -->
             <div class="step-card" data-step="4">
-                <h2><i class="fas fa-check-double me-2"></i>Review & Generate</h2>
-                <p class="step-subtitle">Review your submittal sections before generating the PDF.</p>
+                <div class="step-header">
+                    <div class="step-icon green"><i class="fas fa-check-double"></i></div>
+                    <div class="step-header-text">
+                        <h2>Review & Generate</h2>
+                        <p class="step-subtitle">Review all your submittal sections before generating the final PDF document.</p>
+                    </div>
+                </div>
+
                 <div id="reviewSummary"></div>
-                <div class="text-center mt-4">
-                    <button type="button" class="btn-wizard btn-generate" id="btnSaveGenerate" style="padding: 0.8rem 3rem; font-size: 1rem;">
-                        <i class="fas fa-save me-2"></i>Save & Generate PDF
+
+                <div class="text-center" style="margin-top: 2rem;">
+                    <button type="button" class="btn-wizard btn-generate" id="btnSaveGenerate">
+                        <i class="fas fa-file-pdf me-2"></i> Save & Generate PDF
                     </button>
+                    <div class="helper-note justify-content-center mt-2">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Your submittal will be saved and the PDF will be generated immediately.</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Navigation -->
+            <!-- ─── Navigation ─── -->
             <div class="wizard-nav">
                 <button type="button" class="btn-wizard btn-prev" id="btnPrev" style="display:none;">
-                    <i class="fas fa-arrow-left me-1"></i> Previous
+                    <i class="fas fa-arrow-left"></i> Previous
                 </button>
-                <div></div>
+                <span class="step-counter-text" id="stepCounterText">Step 1 of 5</span>
                 <button type="button" class="btn-wizard btn-next" id="btnNext">
-                    Next <i class="fas fa-arrow-right ms-1"></i>
+                    Next <i class="fas fa-arrow-right"></i>
                 </button>
             </div>
         </form>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <div id="wizard-data" data-payload="{{ wizard_data_json|escape }}"></div>
     <script>
     (function() {
+        const DATA = JSON.parse(document.getElementById('wizard-data').dataset.payload || '{}');
+
         const TOTAL_STEPS = 5;
         let currentStep = 0;
         const selectedMaterials = [];
 
-        const historyData = {
-            project: {{ history.project|safe }},
-            client: {{ history.client|safe }},
-            consultant: {{ history.consultant|safe }},
-            main_contractor: {{ history.main_contractor|safe }},
-            mep_contractor: {{ history.mep_contractor|safe }},
-            product: {{ history.product|safe }},
-        };
+        const historyData = DATA.history || {};
+        const preselected = DATA.selected_material_ids || [];
+        const existingUploads = DATA.existing_uploads || {};
+        const ALL_COLUMN_DEFS = DATA.all_column_definitions || [];
+        const EXISTING_MATERIALS_COLUMNS = DATA.existing_materials_columns || [];
 
-        const preselected = {{ selected_material_ids|safe }};
-        const existingUploads = {{ existing_uploads|safe }};
-        const ALL_COLUMN_DEFS = {{ all_column_definitions|safe }};
-        const EXISTING_MATERIALS_COLUMNS = {{ existing_materials_columns|safe }};
+        const BRANDS_LIST = DATA.brands_json || [];
+        const COMPLIANCE_OPTIONS = DATA.compliance_options_json || [];
+        const REMARK_OPTIONS_BY_BRAND = DATA.remark_options_by_brand_json || {};
+        let complianceRows = DATA.existing_compliance_rows_json || [];
+        let complianceBrandId = DATA.existing_compliance_brand_id || '';
 
-        // ── Compliance statement data ──
-        const BRANDS_LIST = {{ brands_json|safe }};
-        const COMPLIANCE_OPTIONS = {{ compliance_options_json|safe }};
-        const REMARK_OPTIONS_BY_BRAND = {{ remark_options_by_brand_json|safe }};
-        let complianceRows = {{ existing_compliance_rows_json|safe }} || [];
-        let complianceBrandId = '{{ existing_compliance_brand_id }}';
+        const EXISTING_WARRANTY_BRAND_ID = DATA.existing_warranty_brand_id || '';
+        const EXISTING_WARRANTY_DATE_TYPE = DATA.existing_warranty_date_type || 'toc';
+        const EXISTING_WARRANTY_MATERIALS_COLUMNS = DATA.existing_warranty_materials_columns || [];
+        const WARRANTY_BRANDS_WITH_FORMAT = DATA.warranty_brands_with_format || [];
 
-        // ── Labels that are auto-provided (no upload needed) ──
         const AUTO_LABELS = new Set([
             'title page', 'index', 'company profile', 'trade license',
             'list of proposed material', 'product catalogue', 'technical details',
@@ -339,31 +1286,34 @@
         }
 
         // ── Index Builder ──
-        const DEFAULT_INDEX_ITEMS = {{ default_index_items|safe }};
-        const EXISTING_INDEX_ITEMS = {{ existing_index_items|safe }};
+        const DEFAULT_INDEX_ITEMS = DATA.default_index_items || [];
+        const EXISTING_INDEX_ITEMS = DATA.existing_index_items || [];
 
         let indexItems = [];
         if (EXISTING_INDEX_ITEMS && EXISTING_INDEX_ITEMS.length > 0) {
             indexItems = EXISTING_INDEX_ITEMS.map(e =>
                 typeof e === 'string'
-                    ? { label: e, included: true, custom: false }
-                    : { label: e.label || '', included: e.included !== false, custom: e.custom || false }
+                    ? { label: e, included: true, custom: false, display_label: '' }
+                    : { label: e.label || '', included: e.included !== false, custom: e.custom || false, display_label: e.display_label || '' }
             );
         } else {
-            indexItems = DEFAULT_INDEX_ITEMS.map(l => ({ label: l, included: true, custom: false }));
+            indexItems = DEFAULT_INDEX_ITEMS.map(l => ({ label: l, included: true, custom: false, display_label: '' }));
         }
 
         function renderIndexList() {
             const container = document.getElementById('indexItemList');
-            container.innerHTML = indexItems.map((item, i) => `
+            container.innerHTML = indexItems.map((item, i) => {
+                const displayName = item.display_label || item.label;
+                return `
                 <div class="index-item-row" data-idx="${i}">
                     <span class="drag-handle" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
                     <span class="index-num-badge" id="ibadge_${i}">${i + 1}</span>
-                    <span class="index-item-label ${item.custom ? 'custom-item' : ''}">${escapeHtml(item.label)}</span>
+                    <span class="index-item-label ${item.custom ? 'custom-item' : ''}">${escapeHtml(displayName)}</span>
+                    <button type="button" class="btn-rename-idx" data-idx="${i}" title="Rename for this submittal"><i class="fas fa-pen"></i></button>
                     <input type="checkbox" class="index-item-check" data-idx="${i}" ${item.included ? 'checked' : ''}>
                     ${item.custom ? `<button type="button" class="btn-remove-idx" data-idx="${i}" title="Remove"><i class="fas fa-times"></i></button>` : ''}
                 </div>
-            `).join('');
+            `}).join('');
 
             container.querySelectorAll('.index-item-check').forEach(cb => {
                 cb.addEventListener('change', () => {
@@ -373,12 +1323,29 @@
                 });
             });
 
+            container.querySelectorAll('.btn-rename-idx').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.idx);
+                    const item = indexItems[idx];
+                    const current = item.display_label || item.label;
+                    const newName = prompt('Rename for this submittal (leave empty to use original):', current);
+                    if (newName !== null) {
+                        item.display_label = newName.trim();
+                        renderIndexList();
+                        initSortable();
+                        serializeIndexItems();
+                    }
+                });
+            });
+
             container.querySelectorAll('.btn-remove-idx').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    indexItems.splice(parseInt(btn.dataset.idx), 1);
-                    renderIndexList();
-                    initSortable();
-                    serializeIndexItems();
+                    if (confirm('Remove this custom section?')) {
+                        indexItems.splice(parseInt(btn.dataset.idx), 1);
+                        renderIndexList();
+                        initSortable();
+                        serializeIndexItems();
+                    }
                 });
             });
 
@@ -424,12 +1391,13 @@
         document.getElementById('btnAddCustomIndex').addEventListener('click', () => {
             const input = document.getElementById('customIndexInput');
             const label = input.value.trim();
-            if (!label) return;
-            indexItems.push({ label, included: true, custom: true });
+            if (!label) { input.focus(); return; }
+            indexItems.push({ label, included: true, custom: true, display_label: '' });
             input.value = '';
             renderIndexList();
             initSortable();
             serializeIndexItems();
+            input.focus();
         });
 
         document.getElementById('customIndexInput').addEventListener('keydown', e => {
@@ -473,8 +1441,8 @@
                 });
             }
             box.innerHTML = colDefs.map(c => `
-                <label class="me-3 d-inline-block mb-1">
-                    <input type="checkbox" class="col-check" data-key="${escapeHtml(c.key)}" ${(showAllColumns || selectedColumnKeys.includes(c.key)) ? 'checked' : ''}>
+                <label class="me-3 d-inline-flex align-items-center gap-1 mb-1" style="font-size:0.82rem;">
+                    <input type="checkbox" class="col-check" data-key="${escapeHtml(c.key)}" style="accent-color:var(--primary);" ${(showAllColumns || selectedColumnKeys.includes(c.key)) ? 'checked' : ''}>
                     ${escapeHtml(c.label)}
                 </label>
             `).join('');
@@ -498,25 +1466,15 @@
 
         // ── Compliance form helpers ──
         const COMPLY_LABELS = new Set(['comply statement', 'comply statement with project specification']);
-
-        function isComplyStatement(label) {
-            return COMPLY_LABELS.has((label || '').trim().toLowerCase());
-        }
+        function isComplyStatement(label) { return COMPLY_LABELS.has((label || '').trim().toLowerCase()); }
 
         // ── Warranty section data ──
-        const EXISTING_WARRANTY_BRAND_ID = '{{ existing_warranty_brand_id|default:"" }}';
-        const EXISTING_WARRANTY_DATE_TYPE = '{{ existing_warranty_date_type|default:"toc" }}';
-        const EXISTING_WARRANTY_MATERIALS_COLUMNS = {{ existing_warranty_materials_columns|safe }};
-        const WARRANTY_BRANDS_WITH_FORMAT = {{ warranty_brands_with_format|safe }};
 
-        function isWarrantyDraftLetter(label) {
-            return (label || '').trim().toLowerCase() === 'warranty draft letter';
-        }
+        function isWarrantyDraftLetter(label) { return (label || '').trim().toLowerCase() === 'warranty draft letter'; }
 
         function getRemarkOptions(brandId) {
             if (!brandId) return [];
-            const key = parseInt(brandId, 10);
-            return REMARK_OPTIONS_BY_BRAND[key] || [];
+            return REMARK_OPTIONS_BY_BRAND[parseInt(brandId, 10)] || [];
         }
 
         function remarkPreview(text, maxLen) {
@@ -546,64 +1504,74 @@
                     </select>`;
                 return `
                     <tr>
-                        <td style="width:36px;text-align:center;vertical-align:top;padding-top:10px;">${i + 1}</td>
+                        <td style="width:36px;text-align:center;vertical-align:top;padding-top:10px;font-weight:600;color:var(--text-muted);">${i + 1}</td>
                         <td style="vertical-align:top;">
                             <div class="spec-format-toolbar">
-                                <button type="button" class="btn-spec-fmt bold" data-cmd="bold" title="Bold – select text then click (e.g. 2.8 GATE VALVES)"><strong>B</strong></button>
-                                <button type="button" class="btn-spec-fmt italic" data-cmd="italic" title="Italic – select text then click"><em>I</em></button>
-                                <button type="button" class="btn-spec-fmt" data-cmd="heading" title="Heading – bold (same as B)"><strong>H</strong></button>
+                                <button type="button" class="btn-spec-fmt" data-cmd="bold" title="Bold – select text then click"><strong>B</strong></button>
+                                <button type="button" class="btn-spec-fmt" data-cmd="italic" title="Italic – select text then click"><em>I</em></button>
+                                <button type="button" class="btn-spec-fmt" data-cmd="heading" title="Heading – bold"><strong>H</strong></button>
                             </div>
-                            <textarea class="form-control form-control-sm cs-spec" data-idx="${i}" rows="3" style="resize:vertical;">${escapeHtml(row.specification || '')}</textarea>
+                            <textarea class="form-control form-control-sm cs-spec" data-idx="${i}" rows="3" style="resize:vertical;font-size:0.82rem;">${escapeHtml(row.specification || '')}</textarea>
                         </td>
                         <td style="width:150px;vertical-align:top;">${complianceSelect}</td>
                         <td style="width:220px;vertical-align:top;">${remarkSelect}</td>
                         <td style="width:36px;text-align:center;vertical-align:top;padding-top:6px;">
-                            <button type="button" class="btn btn-sm btn-outline-danger cs-remove-row" data-idx="${i}" title="Remove row"><i class="fas fa-times"></i></button>
+                            <button type="button" class="btn-remove-material cs-remove-row" data-idx="${i}" title="Remove row"><i class="fas fa-times"></i></button>
                         </td>
                     </tr>`;
             }).join('');
 
+            // Bind spec text inputs
             tbody.querySelectorAll('.cs-spec').forEach(el => {
                 el.addEventListener('input', () => {
                     complianceRows[parseInt(el.dataset.idx)].specification = el.value;
                     serializeComplianceRows();
                 });
             });
+
+            // Bind compliance dropdowns
             tbody.querySelectorAll('.cs-compliance').forEach(el => {
                 el.addEventListener('change', () => {
                     complianceRows[parseInt(el.dataset.idx)].compliance = el.value;
                     serializeComplianceRows();
                 });
             });
+
+            // Bind remark dropdowns
             tbody.querySelectorAll('.cs-remark').forEach(el => {
                 el.addEventListener('change', () => {
                     complianceRows[parseInt(el.dataset.idx)].remarks = el.value;
                     serializeComplianceRows();
                 });
             });
+
+            // Bind remove buttons
             tbody.querySelectorAll('.cs-remove-row').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    complianceRows.splice(parseInt(btn.dataset.idx), 1);
-                    renderComplianceTable();
-                    serializeComplianceRows();
+                    if (confirm('Remove this row?')) {
+                        complianceRows.splice(parseInt(btn.dataset.idx), 1);
+                        renderComplianceTable();
+                        serializeComplianceRows();
+                    }
                 });
             });
 
+            // Bind format toolbar buttons
             tbody.querySelectorAll('.btn-spec-fmt').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const idx = parseInt(btn.closest('tr').querySelector('.cs-spec')?.dataset.idx ?? -1);
-                    if (idx < 0) return;
-                    const ta = btn.closest('tr').querySelector('.cs-spec');
+                    const ta = btn.closest('tr')?.querySelector('.cs-spec');
                     if (!ta) return;
+                    const idx = parseInt(ta.dataset.idx);
                     const start = ta.selectionStart, end = ta.selectionEnd;
                     const cmd = btn.dataset.cmd;
-                    let before = ta.value.substring(0, start), sel = ta.value.substring(start, end), after = ta.value.substring(end);
+                    let before = ta.value.substring(0, start);
+                    let sel = ta.value.substring(start, end);
+                    let after = ta.value.substring(end);
                     let wrapStart = '', wrapEnd = '';
                     if (cmd === 'bold' || cmd === 'heading') { wrapStart = '<b>'; wrapEnd = '</b>'; }
                     else if (cmd === 'italic') { wrapStart = '<i>'; wrapEnd = '</i>'; }
-                    const newVal = before + wrapStart + sel + wrapEnd + after;
-                    ta.value = newVal;
-                    complianceRows[idx].specification = newVal;
+                    ta.value = before + wrapStart + sel + wrapEnd + after;
+                    complianceRows[idx].specification = ta.value;
                     serializeComplianceRows();
                     ta.focus();
                     ta.setSelectionRange(start + wrapStart.length, end + wrapStart.length);
@@ -642,7 +1610,12 @@
             const uploadItems = indexItems.filter(it => it.included && labelNeedsUpload(it.label));
 
             if (uploadItems.length === 0) {
-                container.innerHTML = '<div class="no-uploads-msg"><i class="fas fa-check-circle me-2"></i>All included sections are auto-provided. No uploads needed.</div>';
+                container.innerHTML = `
+                    <div class="no-uploads-msg">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>All set!</strong><br>
+                        All included sections are auto-provided. No uploads needed.
+                    </div>`;
                 return;
             }
 
@@ -651,88 +1624,93 @@
                 const fieldName = `section_upload__${safeKey}`;
                 const existing = existingUploads[safeKey] || '';
 
+                // ── Warranty Draft Letter section ──
                 if (isWarrantyDraftLetter(it.label)) {
-                    // Warranty: Select brand. Brands with generated format show column options; else upload PDF.
-                    const warrantyColDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
-                        {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
-                        {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
-                        {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
-                    ];
+                    const warrantyColDefs = colDefs;
                     const warrantyCols = EXISTING_WARRANTY_MATERIALS_COLUMNS || [];
                     const warrantyBrandId = String(EXISTING_WARRANTY_BRAND_ID || '');
                     const warrantyDateType = EXISTING_WARRANTY_DATE_TYPE || 'toc';
                     const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
                     const hasGeneratedFormat = warrantyBrandId && brandsWithFormat.includes(parseInt(warrantyBrandId));
+
                     const brandOptions = BRANDS_LIST.map(b => {
                         const hasFormat = brandsWithFormat.includes(b.pk);
-                        const suffix = hasFormat ? ' (generated format)' : '';
+                        const suffix = hasFormat ? ' ✦ generated' : '';
                         return `<option value="${b.pk}" ${String(b.pk) === warrantyBrandId ? 'selected' : ''}>${escapeHtml(b.name)}${suffix}</option>`;
                     }).join('');
+
                     const colCheckboxes = warrantyColDefs.map(c => {
                         const checked = !warrantyCols.length || warrantyCols.includes(c.key);
-                        return `<label class="me-3 d-inline-block mb-1"><input type="checkbox" class="warranty-col-check" data-key="${escapeHtml(c.key)}" ${checked ? 'checked' : ''}> ${escapeHtml(c.label)}</label>`;
+                        return `<label class="me-3 d-inline-flex align-items-center gap-1 mb-1" style="font-size:0.82rem;">
+                            <input type="checkbox" class="warranty-col-check" data-key="${escapeHtml(c.key)}" style="accent-color:var(--primary);" ${checked ? 'checked' : ''}>
+                            ${escapeHtml(c.label)}
+                        </label>`;
                     }).join('');
+
                     return `
                         <div class="upload-row warranty-section">
-                            <label><i class="fas fa-file-contract me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+                            <label><i class="fas fa-file-contract"></i> ${escapeHtml(it.label)}</label>
 
                             <div class="mb-3">
                                 <div class="mb-2">
-                                    <label class="fw-semibold" style="font-size:0.85rem;">Brand</label>
-                                    <select id="warrantyBrandSelect" name="warranty_brand_id" class="form-select form-select-sm" style="max-width:280px;">
-                                        <option value="">— Upload PDF —</option>
+                                    <span class="field-label">Brand</span>
+                                    <select id="warrantyBrandSelect" name="warranty_brand_id" class="form-select form-select-sm" style="max-width:300px;">
+                                        <option value="">— Upload PDF instead —</option>
                                         ${brandOptions}
                                     </select>
-                                    <small class="text-muted d-block mt-1">Select a brand with generated format, or leave as "Upload PDF" to upload your own.</small>
+                                    <div class="helper-note mt-1"><i class="fas fa-info-circle"></i><span>Brands marked ✦ have a generated format. Others require PDF upload.</span></div>
                                 </div>
-                                <div class="warranty-upload-area" style="${hasGeneratedFormat ? 'display:none;' : ''}">
+
+                                <div class="warranty-upload-area" style="${hasGeneratedFormat ? 'display:none;' : ''}margin-top:0.75rem;">
                                     <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
-                                    ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Upload a PDF for this section</small>'}
+                                    ${existing ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existing)}</div>` : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Upload a PDF for this section</span></div>'}
                                 </div>
-                                <div class="mb-3">
-                                    <div class="mb-2 fw-semibold" style="font-size:0.85rem;">Warranty period wording</div>
-                                    <div class="d-flex align-items-center gap-3">
-                                        <label class="d-flex align-items-center gap-2"><input type="radio" name="warranty_date_type" value="toc" ${warrantyDateType === 'toc' ? 'checked' : ''}> from date of TOC</label>
-                                        <label class="d-flex align-items-center gap-2"><input type="radio" name="warranty_date_type" value="invoice" ${warrantyDateType === 'invoice' ? 'checked' : ''}> from date of Invoice</label>
+
+                                <div style="margin-top:1rem;">
+                                    <span class="field-label">Warranty period wording</span>
+                                    <div class="mode-toggle">
+                                        <label><input type="radio" name="warranty_date_type" value="toc" ${warrantyDateType === 'toc' ? 'checked' : ''}> From date of TOC</label>
+                                        <label><input type="radio" name="warranty_date_type" value="invoice" ${warrantyDateType === 'invoice' ? 'checked' : ''}> From date of Invoice</label>
                                     </div>
                                 </div>
-                                <div class="warranty-generate-area mt-3" style="${hasGeneratedFormat ? '' : 'display:none;'}">
-                                    <div class="mb-2 fw-semibold" style="font-size:0.85rem;">Columns to show in warranty materials table</div>
-                                    <div id="warrantyColumnCheckboxes" class="mb-3">${colCheckboxes}</div>
+
+                                <div class="warranty-generate-area" style="${hasGeneratedFormat ? '' : 'display:none;'}margin-top:1rem;">
+                                    <span class="field-label">Columns in warranty materials table</span>
+                                    <div id="warrantyColumnCheckboxes" class="mt-1">${colCheckboxes}</div>
                                 </div>
                             </div>
                             <input type="hidden" id="warrantyMaterialsColumnsJson" name="warranty_materials_columns_json" value="${escapeHtml(JSON.stringify(warrantyCols.length ? warrantyCols : warrantyColDefs.map(c => c.key)))}">
-                        </div>
-                    `;
+                        </div>`;
                 }
 
+                // ── Compliance Statement section ──
                 if (isComplyStatement(it.label)) {
-                    // Render PDF upload + compliance form
                     const brandOptions = BRANDS_LIST.map(b =>
                         `<option value="${b.pk}" ${String(b.pk) === String(complianceBrandId) ? 'selected' : ''}>${escapeHtml(b.name)}</option>`
                     ).join('');
+
                     return `
                         <div class="upload-row comply-section">
-                            <label><i class="fas fa-file-contract me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+                            <label><i class="fas fa-file-contract"></i> ${escapeHtml(it.label)}</label>
 
                             <div class="mb-3">
                                 <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fas fa-upload text-muted" style="font-size:0.85rem;"></i>
-                                    <span class="fw-semibold" style="font-size:0.85rem;">PDF Upload <span class="text-muted fw-normal">(optional — shown first in PDF)</span></span>
+                                    <i class="fas fa-upload" style="color:var(--text-muted);font-size:0.82rem;"></i>
+                                    <span class="field-label" style="margin-bottom:0;">PDF Upload <span style="font-weight:400;color:var(--text-muted);">(optional — shown first in PDF)</span></span>
                                 </div>
                                 <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
-                                ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Leave empty to skip</small>'}
+                                ${existing ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existing)}</div>` : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Leave empty to skip</span></div>'}
                             </div>
 
                             <div class="comply-form-block">
-                                <div class="d-flex align-items-center gap-2 mb-2">
-                                    <i class="fas fa-table text-muted" style="font-size:0.85rem;"></i>
-                                    <span class="fw-semibold" style="font-size:0.85rem;">Compliance Form <span class="text-muted fw-normal">(optional — generated table appended after PDF)</span></span>
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <i class="fas fa-table" style="color:var(--text-muted);font-size:0.85rem;"></i>
+                                    <span class="field-label" style="margin-bottom:0;">Compliance Form <span style="font-weight:400;color:var(--text-muted);">(optional — generated table appended after PDF)</span></span>
                                 </div>
 
-                                <div class="mb-2 d-flex align-items-center gap-3">
-                                    <label style="font-size:0.82rem;font-weight:500;margin:0;">Brand (for Remarks):</label>
-                                    <select id="complianceBrandSelect" class="form-select form-select-sm" style="max-width:220px;">
+                                <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+                                    <label class="field-label" style="margin:0;white-space:nowrap;">Brand (for Remarks):</label>
+                                    <select id="complianceBrandSelect" class="form-select form-select-sm" style="max-width:240px;">
                                         <option value="">— Select Brand —</option>
                                         ${brandOptions}
                                     </select>
@@ -742,9 +1720,9 @@
 
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-sm" style="font-size:0.82rem;">
-                                        <thead style="background:#000;color:#fff;">
+                                        <thead style="background:var(--primary-dark);color:#fff;">
                                             <tr>
-                                                <th style="width:36px;">SR.<br>NO.</th>
+                                                <th style="width:36px;">SR. NO.</th>
                                                 <th>SPECIFICATION</th>
                                                 <th style="width:150px;">COMPLIANCE</th>
                                                 <th style="width:220px;">REMARKS</th>
@@ -754,28 +1732,30 @@
                                         <tbody id="complianceTbody"></tbody>
                                     </table>
                                 </div>
-                                <button type="button" id="btnAddComplianceRow" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-plus me-1"></i> Add Row
+
+                                <button type="button" id="btnAddComplianceRow" class="btn-add-custom" style="font-size:0.8rem;padding:0.45rem 1rem;">
+                                    <i class="fas fa-plus"></i> Add Row
                                 </button>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }
 
+                // ── Generic upload section ──
                 return `
                     <div class="upload-row">
-                        <label><i class="fas fa-file-pdf me-2" style="color:var(--accent)"></i>${escapeHtml(it.label)}</label>
+                        <label><i class="fas fa-file-pdf"></i> ${escapeHtml(it.label)}</label>
                         <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
-                        ${existing ? `<div class="existing-file"><i class="fas fa-paperclip me-1"></i>Currently: ${escapeHtml(existing)}</div>` : '<small class="text-muted">Upload a PDF for this section (leave empty to skip)</small>'}
-                    </div>
-                `;
+                        ${existing
+                            ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existing)}</div>`
+                            : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Upload a PDF for this section (leave empty to skip)</span></div>'}
+                    </div>`;
             }).join('');
 
-            // Init compliance form if it was rendered
+            // Initialize compliance form if rendered
             if (uploadItems.some(it => isComplyStatement(it.label))) {
                 initComplianceForm();
             }
-            // Init warranty form if it was rendered
+            // Initialize warranty form if rendered
             if (uploadItems.some(it => isWarrantyDraftLetter(it.label))) {
                 initWarrantyForm();
             }
@@ -800,11 +1780,6 @@
 
             function serializeWarrantyColumns() {
                 if (!colBox || !hiddenInput) return;
-                const colDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
-                    {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
-                    {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
-                    {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
-                ];
                 const selected = [];
                 colBox.querySelectorAll('.warranty-col-check:checked').forEach(cb => selected.push(cb.dataset.key));
                 hiddenInput.value = JSON.stringify(selected.length ? selected : colDefs.map(c => c.key));
@@ -817,31 +1792,54 @@
         }
 
         // ── Step navigation ──
-        const dots = document.querySelectorAll('.step-dot');
+        const stepItems = document.querySelectorAll('.step-item');
         const cards = document.querySelectorAll('.step-card');
         const btnPrev = document.getElementById('btnPrev');
         const btnNext = document.getElementById('btnNext');
+        const stepCounter = document.getElementById('stepCounterText');
 
         function showStep(step) {
             currentStep = step;
+
+            // Animate card transition
             cards.forEach(c => c.classList.remove('active'));
             cards[step].classList.add('active');
-            dots.forEach((d, i) => {
-                d.classList.remove('active', 'done');
-                if (i < step) d.classList.add('done');
-                if (i === step) d.classList.add('active');
-            });
-            btnPrev.style.display = step === 0 ? 'none' : 'inline-block';
-            btnNext.style.display = step === TOTAL_STEPS - 1 ? 'none' : 'inline-block';
 
+            // Update step indicators
+            stepItems.forEach((item, i) => {
+                item.classList.remove('active', 'done');
+                if (i < step) item.classList.add('done');
+                if (i === step) item.classList.add('active');
+            });
+
+            // Update navigation buttons
+            btnPrev.style.display = step === 0 ? 'none' : 'inline-flex';
+            btnNext.style.display = step === TOTAL_STEPS - 1 ? 'none' : 'inline-flex';
+
+            // Update counter text
+            if (stepCounter) stepCounter.textContent = `Step ${step + 1} of ${TOTAL_STEPS}`;
+
+            // Step-specific init
             if (step === 2) buildDynamicUploads();
             if (step === 3) buildColumnSelector();
             if (step === TOTAL_STEPS - 1) buildReview();
+
+            // Scroll to top of card
+            document.querySelector('.wizard-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        dots.forEach(d => d.addEventListener('click', () => showStep(parseInt(d.dataset.step))));
-        btnNext.addEventListener('click', () => { if (currentStep < TOTAL_STEPS - 1) showStep(currentStep + 1); });
-        btnPrev.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
+        // Click on step circles to navigate
+        stepItems.forEach((item, idx) => {
+            item.addEventListener('click', () => showStep(idx));
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (currentStep < TOTAL_STEPS - 1) showStep(currentStep + 1);
+        });
+
+        btnPrev.addEventListener('click', () => {
+            if (currentStep > 0) showStep(currentStep - 1);
+        });
 
         // ── Title page: Existing / New + list panel ──
         const TITLE_FIELDS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor', 'product'];
@@ -864,11 +1862,10 @@
                 const filtered = q ? items.filter(v => (v || '').toLowerCase().includes(q)) : items;
                 listEl.innerHTML = filtered.length
                     ? filtered.map((v, i) => `<div class="existing-list-item" data-idx="${i}">${escapeHtml(v)}</div>`).join('')
-                    : '<div class="existing-list-empty">No matching entries. Use New to type.</div>';
+                    : '<div class="existing-list-empty"><i class="fas fa-search me-1"></i>No matching entries. Switch to New to type a value.</div>';
                 listEl.querySelectorAll('.existing-list-item').forEach(el => {
                     el.addEventListener('click', () => {
-                        const idx = parseInt(el.dataset.idx, 10);
-                        const val = filtered[idx];
+                        const val = filtered[parseInt(el.dataset.idx, 10)];
                         if (val != null) {
                             input.value = val;
                             panel.classList.remove('show');
@@ -878,13 +1875,15 @@
             }
 
             const origPlaceholder = input.placeholder || '';
+
             modeExisting?.addEventListener('change', () => {
-                btnSelect.style.display = modeExisting.checked ? 'inline-block' : 'none';
-                input.placeholder = modeExisting.checked ? 'Select from list below' : origPlaceholder;
+                if (btnSelect) btnSelect.style.display = modeExisting.checked ? 'inline-flex' : 'none';
+                input.placeholder = modeExisting.checked ? 'Select from list →' : origPlaceholder;
             });
+
             modeNew?.addEventListener('change', () => {
-                btnSelect.style.display = 'none';
-                panel.classList.remove('show');
+                if (btnSelect) btnSelect.style.display = 'none';
+                if (panel) panel.classList.remove('show');
                 input.placeholder = origPlaceholder;
             });
 
@@ -898,9 +1897,11 @@
 
             searchEl?.addEventListener('input', () => renderList(searchEl.value));
 
+            // Close panel on outside click
             document.addEventListener('click', e => {
-                if (panel?.classList.contains('show') && !panel.contains(e.target) && !btnSelect?.contains(e.target))
+                if (panel?.classList.contains('show') && !panel.contains(e.target) && !btnSelect?.contains(e.target)) {
                     panel.classList.remove('show');
+                }
             });
 
             renderList();
@@ -920,18 +1921,19 @@
                     .then(r => r.json())
                     .then(data => {
                         const filtered = (data.results || []).filter(m => !selectedMaterials.find(s => s.id === m.id));
-                        resultsDiv.innerHTML = filtered.map((m, idx) =>
-                            `<div class="material-result-item" data-id="${m.id}" data-index="${idx}">
-                                <span class="code">${escapeHtml(m.model_no)}</span> —
-                                <span class="desc">${escapeHtml(m.item_description)}</span>
-                                <span class="text-muted ms-2">${escapeHtml(m.brand)}</span>
-                            </div>`
-                        ).join('') || '<div class="p-2 text-muted">No results</div>';
+                        resultsDiv.innerHTML = filtered.length
+                            ? filtered.map((m, idx) =>
+                                `<div class="material-result-item" data-id="${m.id}" data-index="${idx}">
+                                    <span class="code">${escapeHtml(m.model_no)}</span>
+                                    <span class="desc">${escapeHtml(m.item_description)}</span>
+                                    <span class="brand-tag">${escapeHtml(m.brand)}</span>
+                                </div>`
+                            ).join('')
+                            : '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;"><i class="fas fa-search me-1"></i> No results found</div>';
                         resultsDiv.classList.add('show');
                         resultsDiv.querySelectorAll('.material-result-item').forEach(el => {
                             el.addEventListener('click', () => {
-                                const idx = parseInt(el.dataset.index, 10);
-                                const mat = filtered[idx];
+                                const mat = filtered[parseInt(el.dataset.index, 10)];
                                 if (mat) {
                                     addMaterial(mat);
                                     searchInput.value = '';
@@ -941,6 +1943,13 @@
                         });
                     });
             }, 300);
+        });
+
+        // Close results on outside click
+        document.addEventListener('click', e => {
+            if (!resultsDiv.contains(e.target) && e.target !== searchInput) {
+                resultsDiv.classList.remove('show');
+            }
         });
 
         function addMaterial(mat) {
@@ -964,18 +1973,36 @@
             const labels = {};
             colDefs.forEach(c => { labels[c.key] = c.label; });
 
-            thead.innerHTML = '<th>#</th>' + keys.map(k => `<th>${escapeHtml(labels[k] || k)}</th>`).join('') + '<th></th>';
+            thead.innerHTML = '<th>#</th>' + keys.map(k => `<th>${escapeHtml(labels[k] || k)}</th>`).join('') + '<th style="width:40px;"></th>';
 
-            tbody.innerHTML = selectedMaterials.map((m, i) => {
-                const cells = keys.map(k => escapeHtml(k === 'model_no' ? m.model_no : (m[k] || '')));
-                return `<tr><td>${i + 1}</td>${cells.map(c => `<td>${c}</td>`).join('')}<td><button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})"><i class="fas fa-times"></i></button></td></tr>`;
-            }).join('');
+            if (selectedMaterials.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${keys.length + 2}" class="empty-table-msg">
+                    <i class="fas fa-inbox"></i>
+                    No materials selected yet.<br>Use the search above to add materials.
+                </td></tr>`;
+            } else {
+                tbody.innerHTML = selectedMaterials.map((m, i) => {
+                    const cells = keys.map(k => escapeHtml(k === 'model_no' ? m.model_no : (m[k] || '')));
+                    return `<tr>
+                        <td style="font-weight:600;color:var(--text-muted);text-align:center;">${i + 1}</td>
+                        ${cells.map(c => `<td>${c}</td>`).join('')}
+                        <td style="text-align:center;">
+                            <button type="button" class="btn-remove-material" onclick="window._removeMat(${m.id})" title="Remove">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
 
-            hiddenDiv.innerHTML = selectedMaterials.map(m => `<input type="hidden" name="material_ids" value="${m.id}">`).join('');
+            hiddenDiv.innerHTML = selectedMaterials.map(m =>
+                `<input type="hidden" name="material_ids" value="${m.id}">`
+            ).join('');
         }
 
         window._removeMat = removeMaterial;
 
+        // Preload existing materials
         if (preselected.length > 0) {
             fetch(`/submittal/api/materials-search/?ids=${preselected.join(',')}`)
                 .then(r => r.json())
@@ -987,32 +2014,52 @@
         // ── Review builder ──
         function buildReview() {
             const sections = [];
+
             indexItems.forEach(it => {
                 if (!it.included) return;
                 const isAuto = AUTO_LABELS.has(it.label.trim().toLowerCase());
-                let status;
+                let status, icon;
+
                 if (isAuto) {
-                    status = '<span class="auto-badge from-db">Auto-included</span>';
+                    status = '<span class="auto-badge green"><i class="fas fa-check" style="font-size:0.55rem;"></i> Auto-included</span>';
+                    icon = '<i class="fas fa-check-circle" style="color:var(--success);font-size:0.75rem;"></i>';
                 } else {
                     const fieldName = `section_upload__${it.label}`;
                     const fileInput = document.querySelector(`input[name="${CSS.escape(fieldName)}"]`);
                     const hasNew = fileInput && fileInput.files && fileInput.files.length > 0;
                     const hasExisting = existingUploads[it.label];
+
                     if (hasNew) {
-                        status = `<span class="auto-badge" style="background:#dbeafe">${escapeHtml(fileInput.files[0].name)}</span>`;
+                        status = `<span class="auto-badge blue"><i class="fas fa-file" style="font-size:0.55rem;"></i> ${escapeHtml(fileInput.files[0].name)}</span>`;
+                        icon = '<i class="fas fa-file-pdf" style="color:var(--primary);font-size:0.75rem;"></i>';
                     } else if (hasExisting) {
-                        status = `<span class="auto-badge" style="background:#fef3c7;color:#92400e">${escapeHtml(hasExisting)} (existing)</span>`;
+                        status = `<span class="auto-badge amber"><i class="fas fa-paperclip" style="font-size:0.55rem;"></i> ${escapeHtml(hasExisting)} (existing)</span>`;
+                        icon = '<i class="fas fa-paperclip" style="color:var(--warning);font-size:0.75rem;"></i>';
                     } else {
-                        status = '<span style="color:var(--accent);font-size:0.8rem">No file uploaded</span>';
+                        status = '<span class="auto-badge red"><i class="fas fa-exclamation-triangle" style="font-size:0.55rem;"></i> No file</span>';
+                        icon = '<i class="fas fa-exclamation-circle" style="color:var(--accent);font-size:0.75rem;"></i>';
                     }
                 }
-                sections.push({ label: it.label, value: status });
+
+                sections.push({ label: it.label, value: status, icon: icon });
             });
 
-            sections.push({ label: 'Proposed Materials', value: `<strong>${selectedMaterials.length}</strong> item(s) selected` });
+            // Materials summary
+            const matCount = selectedMaterials.length;
+            const matIcon = matCount > 0
+                ? '<i class="fas fa-boxes-stacked" style="color:var(--primary);font-size:0.75rem;"></i>'
+                : '<i class="fas fa-exclamation-circle" style="color:var(--accent);font-size:0.75rem;"></i>';
+            const matStatus = matCount > 0
+                ? `<span class="auto-badge blue"><i class="fas fa-check" style="font-size:0.55rem;"></i> ${matCount} item${matCount !== 1 ? 's' : ''} selected</span>`
+                : '<span class="auto-badge red"><i class="fas fa-exclamation-triangle" style="font-size:0.55rem;"></i> No materials</span>';
+
+            sections.push({ label: 'Proposed Materials', value: matStatus, icon: matIcon });
 
             document.getElementById('reviewSummary').innerHTML = sections.map(s =>
-                `<div class="review-item"><span class="review-label">${escapeHtml(s.label)}</span><span class="review-value">${s.value}</span></div>`
+                `<div class="review-item">
+                    <span class="review-label">${s.icon || ''} ${escapeHtml(s.label)}</span>
+                    <span class="review-value">${s.value}</span>
+                </div>`
             ).join('');
         }
 
@@ -1021,8 +2068,9 @@
             const form = document.getElementById('submittalForm');
             const fd = new FormData(form);
             const btn = document.getElementById('btnSaveGenerate');
+
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating…';
 
             fetch('/submittal/save/', {
                 method: 'POST',
@@ -1031,26 +2079,44 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    window.location.href = data.redirect;
+                    btn.innerHTML = '<i class="fas fa-check me-2"></i> Done! Redirecting…';
+                    btn.style.background = 'var(--success)';
+                    setTimeout(() => { window.location.href = data.redirect; }, 500);
                 } else {
                     alert('Error: ' + JSON.stringify(data.errors || data.error));
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save me-2"></i>Save & Generate PDF';
+                    btn.innerHTML = '<i class="fas fa-file-pdf me-2"></i> Save & Generate PDF';
                 }
             })
             .catch(err => {
                 alert('Network error: ' + err);
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-save me-2"></i>Save & Generate PDF';
+                btn.innerHTML = '<i class="fas fa-file-pdf me-2"></i> Save & Generate PDF';
             });
         });
 
+        // ── Utility ──
         function escapeHtml(str) {
             if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         }
+
+        // ── Keyboard shortcuts ──
+        document.addEventListener('keydown', e => {
+            // Alt+Right = next step
+            if (e.altKey && e.key === 'ArrowRight' && currentStep < TOTAL_STEPS - 1) {
+                e.preventDefault();
+                showStep(currentStep + 1);
+            }
+            // Alt+Left = prev step
+            if (e.altKey && e.key === 'ArrowLeft' && currentStep > 0) {
+                e.preventDefault();
+                showStep(currentStep - 1);
+            }
+        });
+
     })();
     </script>
 </body>

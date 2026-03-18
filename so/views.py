@@ -580,27 +580,34 @@ def delete_sales_order(request, order_id):
 def get_item_price(request):
     item_id = request.GET.get('item_id')
     customer_id = request.GET.get('customer_id')
-    
+
+    cache_key = f'item_price_{item_id}_{customer_id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse(cached)
+
     item = get_object_or_404(Items, id=item_id)
-    
+
     # Try to get custom price if exists
     custom_price_obj = CustomerPrice.objects.filter(
         customer_id=customer_id,
         item_id=item_id
     ).first()
-    
+
     default_price = item.item_price
     custom_price = custom_price_obj.custom_price if custom_price_obj else None
 
     # Decide final price: higher of custom or default
     final_price = custom_price if custom_price is not None and custom_price > item.item_cost else default_price
 
-    return JsonResponse({
+    data = {
         'default_price': float(default_price),
         'custom_price': float(custom_price) if custom_price else None,
         'final_price': float(final_price),
         'min_selling_price': float(item.item_price),
-    })
+    }
+    cache.set(cache_key, data, 60)  # 1-minute cache
+    return JsonResponse(data)
 
 from django.db.models import Case, When, Value, IntegerField
 
@@ -636,27 +643,42 @@ from django.http import JsonResponse
 
 @require_GET
 def get_items_by_firm(request):
-    firm = request.GET.get('firm')
+    firm = request.GET.get('firm', '')
+    cache_key = f'items_by_firm_{firm.lower() or "all"}'
 
-    # Don't cache since stock changes frequently
-    # Always fetch fresh data from database
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse({'items': cached})
+
     if firm == 'All' or not firm:
         qs = Items.objects.all()
     else:
         qs = Items.objects.filter(item_firm=firm)
 
-    items = list(qs.values('id', 'item_description', 'item_code', 'item_firm', 'item_upvc','item_stock'))
+    items = list(
+        qs.only('id', 'item_description', 'item_code', 'item_firm', 'item_upvc', 'item_stock')
+          .values('id', 'item_description', 'item_code', 'item_firm', 'item_upvc', 'item_stock')
+    )
 
+    cache.set(cache_key, items, 120)  # 2-minute cache
     return JsonResponse({'items': items})
 
 def get_item_stock(request):
     item_id = request.GET.get('item_id')
+
+    cache_key = f'item_stock_{item_id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JsonResponse(cached)
+
     item = get_object_or_404(Items, id=item_id)
-    return JsonResponse({
+    data = {
         'stock': item.item_stock,
         'cost': float(item.item_cost),
         'min_selling_price': float(item.item_price),
-    })
+    }
+    cache.set(cache_key, data, 60)  # 1-minute cache
+    return JsonResponse(data)
 
 
 def format_whatsapp_order(sales_order, order_items, request):

@@ -106,18 +106,30 @@ def create_quotation(request):
             # -------------------------
             # 5. Process Items
             # -------------------------
+            # Batch-fetch all items and customer prices to avoid N+1 queries
+            items_map = {
+                str(obj.id): obj
+                for obj in Items.objects.filter(id__in=item_ids)
+            }
+            customer_prices_map = {
+                str(cp.item_id): cp
+                for cp in CustomerPrice.objects.filter(customer=customer, item_id__in=item_ids)
+            }
+
             quotation_items = []
             customer_price_updates = []
             total_amount = 0
 
             for i, (item_id, qty, price_input, unit) in enumerate(zip(item_ids, quantities, prices, units)):
                 try:
-                    item = Items.objects.get(id=item_id)
+                    item = items_map.get(str(item_id))
+                    if item is None:
+                        raise Items.DoesNotExist(f"Item {item_id} not found")
                     quantity_val = int(qty)
                     unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'
 
                     # Automatic price from CustomerPrice or default item price
-                    customer_price = CustomerPrice.objects.filter(customer=customer, item=item).first()
+                    customer_price = customer_prices_map.get(str(item_id))
                     price_val = float(price_input) if price_input else (customer_price.custom_price if customer_price else float(item.item_price))
 
                     if quantity_val <= 0:
@@ -203,13 +215,11 @@ def create_quotation(request):
         # ---------------------------------------------------------------------
         # END: Salesman Filtering Logic
         # ---------------------------------------------------------------------
-        items = Items.objects.all()
         firms = Items.objects.values_list('item_firm', flat=True).distinct().order_by('item_firm')
         return render(request, 'so/quotations/create_quotation.html', {
             'customers': customers,
             'salesmen': salesmen,
             'firms': firms,
-            'items': items,
         })
 
 from django.shortcuts import render
@@ -680,6 +690,13 @@ def edit_quotation(request, quotation_id):
             messages.error(request, 'Invalid form data: mismatched item fields')
             return redirect('edit_quotation', quotation_id=quotation.id)
 
+        # Batch-fetch all items to avoid N+1 queries inside the loop
+        valid_item_ids = [iid for iid in item_ids if iid]
+        items_map = {
+            str(obj.id): obj
+            for obj in Items.objects.filter(id__in=valid_item_ids)
+        }
+
         quotation_items = []
         has_undercost_items = False
         
@@ -695,8 +712,9 @@ def edit_quotation(request, quotation_id):
                 if quantity <= 0 or price_val < 0:
                     continue  # Skip invalid items
                     
-                # Get item from Items table
-                item = get_object_or_404(Items, id=item_id)
+                item = items_map.get(str(item_id))
+                if not item:
+                    continue
                 
                 # Check if item is undercost
                 undercost_limit = item.item_cost  # 10% above cost

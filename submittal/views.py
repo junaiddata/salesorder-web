@@ -86,10 +86,31 @@ def submittal_wizard(request, pk=None):
     }
     warranty_brands_with_format = [b.pk for b in brands if getattr(b, 'use_generated_warranty', False)]
 
+    # Single JSON payload for wizard script (avoids Django {{ }} in JS, fixes linter errors)
+    wizard_data = {
+        'history': history,
+        'selected_material_ids': selected_material_ids,
+        'existing_uploads': existing_uploads,
+        'all_column_definitions': all_columns,
+        'existing_materials_columns': existing_materials_columns,
+        'brands_json': [{'pk': b.pk, 'name': b.name} for b in brands],
+        'compliance_options_json': compliance_options,
+        'remark_options_by_brand_json': remark_options_by_brand,
+        'existing_compliance_rows_json': existing_compliance_rows,
+        'existing_compliance_brand_id': existing_compliance_brand_id or '',
+        'default_index_items': list(DEFAULT_INDEX_ITEMS),
+        'existing_index_items': existing_index_items,
+        'existing_warranty_brand_id': existing_warranty_brand_id or '',
+        'existing_warranty_date_type': existing_warranty_date_type,
+        'existing_warranty_materials_columns': existing_warranty_materials_columns,
+        'warranty_brands_with_format': warranty_brands_with_format,
+    }
+
     context = {
         'submittal': submittal,
         'title_form': title_form,
         'materials': materials,
+        'wizard_data_json': json.dumps(wizard_data),
         'selected_material_ids': json.dumps(selected_material_ids),
         'history': {k: json.dumps(v) for k, v in history.items()},
         'default_index_items': json.dumps(list(DEFAULT_INDEX_ITEMS)),
@@ -97,13 +118,11 @@ def submittal_wizard(request, pk=None):
         'existing_uploads': json.dumps(existing_uploads),
         'existing_materials_columns': json.dumps(existing_materials_columns),
         'all_column_definitions': json.dumps(all_columns),
-        # Compliance statement
         'brands_json': json.dumps([{'pk': b.pk, 'name': b.name} for b in brands]),
         'compliance_options_json': json.dumps(compliance_options),
         'remark_options_by_brand_json': json.dumps(remark_options_by_brand),
         'existing_compliance_rows_json': json.dumps(existing_compliance_rows),
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
-        # Warranty section
         'existing_warranty_brand_id': existing_warranty_brand_id or '',
         'existing_warranty_date_type': existing_warranty_date_type,
         'existing_warranty_materials_columns': json.dumps(existing_warranty_materials_columns),

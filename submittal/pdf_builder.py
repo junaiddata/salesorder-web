@@ -563,55 +563,110 @@ def _draw_watermark(c, cx):
 
 
 # ---------------------------------------------------------------------------
-# Section Divider Page (auto-generated, matches uploaded design EXACTLY)
-#
-# Design: Red+Blue left strips, company header box at top,
-# Logo watermark in center (or "JUNAID GROUP OF COMPANIES" text fallback),
-# "N. Section Name" centered large text over watermark area.
-# Blue+Red bottom bar.
+# Section Divider Page – Background image + centered section text overlay
 # ---------------------------------------------------------------------------
 
+def _wrap_to_lines(text, max_width, font_name, font_size, max_lines=2):
+    """Wrap text to fit max_width, return list of lines (at most max_lines)."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    words = str(text).split()
+    if not words:
+        return ['']
+    lines = []
+    line = ''
+    for w in words:
+        test = (line + ' ' + w).strip() if line else w
+        if stringWidth(test, font_name, font_size) <= max_width:
+            line = test
+        else:
+            if line:
+                lines.append(line)
+                if len(lines) >= max_lines:
+                    return lines
+            line = w
+    if line:
+        lines.append(line)
+    return lines
+
+
+def _draw_centered_wrapped(c, text, cx, y, max_width, font_name, font_size, leading=30, max_lines=2):
+    """Draw text wrapped to max_lines, each line centered. Returns final y."""
+    lines = _wrap_to_lines(text, max_width, font_name, font_size, max_lines)
+    c.setFont(font_name, font_size)
+    n = len(lines)
+    start_y = y + (n - 1) * leading / 2 if n > 1 else y
+    for i, line in enumerate(lines):
+        c.drawCentredString(cx, start_y - i * leading, line)
+    return start_y - (n - 1) * leading
+
+
 def _build_divider_page(section_number: int, section_name: str) -> BytesIO:
+    """
+    Build divider page using a pre-designed background image.
+    Only the section name text is drawn dynamically on top.
+    
+    Background image: media/divider_page_bg.png
+    """
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
 
-    # Left decorative strips
-    _draw_left_strips(c)
+    # ── Draw background image (full page) ─────────────────────────────
+    bg_path = os.path.join('media', 'divider_page_bg.png')
+    if os.path.exists(bg_path):
+        c.drawImage(
+            bg_path,
+            0, 0,
+            width=PAGE_W,
+            height=PAGE_H,
+            preserveAspectRatio=False,
+            mask='auto',
+        )
 
-    # Company header box at top
-    _draw_company_header(c, box_y=PAGE_H - 150, box_h=100)
-
-    # Watermark: logo image from media, or fallback to text
-    _draw_watermark(c, cx)
-
-    # Section name (over watermark)
+    # ── Section text overlay (centered on page) ──────────────────────
+    # Use modern font (Montserrat Bold or PlayfairDisplay Bold)
+    title_font = _get_font_bold('Montserrat-Bold', 'Helvetica-Bold')
+    
     section_text = section_name
-    c.setFont('Helvetica-Bold', 24)
-    c.setFillColor(colors.black)
-    c.drawCentredString(cx, PAGE_H / 2 + 10, section_text)
+    max_w = PAGE_W - 120  # padding from edges
 
-    # Bottom decorative bar
-    bar_h = 14
-    c.setFillColor(BLUE_DARK)
-    c.rect(0, 0, PAGE_W * 0.7, bar_h, fill=1, stroke=0)
-    c.setFillColor(RED_ACCENT)
-    c.rect(PAGE_W * 0.7, 0, PAGE_W * 0.15, bar_h, fill=1, stroke=0)
-    c.setFillColor(BLUE_DARK)
-    c.rect(PAGE_W * 0.85, 0, PAGE_W * 0.15, bar_h, fill=1, stroke=0)
+    # Determine font size based on text length
+    if len(section_text) <= 25:
+        font_size = 26
+    elif len(section_text) <= 45:
+        font_size = 22
+    else:
+        font_size = 18
+
+    leading = font_size + 8
+
+    # Center vertically – slightly above page center 
+    # (logo watermark is roughly at center, text sits over it)
+    center_y = PAGE_H / 2 + 10
+
+    c.setFillColor(colors.HexColor('#1a1a1a'))  # near-black for readability
+    _draw_centered_wrapped(
+        c,
+        section_text,
+        cx,
+        center_y,
+        max_w,
+        title_font,
+        font_size,
+        leading=leading,
+        max_lines=2,
+    )
 
     c.save()
     buf.seek(0)
     return buf
 
-
 # ---------------------------------------------------------------------------
-# Proposed Materials Table (Section 7)
+# Proposed Materials Table (Section 7) – Background image + table overlay
 # ---------------------------------------------------------------------------
 
 def _get_effective_columns(submittal, column_override=None):
-    """Return list of (key, label) for materials table. Uses materials_columns if set.
-    column_override: optional list of keys to filter; None = use submittal.materials_columns."""
+    """Return list of (key, label) for materials table."""
     materials = submittal.materials.select_related('brand').all()
     if not materials:
         return [('model_no', 'Model No.'), ('item_description', 'Item Description')]
@@ -649,33 +704,115 @@ def _get_effective_columns(submittal, column_override=None):
 
 
 def _get_warranty_columns(submittal):
-    """Return columns for warranty materials table. Uses warranty_materials_columns if set, else materials_columns."""
+    """Return columns for warranty materials table."""
     sel = submittal.warranty_materials_columns if submittal.warranty_materials_columns else None
     return _get_effective_columns(submittal, column_override=sel)
 
 
+class _MaterialPageTemplate(BaseDocTemplate):
+    """
+    Custom doc template that draws material_page_bg.png on every page.
+    The table flows naturally within the frame area below the header/title
+    already baked into the background image.
+    """
+
+    def __init__(self, buf, bg_path, **kwargs):
+        self._bg_path = bg_path
+        super().__init__(buf, **kwargs)
+
+        # Frame starts below the header + "LIST OF PROPOSED MATERIALS" title
+        # in the background image. Adjust top_start based on your bg image.
+        top_start = kwargs.get('topMargin', 230)
+        bottom_end = kwargs.get('bottomMargin', 50)
+        left = kwargs.get('leftMargin', 50)
+        right = kwargs.get('rightMargin', 50)
+        frame_w = PAGE_W - left - right
+        frame_h = PAGE_H - top_start - bottom_end
+
+        frame = Frame(
+            left,
+            bottom_end,
+            frame_w,
+            frame_h,
+            id='material_frame',
+        )
+        template = PageTemplate(
+            id='material_bg',
+            frames=[frame],
+            onPage=self._draw_bg,
+        )
+        self.addPageTemplates([template])
+
+    def _draw_bg(self, canvas_obj, doc):
+        """Draw background image on every page."""
+        if os.path.exists(self._bg_path):
+            canvas_obj.saveState()
+            canvas_obj.drawImage(
+                self._bg_path,
+                0, 0,
+                width=PAGE_W,
+                height=PAGE_H,
+                preserveAspectRatio=False,
+                mask='auto',
+            )
+            canvas_obj.restoreState()
+
+
 def _build_materials_table(submittal: Submittal) -> BytesIO:
+    """
+    Build materials table PDF with background image on every page.
+    Background: media/material_page_bg.png
+    Table is rendered inside frame area below the pre-designed header & title.
+    """
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=36, rightMargin=36,
-                            topMargin=50, bottomMargin=50)
+    bg_path = os.path.join('media', 'materials_page_bg.png')
 
-    style_title = ParagraphStyle(
-        'MatTitle', fontSize=14, fontName='Helvetica-Bold',
-        textColor=BLUE_DARK, alignment=TA_CENTER, spaceAfter=20,
+    # ── Use custom template with background ───────────────────────────
+    doc = _MaterialPageTemplate(
+        buf,
+        bg_path=bg_path,
+        pagesize=A4,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=230,     # below header + "LIST OF PROPOSED MATERIALS" in bg
+        bottomMargin=50,
     )
-    style_cell = ParagraphStyle('MatCell', fontSize=8, fontName='Helvetica', leading=10)
-    style_header = ParagraphStyle('MatHeader', fontSize=8, fontName='Helvetica-Bold', textColor=WHITE, leading=10)
 
-    elements = [Paragraph('LIST OF PROPOSED MATERIAL', style_title)]
-    materials = submittal.materials.select_related('brand').all().order_by('display_order', 'model_no')
+    # ── Font setup ────────────────────────────────────────────────────
+    header_font = _get_font_bold('Montserrat-Bold', 'Helvetica-Bold')
+    body_font = _get_font('Montserrat', 'Helvetica')
 
+    style_cell = ParagraphStyle(
+        'MatCell',
+        fontSize=8,
+        fontName=body_font,
+        leading=10,
+        textColor=colors.black,
+    )
+    style_header = ParagraphStyle(
+        'MatHeader',
+        fontSize=8,
+        fontName=header_font,
+        textColor=colors.white,
+        leading=10,
+    )
+
+    # ── Fetch materials & columns ─────────────────────────────────────
+    materials = (
+        submittal.materials
+        .select_related('brand')
+        .all()
+        .order_by('display_order', 'model_no')
+    )
     cols = _get_effective_columns(submittal)
-    header = [Paragraph('S.No', style_header)] + [
+
+    # ── Build table header ────────────────────────────────────────────
+    header_row = [Paragraph('S.No', style_header)] + [
         Paragraph(lbl, style_header) for _, lbl in cols
     ]
 
-    data = [header]
+    # ── Build table rows ──────────────────────────────────────────────
+    data = [header_row]
     for idx, mat in enumerate(materials, 1):
         row = [Paragraph(str(idx), style_cell)]
         for key, _ in cols:
@@ -686,26 +823,40 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
             row.append(Paragraph(str(val or ''), style_cell))
         data.append(row)
 
+    # ── Column widths ─────────────────────────────────────────────────
     ncols = len(cols) + 1
-    col_widths = [25] + [max(40, 500 // ncols)] * (ncols - 1)
+    available_w = PAGE_W - 100  # left + right margin
+    col_widths = [30] + [max(45, (available_w - 30) // (ncols - 1))] * (ncols - 1)
+
+    # ── Create table ──────────────────────────────────────────────────
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), BLUE_DARK),
-        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, HexColor('#F5F7FA')]),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        # Header row styling
+        ('BACKGROUND',     (0, 0), (-1, 0), BLUE_DARK),
+        ('TEXTCOLOR',      (0, 0), (-1, 0), colors.white),
+        ('FONTNAME',       (0, 0), (-1, 0), header_font),
+        ('FONTSIZE',       (0, 0), (-1, 0), 8),
+
+        # Body styling
+        ('FONTNAME',       (0, 1), (-1, -1), body_font),
+        ('FONTSIZE',       (0, 1), (-1, -1), 8),
+        ('TEXTCOLOR',      (0, 1), (-1, -1), colors.black),
+
+        # Grid & padding
+        ('GRID',           (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, HexColor('#F5F7FA')]),
+        ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING',     (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING',  (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',    (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING',   (0, 0), (-1, -1), 4),
     ]))
 
-    elements.append(table)
+    # ── Build PDF ─────────────────────────────────────────────────────
+    elements = [table]
     doc.build(elements)
     buf.seek(0)
     return buf
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -733,16 +884,26 @@ def _get_upload_path(submittal, label):
     return None
 
 
-def _get_ordered_index_labels(submittal: Submittal) -> list:
+def _get_ordered_index_items(submittal: Submittal) -> list:
+    """
+    Return list of {display, canonical} for included index items.
+    - display: shown in index PDF and divider pages (display_label or label)
+    - canonical: used for section lookup and upload lookup (always label)
+    """
     raw_items = submittal.index_items or []
-    labels = []
+    items = []
     for entry in raw_items:
         if isinstance(entry, dict):
             if entry.get('included', True):
-                labels.append(entry.get('label', ''))
+                canonical = entry.get('label', '')
+                display = entry.get('display_label') or canonical
+                items.append({'display': display, 'canonical': canonical})
         elif isinstance(entry, str):
-            labels.append(entry)
-    return labels if labels else list(DEFAULT_INDEX_ITEMS)
+            items.append({'display': entry, 'canonical': entry})
+    if not items:
+        for lbl in DEFAULT_INDEX_ITEMS:
+            items.append({'display': lbl, 'canonical': lbl})
+    return items
 
 
 def _append(merger, pdf, add_divider=False, div_num=0, div_name=''):
@@ -1223,13 +1384,16 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     company_docs = services.get_company_documents()
     merger = PdfMerger()
 
-    labels = _get_ordered_index_labels(submittal)
+    items = _get_ordered_index_items(submittal)
+    display_labels = [it['display'] for it in items]
     materials = submittal.materials.all().order_by('display_order')
     seen = set()
     visible_num = 0
 
-    for label in labels:
-        section = _label_to_section(label)
+    for item in items:
+        display = item['display']
+        canonical = item['canonical']
+        section = _label_to_section(canonical)
         visible_num += 1
 
         # ── Title Page: no divider ──
@@ -1240,7 +1404,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
 
         # ── Index: no divider ──
         if section == 2:
-            merger.append(_build_index_page(labels))
+            merger.append(_build_index_page(display_labels))
             seen.add(2)
             continue
 
@@ -1253,23 +1417,23 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         # ── Standard single-content sections ──
         if section == 3:
             _append(merger, _safe_path(company_docs.company_profile_pdf),
-                    True, visible_num, label)
+                    True, visible_num, display)
             continue
 
         if section == 4:
             _append(merger, _safe_path(company_docs.trade_license_pdf),
-                    True, visible_num, label)
+                    True, visible_num, display)
             continue
 
         if section == 7:
             _append(merger, _build_materials_table(submittal),
-                    True, visible_num, label)
+                    True, visible_num, display)
             continue
 
         # ── Upload-based sections (standard or custom) ──
         if section in (5, 6, 8, 13) or section is None:
-            # Always add divider; content optional
-            merger.append(_build_divider_page(visible_num, label))
+            # Always add divider; content optional (show renamed display)
+            merger.append(_build_divider_page(visible_num, display))
 
             # Section 13: generated warranty letter (when brand has format) OR uploaded PDF
             if section == 13:
@@ -1278,14 +1442,14 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                 if use_generated:
                     merger.append(_build_warranty_letter_pdf(submittal))
                 else:
-                    upload_path = _get_upload_path(submittal, label)
+                    upload_path = _get_upload_path(submittal, canonical)
                     if not upload_path:
                         upload_path = _safe_path(submittal.warranty_draft_pdf)
                     if upload_path:
                         merger.append(upload_path)
                 continue
 
-            upload_path = _get_upload_path(submittal, label)
+            upload_path = _get_upload_path(submittal, canonical)
             if not upload_path:
                 legacy_map = {
                     5: submittal.vendor_list_pdf,
@@ -1306,7 +1470,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         # ── Multi-material sections (9-12, 14) ──
         if section in (9, 10, 11, 12, 14):
             # Always add divider; content optional
-            merger.append(_build_divider_page(visible_num, label))
+            merger.append(_build_divider_page(visible_num, display))
             for mat in materials:
                 paths = []
                 if section == 9:

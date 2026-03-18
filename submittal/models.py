@@ -221,10 +221,10 @@ class Submittal(models.Model):
     mep_contractor = models.CharField(max_length=255, blank=True, default='')
     product = models.CharField(max_length=255, blank=True, default='')
 
-    # Section 2 - Index (ordered list of {label, included} dicts, generated with ReportLab)
+    # Section 2 - Index (ordered list of {label, included, display_label?} dicts, generated with ReportLab)
     index_items = models.JSONField(
         default=list, blank=True,
-        help_text="Ordered list of index entries: [{label, included}]"
+        help_text="Ordered list of index entries: [{label, included, display_label?}]. display_label overrides label for this submittal."
     )
 
     # Section 5 - Vendor List
