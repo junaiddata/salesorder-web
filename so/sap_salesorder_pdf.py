@@ -518,7 +518,7 @@ def _build_terms_block(theme, styles):
     elements.append(Spacer(1, 2))
 
     terms = [
-        "1. This sales order is valid for 30 days from the date of issue.",
+        "1. This sales order is valid for 7 days from the date of issue.",
         "2. Prices are subject to change after the validity period.",
         "3. Delivery timelines to be confirmed upon order confirmation.",
         "4. System-generated document by Junaid Trading.",

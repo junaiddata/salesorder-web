@@ -4269,7 +4269,7 @@ def export_sap_quotation_pdf(request, q_number):
         
     elements.extend([
         Paragraph("Terms & Conditions:", styles['h3']),
-        Paragraph("1. This quotation is valid for 30 days from the date of issue.", styles['Normal']),
+        Paragraph("1. This quotation is valid for 7 days from the date of issue.", styles['Normal']),
         Paragraph("2. Prices are subject to change after the validity period.", styles['Normal']),
         Paragraph("3. Delivery timelines to be confirmed upon order confirmation.", styles['Normal']),
         Paragraph("4. System-generated document.", styles['Normal']),

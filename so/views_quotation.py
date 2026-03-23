@@ -1352,7 +1352,7 @@ def generate_junaid_quotation(buffer, quotation):
         Paragraph("Terms & Conditions:", styles['h3'])
     ]
     terms = [
-        "1. This quotation is valid for 30 days from the date of issue.",
+        "1. This quotation is valid for 7 days from the date of issue.",
         "2. Prices are subject to change without prior notice after the validity period.",
         "3. Delivery timelines will be confirmed upon order confirmation.",
         "4. This is a system-generated document and does not require a signature.",
@@ -1566,7 +1566,7 @@ def generate_alabama_quotation(buffer, quotation):
         Paragraph("Terms & Conditions:", styles['h3'])
     ]
     terms = [
-        "1. This quotation is valid for 30 days from the date of issue.",
+        "1. This quotation is valid for 7 days from the date of issue.",
         "2. Prices are subject to change without prior notice after the validity period.",
         "3. Delivery timelines will be confirmed upon order confirmation.",
         "4. This is a system-generated document and does not require a signature.",
