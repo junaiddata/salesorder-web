@@ -196,6 +196,7 @@ urlpatterns += [
     path('saparcreditmemos/<str:credit_memo_number>/', sap_salesorder_views.arcreditmemo_detail, name='arcreditmemo_detail'),
     
     # Proforma Invoice (PI) URLs
+    path('proformainvoices/export-pdf/', sap_salesorder_views.export_pi_list_pdf, name='export_pi_list_pdf'),
     path('proformainvoices/', sap_salesorder_views.pi_list, name='pi_list'),
     path('proformainvoices/old/', sap_salesorder_views.old_pi_list, name='old_pi_list'),
     path('sapsalesorders/<str:so_number>/pi/create/', sap_salesorder_views.create_pi, name='create_pi'),

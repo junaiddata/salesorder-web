@@ -425,7 +425,8 @@
         </div>
         <p>View and manage all Proforma Invoices</p>
       </div>
-      <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a class="btn btn-secondary" href="{% url 'export_pi_list_pdf' %}{% if export_pi_list_query %}?{{ export_pi_list_query }}{% endif %}">Export PDF</a>
         <a class="btn btn-primary" href="{% url 'old_pi_list' %}">View Old PIs</a>
         {% if user.role.role == 'Salesman' %}
           <a class="btn btn-secondary" href="{% url 'sales_home' %}">Home</a>

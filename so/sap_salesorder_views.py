@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+from html import escape as html_escape
 import pandas as pd
 import os
 import itertools
@@ -4281,50 +4282,42 @@ def calculate_pi_grand_total(pi):
     return grand_total
 
 
-@login_required
-def pi_list(request):
+def _pi_list_filtered_queryset(request):
     """
-    List all Proforma Invoices with filtering and search capabilities.
+    Proforma invoice list filters (same as pi_list). Returns ordered QuerySet, not paginated.
     """
-    # Scope by logged-in user - filter PIs by their salesorder's salesman scope
     qs = SAPProformaInvoice.objects.filter(
         salesorder__in=SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
     ).select_related('salesorder').prefetch_related('lines', 'lines__so_item', 'salesorder__items')
 
-    # Filters
     q = request.GET.get('q', '').strip()
     status = request.GET.get('status', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     so_number_filter = request.GET.get('so_number', '').strip()
-    salesman_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
-    pi_type_filter = request.GET.get('pi_type', '').strip()  # 'SAP' or 'inApp'
-    cheque_filter = request.GET.get('cheque', '').strip()  # 'yes' or 'no'
+    salesman_filter = request.GET.getlist('salesman')
+    pi_type_filter = request.GET.get('pi_type', '').strip()
+    cheque_filter = request.GET.get('cheque', '').strip()
 
-    # Apply Cheque Received Filter
     if cheque_filter:
         if cheque_filter.lower() == 'yes':
             qs = qs.filter(cheque_received=True)
         elif cheque_filter.lower() == 'no':
             qs = qs.filter(cheque_received=False)
 
-    # Apply PI Type Filter
     if pi_type_filter:
         if pi_type_filter.upper() == 'SAP':
             qs = qs.filter(is_sap_pi=True)
         elif pi_type_filter.upper() == 'INAPP':
             qs = qs.filter(is_sap_pi=False)
 
-    # Apply Salesman Filter
     if salesman_filter:
         clean_salesmen = [s for s in salesman_filter if s.strip()]
         if clean_salesmen:
             qs = qs.filter(salesorder__salesman_name__in=clean_salesmen)
 
-    # Search filter
     if q:
         if q.isdigit():
-            # Search by PI number or SO number
             qs = qs.filter(
                 Q(pi_number__icontains=q) |
                 Q(salesorder__so_number__icontains=q)
@@ -4342,7 +4335,6 @@ def pi_list(request):
                 Q(salesorder__salesman_name__icontains=q)
             )
 
-    # Status filter (use SO status, not PI status)
     if status:
         s = status.strip().upper()
         if s in ("OPEN", "O"):
@@ -4352,16 +4344,14 @@ def pi_list(request):
         else:
             qs = qs.filter(salesorder__status__iexact=status)
 
-    # SO Number filter
     if so_number_filter:
         qs = qs.filter(salesorder__so_number__icontains=so_number_filter)
 
-    # Date filters
     def parse_date(s):
         if not s:
             return None
         try:
-            if len(s) == 7:  # YYYY-MM
+            if len(s) == 7:
                 return datetime.strptime(s + '-01', '%Y-%m-%d').date()
             return datetime.strptime(s, '%Y-%m-%d').date()
         except ValueError:
@@ -4374,8 +4364,15 @@ def pi_list(request):
     if end_date:
         qs = qs.filter(pi_date__lte=end_date)
 
-    # Order by most recent first (by pi_date, then created_at for fallback)
-    qs = qs.order_by('-pi_date', '-created_at', '-sequence')
+    return qs.order_by('-pi_date', '-created_at', '-sequence')
+
+
+@login_required
+def pi_list(request):
+    """
+    List all Proforma Invoices with filtering and search capabilities.
+    """
+    qs = _pi_list_filtered_queryset(request)
 
     # Pagination
     try:
@@ -4417,11 +4414,25 @@ def pi_list(request):
         .order_by('salesman_name')
     )
 
+    q = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    so_number_filter = request.GET.get('so_number', '').strip()
+    salesman_filter = request.GET.getlist('salesman')
+    pi_type_filter = request.GET.get('pi_type', '').strip()
+    cheque_filter = request.GET.get('cheque', '').strip()
+
+    export_qd = request.GET.copy()
+    export_qd.pop('page', None)
+    export_pi_list_query = export_qd.urlencode()
+
     return render(request, 'salesorders/pi_list.html', {
         'page_obj': page_obj,
         'pis_with_totals': pis_with_totals,  # Dict mapping pi -> grand_total for display
         'total_count': total_count,
         'salesmen': salesmen,
+        'export_pi_list_query': export_pi_list_query,
         'filters': {
             'q': q,
             'status': status,
@@ -4434,6 +4445,312 @@ def pi_list(request):
             'page_size': page_size,
         }
     })
+
+
+@login_required
+def export_pi_list_pdf(request):
+    """
+    Export the filtered Proforma Invoices list as PDF using the same visual theme as PI detail PDF.
+    Respects the same GET filters as the list page (pagination params are ignored).
+    """
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+
+    MAX_ROWS = 2500
+    qs = _pi_list_filtered_queryset(request)
+    total_matching = qs.count()
+    pis = list(qs[: MAX_ROWS + 1])
+    truncated = len(pis) > MAX_ROWS
+    if truncated:
+        pis = pis[:MAX_ROWS]
+
+    # Theme aligned with export_pi_pdf
+    DARK_BLUE = HexColor('#1E3A5F')
+    ORANGE = HexColor('#f0ab00')
+    LIGHT_GRAY = HexColor('#F5F5F5')
+    GRAY_TEXT = HexColor('#808080')
+    LIGHT_BLUE_LINE = HexColor('#4A90D9')
+
+    margin_x = 0.4 * inch
+    margin_y = 0.45 * inch
+    pagesize = landscape(A4)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=pagesize,
+        leftMargin=margin_x,
+        rightMargin=margin_x,
+        topMargin=margin_y,
+        bottomMargin=margin_y,
+    )
+    available_width = pagesize[0] - 2 * margin_x
+
+    pdf_styles = getSampleStyleSheet()
+    company_style = ParagraphStyle(
+        'ListCompany',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        textColor=DARK_BLUE,
+        leading=11,
+    )
+    address_style = ParagraphStyle(
+        'ListAddress',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    title_style = ParagraphStyle(
+        'ListTitle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=DARK_BLUE,
+    )
+    gray_label = ParagraphStyle(
+        'ListGray',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=GRAY_TEXT,
+    )
+    bold_style = ParagraphStyle(
+        'ListBold',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    cell_style = ParagraphStyle(
+        'ListCell',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    cell_right = ParagraphStyle(
+        'ListCellRight',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+    cell_center = ParagraphStyle(
+        'ListCellCenter',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        alignment=TA_CENTER,
+        leading=9,
+    )
+
+    generated = datetime.now().strftime('%d.%m.%y %H:%M')
+
+    def on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 8)
+        canvas.setFillColor(GRAY_TEXT)
+        num = canvas.getPageNumber()
+        canvas.drawRightString(pagesize[0] - margin_x, margin_y * 0.5, f'Page {num}')
+        if num > 1:
+            canvas.setFont('Helvetica-Bold', 9)
+            canvas.setFillColor(DARK_BLUE)
+            canvas.drawString(margin_x, pagesize[1] - 0.32 * inch, 'Junaid Sanitary & Electrical — Proforma Invoices List')
+            canvas.setStrokeColor(LIGHT_BLUE_LINE)
+            canvas.setLineWidth(1)
+            canvas.line(margin_x, pagesize[1] - 0.38 * inch, pagesize[0] - margin_x, pagesize[1] - 0.38 * inch)
+        canvas.restoreState()
+
+    elements = []
+
+    logo_path = os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png')
+    logo_img = None
+    if os.path.exists(logo_path):
+        try:
+            logo_img = Image(logo_path, width=2.0 * inch, height=0.78 * inch)
+        except Exception:
+            logo_img = None
+
+    left_block = []
+    if logo_img:
+        left_block.append([logo_img])
+    else:
+        left_block.append([Paragraph('<b>JUNAID</b>', company_style)])
+    left_block.append([Spacer(1, 0.06 * inch)])
+    left_block.append([Paragraph(
+        '<b>Junaid Sanitary & Electrical Materials Trading (L.L.C)</b>',
+        company_style,
+    )])
+    left_block.append([Paragraph('Dubai Investment Park-2, Dubai', address_style)])
+    left_block.append([Paragraph('04-2367723', address_style)])
+    left_block.append([Paragraph('100225006400003', address_style)])
+
+    left_table = Table(left_block, colWidths=[3.2 * inch])
+    left_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+
+    title_with_bar = Table(
+        [['', Paragraph('<b>PROFORMA INVOICES — LIST</b>', title_style)]],
+        colWidths=[0.1 * inch, 4.2 * inch],
+    )
+    title_with_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), ORANGE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (0, 0), (0, 0), 0),
+        ('LEFTPADDING', (1, 0), (1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+
+    meta_row = Table(
+        [
+            [
+                Paragraph('Generated', gray_label),
+                Paragraph(f'<b>{html_escape(generated)}</b>', bold_style),
+                Paragraph('Rows in this PDF', gray_label),
+                Paragraph(f'<b>{len(pis)}</b>', bold_style),
+                Paragraph('Total matching filters', gray_label),
+                Paragraph(f'<b>{total_matching}</b>', bold_style),
+            ]
+        ],
+        colWidths=[0.75 * inch, 1.15 * inch, 1.05 * inch, 0.65 * inch, 1.35 * inch, 0.75 * inch],
+    )
+    meta_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    header_top = Table(
+        [[left_table, title_with_bar]],
+        colWidths=[3.4 * inch, available_width - 3.4 * inch],
+    )
+    header_top.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_top)
+    elements.append(meta_row)
+    if truncated:
+        elements.append(Paragraph(
+            f'<font color="#C0392B"><b>Note:</b> Export limited to {MAX_ROWS} rows; refine filters to narrow results.</font>',
+            cell_style,
+        ))
+    elements.append(Spacer(1, 0.12 * inch))
+
+    hdr = [
+        Paragraph('<b>Date</b>', bold_style),
+        Paragraph('<b>PI Number</b>', bold_style),
+        Paragraph('<b>Customer</b>', bold_style),
+        Paragraph('<b>Salesman</b>', bold_style),
+        Paragraph('<b>Status</b>', bold_style),
+        Paragraph('<b>Total (AED)</b>', bold_style),
+        Paragraph('<b>Cheque</b>', bold_style),
+    ]
+    table_rows = [hdr]
+    sum_totals = Decimal('0')
+    for pi in pis:
+        so = pi.salesorder
+        d = pi.pi_date or (pi.created_at.date() if pi.created_at else None)
+        date_s = d.strftime('%d/%m/%Y') if d else '—'
+        st = (so.status or '').strip().upper()
+        if st in ('O', 'OPEN'):
+            status_label = 'Open'
+        elif st in ('C', 'CLOSED'):
+            status_label = 'Closed'
+        else:
+            status_label = so.status or '—'
+        try:
+            grand_total = calculate_pi_grand_total(pi)
+        except Exception:
+            grand_total = Decimal('0')
+        sum_totals += grand_total
+        pi_display = html_escape(str(pi.pi_number))
+        if pi.is_sap_pi:
+            pi_cell = Paragraph(
+                f'{pi_display}<br/><font backColor="#4A90D9" color="white"> SAP </font>',
+                cell_style,
+            )
+        else:
+            pi_cell = Paragraph(pi_display, cell_style)
+        cheque_cell = Paragraph('Yes' if pi.cheque_received else '—', cell_center)
+        table_rows.append([
+            Paragraph(html_escape(date_s), cell_style),
+            pi_cell,
+            Paragraph(html_escape(so.customer_name or '—'), cell_style),
+            Paragraph(html_escape(so.salesman_name or '—'), cell_style),
+            Paragraph(html_escape(status_label), cell_center),
+            Paragraph(f'{grand_total:,.2f}', cell_right),
+            cheque_cell,
+        ])
+
+    col_widths = [
+        0.72 * inch,
+        1.2 * inch,
+        2.55 * inch,
+        1.2 * inch,
+        0.62 * inch,
+        0.9 * inch,
+        0.5 * inch,
+    ]
+    scale = available_width / sum(col_widths)
+    col_widths = [w * scale for w in col_widths]
+
+    data_table = Table(table_rows, colWidths=col_widths, repeatRows=1)
+    data_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), LIGHT_GRAY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, HexColor('#CCCCCC')),
+        ('LINEBELOW', (0, 1), (-1, -1), 0.5, HexColor('#EEEEEE')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(data_table)
+    elements.append(Spacer(1, 0.14 * inch))
+    sum_table = Table(
+        [[
+            Paragraph('<b>Grand total (AED)</b>', bold_style),
+            Paragraph(
+                f'<b>{sum_totals:,.2f}</b>',
+                ParagraphStyle('PiListSumRight', parent=bold_style, alignment=TA_RIGHT),
+            ),
+        ]],
+        colWidths=[available_width - 1.2 * inch, 1.2 * inch],
+    )
+    sum_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LINEABOVE', (0, 0), (-1, -1), 1, HexColor('#CCCCCC')),
+    ]))
+    elements.append(sum_table)
+
+    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    fname = f'proforma_invoices_list_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{fname}"'
+    return response
 
 
 @login_required
