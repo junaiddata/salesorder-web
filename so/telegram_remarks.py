@@ -175,7 +175,7 @@ def send_remarks_to_salesman_telegram(salesorder, remark_text):
     if bp_ref:
         lines.append(f"🔗 <b>BP Ref:</b>  {bp_ref}")
 
-    lines.append(f"💰 <b>Total:</b>  <b>{doc_total}</b>")
+    lines.append(f"💰 <b>Total (excl. VAT):</b>  <b>{doc_total}</b>")
 
     if approval_status:
         lines.append(f"📌 <b>Status:</b>  {approval_emoji} {approval_label}")
@@ -256,7 +256,7 @@ def send_remarks_with_pdf_to_salesman_telegram(salesorder, remark_text):
     if bp_ref:
         lines.append(f"🔗 <b>BP Ref:</b>  {bp_ref}")
 
-    lines.append(f"💰 <b>Total:</b>  <b>{doc_total}</b>")
+    lines.append(f"💰 <b>Total (excl. VAT):</b>  <b>{doc_total}</b>")
 
     if approval_status:
         lines.append(f"📌 <b>Status:</b>  {approval_emoji} {approval_label}")
@@ -285,7 +285,7 @@ def send_remarks_with_pdf_to_salesman_telegram(salesorder, remark_text):
             "━━━━━━━━━━━━━━━━━━━━━",
             f"📄 <b>SO:</b>  <code>{so_num_escaped}</code>",
             f"🏢 <b>Customer:</b>  {customer}",
-            f"💰 <b>Total:</b>  <b>{doc_total}</b>",
+            f"💰 <b>Total (excl. VAT):</b>  <b>{doc_total}</b>",
         ]
 
         if approval_status:
@@ -369,7 +369,7 @@ def send_approval_status_change_telegram(salesorder, old_status, new_status, cha
         "",
         f"📄 <b>SO:</b>  <code>{so_num}</code>",
         f"🏢 <b>Customer:</b>  {customer}",
-        f"💰 <b>Total:</b>  <b>{doc_total}</b>",
+        f"💰 <b>Total (excl. VAT):</b>  <b>{doc_total}</b>",
         "",
         f"🔄 <b>Status:</b>  {old_label}  ➜  <b>{new_label}</b> {new_emoji}",
     ]

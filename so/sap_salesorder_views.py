@@ -2238,10 +2238,18 @@ def salesorder_update_approval(request, so_number):
 
     from django.utils import timezone
     old_status = salesorder.approval_status or ""
+
+    # Optional: save management remarks from same POST (synced from remarks textarea in template)
+    update_fields = ["approval_status", "approval_updated_by", "approval_updated_at"]
+    if "remarks" in request.POST:
+        remarks_text = (request.POST.get("remarks") or "").strip()
+        salesorder.remarks = remarks_text if remarks_text else None
+        update_fields.append("remarks")
+
     salesorder.approval_status = new_status
     salesorder.approval_updated_by = request.user
     salesorder.approval_updated_at = timezone.now()
-    salesorder.save(update_fields=["approval_status", "approval_updated_by", "approval_updated_at"])
+    salesorder.save(update_fields=update_fields)
 
     if old_status != new_status:
         ok, err = send_approval_status_change_telegram(salesorder, old_status, new_status, changed_by=request.user)
