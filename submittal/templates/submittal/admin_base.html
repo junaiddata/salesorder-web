@@ -180,6 +180,9 @@
                 <a href="{% url 'submittal:admin_items' %}" class="nav-link {% if request.resolver_match.url_name == 'admin_items' or request.resolver_match.url_name == 'admin_item_detail' %}active{% endif %}">
                     <i class="fas fa-boxes-stacked"></i> Materials
                 </a>
+                <a href="{% url 'submittal:bulk_import_pdfs' %}" class="nav-link {% if request.resolver_match.url_name == 'bulk_import_pdfs' %}active{% endif %}">
+                    <i class="fas fa-file-archive"></i> Bulk Import PDFs
+                </a>
                 <a href="{% url 'submittal:admin_brands' %}" class="nav-link {% if 'admin_brand' in request.resolver_match.url_name or request.resolver_match.url_name == 'admin_brands' %}active{% endif %}">
                     <i class="fas fa-tags"></i> Brands
                 </a>

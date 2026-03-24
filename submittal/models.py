@@ -134,11 +134,11 @@ class SubmittalMaterial(models.Model):
     )
 
     catalogue_pdf = models.FileField(
-        upload_to=catalogue_upload_path, blank=True, null=True,
+        upload_to=catalogue_upload_path, blank=True, null=True, max_length=255,
         help_text="Product catalogue PDF (Section 9)"
     )
     technical_pdf = models.FileField(
-        upload_to=catalogue_upload_path, blank=True, null=True,
+        upload_to=catalogue_upload_path, blank=True, null=True, max_length=255,
         help_text="Technical details PDF (Section 10)"
     )
 
@@ -173,7 +173,7 @@ class MaterialCertification(models.Model):
         SubmittalMaterial, on_delete=models.CASCADE, related_name='certifications'
     )
     cert_type = models.CharField(max_length=30, choices=CERT_TYPE_CHOICES)
-    file = models.FileField(upload_to=material_cert_path)
+    file = models.FileField(upload_to=material_cert_path, max_length=255)
     description = models.CharField(max_length=255, blank=True, default='')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 

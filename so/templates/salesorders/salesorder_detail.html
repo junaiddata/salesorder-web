@@ -760,7 +760,13 @@
 
     <!-- Line Items -->
     <div class="card line-items-card">
-      <div class="card-header">Line Items ({{ items|length }})</div>
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <span>Line Items ({{ items|length }})</span>
+        <button type="button" class="btn btn-success btn-sm" id="save-all-revised-prices-btn" title="Save all revised prices">
+          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save Revised Prices
+        </button>
+      </div>
       <div class="card-body" style="padding:0;">
         <div class="table-wrap">
           <table>
@@ -870,18 +876,22 @@
     (function() {
       var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
       var csrftoken = csrf ? csrf.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
-      var timers = {};
-      document.querySelectorAll('.revised-price-input').forEach(function(input) {
-        input.addEventListener('change', function() {
-          var itemId = this.getAttribute('data-item-id');
-          var val = this.value.trim();
-          var num = val === '' ? null : parseFloat(val);
-          if (num !== null && (isNaN(num) || num < 0)) num = null;
-          if (timers[itemId]) clearTimeout(timers[itemId]);
-          var el = this;
-          var origBg = el.style.background;
-          el.style.background = '#fef3c7';
-          timers[itemId] = setTimeout(function() {
+      var saveBtn = document.getElementById('save-all-revised-prices-btn');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+          var inputs = document.querySelectorAll('.revised-price-input');
+          if (!inputs.length) return;
+          var origHtml = this.innerHTML;
+          this.disabled = true;
+          this.innerHTML = 'Saving…';
+          var total = inputs.length;
+          var done = 0;
+          var hasError = false;
+          inputs.forEach(function(input) {
+            var itemId = input.getAttribute('data-item-id');
+            var val = (input.value || '').trim();
+            var num = val === '' ? null : parseFloat(val);
+            if (num !== null && (isNaN(num) || num < 0)) num = null;
             fetch('{% url "salesorder_item_save_revised_price" %}', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
@@ -890,16 +900,28 @@
             })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-              el.style.background = data.success ? '#d1fae5' : '#fee2e2';
-              setTimeout(function() { el.style.background = origBg; }, data.success ? 300 : 1000);
+              done++;
+              if (!data.success) hasError = true;
+              if (done === total) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origHtml;
+                saveBtn.style.background = hasError ? '#fee2e2' : '#d1fae5';
+                setTimeout(function() { saveBtn.style.background = ''; }, 1500);
+              }
             })
             .catch(function() {
-              el.style.background = '#fee2e2';
-              setTimeout(function() { el.style.background = origBg; }, 1000);
+              done++;
+              hasError = true;
+              if (done === total) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origHtml;
+                saveBtn.style.background = '#fee2e2';
+                setTimeout(function() { saveBtn.style.background = ''; }, 1500);
+              }
             });
-          }, 500);
+          });
         });
-      });
+      }
     })();
   </script>
 

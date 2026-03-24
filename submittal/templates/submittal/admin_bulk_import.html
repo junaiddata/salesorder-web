@@ -1,0 +1,56 @@
+{% extends "submittal/admin_base.html" %}
+{% block title %}Bulk Import PDFs{% endblock %}
+{% block breadcrumb %}
+    <span class="sep">/</span>
+    <span>Bulk Import PDFs</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-file-archive me-2"></i>Bulk Import PDFs</h1>
+    <p class="page-sub">Upload a ZIP file to import datasheets, test certificates, and other PDFs for materials.</p>
+</div>
+
+<div class="admin-card">
+    <h2 class="mb-3" style="font-size:1rem;font-weight:600;">ZIP structure</h2>
+    <pre class="bg-dark text-light p-3 rounded" style="font-size:0.78rem;line-height:1.5;"><code>BRAND_CODE/
+  model_no/
+    datasheet/ or datasheets/  → technical_pdf (Section 10)
+      filename.pdf
+    country_of_origin/   → country of origin certs (multiple)
+      cert1.pdf
+    previous approvals/  → previous approvals (multiple)
+      approval.pdf
+    test certificates/   → test certs (multiple)
+      cert1.pdf
+      cert2.pdf
+    catalogue/           → catalogue_pdf (Section 9) — optional
+      catalogue.pdf</code></pre>
+    <p class="text-muted small mt-2">
+        Brand code must match exactly (e.g. PEGLER). Model numbers must exist in Materials.
+    </p>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="admin-card">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="zip_file" class="form-label fw-semibold">Select ZIP file</label>
+        <input type="file" name="zip_file" id="zip_file" class="form-control" accept=".zip" required>
+    </div>
+    <button type="submit" class="btn-admin btn-admin-primary">
+        <i class="fas fa-upload me-1"></i> Upload &amp; Import
+    </button>
+</form>
+
+<div class="admin-card">
+    <h3 class="mb-2" style="font-size:0.95rem;">Brands</h3>
+    <p class="text-muted small">Use these codes as the top-level folder name in your ZIP:</p>
+    <ul class="list-unstyled mb-0">
+        {% for b in brands %}
+        <li><code>{{ b.code }}</code> — {{ b.name }}</li>
+        {% empty %}
+        <li class="text-muted">No brands found. Add brands first.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

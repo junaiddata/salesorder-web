@@ -423,7 +423,8 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
         subtotal += row_total
 
         desc = (it.description or '—')[:55] + ('…' if len(it.description or '') > 55 else '')
-        qty_str = f"{qty.normalize():f}".rstrip('0').rstrip('.') if qty else "0"
+        # Format qty: avoid rstrip('0') on whole string (80 -> "8"); only strip after decimal
+        qty_str = (f"{qty:.2f}".rstrip('0').rstrip('.')) if qty else "0"
         rev_price_str = f"{rev_price:,.2f}" if rev_price and rev_price > 0 else "—"
 
         table_data.append([

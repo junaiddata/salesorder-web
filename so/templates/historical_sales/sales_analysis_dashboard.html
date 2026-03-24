@@ -58,6 +58,21 @@
     tbody tr:hover { background: var(--bg); }
     .rank { font-weight: 700; color: var(--primary); width: 40px; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Calendar Widget */
+    .calendar-widget { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 24px; box-shadow: var(--shadow); }
+    .calendar-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .calendar-header label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 4px; }
+    .calendar-header select { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
+    @media (max-width: 1200px) { .calendar-grid { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 768px) { .calendar-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 480px) { .calendar-grid { grid-template-columns: repeat(3, 1fr); } }
+    .calendar-day { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.3rem; text-align: center; transition: all 0.2s ease; min-height: 56px; display: flex; flex-direction: column; justify-content: space-between; }
+    .calendar-day:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+    .calendar-day-today { border-color: var(--primary) !important; background: #eff6ff !important; box-shadow: 0 2px 4px rgba(59,130,246,0.2) !important; }
+    .calendar-day-no-sales { background: #f8fafc !important; border-color: var(--border) !important; opacity: 0.7; }
+    .calendar-day-no-sales .calendar-day-label, .calendar-day-no-sales .calendar-day-sales { color: var(--text-secondary) !important; }
+    .calendar-day-no-sales .calendar-day-gp { color: var(--text-secondary) !important; }
   </style>
 </head>
 <body>
@@ -172,6 +187,29 @@
       </div>
     </div>
 
+    <!-- Calendar Widget (Year + Month selector, daily Sales/GP/GP%) - AJAX -->
+    <div class="calendar-widget">
+      <h2 style="font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; color: var(--text);">Calendar</h2>
+      <div class="calendar-header" style="margin-bottom: 1rem;">
+        <label>Year:</label>
+        <select id="cal-year">
+          {% for y in calendar_years %}
+          <option value="{{ y }}" {% if cal_year == y %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+        <label style="margin-left: 8px;">Month:</label>
+        <select id="cal-month">
+          {% for num, name in calendar_months %}
+          <option value="{{ num }}" {% if cal_month == num %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+        <span id="calendar-loading" style="margin-left: 12px; font-size: 0.8rem; color: var(--text-secondary); display: none;">Loading...</span>
+      </div>
+      <div id="calendar-grid-container">
+        {% include 'historical_sales/_historical_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin %}
+      </div>
+    </div>
+
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
       <div class="table-card">
         <div class="table-title">Top 5 Customers</div>
@@ -223,6 +261,33 @@
     var storeInput = document.getElementById('store-input');
     var categoryInputs = document.getElementById('category-inputs');
     var monthInputs = document.getElementById('month-inputs');
+
+    /* Calendar AJAX: no page refresh when changing year/month */
+    (function() {
+      var calYear = document.getElementById('cal-year');
+      var calMonth = document.getElementById('cal-month');
+      var gridContainer = document.getElementById('calendar-grid-container');
+      var loadingEl = document.getElementById('calendar-loading');
+      if (!calYear || !calMonth || !gridContainer) return;
+      function loadCalendar() {
+        loadingEl.style.display = 'inline';
+        var url = new URL(window.location.href);
+        url.searchParams.set('cal_year', calYear.value);
+        url.searchParams.set('cal_month', calMonth.value);
+        url.searchParams.set('ajax', 'calendar');
+        fetch(url.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(r) { return r.text(); }).then(function(html) {
+          gridContainer.innerHTML = html;
+        }).catch(function() {
+          gridContainer.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);">Error loading calendar. Try refreshing.</div>';
+        }).finally(function() {
+          loadingEl.style.display = 'none';
+        });
+      }
+      calYear.addEventListener('change', loadCalendar);
+      calMonth.addEventListener('change', loadCalendar);
+    })();
 
     function syncFormAndSubmit() {
       form.submit();

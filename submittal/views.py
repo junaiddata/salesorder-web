@@ -1,4 +1,6 @@
 import json
+import os
+import zipfile
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -10,7 +12,7 @@ from django.utils import timezone
 
 from .models import (
     Submittal, SubmittalMaterial, SubmittalBrand, ProjectContractorHistory,
-    SubmittalSectionUpload, ComplianceOption, RemarkOption,
+    SubmittalSectionUpload, ComplianceOption, RemarkOption, MaterialCertification,
 )
 from .forms import TitlePageForm
 from .services import get_history_values
@@ -665,8 +667,6 @@ def admin_items(request):
 @login_required
 def admin_item_detail(request, pk):
     """Item/material detail page with uploads for catalogue, technical PDF, and certifications."""
-    from .models import MaterialCertification
-
     material = get_object_or_404(SubmittalMaterial, pk=pk)
     material.brand  # ensure prefetch
 
@@ -727,6 +727,144 @@ def admin_item_detail(request, pk):
         'certifications': certifications,
         'detail_rows': detail_rows,
     })
+
+
+# ── Folder name in ZIP → app field mapping ──────────────────────────────────
+# datasheet/datasheets → technical_pdf; catalogue → catalogue_pdf; others → MaterialCertification
+BULK_IMPORT_FOLDER_MAP = {
+    'datasheet': ('technical', None),
+    'datasheets': ('technical', None),
+    'catalogue': ('catalogue', None),
+    'country_of_origin': ('cert', 'country_of_origin'),
+    'previous approvals': ('cert', 'previous_approval'),
+    'test certificates': ('cert', 'test_certificate'),
+}
+
+
+def _normalize_folder(name):
+    return (name or '').strip().lower()
+
+
+def _match_folder(folder_name):
+    """Return (field_type, cert_type) or None if unknown folder."""
+    norm = _normalize_folder(folder_name)
+    for key, val in BULK_IMPORT_FOLDER_MAP.items():
+        if _normalize_folder(key) == norm:
+            return val
+    return None
+
+
+def _safe_filename(filename, max_len=120):
+    """Sanitize filename: remove path separators, truncate if needed."""
+    base = os.path.basename(filename.replace('\\', '/').strip())
+    # Remove any remaining path chars
+    base = base.replace('\\', '_').replace('/', '_')
+    if len(base) > max_len:
+        stem, ext = os.path.splitext(base)
+        base = stem[: max_len - len(ext)] + ext
+    return base or 'document.pdf'
+
+
+@login_required
+def bulk_import_pdfs(request):
+    """Upload a ZIP file to bulk-import PDFs into materials. Structure: BRAND_CODE/model_no/folder/file.pdf"""
+    if request.method != 'POST':
+        brands = SubmittalBrand.objects.order_by('display_order', 'name')
+        return render(request, 'submittal/admin_bulk_import.html', {'brands': brands})
+
+    zip_file = request.FILES.get('zip_file')
+    if not zip_file or not zip_file.name.lower().endswith('.zip'):
+        messages.error(request, 'Please upload a .zip file.')
+        return redirect('submittal:bulk_import_pdfs')
+
+    imported = 0
+    skipped = []
+    errors = []
+    cleared_cert_keys = set()  # (material.pk, cert_type) – avoid deleting again mid-import
+
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                name = info.filename.replace('\\', '/').strip('/')
+                parts = name.split('/')
+                if len(parts) < 4:
+                    continue
+                brand_code_raw, model_no, folder_name, filename = parts[0], parts[1], parts[2], '/'.join(parts[3:])
+                if not filename or not filename.lower().endswith('.pdf'):
+                    continue
+
+                brand_code = brand_code_raw.strip()
+                model_no = model_no.strip()
+                if not brand_code or not model_no:
+                    continue
+
+                mapping = _match_folder(folder_name)
+                if not mapping:
+                    skipped.append(f'{brand_code}/{model_no}/{folder_name}/ (unknown folder)')
+                    continue
+
+                field_type, cert_type = mapping
+                brand = SubmittalBrand.objects.filter(code__iexact=brand_code).first()
+                if not brand:
+                    errors.append(f'Brand "{brand_code}" not found')
+                    continue
+                material = SubmittalMaterial.objects.filter(brand=brand, model_no__iexact=model_no).first()
+                if not material:
+                    skipped.append(f'{brand_code}/{model_no} (material not found)')
+                    continue
+
+                try:
+                    content = zf.read(info)
+                except Exception as e:
+                    errors.append(f'{name}: {e}')
+                    continue
+
+                safe_name = _safe_filename(filename)
+                if field_type == 'technical':
+                    if material.technical_pdf and material.technical_pdf.name:
+                        material.technical_pdf.delete(save=False)
+                    material.technical_pdf.save(safe_name, ContentFile(content), save=True)
+                    imported += 1
+                elif field_type == 'catalogue':
+                    if material.catalogue_pdf and material.catalogue_pdf.name:
+                        material.catalogue_pdf.delete(save=False)
+                    material.catalogue_pdf.save(safe_name, ContentFile(content), save=True)
+                    imported += 1
+                elif field_type == 'cert' and cert_type:
+                    key = (material.pk, cert_type)
+                    if key not in cleared_cert_keys:
+                        # Replace: delete existing certs of this type for this material
+                        for old in MaterialCertification.objects.filter(material=material, cert_type=cert_type):
+                            if old.file and old.file.name:
+                                old.file.delete(save=False)
+                            old.delete()
+                        cleared_cert_keys.add(key)
+                    MaterialCertification.objects.create(
+                        material=material,
+                        cert_type=cert_type,
+                        file=ContentFile(content, name=safe_name),
+                        description='',
+                    )
+                    imported += 1
+
+    except zipfile.BadZipFile:
+        messages.error(request, 'Invalid or corrupted ZIP file.')
+        return redirect('submittal:bulk_import_pdfs')
+    except Exception as e:
+        messages.error(request, f'Import failed: {e}')
+        return redirect('submittal:bulk_import_pdfs')
+
+    if imported:
+        messages.success(request, f'Imported {imported} file(s).')
+    if skipped:
+        messages.warning(request, f'Skipped {len(skipped)}: {", ".join(skipped[:5])}{"…" if len(skipped) > 5 else ""}')
+    if errors:
+        for err in errors[:5]:
+            messages.error(request, err)
+
+    return redirect('submittal:bulk_import_pdfs')
 
 
 @login_required

@@ -22,6 +22,8 @@
     .field label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
     .field input, .field select { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); width: 100%; font-size: 0.8rem; }
     .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+    #item-loading-overlay { display: none; }
+    #item-loading-overlay.active { display: flex !important; }
     .table-card:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
     table { width: 100%; border-collapse: collapse; min-width: 700px; table-layout: auto; }
     th, td { padding: 6px 8px; font-size: 0.75rem; border-bottom: 1px solid var(--border); }
@@ -72,7 +74,7 @@
     <div class="header">
       <h1>Historical Item Analysis (2020-2023)</h1>
       <div style="display:flex; gap:8px;">
-        <a href="{% url 'historical_sales_item_analysis_export_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Export PDF</a>
+        <a href="{% url 'historical_sales_item_analysis_export_pdf' %}?{{ request.GET.urlencode }}" id="export-pdf-link" class="btn btn-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Export PDF</a>
         <a href="{% url 'historical_sales_analysis' %}" class="btn btn-secondary"><i class="fas fa-chart-line"></i> Sales Analysis</a>
         <a href="{% url 'historical_sales_customer_analysis' %}" class="btn btn-secondary"><i class="fas fa-users"></i> Customer Analysis</a>
         <a href="{% url 'historical_sales_upload' %}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
@@ -163,7 +165,13 @@
       </form>
     </div>
 
-    <div class="table-card" role="region" aria-label="Scrollable table">
+    <div class="table-card" role="region" aria-label="Scrollable table" style="position: relative;">
+      <div id="item-loading-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); z-index: 20; align-items: center; justify-content: center; border-radius: var(--radius);">
+        <div style="text-align: center;">
+          <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary);"></i>
+          <p style="margin-top: 8px; font-size: 0.875rem; color: var(--text-secondary);">Loading...</p>
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
@@ -189,7 +197,7 @@
       <div id="pagination-container">
         {% include 'historical_sales/_item_analysis_pagination.html' with page_obj=page_obj %}
       </div>
-      <p style="padding: 12px; font-size: 0.875rem; color: var(--text-secondary);">Showing {{ page_obj|length }} of {{ total_count|intcomma }} items</p>
+      <p id="item-count-text" style="padding: 12px; font-size: 0.875rem; color: var(--text-secondary);">Showing {{ page_obj|length }} of {{ total_count|intcomma }} items</p>
     </div>
   </div>
   <script>
@@ -197,57 +205,124 @@
       function qs(sel) { return document.querySelector(sel); }
       function qsa(sel) { return document.querySelectorAll(sel); }
 
-      /* Store tiles: single-select, clear categories & salesmen (they differ per store), submit form */
+      var loadingOverlay = document.getElementById('item-loading-overlay');
+      var itemForm = document.getElementById('filters-form');
+      var storeInput = document.getElementById('store-input');
+      var categoryInputs = document.getElementById('category-inputs');
+      var salesmanInputs = document.getElementById('salesman-inputs');
+      var monthInputs = document.getElementById('month-inputs');
+      var tbody = document.getElementById('item-table-body');
+      var paginationContainer = document.getElementById('pagination-container');
+      var countText = document.getElementById('item-count-text');
+
+      function buildParams() {
+        var form = itemForm;
+        var fd = new FormData(form);
+        var params = new URLSearchParams();
+        fd.forEach(function(v, k) { if (v) params.append(k, v); });
+        return params;
+      }
+
+      function loadItemAnalysis(page) {
+        var params = buildParams();
+        if (page) params.set('page', String(page));
+        var paramsForUrl = new URLSearchParams(params);
+        params.set('ajax', '1');
+        var url = '{% url "historical_sales_item_analysis" %}' + '?' + params.toString();
+
+        if (loadingOverlay) loadingOverlay.classList.add('active');
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.success) throw new Error(data.error || 'Error');
+            if (tbody) tbody.innerHTML = data.table_html;
+            if (paginationContainer) paginationContainer.innerHTML = data.pagination_html || '';
+            if (countText) countText.textContent = 'Showing ' + (data.page_length || 0).toLocaleString() + ' of ' + (data.total_count || 0).toLocaleString() + ' items';
+            var cleanQs = paramsForUrl.toString() ? '?' + paramsForUrl.toString() : '';
+            history.replaceState({}, '', '{% url "historical_sales_item_analysis" %}' + cleanQs);
+            var exportLink = document.getElementById('export-pdf-link');
+            if (exportLink) exportLink.href = '{% url "historical_sales_item_analysis_export_pdf" %}' + cleanQs;
+            attachPaginationHandlers();
+          })
+          .catch(function(err) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="24" style="padding:2rem;text-align:center;color:var(--text-secondary);">Error loading data. Please try again.</td></tr>';
+          })
+          .finally(function() {
+            if (loadingOverlay) loadingOverlay.classList.remove('active');
+          });
+      }
+
+      function attachPaginationHandlers() {
+        qsa('.pagination a[data-page]').forEach(function(a) {
+          a.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadItemAnalysis(this.getAttribute('data-page'));
+          });
+        });
+      }
+
+      function triggerLoad() {
+        loadItemAnalysis(1);
+      }
+
+      /* Store tiles: full reload so salesman tiles update for new store */
       qsa('.store-tile').forEach(function(btn) {
         btn.addEventListener('click', function() {
           qsa('.store-tile').forEach(function(b) { b.classList.remove('active'); });
           this.classList.add('active');
-          qs('#store-input').value = this.getAttribute('data-store') || '';
-          qs('#category-inputs').innerHTML = '';
-          qs('#salesman-inputs').innerHTML = '';
+          storeInput.value = this.getAttribute('data-store') || '';
+          categoryInputs.innerHTML = '';
+          salesmanInputs.innerHTML = '';
           qsa('.category-tile').forEach(function(b) { b.classList.remove('active'); });
           qsa('.salesman-tile').forEach(function(b) { b.classList.remove('active'); });
-          qs('#filters-form').submit();
+          var params = buildParams();
+          window.location.href = '{% url "historical_sales_item_analysis" %}' + (params.toString() ? '?' + params.toString() : '');
         });
       });
 
-      /* Category tiles: multiselect, submit form */
+      /* Category tiles */
       qsa('.category-tile').forEach(function(btn) {
         btn.addEventListener('click', function() {
           this.classList.toggle('active');
           var selected = [];
           qsa('.category-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-category')); });
-          qs('#category-inputs').innerHTML = selected.map(function(v) {
+          categoryInputs.innerHTML = selected.map(function(v) {
             return '<input type="hidden" name="category" value="' + (v || '').replace(/"/g, '&quot;') + '">';
           }).join('');
-          qs('#filters-form').submit();
+          triggerLoad();
         });
       });
 
-      /* Salesman tiles: multiselect, submit form */
+      /* Salesman tiles */
       qsa('.salesman-tile').forEach(function(btn) {
         btn.addEventListener('click', function() {
           this.classList.toggle('active');
           var selected = [];
           qsa('.salesman-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-salesman')); });
-          qs('#salesman-inputs').innerHTML = selected.map(function(v) {
+          salesmanInputs.innerHTML = selected.map(function(v) {
             return '<input type="hidden" name="salesman" value="' + (v || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;') + '">';
           }).join('');
-          qs('#filters-form').submit();
+          triggerLoad();
         });
       });
 
-      /* Month tiles: multiselect, submit form */
+      /* Month tiles */
       qsa('.month-tile').forEach(function(btn) {
         btn.addEventListener('click', function() {
           this.classList.toggle('active');
           var selected = [];
           qsa('.month-tile.active').forEach(function(b) { selected.push(b.getAttribute('data-month')); });
-          qs('#month-inputs').innerHTML = selected.map(function(v) {
+          monthInputs.innerHTML = selected.map(function(v) {
             return '<input type="hidden" name="month" value="' + (v || '').replace(/"/g, '&quot;') + '">';
           }).join('');
-          qs('#filters-form').submit();
+          triggerLoad();
         });
+      });
+
+      /* Form submit */
+      itemForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        triggerLoad();
       });
 
       /* Multi-select: toggle dropdowns (Firm) */
@@ -256,7 +331,6 @@
         qs('#firm-options').classList.toggle('active');
       });
 
-      /* Multi-select: search filter */
       qs('#firm-search').addEventListener('input', function() {
         var t = this.value.toLowerCase();
         qsa('#firm-options-list .option-label').forEach(function(l) {
@@ -283,14 +357,7 @@
         window.location.href = '{% url "historical_sales_item_analysis" %}';
       });
 
-      document.querySelectorAll('.pagination a[data-page]').forEach(function(a) {
-        a.addEventListener('click', function(e) {
-          e.preventDefault();
-          var url = new URL(window.location.href);
-          url.searchParams.set('page', this.getAttribute('data-page'));
-          window.location.href = url.toString();
-        });
-      });
+      attachPaginationHandlers();
     });
   </script>
 </body>

@@ -17,6 +17,7 @@ urlpatterns = [
     path('admin/submittals/', views.admin_submittals, name='admin_submittals'),
     path('admin/items/', views.admin_items, name='admin_items'),
     path('admin/items/<int:pk>/', views.admin_item_detail, name='admin_item_detail'),
+    path('admin/bulk-import-pdfs/', views.bulk_import_pdfs, name='bulk_import_pdfs'),
     path('admin/brands/', views.admin_brands, name='admin_brands'),
     path('admin/brands/add/', views.admin_brand_add, name='admin_brand_add'),
     path('admin/brands/<int:pk>/edit/', views.admin_brand_edit, name='admin_brand_edit'),

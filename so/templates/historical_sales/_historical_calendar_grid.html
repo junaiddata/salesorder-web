@@ -1,0 +1,10 @@
+{% load humanize %}
+<div class="calendar-grid">
+  {% for day in month_days %}
+  <div class="calendar-day {% if day.date == today %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
+    <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.25rem;">{{ day.formatted_date }}</div>
+    <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--text); margin-bottom: 0.15rem; line-height: 1.2;">{{ day.sales|floatformat:0|intcomma }}</div>
+    {% if is_admin %}<div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--text-secondary); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }} | {{ day.gp_pct|floatformat:1 }}%</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>

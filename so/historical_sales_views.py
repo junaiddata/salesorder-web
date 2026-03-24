@@ -3,6 +3,7 @@ Historical Sales Views (2020-2023)
 Upload, Sales Analysis, Item Analysis, Customer Analysis for uploaded historical data.
 """
 from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
@@ -13,6 +14,7 @@ from django.template.loader import render_to_string
 from django.http import JsonResponse
 from datetime import datetime, date
 from decimal import Decimal
+import calendar
 import pandas as pd
 import io
 import logging
@@ -555,6 +557,39 @@ def historical_sales_analysis_dashboard(request):
     else:
         categories_for_tiles = [c[0] for c in SALESMAN_CATEGORIES]
 
+    # Calendar: year/month selector (cal_year, cal_month). Default to last allowed year + current month.
+    cal_year = request.GET.get('cal_year', '').strip()
+    cal_month = request.GET.get('cal_month', '').strip()
+    try:
+        cal_year = int(cal_year) if cal_year else ALLOWED_YEARS[-1]
+        cal_month = int(cal_month) if cal_month else today.month
+    except (ValueError, TypeError):
+        cal_year = ALLOWED_YEARS[-1]
+        cal_month = today.month
+    if cal_year not in ALLOWED_YEARS:
+        cal_year = ALLOWED_YEARS[-1]
+    if cal_month < 1 or cal_month > 12:
+        cal_month = 1
+    _, last_day = calendar.monthrange(cal_year, cal_month)
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    cal_lines = apply_common_filters(lines_qs)
+    month_days = []
+    for day_num in range(1, last_day + 1):
+        day_date = date(cal_year, cal_month, day_num)
+        day_qs = cal_lines.filter(posting_date=day_date)
+        day_sales = day_qs.aggregate(s=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
+        day_gp = day_qs.aggregate(s=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
+        day_gp_pct = (float(day_gp) / float(day_sales) * 100) if day_sales else Decimal('0')
+        month_days.append({
+            'day': day_num,
+            'date': day_date,
+            'formatted_date': f'{month_names[cal_month - 1]} {day_num}',
+            'sales': day_sales,
+            'gp': day_gp,
+            'gp_pct': round(float(day_gp_pct), 1),
+            'has_sales': bool(day_sales and day_sales > Decimal('0')),
+        })
+
     context = {
         'total_sales': total_sales,
         'total_gp': total_gp,
@@ -577,7 +612,23 @@ def historical_sales_analysis_dashboard(request):
             'year': year_filter,
         },
         'today': today,
+        'month_days': month_days,
+        'cal_year': cal_year,
+        'cal_month': cal_month,
+        'calendar_month_name': month_names[cal_month - 1],
+        'calendar_years': ALLOWED_YEARS,
+        'calendar_months': [(i, month_names[i - 1]) for i in range(1, 13)],
     }
+
+    # AJAX: return only calendar grid HTML (no full page)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
+        calendar_html = render_to_string(
+            'historical_sales/_historical_calendar_grid.html',
+            {'month_days': month_days, 'today': today, 'is_admin': is_admin},
+            request=request
+        )
+        return HttpResponse(calendar_html, content_type='text/html')
+
     return render(request, 'historical_sales/sales_analysis_dashboard.html', context)
 
 
@@ -760,9 +811,8 @@ def historical_item_analysis(request):
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == '1'
     if is_ajax:
         try:
-            table_html = render_to_string('historical_sales/_item_analysis_table.html', {
+            table_html = render_to_string('historical_sales/_item_analysis_table_rows.html', {
                 'items': page_obj,
-                'years': ALLOWED_YEARS,
                 'is_admin': is_admin,
                 'totals_list': totals_list,
             }, request=request)
@@ -774,6 +824,7 @@ def historical_item_analysis(request):
                 'table_html': table_html,
                 'pagination_html': pagination_html,
                 'total_count': len(items_list),
+                'page_length': len(page_obj),
             })
         except Exception as e:
             logger.exception('Historical item analysis AJAX error')
