@@ -8140,6 +8140,7 @@ def item_analysis(request):
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')  # Multi-select
     firm_filter = request.GET.getlist('firm')  # Multi-select
+    exclude_firm_filter = request.GET.getlist('exclude_firm')  # Multi-select - exclude these firms
     store_filter = request.GET.get('store', '').strip()
     month_filter = request.GET.getlist('month')  # Multi-select
     start_date = request.GET.get('start', '').strip()
@@ -8294,7 +8295,18 @@ def item_analysis(request):
                 if firm_item_codes:
                     invoice_items = invoice_items.filter(item_code__in=firm_item_codes)
                     creditmemo_items = creditmemo_items.filter(item_code__in=firm_item_codes)
-        
+
+        # Apply exclude firm filter if provided (exclude items belonging to these firms)
+        if exclude_firm_filter:
+            clean_exclude_firms = [f for f in exclude_firm_filter if f.strip()]
+            if clean_exclude_firms:
+                exclude_firm_item_codes = list(
+                    Items.objects.filter(item_firm__in=clean_exclude_firms).values_list('item_code', flat=True)
+                )
+                if exclude_firm_item_codes:
+                    invoice_items = invoice_items.exclude(item_code__in=exclude_firm_item_codes)
+                    creditmemo_items = creditmemo_items.exclude(item_code__in=exclude_firm_item_codes)
+
         # Apply search filter if provided (search by item_code, item_description, or upc_code)
         if search_query:
             invoice_items = invoice_items.filter(
@@ -8588,11 +8600,12 @@ def item_analysis(request):
             
             # Render filter display HTML
             filter_display_html = ''
-            if salesmen_filter or firm_filter:
+            if salesmen_filter or firm_filter or exclude_firm_filter:
                 filter_display_html = render_to_string('salesorders/_item_analysis_filter_display.html', {
                     'filters': {
                         'salesman': salesmen_filter,
                         'firm': firm_filter,
+                        'exclude_firm': exclude_firm_filter,
                     },
                 }, request=request)
             
@@ -8630,6 +8643,7 @@ def item_analysis(request):
             'q': search_query,
             'salesman': salesmen_filter,
             'firm': firm_filter,
+            'exclude_firm': exclude_firm_filter,
             'store': store_filter,
             'month': month_filter,
             'start': start_date,
@@ -8848,12 +8862,13 @@ def export_item_analysis_pdf(request):
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     firm_filter = request.GET.getlist('firm')
+    exclude_firm_filter = request.GET.getlist('exclude_firm')
     store_filter = request.GET.get('store', '').strip()
     month_filter = request.GET.getlist('month')
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
     category_filter = request.GET.get('category', 'All').strip()
-    
+
     # Get base querysets
     invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
     creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -8967,7 +8982,18 @@ def export_item_analysis_pdf(request):
             else:
                 invoice_items = invoice_items.none()
                 creditmemo_items = creditmemo_items.none()
-        
+
+        # Apply exclude firm filter at item level (same as item_analysis view)
+        if exclude_firm_filter:
+            clean_exclude_firms = [f for f in exclude_firm_filter if f.strip()]
+            if clean_exclude_firms:
+                exclude_firm_item_codes = list(
+                    Items.objects.filter(item_firm__in=clean_exclude_firms).values_list('item_code', flat=True)
+                )
+                if exclude_firm_item_codes:
+                    invoice_items = invoice_items.exclude(item_code__in=exclude_firm_item_codes)
+                    creditmemo_items = creditmemo_items.exclude(item_code__in=exclude_firm_item_codes)
+
         if search_query:
             search_item_codes = Items.objects.filter(
                 Q(item_code__icontains=search_query) | 
@@ -9306,6 +9332,7 @@ def export_item_analysis_excel(request):
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
     firm_filter = request.GET.getlist('firm')
+    exclude_firm_filter = request.GET.getlist('exclude_firm')
     store_filter = request.GET.get('store', '').strip()
     month_filter = request.GET.getlist('month')
     start_date = request.GET.get('start', '').strip()
@@ -9424,6 +9451,16 @@ def export_item_analysis_excel(request):
                 if firm_item_codes:
                     invoice_items = invoice_items.filter(item_code__in=firm_item_codes)
                     creditmemo_items = creditmemo_items.filter(item_code__in=firm_item_codes)
+
+        if exclude_firm_filter:
+            clean_exclude_firms = [f for f in exclude_firm_filter if f.strip()]
+            if clean_exclude_firms:
+                exclude_firm_item_codes = list(
+                    Items.objects.filter(item_firm__in=clean_exclude_firms).values_list('item_code', flat=True)
+                )
+                if exclude_firm_item_codes:
+                    invoice_items = invoice_items.exclude(item_code__in=exclude_firm_item_codes)
+                    creditmemo_items = creditmemo_items.exclude(item_code__in=exclude_firm_item_codes)
 
         invoice_items_list = list(invoice_items)
         creditmemo_items_list = list(creditmemo_items)

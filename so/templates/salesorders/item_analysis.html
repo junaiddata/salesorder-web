@@ -802,6 +802,27 @@
             </div>
           </div>
           <div class="field">
+            <label>Exclude Firm</label>
+            <div class="multi-select" id="exclude-firm-wrapper">
+              <div class="select-box" id="exclude-firm-trigger">
+                <span id="exclude-firm-text">None Excluded</span>
+              </div>
+              <div class="options-container" id="exclude-firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="exclude-firm-search" class="search-box" placeholder="Search firms to exclude..." autocomplete="off">
+                </div>
+                <div class="options-list" id="exclude-firm-options-list">
+                  {% for firm in firms %}
+                    <label class="option-label" data-value="{{ firm }}">
+                      <input type="checkbox" name="exclude_firm" value="{{ firm }}" {% if firm in filters.exclude_firm %}checked{% endif %}>
+                      <span class="option-text">{{ firm }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
             <label>Start Date</label>
             <input type="date" name="start" id="start-date" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
           </div>
@@ -823,7 +844,7 @@
         <div>
           <h3 class="table-title">Item Performance Matrix</h3>
           <div id="filter-display-container">
-            {% if filters.salesman or filters.firm %}
+            {% if filters.salesman or filters.firm or filters.exclude_firm %}
             {% include 'salesorders/_item_analysis_filter_display.html' with filters=filters %}
             {% endif %}
           </div>
@@ -1125,6 +1146,64 @@
         if (!firmWrapper.contains(e.target)) firmOptions.classList.remove('active');
       });
 
+      // Multi-Select for Exclude Firm
+      const excludeFirmWrapper = document.getElementById('exclude-firm-wrapper');
+      const excludeFirmTrigger = document.getElementById('exclude-firm-trigger');
+      const excludeFirmOptions = document.getElementById('exclude-firm-options');
+      const excludeFirmOptionsList = document.getElementById('exclude-firm-options-list');
+      const excludeFirmText = document.getElementById('exclude-firm-text');
+      const excludeFirmSearch = document.getElementById('exclude-firm-search');
+      const getExcludeFirmCheckboxes = () => excludeFirmOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getExcludeFirmLabels = () => excludeFirmOptionsList.querySelectorAll('.option-label');
+
+      excludeFirmTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        excludeFirmOptions.classList.toggle('active');
+        if (excludeFirmOptions.classList.contains('active')) {
+          setTimeout(() => excludeFirmSearch.focus(), 100);
+        } else {
+          excludeFirmSearch.value = '';
+          getExcludeFirmLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      excludeFirmOptions.addEventListener('click', e => e.stopPropagation());
+
+      excludeFirmSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getExcludeFirmLabels();
+        labels.forEach(label => {
+          const text = label.querySelector('.option-text').textContent.toLowerCase();
+          label.classList.toggle('hidden', !text.includes(searchTerm));
+        });
+      });
+
+      excludeFirmSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateExcludeFirmLabel() {
+        const checked = Array.from(getExcludeFirmCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          excludeFirmText.textContent = "None Excluded";
+          excludeFirmText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          excludeFirmText.textContent = checked[0].value;
+          excludeFirmText.style.opacity = "1";
+        } else {
+          excludeFirmText.textContent = `${checked.length} Excluded`;
+          excludeFirmText.style.opacity = "1";
+        }
+      }
+
+      updateExcludeFirmLabel();
+
+      getExcludeFirmCheckboxes().forEach(box => {
+        box.addEventListener('change', updateExcludeFirmLabel);
+      });
+
+      document.addEventListener('click', e => {
+        if (!excludeFirmWrapper.contains(e.target)) excludeFirmOptions.classList.remove('active');
+      });
+
       // Store filter tiles
       const storeTiles = document.querySelectorAll('.store-tile[data-store]');
       const storeInput = document.getElementById('store-input');
@@ -1186,7 +1265,7 @@
         
         // Add all form fields
         for (const [key, value] of formData.entries()) {
-          if (key === 'salesman' || key === 'firm' || key === 'month') {
+          if (key === 'salesman' || key === 'firm' || key === 'exclude_firm' || key === 'month') {
             params.append(key, value);
           } else if (value) {
             params.set(key, value);

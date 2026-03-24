@@ -1,4 +1,4 @@
-{% if filters.salesman or filters.firm %}
+{% if filters.salesman or filters.firm or filters.exclude_firm %}
 <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; font-weight: 400;">
   {% if filters.salesman %}
     <span style="color: var(--text-secondary);">Salesmen: </span>
@@ -10,6 +10,12 @@
     <span style="color: var(--text-secondary); margin-left: {% if filters.salesman %}12px{% else %}0{% endif %};">Firms: </span>
     {% for firm in filters.firm %}
       <span style="background: var(--primary-light); color: var(--primary); padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ firm }}</span>
+    {% endfor %}
+  {% endif %}
+  {% if filters.exclude_firm %}
+    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman or filters.firm %}12px{% else %}0{% endif %};">Exclude Firms: </span>
+    {% for firm in filters.exclude_firm %}
+      <span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ firm }}</span>
     {% endfor %}
   {% endif %}
 </div>
