@@ -150,6 +150,27 @@
             </div>
           </div>
           <div class="field">
+            <label>Exclude Firm</label>
+            <div class="multi-select" id="exclude-firm-wrapper">
+              <div class="select-box" id="exclude-firm-trigger">
+                <span id="exclude-firm-text">None Excluded</span>
+              </div>
+              <div class="options-container" id="exclude-firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="exclude-firm-search" class="search-box" placeholder="Search firms to exclude…" autocomplete="off">
+                </div>
+                <div class="options-list" id="exclude-firm-options-list">
+                  {% for f in firms %}
+                  <label class="option-label" data-value="{{ f }}">
+                    <input type="checkbox" name="exclude_firm" value="{{ f }}" {% if f in filters.exclude_firm %}checked{% endif %}>
+                    <span class="option-text">{{ f }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
             <label>Start Date</label>
             <input type="date" name="start" value="{{ filters.start }}">
           </div>
@@ -341,6 +362,26 @@
       document.addEventListener('click', function(e) {
         if (!qs('#firm-wrapper').contains(e.target)) qs('#firm-options').classList.remove('active');
       });
+
+      /* Exclude Firm multi-select */
+      qs('#exclude-firm-trigger').addEventListener('click', function(e) {
+        e.stopPropagation();
+        qs('#exclude-firm-options').classList.toggle('active');
+      });
+      qs('#exclude-firm-search').addEventListener('input', function() {
+        var t = this.value.toLowerCase();
+        qsa('#exclude-firm-options-list .option-label').forEach(function(l) {
+          l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(t));
+        });
+      });
+      document.addEventListener('click', function(e) {
+        if (!qs('#exclude-firm-wrapper').contains(e.target)) qs('#exclude-firm-options').classList.remove('active');
+      });
+      function refreshExcludeFirmLabel() {
+        updateLabel(qsa('#exclude-firm-options-list input[type="checkbox"]'), qs('#exclude-firm-text'), 'None Excluded');
+      }
+      qsa('#exclude-firm-options-list input[type="checkbox"]').forEach(function(b) { b.addEventListener('change', refreshExcludeFirmLabel); });
+      refreshExcludeFirmLabel();
 
       function updateLabel(cbs, textEl, allText) {
         var checked = Array.from(cbs).filter(function(x) { return x.checked; });

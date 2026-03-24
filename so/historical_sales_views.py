@@ -647,6 +647,7 @@ def historical_item_analysis(request):
     category_filter = request.GET.getlist('category')
     store_filter = request.GET.get('store', '').strip()
     firm_filter = request.GET.getlist('firm')
+    exclude_firm_filter = request.GET.getlist('exclude_firm')
     month_filter = request.GET.getlist('month')
     start_str = request.GET.get('start', '').strip()
     end_str = request.GET.get('end', '').strip()
@@ -740,6 +741,10 @@ def historical_item_analysis(request):
             if firm_filter:
                 clean_firms = [f for f in firm_filter if f.strip()]
                 if clean_firms and (item.item_firm or '') not in clean_firms:
+                    continue
+            if exclude_firm_filter:
+                clean_exclude_firms = [f for f in exclude_firm_filter if f.strip()]
+                if clean_exclude_firms and (item.item_firm or '') in clean_exclude_firms:
                     continue
             if search_query:
                 sq = search_query.lower()
@@ -846,6 +851,7 @@ def historical_item_analysis(request):
             'category': category_filter,
             'store': store_filter,
             'firm': firm_filter,
+            'exclude_firm': exclude_firm_filter,
             'month': month_filter,
             'start': start_str,
             'end': end_str,
@@ -1116,6 +1122,7 @@ def _build_historical_item_analysis_data(request):
     category_filter = request.GET.getlist('category')
     store_filter = request.GET.get('store', '').strip()
     firm_filter = request.GET.getlist('firm')
+    exclude_firm_filter = request.GET.getlist('exclude_firm')
     month_filter = request.GET.getlist('month')
     start_str = request.GET.get('start', '').strip()
     end_str = request.GET.get('end', '').strip()
@@ -1193,6 +1200,10 @@ def _build_historical_item_analysis_data(request):
             if firm_filter:
                 clean_firms = [f for f in firm_filter if f.strip()]
                 if clean_firms and (item.item_firm or '') not in clean_firms:
+                    continue
+            if exclude_firm_filter:
+                clean_exclude_firms = [f for f in exclude_firm_filter if f.strip()]
+                if clean_exclude_firms and (item.item_firm or '') in clean_exclude_firms:
                     continue
             if search_query:
                 sq = search_query.lower()
@@ -1483,6 +1494,7 @@ def export_historical_item_analysis_pdf(request):
     category_filter = request.GET.getlist('category')
     salesmen_filter = request.GET.getlist('salesman')
     firm_filter = request.GET.getlist('firm')
+    exclude_firm_filter = request.GET.getlist('exclude_firm')
     month_filter = request.GET.getlist('month')
     start_str = request.GET.get('start', '').strip()
     end_str = request.GET.get('end', '').strip()
@@ -1495,6 +1507,8 @@ def export_historical_item_analysis_pdf(request):
         filter_info.append(f"Salesmen: {', '.join(salesmen_filter[:2])}{'...' if len(salesmen_filter) > 2 else ''}")
     if firm_filter:
         filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
+    if exclude_firm_filter:
+        filter_info.append(f"Exclude Firms: {', '.join(exclude_firm_filter[:2])}{'...' if len(exclude_firm_filter) > 2 else ''}")
     if month_filter:
         filter_info.append(f"Months: {', '.join(month_filter)}")
     if start_str or end_str:
