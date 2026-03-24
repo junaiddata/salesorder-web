@@ -14,6 +14,7 @@ from .utils import send_telegram_message, send_telegram_document
 
 # Multiple salesman names can map to the same chat ID
 SALESMAN_TELEGRAM_GROUPS = {
+    "TESTING": "-5266252930",
     #RAFIQ
     "A.MR.RAFIQ": "-5206945591",
     "A.MR.RAFIQ NE": "-5206945591",

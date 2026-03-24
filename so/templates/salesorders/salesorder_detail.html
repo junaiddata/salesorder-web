@@ -512,7 +512,8 @@
                 <form method="post" action="{% url 'salesorder_update_approval' salesorder.so_number %}" id="approval-status-form" style="display:flex; flex-direction:column; gap:2px;" onsubmit="(function(){var r=document.getElementById('remarks-textarea');var h=document.getElementById('approval-sync-remarks');if(r&&h){h.value=r.value;}})();">
                   {% csrf_token %}
                   <input type="hidden" name="remarks" id="approval-sync-remarks" value="">
-                  <select name="approval_status" onchange="this.form.submit()" class="select-sm">
+                  {# requestSubmit() fires submit/onsubmit; form.submit() does NOT — that was clearing remarks #}
+                  <select name="approval_status" onchange="(function(sel){var f=sel.form;var r=document.getElementById('remarks-textarea');var h=document.getElementById('approval-sync-remarks');if(r&&h){h.value=r.value;}if(typeof f.requestSubmit==='function'){f.requestSubmit();}else{f.submit();}})(this);" class="select-sm">
                     {% for value, label in approval_status_choices %}
                       <option value="{{ value }}" {% if salesorder.approval_status == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
