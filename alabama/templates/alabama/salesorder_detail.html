@@ -1,0 +1,129 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Sales Order {{ salesorder.so_number }}{% endblock %}
+
+{% block page_title %}Sales Order {{ salesorder.so_number }}{% endblock %}
+{% block page_subtitle %}{{ salesorder.customer_name }}{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
+    .info-label { font-size: 0.75rem; color: var(--gray-500); font-weight: 500; }
+    .info-value { font-size: 0.938rem; font-weight: 600; }
+    .badge { display: inline-flex; padding: 2px 8px; font-size: 0.65rem; font-weight: 600; border-radius: 12px; }
+    .badge-open { background: #ecfdf5; color: #059669; }
+    .badge-closed { background: var(--gray-100); color: var(--gray-500); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 8px 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--gray-500); background: var(--gray-100); border-bottom: 1px solid var(--gray-200); text-align: left; }
+    tbody td { padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid #f1f5f9; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .open-qty-highlight { background: #fef3c7; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="detail-header">
+    <div></div>
+    <a href="{% url 'alabama:salesorder_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to Sales Orders
+    </a>
+  </div>
+
+  <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">Customer</span>
+        <span class="info-value">{{ salesorder.customer_name|default:"—" }} <small style="color:var(--gray-500);">({{ salesorder.customer_code|default:"" }})</small></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Salesman</span>
+        <span class="info-value">{{ salesorder.salesman_name|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Posting Date</span>
+        <span class="info-value">{{ salesorder.posting_date|date:"d M Y"|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">BP Reference / LPO</span>
+        <span class="info-value">{{ salesorder.bp_reference_no|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">VAT Number</span>
+        <span class="info-value">{{ salesorder.vat_number|default:"—" }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Status</span>
+        <span class="info-value">
+          {% if salesorder.status == 'O' or salesorder.status == 'Open' %}
+            <span class="badge badge-open">Open</span>
+          {% else %}
+            <span class="badge badge-closed">Closed</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Document Total</span>
+        <span class="info-value">{{ salesorder.document_total|default:0|floatformat:2 }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Row Total Sum</span>
+        <span class="info-value">{{ salesorder.row_total_sum|default:0|floatformat:2 }}</span>
+      </div>
+    </div>
+    {% if salesorder.remarks %}
+    <div class="info-item" style="margin-top: 0.5rem;">
+      <span class="info-label">Remarks</span>
+      <span class="info-value">{{ salesorder.remarks }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="padding: 1.5rem;">
+    <h3 class="section-title" style="margin-bottom: 1rem;">Line Items ({{ items|length }})</h3>
+    <p class="text-muted" style="font-size:0.75rem; margin-bottom: 0.75rem; color:var(--gray-500);">Stock values are loaded from Item Master. Shows &quot;-&quot; if item not found.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Item No</th>
+            <th>Description</th>
+            <th>Mfr</th>
+            <th class="num">Qty</th>
+            <th class="num">Price</th>
+            <th class="num">Row Total</th>
+            <th class="num">Open Qty</th>
+            <th class="num">Pending</th>
+            <th class="num">Stock</th>
+            <th class="num">DIP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+          <tr>
+            <td class="num">{{ forloop.counter }}</td>
+            <td><strong>{{ it.item_no|default:"—" }}</strong></td>
+            <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ it.description }}">{{ it.description|default:"—" }}</td>
+            <td>{{ it.manufacture|default:"—" }}</td>
+            <td class="num">{{ it.quantity|floatformat:2 }}</td>
+            <td class="num">{{ it.price|floatformat:2 }}</td>
+            <td class="num">{{ it.row_total|default:0|floatformat:2 }}</td>
+            <td class="num{% if it.remaining_open_quantity and it.remaining_open_quantity > 0 %} open-qty-highlight{% endif %}">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:2 }}</td>
+            <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+            <td class="num">{% if it.stock_total is not None %}{{ it.stock_total|floatformat:0 }}{% else %}—{% endif %}</td>
+            <td class="num">{% if it.stock_dip is not None %}{{ it.stock_dip|floatformat:0 }}{% else %}—{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="11" style="text-align:center; padding:2rem; color:var(--gray-500);">No line items</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

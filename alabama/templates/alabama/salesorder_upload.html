@@ -1,0 +1,148 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Upload Sales Orders{% endblock %}
+
+{% block page_title %}Upload Sales Orders{% endblock %}
+{% block page_subtitle %}Import from Excel — stock loaded from Item Master at view time{% endblock %}
+
+{% block extra_head %}
+  <style>
+    .upload-card { max-width: 700px; margin: 0 auto 1.5rem; }
+    .messages { margin-bottom: 1rem; padding: 1rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #b91c1c; }
+    .messages ul { list-style: none; margin: 0; padding: 0; }
+    .dropzone {
+      border: 2px dashed var(--gray-200);
+      border-radius: 12px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--gray-100);
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--primary-color); background: rgba(220, 38, 38, 0.06); }
+    .dropzone input[type="file"] { display: none; }
+    .file-name { margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(220, 38, 38, 0.08); border-radius: 8px; font-size: 0.875rem; color: var(--primary-color); display: none; }
+    .form-actions { display: flex; gap: 12px; margin-top: 1.5rem; }
+    .info-card { padding: 1rem; background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 8px; margin-top: 1rem; }
+    .info-card h4 { font-size: 0.875rem; margin-bottom: 0.5rem; }
+    .info-card ol, .info-card ul { margin: 0; padding-left: 1.25rem; font-size: 0.813rem; color: var(--gray-700); }
+    .info-card li { margin-bottom: 4px; }
+    .note-stock { margin-top: 0.75rem; font-size: 0.75rem; color: var(--gray-500); font-style: italic; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div style="margin-bottom: 1rem;">
+    <a href="{% url 'alabama:salesorder_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to Sales Orders
+    </a>
+  </div>
+
+  <div class="card upload-card" style="padding: 1.5rem;">
+    {% if messages %}
+      <div class="messages">
+        <ul>
+          {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" id="upload-form">
+      {% csrf_token %}
+
+      <label class="dropzone" id="dropzone">
+        <i class="fas fa-file-excel" style="font-size: 2.5rem; color: var(--gray-500); margin-bottom: 0.5rem;"></i>
+        <div style="font-weight: 600; margin-bottom: 4px;">Drop your Excel file here</div>
+        <div style="font-size: 0.875rem; color: var(--gray-500);">or click to browse (.xls, .xlsx)</div>
+        <input id="excel-input" type="file" name="excel_file" accept=".xls,.xlsx" required />
+      </label>
+
+      <p id="file-name" class="file-name"></p>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">
+          <i class="fas fa-upload"></i> Upload
+        </button>
+        <a class="btn btn-secondary" href="{% url 'alabama:salesorder_list' %}">Cancel</a>
+      </div>
+
+      <div class="info-card">
+        <h4>Required Columns</h4>
+        <ol>
+          <li>Document Number</li>
+          <li>Posting Date</li>
+          <li>BP Reference No.</li>
+          <li>Customer/Supplier No.</li>
+          <li>Customer/Supplier Name</li>
+          <li>Row Status</li>
+          <li>Job Type</li>
+          <li>Item No.</li>
+          <li>Item/Service Description</li>
+          <li>Manufacture</li>
+          <li>Quantity</li>
+          <li>Row Total</li>
+          <li>Remaining Open Quantity</li>
+          <li>Pending Amount</li>
+          <li>Sales Employee</li>
+        </ol>
+        <p class="note-stock">Stock (Total available Stock, Dip warehouse stock) is loaded from Item Master when viewing orders — not from Excel. Items not in the master show "—".</p>
+      </div>
+
+      <div class="info-card">
+        <h4>Optional Columns</h4>
+        <ul>
+          <li>Remarks, VAT Number, Discount, Unit Price, Document Total(incl), Overall Discount Amount</li>
+        </ul>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    (function(){
+      var drop = document.getElementById('dropzone');
+      var input = document.getElementById('excel-input');
+      var fileName = document.getElementById('file-name');
+
+      function setFileName(name){
+        fileName.textContent = "Selected: " + name;
+        fileName.style.display = 'block';
+      }
+
+      drop.addEventListener('click', function() { input.click(); });
+
+      input.addEventListener('change', function(e) {
+        var f = e.target.files && e.target.files[0];
+        if (f) setFileName(f.name);
+      });
+
+      ['dragenter','dragover'].forEach(function(ev) {
+        drop.addEventListener(ev, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          drop.classList.add('dragover');
+        });
+      });
+
+      ['dragleave','drop'].forEach(function(ev) {
+        drop.addEventListener(ev, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          drop.classList.remove('dragover');
+        });
+      });
+
+      drop.addEventListener('drop', function(e) {
+        var dt = e.dataTransfer;
+        if (!dt || !dt.files || dt.files.length === 0) return;
+        var f = dt.files[0];
+        if (!/\.xlsx?$/i.test(f.name)){
+          alert('Please drop an .xls or .xlsx file.');
+          return;
+        }
+        input.files = dt.files;
+        setFileName(f.name);
+      });
+    })();
+  </script>
+{% endblock %}

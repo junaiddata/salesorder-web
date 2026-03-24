@@ -4,6 +4,7 @@ from . import delivery_order_views
 from . import item_analysis_views
 from . import customer_analysis_views
 from . import sales_analysis_views
+from . import salesorder_views
 
 app_name = 'alabama'
 
@@ -25,6 +26,9 @@ urlpatterns = [
     path('quotations/', views.quotation_list, name='quotation_list'),
     path('quotations/upload/', views.quotation_upload, name='quotation_upload'),
     path('quotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
+    path('sales-orders/', salesorder_views.salesorder_list, name='salesorder_list'),
+    path('sales-orders/upload/', salesorder_views.salesorder_upload, name='salesorder_upload'),
+    path('sales-orders/<str:so_number>/', salesorder_views.salesorder_detail, name='salesorder_detail'),
     path('delivery-orders/', delivery_order_views.delivery_order_list, name='delivery_order_list'),
     path('delivery-orders/upload/', delivery_order_views.delivery_order_upload, name='delivery_order_upload'),
     path('delivery-orders/<str:do_number>/', delivery_order_views.delivery_order_detail, name='delivery_order_detail'),

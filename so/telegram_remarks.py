@@ -377,6 +377,16 @@ def send_approval_status_change_telegram(salesorder, old_status, new_status, cha
     if changed_by_str:
         lines.append(f"👤 <b>Changed by:</b>  {changed_by_str}")
 
+    remarks_raw = (getattr(salesorder, "remarks", None) or "").strip()
+    if remarks_raw:
+        remarks_esc = _escape_html(remarks_raw)
+        if len(remarks_esc) > 3500:
+            remarks_esc = remarks_esc[:3500] + "…"
+        lines.append("")
+        lines.append("💬 <b>Management remarks:</b>")
+        lines.append("")
+        lines.append(f"<blockquote>{remarks_esc}</blockquote>")
+
     lines.append("")
     lines.append(f"🕐 <i>{timestamp}</i>")
 

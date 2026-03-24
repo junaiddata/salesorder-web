@@ -12,6 +12,8 @@ from . import credit_memo_analysis_views
 from . import purchase_stock_requirement_views
 from . import quotation_item_analysis_views
 from . import item_quoted_analysis_pdf_export
+from . import item_sold_analysis_views
+from . import item_sold_analysis_pdf_export
 from . import historical_sales_views
 
 urlpatterns = [
@@ -183,6 +185,8 @@ urlpatterns += [
     path('saparinvoices/item-quoted-analysis/export-pdf/', item_quoted_analysis_pdf_export.export_item_quoted_analysis_pdf, name='export_item_quoted_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/save-proposed-qty/', quotation_item_analysis_views.save_proposed_quantity, name='save_proposed_quantity'),
     path('saparinvoices/item-quoted-analysis/reset-proposed-qty/', quotation_item_analysis_views.reset_proposed_quantities, name='reset_proposed_quantities'),
+    path('saparinvoices/item-sold-analysis/', item_sold_analysis_views.item_sold_analysis, name='item_sold_analysis'),
+    path('saparinvoices/item-sold-analysis/export-pdf/', item_sold_analysis_pdf_export.export_item_sold_analysis_pdf, name='export_item_sold_analysis_pdf'),
     path('saparinvoices/combined/export-excel/', sap_salesorder_views.export_combined_sales_invoices_excel, name='export_combined_sales_invoices_excel'),
     path('saparinvoices/combined/export-itemwise-excel/', sap_salesorder_views.export_combined_itemwise_excel, name='export_combined_itemwise_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),

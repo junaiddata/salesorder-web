@@ -197,6 +197,10 @@
         {% endif %}
 
         <div class="upload-grid">
+          <a href="{% url 'alabama:salesorder_upload' %}" class="upload-btn">
+            <i class="fas fa-shopping-cart"></i>
+            Upload Sales Orders
+          </a>
           <a href="{% url 'alabama:sales_summary_upload' %}" class="upload-btn">
             <i class="fas fa-file-invoice-dollar"></i>
             Upload Sales Summary
@@ -218,6 +222,7 @@
         <details class="column-reference">
           <summary>Expected columns (click to expand)</summary>
           <ul class="info-list">
+            <li><strong>Sales Orders:</strong> Document Number, Posting Date, BP Reference No., Customer/Supplier No., Customer/Supplier Name, Row Status, Job Type, Item No., Item/Service Description, Manufacture, Quantity, Row Total, Remaining Open Quantity, Pending Amount, Sales Employee. Stock loaded from Item Master.</li>
             <li><strong>Sales Summary:</strong> Document Type, Document Number, PostingDate, Customer Code, Customer Name, Sales Employee, ItemCode, Item Description, Item Manufacturer, Quantity, Net Sales, Gross Profit.</li>
             <li><strong>Quotations:</strong> Document Number, Posting Date, Customer/Supplier No., Customer/Supplier Name, Sales Employee Name, Manufacturer Name, BP Reference No., Item No., Item/Service Description, Quantity, Price, Row Total, Document Total, Status, Bill To.</li>
             <li><strong>Delivery Orders:</strong> DO, DATE, CUSTOMER CODE, CUSTOMER, Sales Person (uses Settings mappings), CITY, AREA, LPO, Remarks, INVOICE, AMOUNT, Item No., Item/Service Description, Quantity, Price.</li>

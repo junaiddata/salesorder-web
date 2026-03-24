@@ -248,6 +248,24 @@
             </li>
             {% endif %}
 
+            <li class="has-submenu {% if active_page in 'salesorder salesorder_list salesorder_detail salesorder_upload' %}open{% endif %}">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-shopping-cart"></i>
+                    Sales Orders
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{% url 'alabama:salesorder_list' %}" class="{% if active_page == 'salesorder_list' or active_page == 'salesorder_detail' %}active{% endif %}">
+                            <i class="fas fa-list"></i> Sales Orders List
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:salesorder_upload' %}" class="{% if active_page == 'salesorder_upload' %}active{% endif %}">
+                            <i class="fas fa-upload"></i> Upload Sales Orders
+                        </a>
+                    </li>
+                </ul>
+            </li>
             <li class="has-submenu {% if active_page in 'delivery_order delivery_order_upload delivery_order_detail' %}open{% endif %}">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
                     <i class="fas fa-truck"></i>

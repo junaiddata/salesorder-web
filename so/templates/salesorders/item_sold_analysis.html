@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Item Quoted Analysis — Firm-wise Quotation Report</title>
+  <title>Item Sold Analysis — Firm-wise Invoice/Order Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -889,14 +889,14 @@
     <div class="page-header">
       <div class="page-header-left">
         <h1>
-          <span class="header-icon"><i class="fas fa-file-invoice"></i></span>
-          Item Quoted Analysis
+          <span class="header-icon"><i class="fas fa-shopping-cart"></i></span>
+          Item Sold Analysis
         </h1>
-        <p>Firm-wise analysis — Qty &amp; total amount (2025 &amp; 2026), customer count per item</p>
+        <p>Firm-wise analysis — Qty sold &amp; total amount (2025 &amp; 2026), customer count per item</p>
       </div>
       <div class="page-header-right">
-        <a href="{% url 'item_sold_analysis' %}" class="btn btn-secondary">
-          <i class="fas fa-shopping-cart"></i> Sold Analysis
+        <a href="{% url 'item_quoted_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-quote-left"></i> Quoted Analysis
         </a>
         <a href="{% url 'home' %}" class="btn btn-secondary">
           <i class="fas fa-arrow-left"></i> Back
@@ -907,7 +907,7 @@
 
     <!-- ─── Filters ─── -->
     <div class="card filters-card">
-      <form method="GET" action="{% url 'item_quoted_analysis' %}" id="filters-form">
+      <form method="GET" action="{% url 'item_sold_analysis' %}" id="filters-form">
         <div class="filters-grid">
           <div class="field">
             <label>Firm</label>
@@ -961,12 +961,12 @@
           <h3 class="table-title">
             {% if selected_firms %}
               {% if selected_firms|length == 1 %}
-                {{ selected_firms.0 }} — Item Quoted Analysis
+                {{ selected_firms.0 }} — Item Sold Analysis
               {% else %}
-                {{ selected_firms|length }} Firms — Item Quoted Analysis
+                {{ selected_firms|length }} Firms — Item Sold Analysis
               {% endif %}
             {% else %}
-              Item Quoted Analysis
+              Item Sold Analysis
             {% endif %}
           </h3>
           <p class="table-subtitle">
@@ -984,13 +984,10 @@
         </div>
         {% if selected_firms and items %}
         <div class="table-actions">
-          <form method="GET" action="{% url 'item_quoted_analysis' %}" id="search-form" style="display: inline-flex; align-items: center; gap: 8px;">
+          <form method="GET" action="{% url 'item_sold_analysis' %}" id="search-form" style="display: inline-flex; align-items: center; gap: 8px;">
             {% for f in selected_firms %}
             <input type="hidden" name="firm" value="{{ f }}">
             {% endfor %}
-            {% if include_conversion %}
-            <input type="hidden" name="include_conversion" value="true">
-            {% endif %}
             <div class="search-bar-wrap">
               <i class="fas fa-search search-icon"></i>
               <input type="text" name="search" id="table-search" class="search-bar" placeholder="Search code, description, UPC…" autocomplete="off" value="{{ search_term|default:'' }}">
@@ -1001,22 +998,10 @@
             <button type="submit" class="btn btn-primary btn-sm" style="display:none;" id="search-submit-btn">Search</button>
           </form>
           <div style="display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <form method="GET" action="{% url 'item_quoted_analysis' %}" id="conversion-toggle-form" style="display: inline-flex; align-items: center; gap: 6px;">
+            <form method="GET" action="{% url 'export_item_sold_analysis_pdf' %}" target="_blank" class="export-pdf-form" style="display: inline-flex; align-items: center; gap: 12px;">
               {% for f in selected_firms %}
               <input type="hidden" name="firm" value="{{ f }}">
               {% endfor %}
-              <label class="toggle-label" style="display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
-                <input type="checkbox" name="include_conversion" value="true" id="conversion-toggle" {% if include_conversion %}checked{% endif %} style="cursor: pointer;" onchange="this.form.submit()">
-                <span>Show Conversion Metrics</span>
-              </label>
-            </form>
-            <form method="GET" action="{% url 'export_item_quoted_analysis_pdf' %}" target="_blank" class="export-pdf-form" style="display: inline-flex; align-items: center; gap: 12px;">
-              {% for f in selected_firms %}
-              <input type="hidden" name="firm" value="{{ f }}">
-              {% endfor %}
-              {% if include_conversion %}
-              <input type="hidden" name="include_conversion" value="true">
-              {% endif %}
               {% if search_term %}
               <input type="hidden" name="search" value="{{ search_term }}">
               {% endif %}
@@ -1037,7 +1022,7 @@
         <div class="empty-state">
           <div class="empty-state-icon"><i class="fas fa-building"></i></div>
           <h3>No Firm Selected</h3>
-          <p>Choose one or more firms from the dropdown above to generate the item quoted analysis report.</p>
+          <p>Choose one or more firms from the dropdown above to generate the item sold analysis report.</p>
         </div>
 
       {% elif not items %}
@@ -1074,28 +1059,18 @@
                 <th style="min-width:80px;">UPC</th>
                 <th class="text-right" style="min-width:100px;">Total Stock</th>
                 <th class="text-right" style="min-width:90px;">IMPORT + LPO</th>
-                <th class="text-right" style="min-width:75px;">Sold 25</th>
-                <th class="text-right" style="min-width:75px;">Sold 26</th>
                 <th class="text-right" style="min-width:75px;">Qty 2025</th>
                 <th class="text-right" style="min-width:75px;">Qty 2026</th>
                 <th class="text-right" style="min-width:90px;">Total Amt 2025</th>
                 <th class="text-right" style="min-width:90px;">Total Amt 2026</th>
-                <th class="text-center" style="min-width:65px;">Q's 25</th>
-                <th class="text-center" style="min-width:65px;">Q's 26</th>
+                <th class="text-center" style="min-width:65px;">Invs 25</th>
+                <th class="text-center" style="min-width:65px;">Invs 26</th>
                 <th class="text-center" style="min-width:70px;">Cust.</th>
-                {% if include_conversion %}
-                <th class="text-right conversion-th conversion-th-first" style="min-width:70px;">SO Qty 25</th>
-                <th class="text-right conversion-th" style="min-width:70px;">SO Qty 26</th>
-                <th class="text-center conversion-th" style="min-width:60px;">Convt Quotes 25</th>
-                <th class="text-center conversion-th" style="min-width:60px;">Convt Quotes 26</th>
-                <!-- <th class="text-right" style="min-width:65px;">% 25</th>
-                <th class="text-right" style="min-width:65px;">% 26</th> -->
-                {% endif %}
                 <th class="text-right" style="min-width:100px; background: #fef3c7; color: #d97706; font-weight: 700;">Proposed<br>Quantity</th>
               </tr>
             </thead>
             <tbody id="analysis-tbody">
-              {% include 'salesorders/_item_quoted_analysis_table.html' with items=items grand_total_sold_2025=grand_total_sold_2025 grand_total_sold_2026=grand_total_sold_2026 grand_total_sold=grand_total_sold grand_total_2025=grand_total_2025 grand_total_2026=grand_total_2026 %}
+              {% include 'salesorders/_item_sold_analysis_table.html' with items=items grand_total_2025=grand_total_2025 grand_total_2026=grand_total_2026 %}
             </tbody>
           </table>
         </div>
@@ -1439,14 +1414,6 @@
           url.searchParams.set('search', searchInput.value.trim());
         } else {
           url.searchParams.delete('search');
-        }
-        
-        // Preserve conversion toggle
-        var conversionToggle = document.getElementById('conversion-toggle');
-        if (conversionToggle && conversionToggle.checked) {
-          url.searchParams.set('include_conversion', 'true');
-        } else {
-          url.searchParams.delete('include_conversion');
         }
         
         window.location.href = url.toString();
