@@ -42,7 +42,13 @@ from .sap_salesorder_pdf import generate_sap_salesorder_pdf_bytes
 from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
-from .sync_services import sync_salesorders_core, sync_arinvoices_core, sync_arcreditmemos_core
+from .sync_services import (
+    sync_salesorders_core,
+    sync_arinvoices_core,
+    sync_arcreditmemos_core,
+    snapshot_revised_prices_by_so,
+    restore_revised_prices_after_item_rebuild,
+)
 
 
 def normalize_salesman_name(name):
@@ -552,6 +558,7 @@ def upload_salesorders(request):
                             SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
                         )
 
+                        _rev_snap = snapshot_revised_prices_by_so(so_numbers)
                         # Delete existing items for these salesorders in ONE query
                         SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
 
@@ -596,6 +603,8 @@ def upload_salesorders(request):
 
                         if items_to_create:
                             SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=10000)
+
+                        restore_revised_prices_after_item_rebuild(_rev_snap)
 
                     messages.success(
                         request,
@@ -895,6 +904,7 @@ def sync_salesorders_api_receive(request):
                 SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
             )
             
+            _rev_snap = snapshot_revised_prices_by_so(so_numbers)
             # Delete existing items for these salesorders
             SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
             
@@ -941,6 +951,8 @@ def sync_salesorders_api_receive(request):
             
             if items_to_create:
                 SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
+            
+            restore_revised_prices_after_item_rebuild(_rev_snap)
             
             stats['total_items'] = sum(len(m.get('items', [])) for m in orders)
             

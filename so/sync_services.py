@@ -27,6 +27,33 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+
+def snapshot_revised_prices_by_so(so_numbers):
+    """
+    Before deleting/rebuilding SAPSalesorderItem rows, capture revised_price
+    keyed by (salesorder_id, line_no). Used so sync/import does not wipe user edits.
+    """
+    if not so_numbers:
+        return {}
+    out = {}
+    qs = SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).exclude(
+        revised_price__isnull=True
+    )
+    for row in qs.values("salesorder_id", "line_no", "revised_price"):
+        out[(row["salesorder_id"], row["line_no"])] = row["revised_price"]
+    return out
+
+
+def restore_revised_prices_after_item_rebuild(snapshot):
+    """After bulk_create of line items, re-apply saved revised prices for matching lines."""
+    if not snapshot:
+        return
+    for (salesorder_id, line_no), rev in snapshot.items():
+        SAPSalesorderItem.objects.filter(salesorder_id=salesorder_id, line_no=line_no).update(
+            revised_price=rev
+        )
+
+
 # Per-entity file loggers (for Settings sync - same files as management commands)
 _LOG_DIR = Path(__file__).resolve().parent.parent / 'logs'
 _LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -228,6 +255,7 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
             order_id_map = dict(
                 SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
             )
+            _rev_snap = snapshot_revised_prices_by_so(so_numbers)
             SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
 
             items_to_create = []
@@ -261,6 +289,8 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
 
             if items_to_create:
                 SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
+
+            restore_revised_prices_after_item_rebuild(_rev_snap)
 
             sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_orders)
 
