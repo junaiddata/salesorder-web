@@ -28,6 +28,12 @@ urlpatterns = [
     path('quotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sales-orders/', salesorder_views.salesorder_list, name='salesorder_list'),
     path('sales-orders/upload/', salesorder_views.salesorder_upload, name='salesorder_upload'),
+    path('sales-orders/<str:so_number>/remarks/', salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
+    path(
+        'sales-orders/<str:so_number>/send-remarks-telegram/',
+        salesorder_views.salesorder_send_remarks_telegram,
+        name='salesorder_send_remarks_telegram',
+    ),
     path('sales-orders/<str:so_number>/', salesorder_views.salesorder_detail, name='salesorder_detail'),
     path('delivery-orders/', delivery_order_views.delivery_order_list, name='delivery_order_list'),
     path('delivery-orders/upload/', delivery_order_views.delivery_order_upload, name='delivery_order_upload'),

@@ -1485,6 +1485,9 @@ def logout_view(request):
 @role_required('Admin')
 @login_required
 def home(request):
+    import calendar
+
+    from django.template.loader import render_to_string
     from so.sap_salesorder_views import salesman_scope_q_salesorder
     from so.models import SAPARInvoice, SAPARCreditMemo
     from django.db.models import Sum, Q
@@ -1497,6 +1500,26 @@ def home(request):
     
     # Get store filter (default to HO)
     store_filter = request.GET.get('store', 'HO').strip()
+
+    # Calendar month selector (default: current month, same partial-month behavior as before)
+    cal_year_raw = request.GET.get('cal_year', '').strip()
+    cal_month_raw = request.GET.get('cal_month', '').strip()
+    calendar_year_min = 2024  # SAP calendar data available from this year onward
+    calendar_year_max = current_year + 1
+    calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
+    try:
+        cal_year = int(cal_year_raw) if cal_year_raw else current_year
+        cal_month = int(cal_month_raw) if cal_month_raw else current_month
+    except (ValueError, TypeError):
+        cal_year = current_year
+        cal_month = current_month
+    if cal_year not in calendar_years:
+        cal_year = current_year
+    if cal_month < 1 or cal_month > 12:
+        cal_month = current_month
+    month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
+    calendar_display = date(cal_year, cal_month, 1)
     
     # Get base querysets with salesman scope
     invoice_qs_base = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -1578,25 +1601,22 @@ def home(request):
             week_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
         )
     
-    # Calculate This Month's Days (from 1st to today)
+    # Calendar days: current month shows 1..today only; other months show full month
+    _, last_day_in_month = calendar.monthrange(cal_year, cal_month)
+    is_calendar_current_month = cal_year == current_year and cal_month == current_month
+    last_calendar_day = min(today.day, last_day_in_month) if is_calendar_current_month else last_day_in_month
+
     month_days = []
-    today_day = today.day
-    
-    # Month names for formatting
-    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    
-    # Get all days from 1st to today
-    for day_num in range(1, today_day + 1):
-        day_date = date(current_year, current_month, day_num)
-        
-        # Apply store filter for this day's data
+    for day_num in range(1, last_calendar_day + 1):
+        day_date = date(cal_year, cal_month, day_num)
+
         if store_filter and store_filter != 'Total':
             day_invoices = invoice_qs_base.filter(posting_date=day_date, store=store_filter)
             day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date, store=store_filter)
         else:
             day_invoices = invoice_qs_base.filter(posting_date=day_date)
             day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date)
-        
+
         day_sales = (
             day_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
             day_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
@@ -1607,8 +1627,7 @@ def home(request):
                 day_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
                 day_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
             )
-        
-        # Add all days (including zero sales days)
+
         day_sales_val = day_sales or Decimal('0')
         day_gp_val = day_gp or Decimal('0')
         day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
@@ -1616,12 +1635,20 @@ def home(request):
         month_days.append({
             'day': day_num,
             'date': day_date,
-            'formatted_date': f"{month_names[current_month - 1]} {day_num}",
+            'formatted_date': f"{month_names_short[cal_month - 1]} {day_num}",
             'sales': day_sales_val,
             'gp': day_gp_val,
             'gp_pct': round(day_gp_pct, 1),
             'has_sales': bool(day_sales and day_sales > Decimal('0')),
         })
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
+        calendar_html = render_to_string(
+            'so/_home_calendar_grid.html',
+            {'month_days': month_days, 'today': today, 'is_admin': is_admin},
+            request=request,
+        )
+        return HttpResponse(calendar_html, content_type='text/html')
 
     def _gp_pct(gp, sales):
         s = float(sales or Decimal('0'))
@@ -1646,6 +1673,11 @@ def home(request):
         'current_month': current_month,
         'current_year': current_year,
         'today': today,
+        'cal_year': cal_year,
+        'cal_month': cal_month,
+        'calendar_years': calendar_years,
+        'calendar_months': calendar_months,
+        'calendar_display': calendar_display,
     })
 
 def sales_home(request):

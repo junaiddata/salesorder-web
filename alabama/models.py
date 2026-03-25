@@ -193,7 +193,16 @@ class AlabamaSalesOrder(models.Model):
     salesman_name = models.CharField(max_length=255, blank=True, null=True)
     bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
     vat_number = models.CharField(max_length=100, blank=True, null=True)
-    remarks = models.TextField(blank=True, null=True)
+    remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Remarks from SAP / Excel upload (not editable as management remarks)',
+    )
+    management_remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Internal management remarks; optional Telegram to salesman',
+    )
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     document_total = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     row_total_sum = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)

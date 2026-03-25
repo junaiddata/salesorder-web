@@ -15,6 +15,7 @@ from . import item_quoted_analysis_pdf_export
 from . import item_sold_analysis_views
 from . import item_sold_analysis_pdf_export
 from . import historical_sales_views
+from . import accounts_recording_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -192,6 +193,10 @@ urlpatterns += [
     path('saparinvoices/combined/export-excel/', sap_salesorder_views.export_combined_sales_invoices_excel, name='export_combined_sales_invoices_excel'),
     path('saparinvoices/combined/export-itemwise-excel/', sap_salesorder_views.export_combined_itemwise_excel, name='export_combined_itemwise_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),
+    path('saparinvoices/accounts-recording/save/', accounts_recording_views.accounts_recording_save, name='accounts_recording_save'),
+    path('saparinvoices/accounts-recording/export-excel/', accounts_recording_views.export_accounts_recording_excel, name='export_accounts_recording_excel'),
+    path('saparinvoices/accounts-recording/export-pdf/', accounts_recording_views.export_accounts_recording_pdf, name='export_accounts_recording_pdf'),
+    path('saparinvoices/accounts-recording/', accounts_recording_views.accounts_recording_list, name='accounts_recording_list'),
     path('saparinvoices/', sap_salesorder_views.arinvoice_list, name='arinvoice_list'),
     path('saparinvoices/<str:invoice_number>/', sap_salesorder_views.arinvoice_detail, name='arinvoice_detail'),
     

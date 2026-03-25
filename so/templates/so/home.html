@@ -465,6 +465,30 @@
             box-shadow: var(--shadow-sm);
         }
 
+        .calendar-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .calendar-header label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-right: 4px;
+        }
+
+        .calendar-header select {
+            padding: 6px 10px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            background: var(--white);
+            color: var(--gray-800);
+        }
+
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -901,6 +925,14 @@
                             Combined Report
                         </a>
                     </li>
+                    <!-- {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+                    <li>
+                        <a href="{% url 'accounts_recording_list' %}">
+                            <i class="fas fa-clipboard-check"></i>
+                            Accounts Recording
+                        </a>
+                    </li>
+                    {% endif %} -->
                     <li>
                         <a href="{% url 'credit_memo_analysis' %}">
                             <i class="fas fa-chart-pie"></i>
@@ -1047,13 +1079,13 @@
             <div style="margin-bottom: 1.25rem;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--white); padding: 0.75rem 1rem; border-radius: 10px; box-shadow: var(--shadow-sm);">
                     <label style="font-size: 0.75rem; font-weight: 600; color: var(--gray-700); margin-right: 6px;">Store:</label>
-                    <a href="?store=HO" class="store-tile-btn {% if store_filter == 'HO' or not store_filter %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=HO&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'HO' or not store_filter %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         HO
                     </a>
-                    <a href="?store=Others" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=Others&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         Others
                     </a>
-                    <a href="?store=Total" class="store-tile-btn {% if store_filter == 'Total' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=Total&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'Total' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         Total
                     </a>
                 </div>
@@ -1134,23 +1166,29 @@
                 </div>
             </div>
 
-            <!-- This Month Calendar Widget -->
+            <!-- Calendar Widget (year/month selector + daily sales) -->
             <div style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="section-header">
-                    <!-- I want to show the month name in the section title it is not stored anywhere. Use inbuilt month name function like today.month  -->
-                    <h2 class="section-title"> {{ today|date:"F" }} Calendar</h2>
+                    <h2 class="section-title" data-home-calendar-title>{{ calendar_display|date:"F Y" }} Calendar</h2>
                 </div>
                 <div class="calendar-widget">
-                    <div class="calendar-grid">
-                        {% for day in month_days %}
-                        <div class="calendar-day {% if day.day == today.day %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
-                            <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{day.formatted_date}}</div>
-                            <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{day.sales|floatformat:0|intcomma}}</div>
-                            {% if is_admin %}
-                            <div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{day.gp|floatformat:0|intcomma}} | {{day.gp_pct|floatformat:1}}%</div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
+                    <div class="calendar-header">
+                        <label for="cal-year">Year</label>
+                        <select id="cal-year" aria-label="Calendar year">
+                            {% for y in calendar_years %}
+                            <option value="{{ y }}" {% if cal_year == y %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                        <label for="cal-month" style="margin-left: 4px;">Month</label>
+                        <select id="cal-month" aria-label="Calendar month">
+                            {% for num, name in calendar_months %}
+                            <option value="{{ num }}" {% if cal_month == num %}selected{% endif %}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                        <span id="calendar-loading" style="font-size: 0.75rem; color: var(--gray-500); display: none;">Loading…</span>
+                    </div>
+                    <div id="calendar-grid-container">
+                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin %}
                     </div>
                 </div>
             </div>
@@ -1321,6 +1359,40 @@
 
 
 document.addEventListener("DOMContentLoaded", function () {
+    (function () {
+        var calYear = document.getElementById('cal-year');
+        var calMonth = document.getElementById('cal-month');
+        var gridContainer = document.getElementById('calendar-grid-container');
+        var loadingEl = document.getElementById('calendar-loading');
+        var calendarTitleEl = document.querySelector('[data-home-calendar-title]');
+        var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        if (!calYear || !calMonth || !gridContainer) return;
+        function updateCalendarTitle() {
+            if (!calendarTitleEl) return;
+            var m = parseInt(calMonth.value, 10);
+            calendarTitleEl.textContent = (MONTH_LONG[m - 1] || '') + ' ' + calYear.value + ' Calendar';
+        }
+        function loadCalendar() {
+            if (loadingEl) loadingEl.style.display = 'inline';
+            var url = new URL(window.location.href);
+            url.searchParams.set('cal_year', calYear.value);
+            url.searchParams.set('cal_month', calMonth.value);
+            url.searchParams.set('ajax', 'calendar');
+            fetch(url.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.text(); }).then(function (html) {
+                gridContainer.innerHTML = html;
+                updateCalendarTitle();
+            }).catch(function () {
+                gridContainer.innerHTML = '<div style="padding:1rem;color:var(--gray-500);">Could not load calendar.</div>';
+            }).finally(function () {
+                if (loadingEl) loadingEl.style.display = 'none';
+            });
+        }
+        calYear.addEventListener('change', loadCalendar);
+        calMonth.addEventListener('change', loadCalendar);
+    })();
+
     // Mobile menu toggle (SAFE)
     const menuToggle = document.getElementById('menuToggle');
     const sidebar = document.getElementById('sidebar');

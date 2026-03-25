@@ -372,6 +372,16 @@
                 <div class="action-title">Sales</div>
                 <div class="action-description">Combined Sales Report</div>
             </a>
+            {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+            <a href="{% url 'accounts_recording_list' %}" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
+                <div class="action-icon">
+                    <i class="fas fa-clipboard-check"></i>
+                </div>
+                <div class="action-title">Accounts</div>
+                <div class="action-description">Accounts Recording</div>
+            </a>
+            {% endif %}
             <a href="{% url 'item_analysis' %}" class="action-button view-quotation">
                 <span class="live-badge-small">LIVE</span>
                 <div class="action-icon">

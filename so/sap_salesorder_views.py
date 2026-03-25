@@ -33,8 +33,28 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
+def _ar_detail_list_back_context(request, *, default_list_url_name, list_back_label):
+    """When opened from Accounts Recording (?from=accounts-recording), back leads there (admins only)."""
+    if request.GET.get("from") == "accounts-recording":
+        u = request.user
+        if u.is_superuser or u.is_staff or (
+            hasattr(u, "role") and u.role and getattr(u.role, "role", None) == "Admin"
+        ):
+            return {
+                "list_back_url": reverse("accounts_recording_list"),
+                "list_back_label": "Back to Accounts Recording",
+                "detail_nav_query": "?from=accounts-recording",
+            }
+    return {
+        "list_back_url": reverse(default_list_url_name),
+        "list_back_label": list_back_label,
+        "detail_nav_query": "",
+    }
+
+
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList, APPROVAL_STATUS_CHOICES
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList, APPROVAL_STATUS_CHOICES, AccountsRecordingEntry
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
@@ -42,6 +62,12 @@ from .sap_salesorder_pdf import generate_sap_salesorder_pdf_bytes
 from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
+from .combined_ar_query import (
+    get_combined_ar_filtered_querysets,
+    combined_ar_totals,
+    combined_ar_summary_metrics,
+    combined_ar_salesmen_list,
+)
 from .sync_services import (
     sync_salesorders_core,
     sync_arinvoices_core,
@@ -6527,7 +6553,7 @@ def arinvoice_detail(request, invoice_number):
             posting_date__gte=invoice.posting_date if invoice.posting_date else None
         ).first()
     
-    return render(request, 'salesorders/arinvoice_detail.html', {
+    ctx = {
         'invoice': invoice,
         'items': items,
         'subtotal': subtotal,
@@ -6539,7 +6565,18 @@ def arinvoice_detail(request, invoice_number):
         'cancel_status_label': cancel_status_label,
         'related_cancellation': related_cancellation,
         'rounding_diff_amount': invoice.rounding_diff_amount or Decimal("0.00"),
-    })
+    }
+    acc_row = AccountsRecordingEntry.objects.filter(
+        document_kind=AccountsRecordingEntry.DocumentKind.INVOICE,
+        document_number=invoice.invoice_number,
+    ).first()
+    ctx['accounts_internal_remark'] = (acc_row.accounts_internal_remark or '') if acc_row else ''
+    ctx.update(_ar_detail_list_back_context(
+        request,
+        default_list_url_name='arinvoice_list',
+        list_back_label='Back to AR Invoices',
+    ))
+    return render(request, 'salesorders/arinvoice_detail.html', ctx)
 
 
 # =====================
@@ -7158,250 +7195,28 @@ def combined_sales_invoices_list(request):
     Combined view that merges AR Invoices and AR Credit Memos into a single list.
     Shows header-level totals with Document Type column to distinguish between invoices and credit memos.
     """
-    # Get filtered querysets for both invoice and credit memo
-    invoice_qs = SAPARInvoice.objects.all()
-    creditmemo_qs = SAPARCreditMemo.objects.all()
-    
-    # Apply salesman scope if user is not staff
-    if not (request.user.is_superuser or request.user.is_staff):
-        invoice_qs = invoice_qs.filter(salesman_scope_q_salesorder(request.user))
-        creditmemo_qs = creditmemo_qs.filter(salesman_scope_q_salesorder(request.user))
-    
-    # Filters
-    q = request.GET.get('q', '').strip()
-    salesmen_filter = request.GET.getlist('salesman')
-    cancel_status_filter = request.GET.get('cancel_status', '').strip()
-    store_filter = request.GET.get('store', '').strip()
-    document_type_filter = request.GET.get('document_type', '').strip()  # 'Invoice', 'Credit Memo', or '' for both
-    start = request.GET.get('start', '').strip()
-    end = request.GET.get('end', '').strip()
-    total_range = request.GET.get('total', '').strip()
-    
-    # Helper function to apply filters to a queryset
-    def apply_filters(qs, is_invoice=True):
-        # Apply Store Filter
-        if store_filter:
-            qs = qs.filter(store=store_filter)
-        
-        # Apply Salesman Filter
-        if salesmen_filter:
-            clean_salesmen = [s for s in salesmen_filter if s.strip()]
-            if clean_salesmen:
-                qs = qs.filter(salesman_name__in=clean_salesmen)
-        
-        # Cancel status filter
-        if cancel_status_filter:
-            if cancel_status_filter == 'csNo':
-                qs = qs.filter(cancel_status='csNo')
-            elif cancel_status_filter == 'csYes':
-                qs = qs.filter(cancel_status='csYes')
-            elif cancel_status_filter == 'csCancellation':
-                qs = qs.filter(cancel_status='csCancellation')
-            elif cancel_status_filter == 'All':
-                pass  # Show all
-            else:
-                qs = qs.filter(cancel_status=cancel_status_filter)
-        
-        # Total range filter
-        if total_range:
-            if total_range == "0-5000":
-                qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
-            elif total_range == "5001-10000":
-                qs = qs.filter(doc_total__gte=5001, doc_total__lte=10000)
-            elif total_range == "10001-25000":
-                qs = qs.filter(doc_total__gte=10001, doc_total__lte=25000)
-            elif total_range == "25001-50000":
-                qs = qs.filter(doc_total__gte=25001, doc_total__lte=50000)
-            elif total_range == "50001-100000":
-                qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
-            elif total_range == "100000+":
-                qs = qs.filter(doc_total__gt=100000)
-        
-        # Search filter
-        if q:
-            if is_invoice:
-                if q.isdigit():
-                    qs = qs.filter(invoice_number__istartswith=q)
-                elif len(q) < 3:
-                    qs = qs.filter(
-                        Q(customer_name__istartswith=q) |
-                        Q(salesman_name__istartswith=q) |
-                        Q(bp_reference_no__istartswith=q)
-                    )
-                else:
-                    qs = qs.filter(
-                        Q(invoice_number__icontains=q) |
-                        Q(customer_name__icontains=q) |
-                        Q(salesman_name__icontains=q) |
-                        Q(bp_reference_no__icontains=q) |
-                        Q(customer_code__icontains=q)
-                    )
-            else:
-                if q.isdigit():
-                    qs = qs.filter(credit_memo_number__istartswith=q)
-                elif len(q) < 3:
-                    qs = qs.filter(
-                        Q(customer_name__istartswith=q) |
-                        Q(salesman_name__istartswith=q) |
-                        Q(bp_reference_no__istartswith=q)
-                    )
-                else:
-                    qs = qs.filter(
-                        Q(credit_memo_number__icontains=q) |
-                        Q(customer_name__icontains=q) |
-                        Q(salesman_name__icontains=q) |
-                        Q(bp_reference_no__icontains=q) |
-                        Q(customer_code__icontains=q)
-                    )
-        
-        # Date filters
-        def parse_date(s):
-            if not s:
-                return None
-            try:
-                if len(s) == 7:  # YYYY-MM
-                    return datetime.strptime(s + '-01', '%Y-%m-%d').date()
-                return datetime.strptime(s, '%Y-%m-%d').date()
-            except ValueError:
-                return None
-        
-        start_date = parse_date(start)
-        end_date = parse_date(end)
-        if start_date:
-            qs = qs.filter(posting_date__gte=start_date)
-        if end_date:
-            qs = qs.filter(posting_date__lte=end_date)
-        
-        return qs
-    
-    # Apply filters to both querysets
-    invoice_qs = apply_filters(invoice_qs, is_invoice=True)
-    creditmemo_qs = apply_filters(creditmemo_qs, is_invoice=False)
-    
-    # Apply document type filter - if specified, only include that type
-    if document_type_filter == 'Invoice':
-        creditmemo_qs = creditmemo_qs.none()  # Exclude credit memos
-    elif document_type_filter == 'Credit Memo':
-        invoice_qs = invoice_qs.none()  # Exclude invoices
-    # If document_type_filter is empty or 'All', include both (no change)
-    
-    # Calculate totals separately
-    invoice_totals = invoice_qs.aggregate(
-        total_without_vat=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
-        total_gross_profit=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
+    invoice_qs, creditmemo_qs, p = get_combined_ar_filtered_querysets(
+        request, request.user, salesman_scope_q_salesorder
     )
-    creditmemo_totals = creditmemo_qs.aggregate(
-        total_without_vat=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField())),
-        total_gross_profit=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
+    store_filter = p["store_filter"]
+    salesmen_filter = p["salesmen_filter"]
+    cancel_status_filter = p["cancel_status_filter"]
+    document_type_filter = p["document_type_filter"]
+    q = p["q"]
+    start = p["start"]
+    end = p["end"]
+    total_range = p["total_range"]
+
+    combined_total_without_vat, combined_total_gp = combined_ar_totals(invoice_qs, creditmemo_qs)
+    summary = combined_ar_summary_metrics(
+        request.user, salesman_scope_q_salesorder, store_filter, salesmen_filter
     )
-    
-    # Combine totals
-    combined_total_without_vat = invoice_totals['total_without_vat'] + creditmemo_totals['total_without_vat']
-    combined_total_gp = invoice_totals['total_gross_profit'] + creditmemo_totals['total_gross_profit']
-    
-    # Calculate summary metrics (Today, Current Month, Current Year)
-    today = date.today()
-    current_year = today.year
-    current_month = today.month
-    
-    # Today metrics (apply store and salesman filters if present)
-    today_invoices = SAPARInvoice.objects.all()
-    today_creditmemos = SAPARCreditMemo.objects.all()
-    if not (request.user.is_superuser or request.user.is_staff):
-        today_invoices = today_invoices.filter(salesman_scope_q_salesorder(request.user))
-        today_creditmemos = today_creditmemos.filter(salesman_scope_q_salesorder(request.user))
-    today_invoices = today_invoices.filter(posting_date=today)
-    today_creditmemos = today_creditmemos.filter(posting_date=today)
-    if store_filter:
-        today_invoices = today_invoices.filter(store=store_filter)
-        today_creditmemos = today_creditmemos.filter(store=store_filter)
-    if salesmen_filter:
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            today_invoices = today_invoices.filter(salesman_name__in=clean_salesmen)
-            today_creditmemos = today_creditmemos.filter(salesman_name__in=clean_salesmen)
-    
-    today_sales_agg = today_invoices.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    today_sales_cm_agg = today_creditmemos.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    today_sales = today_sales_agg['total'] + today_sales_cm_agg['total']
-    
-    today_gp_agg = today_invoices.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    today_gp_cm_agg = today_creditmemos.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    today_gp = today_gp_agg['total'] + today_gp_cm_agg['total']
-    
-    # Current Month metrics
-    month_invoices = SAPARInvoice.objects.all()
-    month_creditmemos = SAPARCreditMemo.objects.all()
-    if not (request.user.is_superuser or request.user.is_staff):
-        month_invoices = month_invoices.filter(salesman_scope_q_salesorder(request.user))
-        month_creditmemos = month_creditmemos.filter(salesman_scope_q_salesorder(request.user))
-    month_invoices = month_invoices.filter(posting_date__year=current_year, posting_date__month=current_month)
-    month_creditmemos = month_creditmemos.filter(posting_date__year=current_year, posting_date__month=current_month)
-    if store_filter:
-        month_invoices = month_invoices.filter(store=store_filter)
-        month_creditmemos = month_creditmemos.filter(store=store_filter)
-    if salesmen_filter:
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            month_invoices = month_invoices.filter(salesman_name__in=clean_salesmen)
-            month_creditmemos = month_creditmemos.filter(salesman_name__in=clean_salesmen)
-    
-    month_sales_agg = month_invoices.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    month_sales_cm_agg = month_creditmemos.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    month_sales = month_sales_agg['total'] + month_sales_cm_agg['total']
-    
-    month_gp_agg = month_invoices.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    month_gp_cm_agg = month_creditmemos.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    month_gp = month_gp_agg['total'] + month_gp_cm_agg['total']
-    
-    # Current Year metrics
-    year_invoices = SAPARInvoice.objects.all()
-    year_creditmemos = SAPARCreditMemo.objects.all()
-    if not (request.user.is_superuser or request.user.is_staff):
-        year_invoices = year_invoices.filter(salesman_scope_q_salesorder(request.user))
-        year_creditmemos = year_creditmemos.filter(salesman_scope_q_salesorder(request.user))
-    year_invoices = year_invoices.filter(posting_date__year=current_year)
-    year_creditmemos = year_creditmemos.filter(posting_date__year=current_year)
-    if store_filter:
-        year_invoices = year_invoices.filter(store=store_filter)
-        year_creditmemos = year_creditmemos.filter(store=store_filter)
-    if salesmen_filter:
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            year_invoices = year_invoices.filter(salesman_name__in=clean_salesmen)
-            year_creditmemos = year_creditmemos.filter(salesman_name__in=clean_salesmen)
-    
-    year_sales_agg = year_invoices.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    year_sales_cm_agg = year_creditmemos.aggregate(
-        total=Coalesce(Sum('doc_total_without_vat'), Value(0, output_field=DecimalField()))
-    )
-    year_sales = year_sales_agg['total'] + year_sales_cm_agg['total']
-    
-    year_gp_agg = year_invoices.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    year_gp_cm_agg = year_creditmemos.aggregate(
-        total=Coalesce(Sum('total_gross_profit'), Value(0, output_field=DecimalField()))
-    )
-    year_gp = year_gp_agg['total'] + year_gp_cm_agg['total']
+    today_sales = summary["today_sales"]
+    today_gp = summary["today_gp"]
+    month_sales = summary["month_sales"]
+    month_gp = summary["month_gp"]
+    year_sales = summary["year_sales"]
+    year_gp = summary["year_gp"]
     
     # Order both querysets
     invoice_qs = invoice_qs.order_by('-posting_date', '-invoice_number')
@@ -7445,24 +7260,8 @@ def combined_sales_invoices_list(request):
     paginator = Paginator(combined_list, page_size)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Get distinct salesmen from both models
-    invoice_salesmen = (
-        SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
-        .exclude(salesman_name__isnull=True)
-        .exclude(salesman_name='')
-        .values_list('salesman_name', flat=True)
-        .distinct()
-    )
-    creditmemo_salesmen = (
-        SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
-        .exclude(salesman_name__isnull=True)
-        .exclude(salesman_name='')
-        .values_list('salesman_name', flat=True)
-        .distinct()
-    )
-    # Combine and deduplicate salesmen
-    all_salesmen = sorted(set(list(invoice_salesmen) + list(creditmemo_salesmen)))
+
+    all_salesmen = combined_ar_salesmen_list(request.user, salesman_scope_q_salesorder)
     
     # Check if user is admin
     is_admin = request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin')
@@ -7539,7 +7338,7 @@ def arcreditmemo_detail(request, credit_memo_number):
             posting_date__gte=creditmemo.posting_date if creditmemo.posting_date else None
         ).first()
     
-    return render(request, 'salesorders/arcreditmemo_detail.html', {
+    ctx = {
         'creditmemo': creditmemo,
         'items': items,
         'subtotal': subtotal,
@@ -7551,7 +7350,18 @@ def arcreditmemo_detail(request, credit_memo_number):
         'cancel_status_label': cancel_status_label,
         'related_cancellation': related_cancellation,
         'rounding_diff_amount': creditmemo.rounding_diff_amount or Decimal("0.00"),
-    })
+    }
+    acc_row = AccountsRecordingEntry.objects.filter(
+        document_kind=AccountsRecordingEntry.DocumentKind.CREDIT_MEMO,
+        document_number=creditmemo.credit_memo_number,
+    ).first()
+    ctx['accounts_internal_remark'] = (acc_row.accounts_internal_remark or '') if acc_row else ''
+    ctx.update(_ar_detail_list_back_context(
+        request,
+        default_list_url_name='arcreditmemo_list',
+        list_back_label='Back to AR Credit Memos',
+    ))
+    return render(request, 'salesorders/arcreditmemo_detail.html', ctx)
 
 
 @login_required

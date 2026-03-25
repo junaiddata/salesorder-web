@@ -300,10 +300,33 @@
     .related-notice a:hover {
       text-decoration: underline;
     }
+
+    .acc-remark-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 12px 14px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      line-height: 1.5;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      resize: vertical;
+    }
+    .acc-remark-textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
   </style>
 </head>
 <body>
+  {% csrf_token %}
   <div class="container">
+    {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+    <div id="acc-remark-config" data-doc-kind="invoice" data-doc-number="{{ invoice.invoice_number }}" hidden></div>
+    {% endif %}
     <!-- Header -->
     <header class="header">
       <div class="header-left">
@@ -316,9 +339,9 @@
         <p>{{ invoice.customer_name }}</p>
       </div>
       <div class="header-actions">
-        <a class="btn btn-secondary" href="{% url 'arinvoice_list' %}">
+        <a class="btn btn-secondary" href="{{ list_back_url }}">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-          Back to List
+          {{ list_back_label }}
         </a>
         {% if user.is_staff or user.is_superuser %}
           <a class="btn btn-primary" href="{% url 'sync_arinvoices_api' %}">Sync from API</a>
@@ -368,7 +391,7 @@
           {% if related_cancellation %}
           <div class="related-notice">
             ⚠️ This invoice is cancelled. Related cancellation invoice: 
-            <a href="{% url 'arinvoice_detail' related_cancellation.invoice_number %}">{{ related_cancellation.invoice_number }}</a>
+            <a href="{% url 'arinvoice_detail' related_cancellation.invoice_number %}{{ detail_nav_query }}">{{ related_cancellation.invoice_number }}</a>
           </div>
           {% endif %}
         </div>
@@ -418,6 +441,26 @@
         </div>
       </div>
     </div>
+
+    {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+    <!-- Accounts internal remark (saved with Accounts Recording) -->
+    <div class="card">
+      <div class="card-header">Accounts internal remark</div>
+      <div class="card-body">
+        <p style="font-size:0.813rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5;">
+          For accounts use only. A short preview appears on the
+          <a href="{% url 'accounts_recording_list' %}" style="color:var(--primary);font-weight:600;text-decoration:none;">Accounts Recording</a>
+          list; click the preview there to read the full text.
+        </p>
+        <label for="acc-internal-remark" class="info-label" style="margin-bottom:6px;">Remark</label>
+        <textarea id="acc-internal-remark" class="acc-remark-textarea" name="accounts_internal_remark">{{ accounts_internal_remark }}</textarea>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary" id="acc-internal-remark-save">Save remark</button>
+          <span id="acc-internal-remark-msg" style="font-size:0.875rem;color:var(--text-secondary);"></span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Comments -->
     {% if invoice.comments %}
@@ -484,11 +527,62 @@
 
     <!-- Footer Actions -->
     <div style="margin-top: 20px;">
-      <a class="btn btn-secondary" href="{% url 'arinvoice_list' %}">
+      <a class="btn btn-secondary" href="{{ list_back_url }}">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-        Back to AR Invoices
+        {{ list_back_label }}
       </a>
     </div>
   </div>
+  {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+  <script>
+    (function() {
+      var cfg = document.getElementById('acc-remark-config');
+      var btn = document.getElementById('acc-internal-remark-save');
+      var ta = document.getElementById('acc-internal-remark');
+      var msg = document.getElementById('acc-internal-remark-msg');
+      if (!cfg || !btn || !ta) return;
+      function getCookie(name) {
+        var v = null;
+        if (document.cookie && document.cookie !== '') {
+          document.cookie.split(';').forEach(function(part) {
+            var s = part.trim();
+            if (s.indexOf(name + '=') === 0) v = decodeURIComponent(s.slice(name.length + 1));
+          });
+        }
+        return v;
+      }
+      var saveUrl = '{% url "accounts_recording_save" %}';
+      btn.addEventListener('click', function() {
+        if (msg) { msg.textContent = ''; msg.style.color = ''; }
+        fetch(saveUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken') || (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+          },
+          body: JSON.stringify({
+            document_kind: cfg.getAttribute('data-doc-kind'),
+            document_number: cfg.getAttribute('data-doc-number'),
+            accounts_internal_remark: ta.value
+          })
+        })
+          .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+          .then(function(res) {
+            if (!msg) return;
+            if (res.ok && res.data.success) {
+              msg.textContent = 'Saved.';
+              msg.style.color = 'var(--success)';
+            } else {
+              msg.textContent = (res.data && res.data.error) ? res.data.error : 'Save failed';
+              msg.style.color = '#b91c1c';
+            }
+          })
+          .catch(function() {
+            if (msg) { msg.textContent = 'Network error'; msg.style.color = '#b91c1c'; }
+          });
+      });
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accounts Recording</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --bg-pattern: #f1f5f9;
+      --surface: #ffffff;
+      --surface-hover: #fafbfc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* Filters */
+    .filters-card {
+      margin-bottom: 20px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    @media (min-width: 1024px) {
+      .filters-grid {
+        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
+      }
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .input:focus, .select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+    }
+
+    .stat-value {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-value.highlight {
+      color: var(--success);
+    }
+
+    /* Multi-select */
+    .multi-select {
+      position: relative;
+    }
+
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--text-muted);
+    }
+
+    .select-box::after {
+      content: '▾';
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    /* Table */
+    .table-card {
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1420px;
+    }
+
+    /* Accounts internal remark: click for full text (same pattern as SAP sales order list) */
+    .cell-remark {
+      color: #64748b;
+      font-size: 0.68rem;
+      max-width: 72px;
+    }
+    .cell-remark .remark-preview {
+      cursor: pointer;
+      display: inline-block;
+      max-width: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-bottom: 1px dashed #94a3b8;
+    }
+    .cell-remark .remark-preview:hover {
+      color: #3b82f6;
+      border-bottom-color: #3b82f6;
+    }
+    #accRemarkPopup {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      width: 280px;
+      max-width: 90vw;
+      padding: 0.6rem 0.75rem;
+      background: #1e293b;
+      color: #f1f5f9;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      line-height: 1.5;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #accRemarkPopup.visible {
+      display: block;
+    }
+
+    .cell-input, .cell-select {
+      width: 100%;
+      max-width: 9rem;
+      padding: 4px 6px;
+      font-size: 0.7rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .cell-input:focus, .cell-select:focus {
+      border-color: var(--primary);
+      outline: none;
+    }
+
+    .acc-col-ctrl { max-width: 5.5rem; }
+    select.cell-select.acc-handed { max-width: 14rem; }
+    .acc-saving td { opacity: 0.7; }
+    .acc-row-error td { background: #fef2f2 !important; }
+
+    thead th {
+      padding: 4px 8px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      line-height: 1.25;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text);
+    }
+
+    tbody tr {
+      transition: background var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--surface-hover);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .col-date {
+      white-space: nowrap;
+      min-width: 4.5rem;
+    }
+
+    .col-customer {
+      white-space: nowrap;
+    }
+
+    .col-narrow {
+      width: 1%;
+      padding-left: 4px !important;
+      padding-right: 4px !important;
+      white-space: nowrap;
+    }
+
+    .so-link {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .so-link:hover {
+      text-decoration: underline;
+    }
+
+    .text-muted {
+      color: var(--text-secondary);
+    }
+
+    /* Status Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 5px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+
+    .badge-open {
+      background: var(--success-light);
+      color: var(--success);
+    }
+
+    .badge-closed {
+      background: var(--bg);
+      color: var(--text-secondary);
+    }
+
+    .badge-invoice {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .badge-creditmemo {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    /* Footer / Pagination */
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+    }
+
+    .pagination {
+      display: flex;
+      gap: 4px;
+    }
+
+    .pagination a, .pagination span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .pagination a:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .pagination .active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .pagination .disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .total-count {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .total-count strong {
+      color: var(--text);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 24px 16px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state svg {
+      width: 32px;
+      height: 32px;
+      margin-bottom: 8px;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+  {% csrf_token %}
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>Accounts Recording</h1>
+        <p>Combined invoices and credit memos — CTRL, handover, and status (saved automatically)</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-primary" href="{% url 'export_accounts_recording_excel' %}?{{ request.GET.urlencode }}">Export Excel</a>
+        <a class="btn btn-secondary" href="{% url 'export_accounts_recording_pdf' %}?{{ request.GET.urlencode }}">Export PDF</a>
+        <a class="btn btn-secondary" href="{% url 'combined_sales_invoices_list' %}?{{ request.GET.urlencode }}">Combined Report</a>
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">Home</a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="card filters-card">
+      <form id="filters" class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Doc No, Customer, Salesman...">
+        </div>
+
+        <div class="field">
+          <label>Salesman</label>
+          <div class="multi-select" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger">
+              <span id="salesman-text">All Salesmen</span>
+            </div>
+            <div class="options-container" id="salesman-options">
+              {% for s in salesmen %}
+                <label class="option-label">
+                  <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
+                  {{ s }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Start Date</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+
+        <div class="field">
+          <label>End Date</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+
+        <div class="field">
+          <label>Cancel Status</label>
+          <select class="select" name="cancel_status">
+            <option value="All" {% if filters.cancel_status == 'All' %}selected{% endif %}>All</option>
+            <option value="csNo" {% if filters.cancel_status == 'csNo' %}selected{% endif %}>Active</option>
+            <option value="csYes" {% if filters.cancel_status == 'csYes' %}selected{% endif %}>Cancelled</option>
+            <option value="csCancellation" {% if filters.cancel_status == 'csCancellation' %}selected{% endif %}>Cancellation</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Store</label>
+          <select class="select" name="store">
+            <option value="">All Stores</option>
+            <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
+            <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Document Type</label>
+          <select class="select" name="document_type">
+            <option value="All" {% if filters.document_type == 'All' or not filters.document_type %}selected{% endif %}>All (Invoices & Credit Memos)</option>
+            <option value="Invoice" {% if filters.document_type == 'Invoice' %}selected{% endif %}>Invoices Only</option>
+            <option value="Credit Memo" {% if filters.document_type == 'Credit Memo' %}selected{% endif %}>Credit Memos Only</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Amount Range</label>
+          <select class="select" name="total">
+            <option value="">All</option>
+            <option value="0-5000" {% if filters.total == '0-5000' %}selected{% endif %}>0 - 5K</option>
+            <option value="5001-10000" {% if filters.total == '5001-10000' %}selected{% endif %}>5K - 10K</option>
+            <option value="10001-25000" {% if filters.total == '10001-25000' %}selected{% endif %}>10K - 25K</option>
+            <option value="25001-50000" {% if filters.total == '25001-50000' %}selected{% endif %}>25K - 50K</option>
+            <option value="50001-100000" {% if filters.total == '50001-100000' %}selected{% endif %}>50K - 100K</option>
+            <option value="100000+" {% if filters.total == '100000+' %}selected{% endif %}>100K+</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
+        </div>
+
+        <div class="field" style="align-self:end;">
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+
+      <!-- Summary Metrics Cards -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Today Sales</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{{ today_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Today GP</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{% if is_admin %}{{ today_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Month Sales</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{{ month_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Month GP</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{% if is_admin %}{{ month_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Year Sales</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{{ year_sales|default:0|floatformat:2 }}</div>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; box-shadow: var(--shadow);">
+          <div style="font-size: 0.65rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em;">Year GP</div>
+          <div style="font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.2;">{% if is_admin %}{{ year_gp|default:0|floatformat:2 }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
+
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">Total (without VAT):</span>
+          <span class="stat-value">{{ total_without_vat_value|default:0|floatformat:2 }}</span>
+        </div>
+        {% if user.is_staff or user.is_superuser %}
+        <div class="stat-item">
+          <span class="stat-label">Total GP:</span>
+          <span class="stat-value">{{ total_gross_profit_value|default:0|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-narrow">Type</th>
+              <th class="col-date">Inv. date</th>
+              <th>Inv. no.</th>
+              <th class="acc-col-ctrl">Ctrl no.</th>
+              <th class="col-customer">Customer</th>
+              <th>Salesman</th>
+              <th>LPO</th>
+              <th>Handed to</th>
+              <th class="col-date">Handed date</th>
+              <th class="col-narrow">Recv. back</th>
+              <th>A/c int. remark</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% include 'salesorders/_accounts_recording_rows.html' %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div class="table-footer">
+        <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> documents</div>
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      </div>
+    </div>
+  </div>
+
+  <div id="accRemarkPopup" aria-live="polite"></div>
+
+  <script>
+    const ACC_SAVE_URL = '{% url "accounts_recording_save" %}';
+
+    function getCookie(name) {
+      let v = null;
+      if (document.cookie && document.cookie !== '') {
+        document.cookie.split(';').forEach(function(part) {
+          const s = part.trim();
+          if (s.startsWith(name + '=')) v = decodeURIComponent(s.slice(name.length + 1));
+        });
+      }
+      return v;
+    }
+
+    const csrftoken = getCookie('csrftoken');
+
+    function rowPayload(tr, manualStatus) {
+      return {
+        document_kind: tr.getAttribute('data-doc-kind'),
+        document_number: tr.getAttribute('data-doc-number'),
+        ctrl_number: tr.querySelector('.acc-ctrl').value,
+        handed_to_salesman: tr.querySelector('.acc-handed').value,
+        handed_over_date: tr.querySelector('.acc-date').value,
+        received_back: tr.querySelector('.acc-received').checked,
+        status: tr.querySelector('.acc-status').value,
+        manual_status: !!manualStatus
+      };
+    }
+
+    function applyRowFromServer(tr, row) {
+      if (!row) return;
+      const st = tr.querySelector('.acc-status');
+      if (row.status) st.value = row.status;
+      const dt = tr.querySelector('.acc-date');
+      if (row.handed_over_date !== undefined) dt.value = row.handed_over_date || '';
+      const recv = tr.querySelector('.acc-received');
+      if (row.received_back !== undefined) recv.checked = !!row.received_back;
+      const hd = tr.querySelector('.acc-handed');
+      var hv = (row.handed_select_value !== undefined && row.handed_select_value !== null)
+        ? row.handed_select_value
+        : (row.handed_to_salesman || '');
+      if (hv && !Array.from(hd.options).some(function(o) { return o.value === hv; })) {
+        var opt = document.createElement('option');
+        opt.value = hv;
+        opt.textContent = hv;
+        hd.appendChild(opt);
+      }
+      hd.value = hv || '';
+      const cx = tr.querySelector('.acc-ctrl');
+      if (row.ctrl_number !== undefined) cx.value = row.ctrl_number || '';
+    }
+
+    function saveRow(tr, manualStatus) {
+      tr.classList.remove('acc-row-error');
+      tr.classList.add('acc-saving');
+      const body = JSON.stringify(rowPayload(tr, manualStatus));
+      fetch(ACC_SAVE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrftoken || ''
+        },
+        body: body
+      })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+          tr.classList.remove('acc-saving');
+          if (!res.ok || !res.data.success) {
+            tr.classList.add('acc-row-error');
+            return;
+          }
+          applyRowFromServer(tr, res.data.row);
+        })
+        .catch(function() {
+          tr.classList.remove('acc-saving');
+          tr.classList.add('acc-row-error');
+        });
+    }
+
+    function debounce(fn, ms) {
+      let t;
+      return function() {
+        const args = arguments;
+        clearTimeout(t);
+        t = setTimeout(function() { fn.apply(null, args); }, ms);
+      };
+    }
+
+    function todayISO() {
+      var d = new Date();
+      var m = String(d.getMonth() + 1);
+      var day = String(d.getDate());
+      if (m.length === 1) m = '0' + m;
+      if (day.length === 1) day = '0' + day;
+      return d.getFullYear() + '-' + m + '-' + day;
+    }
+
+    function primeAccHandoverDate(el, tr) {
+      if (el.value && String(el.value).length > 0) return;
+      var pre = el.getAttribute('data-acc-handover-prefill');
+      el.value = (pre && pre.length >= 10) ? pre.slice(0, 10) : todayISO();
+      saveRow(tr, false);
+    }
+
+    document.querySelectorAll('tr.acc-row').forEach(function(tr) {
+      const st = tr.querySelector('.acc-status');
+      st.addEventListener('change', function() { saveRow(tr, true); });
+
+      tr.querySelector('.acc-handed').addEventListener('change', function() { saveRow(tr, false); });
+      const dateEl = tr.querySelector('.acc-date');
+      dateEl.addEventListener('change', function() { saveRow(tr, false); });
+      function prime() { primeAccHandoverDate(dateEl, tr); }
+      dateEl.addEventListener('focusin', prime);
+      dateEl.addEventListener('pointerdown', prime);
+      dateEl.addEventListener('click', prime);
+      dateEl.addEventListener('touchstart', prime, { passive: true });
+      tr.querySelector('.acc-received').addEventListener('change', function() { saveRow(tr, false); });
+
+      const ctrl = tr.querySelector('.acc-ctrl');
+      const debouncedSave = debounce(function() { saveRow(tr, false); }, 450);
+      ctrl.addEventListener('input', debouncedSave);
+    });
+
+    // Multi-select functionality
+    const salesmanTrigger = document.getElementById('salesman-trigger');
+    const salesmanOptions = document.getElementById('salesman-options');
+    const salesmanText = document.getElementById('salesman-text');
+    const salesmanCheckboxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
+
+    if (salesmanTrigger) {
+      salesmanTrigger.addEventListener('click', () => {
+        salesmanOptions.classList.toggle('active');
+      });
+
+      // Update text when checkboxes change
+      salesmanCheckboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
+          if (checked.length === 0) {
+            salesmanText.textContent = 'All Salesmen';
+          } else if (checked.length === 1) {
+            salesmanText.textContent = checked[0].nextSibling.textContent.trim();
+          } else {
+            salesmanText.textContent = `${checked.length} selected`;
+          }
+        });
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!salesmanTrigger.contains(e.target) && !salesmanOptions.contains(e.target)) {
+          salesmanOptions.classList.remove('active');
+        }
+      });
+
+      // Initialize text
+      const checked = Array.from(salesmanCheckboxes).filter(c => c.checked);
+      if (checked.length === 0) {
+        salesmanText.textContent = 'All Salesmen';
+      } else if (checked.length === 1) {
+        salesmanText.textContent = checked[0].nextSibling.textContent.trim();
+      } else {
+        salesmanText.textContent = `${checked.length} selected`;
+      }
+    }
+
+    // Accounts internal remark: click preview for full text
+    document.addEventListener('DOMContentLoaded', function() {
+      var remarkPopup = document.getElementById('accRemarkPopup');
+      if (!remarkPopup) return;
+      var activeRemarkEl = null;
+      document.addEventListener('click', function(e) {
+        var preview = e.target.closest('.remark-preview');
+        if (preview && preview.closest('table')) {
+          e.stopPropagation();
+          if (activeRemarkEl === preview) {
+            remarkPopup.classList.remove('visible');
+            activeRemarkEl = null;
+            return;
+          }
+          activeRemarkEl = preview;
+          remarkPopup.textContent = preview.getAttribute('data-remark') || '';
+          remarkPopup.classList.add('visible');
+          var rect = preview.getBoundingClientRect();
+          var popupW = 280;
+          var left = rect.left;
+          if (left + popupW > window.innerWidth - 10) { left = window.innerWidth - popupW - 10; }
+          if (left < 10) left = 10;
+          var top = rect.top - 8;
+          remarkPopup.style.left = left + 'px';
+          remarkPopup.style.top = 'auto';
+          remarkPopup.style.bottom = (window.innerHeight - top) + 'px';
+          return;
+        }
+        if (!e.target.closest('#accRemarkPopup')) {
+          remarkPopup.classList.remove('visible');
+          activeRemarkEl = null;
+        }
+      });
+    });
+  </script>
+</body>
+</html>

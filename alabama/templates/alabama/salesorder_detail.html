@@ -22,6 +22,12 @@
     tbody td { padding: 8px 12px; font-size: 0.8rem; border-bottom: 1px solid #f1f5f9; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .open-qty-highlight { background: #fef3c7; }
+    .remarks-textarea {
+      width: 100%; min-height: 100px; padding: 10px 12px; font-size: 0.875rem; font-family: inherit;
+      border: 1px solid var(--gray-200); border-radius: 8px; resize: vertical;
+    }
+    .remarks-readonly { white-space: pre-wrap; font-size: 0.875rem; color: var(--gray-800); line-height: 1.5; }
+    .telegram-hint { font-size: 0.7rem; color: var(--gray-500); margin-top: 8px; line-height: 1.4; }
   </style>
 {% endblock %}
 
@@ -74,11 +80,37 @@
         <span class="info-value">{{ salesorder.row_total_sum|default:0|floatformat:2 }}</span>
       </div>
     </div>
-    {% if salesorder.remarks %}
-    <div class="info-item" style="margin-top: 0.5rem;">
-      <span class="info-label">Remarks</span>
-      <span class="info-value">{{ salesorder.remarks }}</span>
+    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--gray-200);">
+      <span class="info-label">SAP remarks (from Excel / upload)</span>
+      <div class="remarks-readonly" style="margin-top: 6px; color: var(--gray-700);">{{ salesorder.remarks|default:"—" }}</div>
     </div>
+  </div>
+
+  <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+    <h3 class="section-title" style="margin-bottom: 0.75rem; font-size: 1rem;">Management remarks</h3>
+    <p class="text-muted" style="font-size:0.75rem; margin-bottom:0.5rem; color:var(--gray-500);">Separate from SAP remarks above. Shown to authorized users; can be sent to the salesman Telegram group.</p>
+    {% if can_edit_management_remarks %}
+    <form method="post" action="{% url 'alabama:salesorder_update_remarks' salesorder.so_number %}" id="alabama-remarks-form">
+      {% csrf_token %}
+      <textarea name="management_remarks" id="alabama-remarks-textarea" class="remarks-textarea" placeholder="Internal management remarks…">{{ salesorder.management_remarks|default_if_none:'' }}</textarea>
+      <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center;">
+        <button type="submit" class="btn btn-success btn-sm">Save</button>
+        {% if can_send_remarks_telegram %}
+        <button type="button" class="btn btn-secondary btn-sm" id="alabama-send-telegram-btn" title="Send to salesman Telegram group">
+          Send to Telegram
+        </button>
+        {% endif %}
+      </div>
+    </form>
+    {% if not can_send_remarks_telegram %}
+    <p class="telegram-hint">
+      To enable <strong>Send to Telegram</strong>, map the salesman name (after Settings name rules) to a group chat id in
+      <code style="font-size:0.65rem;">alabama/telegram_remarks.py</code> → <code style="font-size:0.65rem;">ALABAMA_SALESMAN_TELEGRAM_GROUPS</code>.
+      Use the same bot token as Junaid (<code style="font-size:0.65rem;">TELEGRAM_MD_APPROVAL_BOT_TOKEN</code> or <code style="font-size:0.65rem;">TELEGRAM_BOT_TOKEN</code>).
+    </p>
+    {% endif %}
+    {% else %}
+    <div class="remarks-readonly">{{ salesorder.management_remarks|default:"—" }}</div>
     {% endif %}
   </div>
 
@@ -126,4 +158,40 @@
       </table>
     </div>
   </div>
+
+  {% if can_edit_management_remarks and can_send_remarks_telegram %}
+  <script>
+    (function() {
+      var form = document.getElementById('alabama-remarks-form');
+      var textarea = document.getElementById('alabama-remarks-textarea');
+      var btn = document.getElementById('alabama-send-telegram-btn');
+      if (!form || !btn) return;
+      btn.addEventListener('click', function() {
+        var orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', form.querySelector('input[name="csrfmiddlewaretoken"]').value);
+        fd.append('management_remarks', textarea ? textarea.value : '');
+        fetch('{% url "alabama:salesorder_send_remarks_telegram" salesorder.so_number %}', {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            btn.disabled = false;
+            btn.textContent = orig;
+            alert(data.success ? 'Sent to Telegram' : (data.error || 'Failed'));
+          })
+          .catch(function() {
+            btn.disabled = false;
+            btn.textContent = orig;
+            alert('Failed to send');
+          });
+      });
+    })();
+  </script>
+  {% endif %}
 {% endblock %}

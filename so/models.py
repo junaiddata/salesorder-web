@@ -774,6 +774,58 @@ class SAPARCreditMemoItem(models.Model):
         return f"{self.credit_memo.credit_memo_number} - {self.item_description}"
 
 
+class AccountsRecordingEntry(models.Model):
+    """Per-document tracking for Accounts Recording list (invoices + credit memos)."""
+
+    class DocumentKind(models.TextChoices):
+        INVOICE = "invoice", "Invoice"
+        CREDIT_MEMO = "credit_memo", "Credit Memo"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        WITH_SALESMAN = "with_salesman", "With Salesman"
+        IN_STORE = "in_store", "In Store"
+        RECEIVED_BY_AC = "received_by_ac", "Received by A/c"
+
+    document_kind = models.CharField(max_length=20, choices=DocumentKind.choices)
+    document_number = models.CharField(max_length=100, db_index=True)
+    ctrl_number = models.CharField(max_length=100, blank=True, null=True)
+    handed_to_salesman = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Empty = same as document salesman",
+    )
+    handed_over_date = models.DateField(blank=True, null=True)
+    received_back = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=32,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    accounts_internal_remark = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Accounts-only internal note; shown on Accounts Recording list and detail.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document_kind", "document_number"],
+                name="unique_accounts_recording_document",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["document_kind", "document_number"]),
+        ]
+
+    def __str__(self):
+        return f"{self.document_kind} {self.document_number}"
+
+
 ################ LOGS #######################
 from django.conf import settings
 from django.db import models

@@ -6,7 +6,8 @@ import pandas as pd
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import Http404
+from django.http import Http404, JsonResponse
+from django.views.decorators.http import require_POST
 from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
@@ -16,6 +17,25 @@ from decimal import Decimal
 
 from .models import AlabamaSalesOrder, AlabamaSalesOrderItem
 from .views import alabama_salesman_scope_q, normalize_alabama_salesman
+from .telegram_remarks import can_send_alabama_remarks_telegram, send_alabama_remarks_to_salesman_telegram
+
+
+def _can_edit_alabama_management_remarks(request):
+    """Alabama Admin (company), manager username, Django staff/superuser."""
+    if request.user.is_superuser or request.user.is_staff:
+        return True
+    if (request.user.username or '').strip().lower() == 'manager':
+        return True
+    role = getattr(request.user, 'role', None)
+    if role and role.role == 'Admin' and getattr(role, 'company', '') == 'Alabama':
+        return True
+    return False
+
+
+def _alabama_salesorder_detail_allowed(request, salesorder):
+    return AlabamaSalesOrder.objects.filter(
+        Q(pk=salesorder.pk) & alabama_salesman_scope_q(request.user, field='salesman_name')
+    ).exists()
 
 
 def _open_row_status_q() -> Q:
@@ -74,9 +94,9 @@ def salesorder_list(request):
             qs = qs.filter(document_total__gt=100000)
 
     if remarks_filter == "YES":
-        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+        qs = qs.filter(management_remarks__isnull=False).exclude(management_remarks__exact="")
     elif remarks_filter == "NO":
-        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
+        qs = qs.filter(Q(management_remarks__isnull=True) | Q(management_remarks__exact=""))
 
     if q:
         if q.isdigit():
@@ -175,10 +195,7 @@ def salesorder_list(request):
 def salesorder_detail(request, so_number):
     salesorder = get_object_or_404(AlabamaSalesOrder, so_number=so_number)
 
-    allowed = AlabamaSalesOrder.objects.filter(
-        Q(pk=salesorder.pk) & alabama_salesman_scope_q(request.user, field='salesman_name')
-    ).exists()
-    if not allowed:
+    if not _alabama_salesorder_detail_allowed(request, salesorder):
         raise Http404("Sales order not found")
 
     items = salesorder.items.all().order_by('line_no', 'id')
@@ -202,10 +219,52 @@ def salesorder_detail(request, so_number):
         it.stock_total = sd.get('total')
         it.stock_dip = sd.get('dip')
 
+    can_edit_comments = _can_edit_alabama_management_remarks(request)
+    can_send_telegram = can_edit_comments and can_send_alabama_remarks_telegram(salesorder)
+
     return render(request, 'alabama/salesorder_detail.html', {
         'salesorder': salesorder,
         'items': items_list,
+        'can_edit_management_remarks': can_edit_comments,
+        'can_send_remarks_telegram': can_send_telegram,
     })
+
+
+@login_required
+@require_POST
+def salesorder_update_remarks(request, so_number):
+    salesorder = get_object_or_404(AlabamaSalesOrder, so_number=so_number)
+    if not _alabama_salesorder_detail_allowed(request, salesorder):
+        raise Http404("Sales order not found")
+    if not _can_edit_alabama_management_remarks(request):
+        messages.error(request, "You do not have permission to edit management remarks.")
+        return redirect('alabama:salesorder_detail', so_number=salesorder.so_number)
+
+    text = (request.POST.get('management_remarks') or '').strip()
+    salesorder.management_remarks = text or None
+    salesorder.save(update_fields=['management_remarks'])
+    messages.success(request, "Management remarks updated.")
+    return redirect('alabama:salesorder_detail', so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
+def salesorder_send_remarks_telegram(request, so_number):
+    """POST: save remarks and notify salesman's Telegram group (JSON)."""
+    salesorder = get_object_or_404(AlabamaSalesOrder, so_number=so_number)
+    if not _alabama_salesorder_detail_allowed(request, salesorder):
+        return JsonResponse({'success': False, 'error': 'Not found'}, status=404)
+    if not _can_edit_alabama_management_remarks(request):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    remark_text = (request.POST.get('management_remarks') or '').strip() or (salesorder.management_remarks or '')
+    salesorder.management_remarks = remark_text
+    salesorder.save(update_fields=['management_remarks'])
+
+    ok, err = send_alabama_remarks_to_salesman_telegram(salesorder, remark_text)
+    if ok:
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': err or 'Unknown error'}, status=400)
 
 
 @login_required

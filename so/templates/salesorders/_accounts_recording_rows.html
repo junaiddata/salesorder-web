@@ -1,0 +1,66 @@
+{% for doc in page_obj %}
+{% with entry=doc.accounts_entry sel=doc.accounts_handed_select_value %}
+<tr class="acc-row" data-doc-kind="{% if doc.document_type == 'Invoice' %}invoice{% else %}credit_memo{% endif %}" data-doc-number="{{ doc.document_number }}">
+  <td class="col-narrow">
+    {% if doc.document_type == 'Invoice' %}
+      <span class="badge badge-invoice">Invoice</span>
+    {% else %}
+      <span class="badge badge-creditmemo">Cr. memo</span>
+    {% endif %}
+  </td>
+  <td class="col-date">{{ doc.posting_date|date:"d-m-y"|default:"-" }}</td>
+  <td>
+    {% if doc.document_type == 'Invoice' %}
+      <a class="so-link" href="{% url 'arinvoice_detail' doc.invoice_number %}?from=accounts-recording">{{ doc.invoice_number }}</a>
+    {% else %}
+      <a class="so-link" href="{% url 'arcreditmemo_detail' doc.credit_memo_number %}?from=accounts-recording">{{ doc.credit_memo_number }}</a>
+    {% endif %}
+  </td>
+  <td class="acc-col-ctrl">
+    <input type="text" class="cell-input acc-ctrl" autocomplete="off" placeholder="CTRL" value="{% if entry %}{{ entry.ctrl_number|default:'' }}{% endif %}">
+  </td>
+  <td class="col-customer">{{ doc.customer_name }}</td>
+  <td class="text-muted">{{ doc.salesman_name|default:"—" }}</td>
+  <td class="text-muted">{{ doc.bp_reference_no|default:"—" }}</td>
+  <td>
+    <select class="cell-select acc-handed" title="Handed to: choose a salesman or Same as invoiced salesman.">
+      <option value="" {% if not sel %}selected{% endif %}>— Select —</option>
+      <option value="__doc_salesman__" {% if sel == '__doc_salesman__' %}selected{% endif %}>Same as invoiced salesman</option>
+      {% if sel and sel != '__doc_salesman__' and sel not in salesmen_ho %}
+        <option value="{{ sel }}" selected>{{ sel }}</option>
+      {% endif %}
+      {% for s in salesmen_ho %}
+        <option value="{{ s }}" {% if sel == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <input type="date" class="cell-input acc-date"{% if not entry or not entry.handed_over_date %} data-acc-handover-prefill="{{ acc_handover_today }}"{% endif %} value="{% if entry and entry.handed_over_date %}{{ entry.handed_over_date|date:'Y-m-d' }}{% endif %}">
+  </td>
+  <td class="col-narrow" style="text-align:center;">
+    <input type="checkbox" class="acc-received" {% if entry and entry.received_back %}checked{% endif %}>
+  </td>
+  <td class="cell-remark">
+    {% if entry and entry.accounts_internal_remark %}
+      <span class="remark-preview" data-remark="{{ entry.accounts_internal_remark|escape }}">{{ entry.accounts_internal_remark|truncatechars:14 }}</span>
+    {% else %}
+      <span class="text-muted">—</span>
+    {% endif %}
+  </td>
+  <td>
+    <select class="cell-select acc-status">
+      {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if entry %}{% if entry.status == val %}selected{% endif %}{% else %}{% if val == 'pending' %}selected{% endif %}{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </td>
+</tr>
+{% endwith %}
+{% empty %}
+<tr>
+  <td colspan="12" class="empty-state">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="display:block;margin:0 auto 6px;opacity:0.3;"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    No documents found
+  </td>
+</tr>
+{% endfor %}

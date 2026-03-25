@@ -109,8 +109,8 @@
         </select>
       </div>
       <div class="field">
-        <label>Remarks</label>
-        <select class="select" name="remarks">
+          <label>Mgmt remarks</label>
+          <select class="select" name="remarks">
           <option value="">All</option>
           <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
           <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
@@ -145,7 +145,8 @@
             <th class="num">Pending Total</th>
             <th class="num">Document Total</th>
             <th>Status</th>
-            <th>Remarks</th>
+            <th>SAP remarks</th>
+            <th>Management</th>
           </tr>
         </thead>
         <tbody>
@@ -167,11 +168,12 @@
                 <span class="badge badge-closed">Closed</span>
               {% endif %}
             </td>
-            <td class="cell-remark" title="{{ so.remarks|default:'' }}">{{ so.remarks|default:"—"|truncatechars:15 }}</td>
+            <td class="cell-remark" title="{{ so.remarks|default:'' }}">{{ so.remarks|default:"—"|truncatechars:12 }}</td>
+            <td class="cell-remark" title="{{ so.management_remarks|default:'' }}">{{ so.management_remarks|default:"—"|truncatechars:12 }}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="9" style="text-align:center; padding:2rem; color:var(--gray-500);">No sales orders found. Upload Excel data from Settings or Upload Sales Orders.</td>
+            <td colspan="10" style="text-align:center; padding:2rem; color:var(--gray-500);">No sales orders found. Upload Excel data from Settings or Upload Sales Orders.</td>
           </tr>
           {% endfor %}
         </tbody>
