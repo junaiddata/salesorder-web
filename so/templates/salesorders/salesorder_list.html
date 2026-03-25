@@ -647,15 +647,18 @@
       <div class="stats-bar">
         <div class="stat-item">
           <span class="stat-label">Pending total (excl. VAT):</span>
-          <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2|intcomma }}</span>
+          <span class="stat-value" id="total-value">—</span>
         </div>
         <div class="stat-item">
           <span class="stat-label">2025 pending (excl. VAT):</span>
-          <span class="stat-value">{{ total_2025|default:0|floatformat:2|intcomma }}</span>
+          <span class="stat-value" id="total-2025">—</span>
         </div>
         <div class="stat-item">
           <span class="stat-label">2026 pending (excl. VAT):</span>
-          <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2|intcomma }}</span>
+          <span class="stat-value highlight" id="total-2026">—</span>
+        </div>
+        <div class="stat-item" style="margin-left:auto; border-style:dashed;">
+          <button type="button" class="btn btn-secondary" id="btn-refresh-so-stats" title="Load pending totals for the current filters (can be slow on large data)">Refresh totals</button>
         </div>
       </div>
     </div>
@@ -749,7 +752,23 @@
       return params;
     }
 
-    function load(params) {
+    function formatStatMoney(n) {
+      return Number(n).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function resetDeferredStats() {
+      ['total-value', 'total-2025', 'total-2026'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+    }
+
+    function load(params, opts) {
+      opts = opts || {};
+      var resetStats = opts.resetStats !== false;
       var qs = params.toString();
       history.replaceState(null, '', '?' + qs);
       sessionStorage.setItem('so_list_filters', qs);
@@ -762,15 +781,38 @@
           body.innerHTML = data.rows_html;
           pagination.innerHTML = data.pagination_html + 
             `<div class="total-count">Showing <strong>${Math.min(data.count, 100)}</strong> of <strong>${data.count}</strong> sales orders</div>`;
-
-          const totalSpan = document.getElementById('total-value');
-          if (totalSpan && data.total_value !== undefined) {
-            totalSpan.textContent = Number(data.total_value).toLocaleString(undefined, {
-              minimumFractionDigits: 2, maximumFractionDigits: 2
-            });
-          }
+          if (resetStats) resetDeferredStats();
         })
         .catch(console.error);
+    }
+
+    const refreshStatsBtn = document.getElementById('btn-refresh-so-stats');
+    if (refreshStatsBtn) {
+      refreshStatsBtn.addEventListener('click', function() {
+        const params = collectParams({});
+        params.delete('page');
+        const btn = refreshStatsBtn;
+        const prev = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Calculating…';
+        fetch('{% url "salesorder_list_stats" %}?' + params.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(r => r.json())
+          .then(data => {
+            const t1 = document.getElementById('total-value');
+            const t2 = document.getElementById('total-2025');
+            const t3 = document.getElementById('total-2026');
+            if (t1 && data.total_value !== undefined) t1.textContent = formatStatMoney(data.total_value);
+            if (t2 && data.total_2025 !== undefined) t2.textContent = formatStatMoney(data.total_2025);
+            if (t3 && data.total_2026 !== undefined) t3.textContent = formatStatMoney(data.total_2026);
+          })
+          .catch(console.error)
+          .finally(function() {
+            btn.disabled = false;
+            btn.textContent = prev;
+          });
+      });
     }
 
     form.addEventListener('submit', function(e) {
@@ -809,7 +851,7 @@
       const a = e.target.closest('a[data-page]');
       if (!a) return;
       e.preventDefault();
-      load(collectParams({ page: a.getAttribute('data-page') }));
+      load(collectParams({ page: a.getAttribute('data-page') }), { resetStats: false });
     });
   })();
 

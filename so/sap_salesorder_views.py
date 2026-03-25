@@ -1123,37 +1123,42 @@ def sync_salesorders_api_receive(request):
 # =====================
 # Salesorder: List
 # =====================
-@login_required
-def salesorder_list(request):
-    # Scope by logged-in user
-    qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+def _salesorder_list_parse_date(s):
+    if not s:
+        return None
+    try:
+        if len(s) == 7:
+            return datetime.strptime(s + '-01', '%Y-%m-%d').date()
+        return datetime.strptime(s, '%Y-%m-%d').date()
+    except ValueError:
+        return None
 
-    # Derive header status from items (Open if ANY line is open)
+
+def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
+    """
+    Shared filters for sales order list + AJAX search + deferred stats.
+    When include_pending_annotation is False (stats endpoint), skip per-row Sum(items)
+    so global aggregates stay a single clean Sum join.
+    """
+    qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
     open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
-    qs = qs.annotate(
+    ann = dict(
         has_open=Exists(open_items_sq),
         display_status=Case(
             When(has_open=True, then=Value("O")),
             default=Value("C"),
             output_field=CharField(),
         ),
-        # Calculate pending_total = sum of pending_amount from all items
-        pending_total=Coalesce(
-            Sum('items__pending_amount'),
-            Value(0, output_field=DecimalField())
-        ),
     )
+    if include_pending_annotation:
+        ann['pending_total'] = Coalesce(
+            Sum('items__pending_amount'),
+            Value(0, output_field=DecimalField()),
+        )
+    qs = qs.annotate(**ann)
 
-    # Filters
     q = request.GET.get('q', '').strip()
-    salesmen_filter = request.GET.getlist('salesman')  # Gets ['Name1', 'Name2']
-
-    # Apply List Filter
-    if salesmen_filter:
-        # Filter out empty strings
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            qs = qs.filter(salesman_name__in=clean_salesmen)
+    salesmen_filter = request.GET.getlist('salesman')
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     status = request.GET.get('status', '').strip()
@@ -1161,11 +1166,15 @@ def salesorder_list(request):
     remarks_filter = request.GET.get('remarks', '').strip()
     approval_status_filter = request.GET.get('approval_status', '').strip()
 
-    # Approval status filter (Admin only - filter applied for all, tabs shown for Admin)
     is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
     valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
     if is_admin and approval_status_filter in valid_approval_statuses:
         qs = qs.filter(approval_status=approval_status_filter)
+
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
 
     if total_range:
         if total_range == "0-5000":
@@ -1203,7 +1212,6 @@ def salesorder_list(request):
                 Q(bp_reference_no__icontains=q)
             )
 
-    # Status filter (based on derived status)
     if status:
         s = status.strip().upper()
         if s in ("OPEN", "O"):
@@ -1213,37 +1221,49 @@ def salesorder_list(request):
         else:
             qs = qs.filter(status__iexact=status)
 
-    # Parse dates (YYYY-MM or YYYY-MM-DD)
-    def parse_date(s):
-        if not s:
-            return None
-        try:
-            if len(s) == 7:  # YYYY-MM
-                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
-            return datetime.strptime(s, '%Y-%m-%d').date()
-        except ValueError:
-            return None
     qs_for_years = qs.all()
-    start_date = parse_date(start)
-    end_date = parse_date(end)
+    start_date = _salesorder_list_parse_date(start)
+    end_date = _salesorder_list_parse_date(end)
     if start_date:
         qs = qs.filter(posting_date__gte=start_date)
     if end_date:
         qs = qs.filter(posting_date__lte=end_date)
 
-    # Calculate totals (pending amounts from items, not document totals)
-    grand_total_agg = qs.aggregate(
-        total=Coalesce(Sum('items__pending_amount'), Value(0, output_field=DecimalField()))
-    )
-    total_value = grand_total_agg['total']
+    meta = {
+        'q': q,
+        'salesmen_filter': salesmen_filter,
+        'start': start,
+        'end': end,
+        'status': status,
+        'total_range': total_range,
+        'remarks_filter': remarks_filter,
+        'approval_status_filter': approval_status_filter,
+        'is_admin': is_admin,
+    }
+    return qs, qs_for_years, meta
 
-    # Calculate Years from 'qs_for_years' (Respects Salesman/Status, IGNORES Date)
+
+@login_required
+def salesorder_list_stats(request):
+    """Deferred pending-total aggregates for the list stats bar (same filters as list)."""
+    qs, qs_for_years, _meta = _salesorder_list_filtered_qs(request, include_pending_annotation=False)
+    grand_total_agg = qs.aggregate(
+        total=Coalesce(Sum('items__pending_amount'), Value(0, output_field=DecimalField())),
+    )
     yearly_agg = qs_for_years.aggregate(
         total_2025=Coalesce(Sum('items__pending_amount', filter=Q(posting_date__year=2025)), Value(0, output_field=DecimalField())),
         total_2026=Coalesce(Sum('items__pending_amount', filter=Q(posting_date__year=2026)), Value(0, output_field=DecimalField())),
     )
-    total_2025 = yearly_agg['total_2025']
-    total_2026 = yearly_agg['total_2026']
+    return JsonResponse({
+        'total_value': float(grand_total_agg['total'] or 0),
+        'total_2025': float(yearly_agg['total_2025'] or 0),
+        'total_2026': float(yearly_agg['total_2026'] or 0),
+    })
+
+
+@login_required
+def salesorder_list(request):
+    qs, _qs_for_years, meta = _salesorder_list_filtered_qs(request, include_pending_annotation=True)
 
     qs = qs.order_by('-posting_date', '-so_number')
 
@@ -1270,22 +1290,19 @@ def salesorder_list(request):
     return render(request, 'salesorders/salesorder_list.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
-        'total_2025': total_2025,
-        'total_2026': total_2026,
         'salesmen': salesmen,
-        'total_value': total_value,
         'filters': {
-            'q': q,
-            'salesmen_filter': salesmen_filter,
-            'status': status,
-            'start': start,
-            'end': end,
+            'q': meta['q'],
+            'salesmen_filter': meta['salesmen_filter'],
+            'status': meta['status'],
+            'start': meta['start'],
+            'end': meta['end'],
             'page_size': page_size,
-            'total': total_range,
-            'remarks': remarks_filter,
-            'approval_status': approval_status_filter,
+            'total': meta['total_range'],
+            'remarks': meta['remarks_filter'],
+            'approval_status': meta['approval_status_filter'],
         },
-        'is_admin': is_admin,
+        'is_admin': meta['is_admin'],
     })
 
 
@@ -1559,118 +1576,8 @@ def salesorder_detail(request, so_number):
 # =====================
 @login_required
 def salesorder_search(request):
-    # Scope by logged-in user
-    qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
-
-    # Derive header status from items (Open if ANY line is open)
-    open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
-    qs = qs.annotate(
-        has_open=Exists(open_items_sq),
-        display_status=Case(
-            When(has_open=True, then=Value("O")),
-            default=Value("C"),
-            output_field=CharField(),
-        ),
-        # Calculate pending_total = sum of pending_amount from all items
-        pending_total=Coalesce(
-            Sum('items__pending_amount'),
-            Value(0, output_field=DecimalField())
-        ),
-    )
-
-    q = request.GET.get('q', '').strip()
-    salesmen_filter = request.GET.getlist('salesman')
-
-    # Logic
-    if salesmen_filter:
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            qs = qs.filter(salesman_name__in=clean_salesmen)
-
-    start = request.GET.get('start', '').strip()
-    end = request.GET.get('end', '').strip()
-    status = request.GET.get('status', '').strip()
-    total_range = request.GET.get('total', '').strip()
-    remarks_filter = request.GET.get('remarks', '').strip()
-    approval_status_filter = request.GET.get('approval_status', '').strip()
-
-    # Approval status filter (Admin only)
-    is_admin_search = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
-    valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
-    if is_admin_search and approval_status_filter in valid_approval_statuses:
-        qs = qs.filter(approval_status=approval_status_filter)
-
-    # Existing filters
-    if q:
-        if q.isdigit():
-            qs = qs.filter(so_number__istartswith=q)
-        elif len(q) < 3:
-            qs = qs.filter(
-                Q(customer_name__istartswith=q) |
-                Q(salesman_name__istartswith=q) |
-                Q(bp_reference_no__istartswith=q)
-            )
-        else:
-            qs = qs.filter(
-                Q(so_number__icontains=q) |
-                Q(customer_name__icontains=q) |
-                Q(salesman_name__icontains=q) |
-                Q(bp_reference_no__icontains=q)
-            )
-
-    # Status filter (based on derived status)
-    if status:
-        s = status.strip().upper()
-        if s in ("OPEN", "O"):
-            qs = qs.filter(has_open=True)
-        elif s in ("CLOSED", "C"):
-            qs = qs.filter(has_open=False)
-        else:
-            qs = qs.filter(status__iexact=status)
-
-    # Remarks filter
-    if remarks_filter == "YES":
-        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
-    elif remarks_filter == "NO":
-        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
-
-    # Date filter
-    def parse_date(s):
-        if not s:
-            return None
-        try:
-            if len(s) == 7:  # YYYY-MM
-                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
-            return datetime.strptime(s, '%Y-%m-%d').date()
-        except ValueError:
-            return None
-
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
-
-    # Total range filter
-    if total_range:
-        if total_range == "0-5000":
-            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
-        elif total_range == "5001-10000":
-            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
-        elif total_range == "10001-25000":
-            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
-        elif total_range == "25001-50000":
-            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
-        elif total_range == "50001-100000":
-            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
-        elif total_range == "100000+":
-            qs = qs.filter(document_total__gt=100000)
-
-    # Total value (sum of pending_amount from items on FILTERED qs)
-    total_value = qs.aggregate(
-        total=Coalesce(Sum('items__pending_amount'), Value(0, output_field=DecimalField()))
-    )['total']
+    qs, _qs_for_years, meta = _salesorder_list_filtered_qs(request, include_pending_annotation=True)
+    is_admin_search = meta['is_admin']
 
     # Order + Pagination
     qs = qs.order_by('-posting_date', '-so_number')
@@ -1697,7 +1604,6 @@ def salesorder_search(request):
         'rows_html': rows_html,
         'pagination_html': pagination_html,
         'count': paginator.count,
-        'total_value': float(total_value or 0),
     })
 
 
@@ -2045,7 +1951,7 @@ def export_salesorder_list_pdf(request):
         Paragraph('<b>SO #</b>', bold_style),
         Paragraph('<b>Customer</b>', bold_style),
         Paragraph('<b>Salesman</b>', bold_style),
-        Paragraph('<b>Status</b>', bold_style),
+        Paragraph('<b>Approval</b>', bold_style),
         Paragraph('<b>Total excl. VAT (AED)</b>', bold_style),
     ]
     table_rows = [hdr]
@@ -2057,14 +1963,14 @@ def export_salesorder_list_pdf(request):
         sum_totals += row_sum
         d = item.posting_date
         date_s = d.strftime('%d/%m/%Y') if d else '—'
-        disp = getattr(item, 'display_status', None) or (item.status or '')
-        st = str(disp).strip().upper()
-        if st in ('O', 'OPEN'):
-            status_label = 'Open'
-        elif st in ('C', 'CLOSED'):
-            status_label = 'Closed'
+        approval_raw = (getattr(item, 'approval_status', None) or '').strip()
+        if approval_raw:
+            if approval_raw in ('SO Closed/Completed', 'Partial DO', 'Trade License Expired'):
+                status_label = f'Approved + {approval_raw}'
+            else:
+                status_label = approval_raw
         else:
-            status_label = str(disp) if disp else '—'
+            status_label = '—'
         table_rows.append([
             Paragraph(html_escape(date_s), cell_style),
             Paragraph(html_escape(str(item.so_number or '—')), cell_style),

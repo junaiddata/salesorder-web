@@ -150,6 +150,7 @@ urlpatterns += [
     path('sappurchaseorders/<str:po_number>/export/', sap_purchaseorder_views.export_sap_purchaseorder_pdf, name='export_sap_purchaseorder_pdf'),
     path('sappurchaseorders/<str:po_number>/export-open/', sap_purchaseorder_views.export_sap_purchaseorder_open_items_pdf, name='export_sap_purchaseorder_open_items_pdf'),
     path('sapsalesorders/', sap_salesorder_views.salesorder_list, name='salesorder_list'),
+    path('sapsalesorders/stats/', sap_salesorder_views.salesorder_list_stats, name='salesorder_list_stats'),
     path('sapsalesorders/ajax/', sap_salesorder_views.salesorder_search, name='salesorder_search'),
     # Static paths must come before <so_number> or "export-list" is treated as an SO number (404).
     path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
