@@ -84,6 +84,7 @@ def _get_approval_emoji(status):
         "pending": "⏳",
         "on_hold": "⏸",
         "review": "🔍",
+        "scheduled": "📅",
     }
     if not status:
         return "📋"

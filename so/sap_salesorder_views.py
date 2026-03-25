@@ -1498,7 +1498,6 @@ def salesorder_detail(request, so_number):
         approval_status_choices = APPROVAL_STATUS_CHOICES
     else:
         approval_status_choices = [c for c in APPROVAL_STATUS_CHOICES if c[0] not in MANAGER_ONLY_STATUSES]
-        # If current status is manager-only, prepend it so it displays correctly (user can change to others)
         if salesorder.approval_status in MANAGER_ONLY_STATUSES:
             approval_status_choices = [(salesorder.approval_status, salesorder.approval_status)] + approval_status_choices
     monthly_pending_data = []
