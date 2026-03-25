@@ -25,7 +25,7 @@ from reportlab.lib.colors import HexColor, white
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, KeepTogether, SimpleDocTemplate, Image, BaseDocTemplate, Frame, PageTemplate
 from reportlab.graphics.shapes import Drawing, Line
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from django.conf import settings
 import requests
 import logging
@@ -1752,7 +1752,8 @@ def export_sap_salesorder_pdf(request, so_number):
 def export_salesorder_list_pdf(request):
     """
     Exports the filtered list of salesorders to a PDF report.
-    Respects: q, salesman, start/end date, status, total range, remarks.
+    Visual theme matches Proforma Invoices list PDF (logo, header, table style).
+    Respects: q, salesman, start/end date, status, total range, remarks, approval_status.
     """
     # 1. APPLY FILTERS (Exact copy from salesorder_list)
     qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
@@ -1840,87 +1841,292 @@ def export_salesorder_list_pdf(request):
     # Ordering
     qs = qs.order_by('-posting_date', '-created_at')
 
-    # Calculate Total Value of Report
-    total_value = qs.aggregate(
-        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField()))
-    )['total']
+    # --- 2. GENERATE PDF (same theme as export_pi_list_pdf) ---
+    MAX_ROWS = 2500
+    total_matching = qs.count()
+    orders_list = list(qs[: MAX_ROWS + 1])
+    truncated = len(orders_list) > MAX_ROWS
+    if truncated:
+        orders_list = orders_list[:MAX_ROWS]
 
-    # --- 2. GENERATE PDF ---
-    response = HttpResponse(content_type='application/pdf')
-    filename = f"Salesorder_Report_{datetime.now().strftime('%Y%m%d')}.pdf"
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    DARK_BLUE = HexColor('#1E3A5F')
+    ORANGE = HexColor('#f0ab00')
+    LIGHT_GRAY = HexColor('#F5F5F5')
+    GRAY_TEXT = HexColor('#808080')
+    LIGHT_BLUE_LINE = HexColor('#4A90D9')
 
-    # Landscape A4 because lists are wide
-    from reportlab.platypus import SimpleDocTemplate
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
-    
-    doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    margin_x = 0.4 * inch
+    margin_y = 0.45 * inch
+    pagesize = landscape(A4)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=pagesize,
+        leftMargin=margin_x,
+        rightMargin=margin_x,
+        topMargin=margin_y,
+        bottomMargin=margin_y,
+    )
+    available_width = pagesize[0] - 2 * margin_x
+
+    pdf_styles = getSampleStyleSheet()
+    company_style = ParagraphStyle(
+        'SOListCompany',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        textColor=DARK_BLUE,
+        leading=11,
+    )
+    address_style = ParagraphStyle(
+        'SOListAddress',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    title_style = ParagraphStyle(
+        'SOListTitle',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=10,
+        textColor=DARK_BLUE,
+    )
+    gray_label = ParagraphStyle(
+        'SOListGray',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=GRAY_TEXT,
+    )
+    bold_style = ParagraphStyle(
+        'SOListBold',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        textColor=colors.black,
+    )
+    cell_style = ParagraphStyle(
+        'SOListCell',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    cell_right = ParagraphStyle(
+        'SOListCellRight',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+    cell_center = ParagraphStyle(
+        'SOListCellCenter',
+        parent=pdf_styles['Normal'],
+        fontName='Helvetica',
+        fontSize=7,
+        textColor=colors.black,
+        alignment=TA_CENTER,
+        leading=9,
+    )
+
+    generated = datetime.now().strftime('%d.%m.%y %H:%M')
+
+    def on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 8)
+        canvas.setFillColor(GRAY_TEXT)
+        num = canvas.getPageNumber()
+        canvas.drawRightString(pagesize[0] - margin_x, margin_y * 0.5, f'Page {num}')
+        if num > 1:
+            canvas.setFont('Helvetica-Bold', 9)
+            canvas.setFillColor(DARK_BLUE)
+            canvas.drawString(margin_x, pagesize[1] - 0.32 * inch, 'Junaid Sanitary & Electrical — Sales Orders List')
+            canvas.setStrokeColor(LIGHT_BLUE_LINE)
+            canvas.setLineWidth(1)
+            canvas.line(margin_x, pagesize[1] - 0.38 * inch, pagesize[0] - margin_x, pagesize[1] - 0.38 * inch)
+        canvas.restoreState()
+
     elements = []
-    styles = getSampleStyleSheet()
 
-    # Title
-    title_text = "Salesorder Sales Report"
-    if start and end:
-        title_text += f" ({start} to {end})"
-    elements.append(Paragraph(title_text, styles['Title']))
-    elements.append(Spacer(1, 20))
+    logo_path = os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png')
+    logo_img = None
+    if os.path.exists(logo_path):
+        try:
+            logo_img = Image(logo_path, width=2.0 * inch, height=0.78 * inch)
+        except Exception:
+            logo_img = None
 
-    # Table Header
-    headers = ['Date', 'SO #', 'Customer Name', 'Salesman', 'Status', 'Total (AED)']
-    data = [headers]
+    left_block = []
+    if logo_img:
+        left_block.append([logo_img])
+    else:
+        left_block.append([Paragraph('<b>JUNAID</b>', company_style)])
+    left_block.append([Spacer(1, 0.06 * inch)])
+    left_block.append([Paragraph(
+        '<b>Junaid Sanitary & Electrical Materials Trading (L.L.C)</b>',
+        company_style,
+    )])
+    left_block.append([Paragraph('Dubai Investment Park-2, Dubai', address_style)])
+    left_block.append([Paragraph('04-2367723', address_style)])
+    left_block.append([Paragraph('100225006400003', address_style)])
 
-    # Table Rows
-    for item in qs:
-        doc_total = item.document_total if item.document_total else 0
-        date_str = item.posting_date.strftime('%Y-%m-%d') if item.posting_date else "-"
-        
-        row = [
-            date_str,
-            item.so_number,
-            Paragraph(item.customer_name[:35] + '...' if len(item.customer_name or '') > 35 else (item.customer_name or ''), styles['Normal']),
-            Paragraph(item.salesman_name or '-', styles['Normal']),
-            item.status or '-',
-            f"{doc_total:,.2f}"
-        ]
-        data.append(row)
+    left_table = Table(left_block, colWidths=[3.2 * inch])
+    left_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
 
-    # Grand Total Row
-    data.append(['', '', '', '', 'GRAND TOTAL:', f"{total_value:,.2f}"])
-
-    # Table Styling
-    # Calculate column widths (Landscape A4 width approx 840 points)
-    col_widths = [70, 70, 280, 150, 80, 80]
-    
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    
-    style = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C5530')), # Header Color
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        
-        # Data Rows
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+    title_with_bar = Table(
+        [['', Paragraph('<b>SALES ORDERS — LIST</b>', title_style)]],
+        colWidths=[0.1 * inch, 4.2 * inch],
+    )
+    title_with_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), ORANGE),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (-1, 1), (-1, -1), 'RIGHT'), # Right align totals
-        
-        # Grand Total Row styling
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-        ('TEXTCOLOR', (0, -1), (-1, -1), colors.black),
-    ])
-    
-    table.setStyle(style)
-    elements.append(table)
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (0, 0), (0, 0), 0),
+        ('LEFTPADDING', (1, 0), (1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
 
-    # Footer/Summary
-    elements.append(Spacer(1, 20))
-    elements.append(Paragraph(f"Total Records: {qs.count()}", styles['Normal']))
+    meta_row = Table(
+        [
+            [
+                Paragraph('Generated', gray_label),
+                Paragraph(f'<b>{html_escape(generated)}</b>', bold_style),
+                Paragraph('Rows in this PDF', gray_label),
+                Paragraph(f'<b>{len(orders_list)}</b>', bold_style),
+                Paragraph('Total matching filters', gray_label),
+                Paragraph(f'<b>{total_matching}</b>', bold_style),
+            ]
+        ],
+        colWidths=[0.75 * inch, 1.15 * inch, 1.05 * inch, 0.65 * inch, 1.35 * inch, 0.75 * inch],
+    )
+    meta_row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
 
-    doc.build(elements)
+    header_top = Table(
+        [[left_table, title_with_bar]],
+        colWidths=[3.4 * inch, available_width - 3.4 * inch],
+    )
+    header_top.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_top)
+    elements.append(meta_row)
+    if start and end:
+        elements.append(Paragraph(
+            f'<font color="#555555">Date filter: <b>{html_escape(start)}</b> to <b>{html_escape(end)}</b></font>',
+            cell_style,
+        ))
+    if truncated:
+        elements.append(Paragraph(
+            f'<font color="#C0392B"><b>Note:</b> Export limited to {MAX_ROWS} rows; refine filters to narrow results.</font>',
+            cell_style,
+        ))
+    elements.append(Spacer(1, 0.12 * inch))
+
+    hdr = [
+        Paragraph('<b>Date</b>', bold_style),
+        Paragraph('<b>SO #</b>', bold_style),
+        Paragraph('<b>Customer</b>', bold_style),
+        Paragraph('<b>Salesman</b>', bold_style),
+        Paragraph('<b>Status</b>', bold_style),
+        Paragraph('<b>Total excl. VAT (AED)</b>', bold_style),
+    ]
+    table_rows = [hdr]
+    sum_totals = Decimal('0')
+
+    for item in orders_list:
+        # Match sales order list UI: subtotal from lines (excl. VAT), not document_total / pending balance field
+        row_sum = item.row_total_sum if item.row_total_sum is not None else Decimal('0')
+        sum_totals += row_sum
+        d = item.posting_date
+        date_s = d.strftime('%d/%m/%Y') if d else '—'
+        disp = getattr(item, 'display_status', None) or (item.status or '')
+        st = str(disp).strip().upper()
+        if st in ('O', 'OPEN'):
+            status_label = 'Open'
+        elif st in ('C', 'CLOSED'):
+            status_label = 'Closed'
+        else:
+            status_label = str(disp) if disp else '—'
+        table_rows.append([
+            Paragraph(html_escape(date_s), cell_style),
+            Paragraph(html_escape(str(item.so_number or '—')), cell_style),
+            Paragraph(html_escape(item.customer_name or '—'), cell_style),
+            Paragraph(html_escape(item.salesman_name or '—'), cell_style),
+            Paragraph(html_escape(status_label), cell_center),
+            Paragraph(f'{row_sum:,.2f}', cell_right),
+        ])
+
+    col_widths = [
+        0.72 * inch,
+        0.95 * inch,
+        2.85 * inch,
+        1.25 * inch,
+        0.62 * inch,
+        0.9 * inch,
+    ]
+    scale = available_width / sum(col_widths)
+    col_widths = [w * scale for w in col_widths]
+
+    data_table = Table(table_rows, colWidths=col_widths, repeatRows=1)
+    data_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), LIGHT_GRAY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, HexColor('#CCCCCC')),
+        ('LINEBELOW', (0, 1), (-1, -1), 0.5, HexColor('#EEEEEE')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(data_table)
+    elements.append(Spacer(1, 0.14 * inch))
+    sum_table = Table(
+        [[
+            Paragraph('<b>Grand total excl. VAT (AED)</b>', bold_style),
+            Paragraph(
+                f'<b>{sum_totals:,.2f}</b>',
+                ParagraphStyle('SOListSumRight', parent=bold_style, alignment=TA_RIGHT),
+            ),
+        ]],
+        colWidths=[available_width - 1.2 * inch, 1.2 * inch],
+    )
+    sum_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LINEABOVE', (0, 0), (-1, -1), 1, HexColor('#CCCCCC')),
+    ]))
+    elements.append(sum_table)
+
+    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    fname = f'sales_orders_list_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{fname}"'
     return response
 
 

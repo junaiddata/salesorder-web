@@ -646,15 +646,15 @@
 
       <div class="stats-bar">
         <div class="stat-item">
-          <span class="stat-label">Pending Total Value:</span>
+          <span class="stat-label">Pending total (excl. VAT):</span>
           <span class="stat-value" id="total-value">{{ total_value|default:0|floatformat:2|intcomma }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">2025 Pending:</span>
+          <span class="stat-label">2025 pending (excl. VAT):</span>
           <span class="stat-value">{{ total_2025|default:0|floatformat:2|intcomma }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">2026 Pending:</span>
+          <span class="stat-label">2026 pending (excl. VAT):</span>
           <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2|intcomma }}</span>
         </div>
       </div>
@@ -685,8 +685,8 @@
               <th>Customer</th>
               <th>Salesman</th>
               <th>LPO Reference</th>
-              <th style="text-align:right">Pending Total</th>
-              <th style="text-align:right">Document Total</th>
+              <th style="text-align:right">Pending total (excl. VAT)</th>
+              <th style="text-align:right">Total (excl. VAT)</th>
               <th>Status</th>
               <th>Remarks</th>
             </tr>

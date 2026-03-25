@@ -151,6 +151,9 @@ urlpatterns += [
     path('sappurchaseorders/<str:po_number>/export-open/', sap_purchaseorder_views.export_sap_purchaseorder_open_items_pdf, name='export_sap_purchaseorder_open_items_pdf'),
     path('sapsalesorders/', sap_salesorder_views.salesorder_list, name='salesorder_list'),
     path('sapsalesorders/ajax/', sap_salesorder_views.salesorder_search, name='salesorder_search'),
+    # Static paths must come before <so_number> or "export-list" is treated as an SO number (404).
+    path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
+    path('sapsalesorders/export-excel/', sap_salesorder_views.export_salesorder_list_excel, name='export_salesorder_list_excel'),
     path('sapsalesorders/<str:so_number>/', sap_salesorder_views.salesorder_detail, name='salesorder_detail'),
     path('sapsalesorders/<str:so_number>/view-pdf/', sap_salesorder_views.sap_salesorder_view_pdf, name='sap_salesorder_view_pdf'),
     path('sapsalesorders/<str:so_number>/export/', sap_salesorder_views.export_sap_salesorder_pdf, name='export_sap_salesorder_pdf'),
@@ -161,8 +164,6 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/salesman-remarks/', sap_salesorder_views.salesorder_update_salesman_remarks, name='salesorder_update_salesman_remarks'),
     path('sapsalesorders/item/revised-price/', sap_salesorder_views.salesorder_item_save_revised_price, name='salesorder_item_save_revised_price'),
     path('sapsalesorders/<str:so_number>/approval/', sap_salesorder_views.salesorder_update_approval, name='salesorder_update_approval'),
-    path('sapsalesorders/export-list/', sap_salesorder_views.export_salesorder_list_pdf, name='export_salesorder_list_pdf'),
-    path('sapsalesorders/export-excel/', sap_salesorder_views.export_salesorder_list_excel, name='export_salesorder_list_excel'),
     
     # SAP AR Invoice URLs
     path('saparinvoices/sync-api/', sap_salesorder_views.sync_arinvoices_from_api, name='sync_arinvoices_api'),
