@@ -1958,7 +1958,7 @@ def export_salesorder_list_pdf(request):
     sum_totals = Decimal('0')
 
     for item in orders_list:
-        # Match sales order list UI: subtotal from lines (excl. VAT), not document_total / pending balance field
+        # Subtotal from lines (row_total_sum), not document_total
         row_sum = item.row_total_sum if item.row_total_sum is not None else Decimal('0')
         sum_totals += row_sum
         d = item.posting_date
