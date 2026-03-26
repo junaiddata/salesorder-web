@@ -434,7 +434,7 @@
                                         <label>Price <span class="required-mark">*</span></label>
                                         <input type="number" name="price" class="item-price"
                                                step="0.01" min="0" value="" required inputmode="decimal">
-                                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
+                                        <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
                                     </div>
                                 </div>
                             </div>
@@ -1052,7 +1052,7 @@ function addItemRowWithData(itemId, itemText, firm) {
                         <label>Price <span class="required-mark">*</span></label>
                         <input type="number" name="price" class="item-price"
                                step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
-                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
+                        <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
                     </div>
                 </div>
             </div>
@@ -1147,7 +1147,7 @@ function addItemRow() {
                         <label>Price <span class="required-mark">*</span></label>
                         <input type="number" name="price" class="item-price"
                                step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
-                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
+                        <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
                     </div>
                 </div>
                 <div class="form-group">
@@ -1196,7 +1196,7 @@ function removeItemRow(btn) {
     });
 }
 
-// ── Keep “Agreed price” line in sync: DB custom and/or manual edits vs list price ──
+// ── Keep “Previous price” line in sync: DB custom and/or manual edits vs list price ──
 function syncAgreedPriceLine(row) {
     var listP = row.data('listPrice');
     var dbC = row.data('dbCustomPrice');
