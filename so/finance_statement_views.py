@@ -14,6 +14,30 @@ from calendar import monthrange
 import pandas as pd
 from io import BytesIO
 from so.models import Customer, Salesman, FinanceCreditEditLog
+from so.views import SALES_USER_MAP
+from so.finance_statement_scope import (
+    assert_user_can_access_finance_customer,
+    finance_statement_customer_scope_q,
+    finance_statement_user_sees_all_customers,
+)
+
+
+def _finance_salesmen_for_user(request):
+    """Salesman choices for filter UI: all (admin) or mapped names only (salesman)."""
+    if finance_statement_user_sees_all_customers(request.user):
+        return Salesman.objects.all().order_by("salesman_name")
+
+    uname = (request.user.username or "").strip().lower()
+    names = SALES_USER_MAP.get(uname)
+    if names:
+        q = Q()
+        for n in names:
+            q |= Q(salesman_name__iexact=n)
+        return Salesman.objects.filter(q).order_by("salesman_name")
+    token = uname.replace(".", " ").strip()
+    if token:
+        return Salesman.objects.filter(salesman_name__icontains=token).order_by("salesman_name")
+    return Salesman.objects.none()
 
 
 @login_required
@@ -35,8 +59,8 @@ def finance_statement_list(request):
     # This excludes customers where BOTH balance and PDC are 0
     customers = Customer.objects.filter(
         Q(total_outstanding__gt=0) | Q(pdc_received__gt=0)
-    ).select_related('salesman')
-    
+    ).filter(finance_statement_customer_scope_q(request.user)).select_related("salesman")
+
     # Apply search filter
     if search_query:
         customers = customers.filter(
@@ -77,8 +101,8 @@ def finance_statement_list(request):
     except:
         page_obj = paginator.get_page(1)
     
-    # Get all salesmen for filter dropdown
-    salesmen = Salesman.objects.all().order_by('salesman_name')
+    # Salesmen for filter dropdown (scoped for salesman users)
+    salesmen = _finance_salesmen_for_user(request)
     
     # Calculate totals
     totals = customers.aggregate(
@@ -112,6 +136,7 @@ def finance_statement_list(request):
         'customers': page_obj,  # Pass page_obj for pagination
         'page_obj': page_obj,  # Also pass as page_obj for template
         'salesmen': salesmen,
+        'finance_statement_scoped_user': not finance_statement_user_sees_all_customers(request.user),
         'is_manager': request.user.username == 'manager',
         'show_detail_columns': show_detail_columns,
         'filters': {
@@ -136,7 +161,8 @@ def finance_statement_detail(request, customer_id):
     Finance Statement Detail - Shows detailed finance breakdown for a customer
     """
     customer = get_object_or_404(Customer.objects.select_related('salesman'), id=customer_id)
-    
+    assert_user_can_access_finance_customer(request, customer)
+
     # Prepare monthly pending data (Month 6 = current, going back to Month 1)
     today = datetime.now().date()
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -435,8 +461,8 @@ def export_finance_statement_list_excel(request):
     # Base queryset - only customers with finance data (non-zero balance or PDC)
     customers = Customer.objects.filter(
         Q(total_outstanding__gt=0) | Q(pdc_received__gt=0)
-    ).select_related('salesman')
-    
+    ).filter(finance_statement_customer_scope_q(request.user)).select_related("salesman")
+
     # Apply search filter
     if search_query:
         customers = customers.filter(
@@ -526,7 +552,8 @@ def export_finance_statement_detail_excel(request, customer_id):
     Export Finance Statement Detail to Excel
     """
     customer = get_object_or_404(Customer.objects.select_related('salesman'), id=customer_id)
-    
+    assert_user_can_access_finance_customer(request, customer)
+
     # Prepare monthly pending data
     today = datetime.now().date()
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

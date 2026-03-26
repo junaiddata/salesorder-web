@@ -28,6 +28,10 @@ from reportlab.platypus import (
 )
 
 from so.models import Customer, Salesman, FinanceCreditEditLog
+from so.finance_statement_scope import (
+    assert_user_can_access_finance_customer,
+    finance_statement_customer_scope_q,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -632,7 +636,7 @@ def export_finance_statement_list_pdf(request):
 
     customers = Customer.objects.filter(
         Q(total_outstanding__gt=0) | Q(pdc_received__gt=0)
-    ).select_related('salesman')
+    ).filter(finance_statement_customer_scope_q(request.user)).select_related("salesman")
 
     if search_query:
         customers = customers.filter(
@@ -980,6 +984,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     customer = get_object_or_404(
         Customer.objects.select_related('salesman'), id=customer_id
     )
+    assert_user_can_access_finance_customer(request, customer)
 
     # ── Compute data (business logic unchanged) ──
     from calendar import monthrange

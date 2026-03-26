@@ -623,6 +623,9 @@
       <div class="header-left">
         <h1>Finance Statement</h1>
         <p>Customer Finance Summary & Outstanding Balances</p>
+        {% if finance_statement_scoped_user %}
+        <p style="font-size:0.875rem;color:#64748b;margin-top:6px;">Showing only customers assigned to your salesman account.</p>
+        {% endif %}
       </div>
       <div class="header-actions">
         {% if is_manager %}

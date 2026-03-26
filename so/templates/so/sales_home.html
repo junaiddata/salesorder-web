@@ -372,6 +372,13 @@
                 <div class="action-title">Sales</div>
                 <div class="action-description">Combined Sales Report</div>
             </a>
+            <a href="{% url 'finance_statement_list' %}" class="action-button view-orders">
+                <div class="action-icon">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div class="action-title">Finance Statement</div>
+                <div class="action-description">Your customers’ balances &amp; aging</div>
+            </a>
             {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
             <a href="{% url 'accounts_recording_list' %}" class="action-button view-quotation">
                 <span class="live-badge-small">LIVE</span>

@@ -6929,6 +6929,370 @@ def export_combined_sales_invoices_excel(request):
 
 
 @login_required
+def export_combined_sales_invoices_pdf(request):
+    """
+    Export the filtered Combined Sales (AR Invoices + Credit Memos) list as PDF.
+    Same GET filters as combined_sales_invoices_list; same visual theme as export_pi_list_pdf.
+    """
+    MAX_ROWS = 2500
+
+    invoice_qs, creditmemo_qs, _ = get_combined_ar_filtered_querysets(
+        request, request.user, salesman_scope_q_salesorder
+    )
+    invoice_qs = invoice_qs.order_by("-posting_date", "-invoice_number")
+    creditmemo_qs = creditmemo_qs.order_by("-posting_date", "-credit_memo_number")
+
+    invoice_list = list(invoice_qs)
+    creditmemo_list = list(creditmemo_qs)
+    for inv in invoice_list:
+        setattr(inv, "document_type", "Invoice")
+        setattr(inv, "document_number", inv.invoice_number)
+    for cm in creditmemo_list:
+        setattr(cm, "document_type", "Credit Memo")
+        setattr(cm, "document_number", cm.credit_memo_number)
+
+    combined_list = invoice_list + creditmemo_list
+    combined_list.sort(
+        key=lambda x: (
+            x.posting_date if x.posting_date else datetime.min.date(),
+            x.document_number if x.document_number else "",
+        ),
+        reverse=True,
+    )
+
+    total_matching = len(combined_list)
+    truncated = total_matching > MAX_ROWS
+    rows = combined_list[:MAX_ROWS] if truncated else combined_list
+
+    show_gp = request.user.is_superuser or request.user.is_staff
+
+    DARK_BLUE = HexColor("#1E3A5F")
+    ORANGE = HexColor("#f0ab00")
+    LIGHT_GRAY = HexColor("#F5F5F5")
+    GRAY_TEXT = HexColor("#808080")
+    LIGHT_BLUE_LINE = HexColor("#4A90D9")
+
+    margin_x = 0.4 * inch
+    margin_y = 0.45 * inch
+    pagesize = landscape(A4)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=pagesize,
+        leftMargin=margin_x,
+        rightMargin=margin_x,
+        topMargin=margin_y,
+        bottomMargin=margin_y,
+    )
+    available_width = pagesize[0] - 2 * margin_x
+
+    pdf_styles = getSampleStyleSheet()
+    company_style = ParagraphStyle(
+        "CsListCompany",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        textColor=DARK_BLUE,
+        leading=11,
+    )
+    address_style = ParagraphStyle(
+        "CsListAddress",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7,
+        textColor=colors.black,
+        leading=9,
+    )
+    title_style = ParagraphStyle(
+        "CsListTitle",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor=DARK_BLUE,
+    )
+    gray_label = ParagraphStyle(
+        "CsListGray",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7,
+        textColor=GRAY_TEXT,
+    )
+    bold_style = ParagraphStyle(
+        "CsListBold",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        textColor=colors.black,
+    )
+    cell_style = ParagraphStyle(
+        "CsListCell",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6,
+        textColor=colors.black,
+        leading=8,
+    )
+    cell_right = ParagraphStyle(
+        "CsListCellRight",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6,
+        textColor=colors.black,
+        alignment=TA_RIGHT,
+        leading=8,
+    )
+    cell_center = ParagraphStyle(
+        "CsListCellCenter",
+        parent=pdf_styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6,
+        textColor=colors.black,
+        alignment=TA_CENTER,
+        leading=8,
+    )
+
+    generated = datetime.now().strftime("%d.%m.%y %H:%M")
+
+    def on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(GRAY_TEXT)
+        num = canvas.getPageNumber()
+        canvas.drawRightString(pagesize[0] - margin_x, margin_y * 0.5, f"Page {num}")
+        if num > 1:
+            canvas.setFont("Helvetica-Bold", 9)
+            canvas.setFillColor(DARK_BLUE)
+            canvas.drawString(
+                margin_x,
+                pagesize[1] - 0.32 * inch,
+                "Junaid Sanitary & Electrical — Combined Sales Report",
+            )
+            canvas.setStrokeColor(LIGHT_BLUE_LINE)
+            canvas.setLineWidth(1)
+            canvas.line(
+                margin_x,
+                pagesize[1] - 0.38 * inch,
+                pagesize[0] - margin_x,
+                pagesize[1] - 0.38 * inch,
+            )
+        canvas.restoreState()
+
+    elements = []
+
+    logo_path = os.path.join(settings.BASE_DIR, "media", "footer-logo1.png")
+    logo_img = None
+    if os.path.exists(logo_path):
+        try:
+            logo_img = Image(logo_path, width=2.0 * inch, height=0.78 * inch)
+        except Exception:
+            logo_img = None
+
+    left_block = []
+    if logo_img:
+        left_block.append([logo_img])
+    else:
+        left_block.append([Paragraph("<b>JUNAID</b>", company_style)])
+    left_block.append([Spacer(1, 0.06 * inch)])
+    left_block.append(
+        [Paragraph("<b>Junaid Sanitary & Electrical Materials Trading (L.L.C)</b>", company_style)]
+    )
+    left_block.append([Paragraph("Dubai Investment Park-2, Dubai", address_style)])
+    left_block.append([Paragraph("04-2367723", address_style)])
+    left_block.append([Paragraph("100225006400003", address_style)])
+
+    left_table = Table(left_block, colWidths=[3.2 * inch])
+    left_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ]
+        )
+    )
+
+    title_with_bar = Table(
+        [["", Paragraph("<b>COMBINED SALES — INVOICES & CREDIT MEMOS</b>", title_style)]],
+        colWidths=[0.1 * inch, 4.4 * inch],
+    )
+    title_with_bar.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), ORANGE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 0),
+                ("LEFTPADDING", (1, 0), (1, 0), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+
+    meta_row = Table(
+        [
+            [
+                Paragraph("Generated", gray_label),
+                Paragraph(f"<b>{html_escape(generated)}</b>", bold_style),
+                Paragraph("Rows in this PDF", gray_label),
+                Paragraph(f"<b>{len(rows)}</b>", bold_style),
+                Paragraph("Total matching filters", gray_label),
+                Paragraph(f"<b>{total_matching}</b>", bold_style),
+            ]
+        ],
+        colWidths=[0.75 * inch, 1.15 * inch, 1.05 * inch, 0.65 * inch, 1.35 * inch, 0.75 * inch],
+    )
+    meta_row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+
+    header_top = Table(
+        [[left_table, title_with_bar]],
+        colWidths=[3.4 * inch, available_width - 3.4 * inch],
+    )
+    header_top.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    elements.append(header_top)
+    elements.append(meta_row)
+    if truncated:
+        elements.append(
+            Paragraph(
+                f'<font color="#C0392B"><b>Note:</b> Export limited to {MAX_ROWS} rows; refine filters to narrow results.</font>',
+                cell_style,
+            )
+        )
+    elements.append(Spacer(1, 0.12 * inch))
+
+    hdr = [
+        Paragraph("<b>Type</b>", bold_style),
+        Paragraph("<b>Date</b>", bold_style),
+        Paragraph("<b>Document</b>", bold_style),
+        Paragraph("<b>Customer</b>", bold_style),
+        Paragraph("<b>Salesman</b>", bold_style),
+        Paragraph("<b>BP Ref.</b>", bold_style),
+        Paragraph("<b>Total incl VAT</b>", bold_style),
+        Paragraph("<b>Total w/o VAT</b>", bold_style),
+    ]
+    if show_gp:
+        hdr.append(Paragraph("<b>Total GP</b>", bold_style))
+
+    table_rows = [hdr]
+    sum_vat = Decimal("0")
+    sum_wo = Decimal("0")
+    sum_gp = Decimal("0")
+
+    for doc_row in rows:
+        d = doc_row.posting_date
+        date_s = d.strftime("%d/%m/%Y") if d else "—"
+        dt = doc_row.document_type or "—"
+        doc_no = html_escape(str(doc_row.document_number or "—"))
+        cust = html_escape(str(doc_row.customer_name or "—"))
+        sm = html_escape(str(doc_row.salesman_name or "—"))
+        bp = html_escape(str(doc_row.bp_reference_no or "—"))
+        vat = doc_row.doc_total or Decimal("0")
+        wov = doc_row.doc_total_without_vat or Decimal("0")
+        gp = doc_row.total_gross_profit or Decimal("0")
+        sum_vat += vat
+        sum_wo += wov
+        sum_gp += gp
+
+        row_cells = [
+            Paragraph(html_escape(dt), cell_center),
+            Paragraph(html_escape(date_s), cell_style),
+            Paragraph(doc_no, cell_style),
+            Paragraph(cust, cell_style),
+            Paragraph(sm, cell_style),
+            Paragraph(bp, cell_style),
+            Paragraph(f"{float(vat):,.2f}", cell_right),
+            Paragraph(f"{float(wov):,.2f}", cell_right),
+        ]
+        if show_gp:
+            row_cells.append(Paragraph(f"{float(gp):,.2f}", cell_right))
+        table_rows.append(row_cells)
+
+    base_widths = [
+        0.52 * inch,
+        0.58 * inch,
+        0.78 * inch,
+        1.85 * inch,
+        0.95 * inch,
+        0.62 * inch,
+        0.62 * inch,
+        0.68 * inch,
+    ]
+    if show_gp:
+        base_widths.append(0.58 * inch)
+
+    scale = available_width / sum(base_widths)
+    col_widths = [w * scale for w in base_widths]
+
+    data_table = Table(table_rows, colWidths=col_widths, repeatRows=1)
+    data_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), LIGHT_GRAY),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 7),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LINEBELOW", (0, 0), (-1, 0), 1, HexColor("#CCCCCC")),
+                ("LINEBELOW", (0, 1), (-1, -1), 0.5, HexColor("#EEEEEE")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    elements.append(data_table)
+    elements.append(Spacer(1, 0.14 * inch))
+
+    footer_parts = [
+        Paragraph("<b>Totals (this PDF)</b>", bold_style),
+        Paragraph("", cell_style),
+        Paragraph("", cell_style),
+        Paragraph("", cell_style),
+        Paragraph("", cell_style),
+        Paragraph("", cell_style),
+        Paragraph(f"<b>{float(sum_vat):,.2f}</b>", cell_right),
+        Paragraph(f"<b>{float(sum_wo):,.2f}</b>", cell_right),
+    ]
+    if show_gp:
+        footer_parts.append(Paragraph(f"<b>{float(sum_gp):,.2f}</b>", cell_right))
+
+    sum_table = Table([footer_parts], colWidths=col_widths)
+    sum_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LINEABOVE", (0, 0), (-1, -1), 1, HexColor("#CCCCCC")),
+            ]
+        )
+    )
+    elements.append(sum_table)
+
+    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    fname = f'combined_sales_invoices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return response
+
+
+@login_required
 def export_combined_itemwise_excel(request):
     """
     Export Combined Report as item-wise line items with Line Total and GP.
