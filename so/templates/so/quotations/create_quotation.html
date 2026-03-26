@@ -710,7 +710,7 @@ async function restoreItemRow($row, itemData, commonFirm) {
     if (itemData.db_custom_price !== undefined && itemData.db_custom_price !== null && itemData.db_custom_price !== '') {
         $row.data('dbCustomPrice', parseFloat(itemData.db_custom_price));
     }
-    syncAgreedPriceLine($row);
+    applyPreviousPriceDisplay($row);
 }
 
 
@@ -743,9 +743,6 @@ $(document).ready(function() {
         $('.item-select').each(function() {
             if ($(this).val()) updatePriceField(this);
         });
-    });
-    $(document).on('input change', '.item-price', function() {
-        syncAgreedPriceLine($(this).closest('.item-card'));
     });
     updateItemNumbers();
 
@@ -1167,29 +1164,16 @@ function onItemChange(itemSelect) {
     scheduleDraftSave();
 }
 
-// ── Keep “Previous price” line in sync: DB custom and/or manual edits vs list price ──
-function syncAgreedPriceLine(row) {
+// ── Previous price (DB customer price): fixed; does not follow edits to the main price field ──
+function applyPreviousPriceDisplay(row) {
     var listP = row.data('listPrice');
     var dbC = row.data('dbCustomPrice');
-    var raw = row.find('.item-price').val();
-    var fieldVal = parseFloat(raw);
     var $ref = row.find('.custom-price-ref');
     var $val = row.find('.custom-price-value');
     var tol = 0.005;
 
-    if (raw === '' || raw === null || isNaN(fieldVal)) {
-        $ref.hide();
-        return;
-    }
-
     var listNum = (listP !== undefined && listP !== null && listP !== '' && !isNaN(parseFloat(listP)))
         ? parseFloat(listP) : null;
-
-    if (listNum !== null && Math.abs(fieldVal - listNum) > tol) {
-        $val.text(fieldVal.toFixed(2));
-        $ref.show();
-        return;
-    }
 
     if (dbC !== undefined && dbC !== null && dbC !== '' && !isNaN(parseFloat(dbC))) {
         var dbNum = parseFloat(dbC);
@@ -1229,7 +1213,7 @@ function updatePriceField(itemSelect) {
                 } else {
                     row.removeData('dbCustomPrice');
                 }
-                syncAgreedPriceLine(row);
+                applyPreviousPriceDisplay(row);
                 priceField.prop('disabled', false).attr('placeholder', '0.00');
                 scheduleDraftSave();
             },
