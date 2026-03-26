@@ -209,9 +209,7 @@
 
         /* ── Price Indicators ── */
         .custom-price { border-color: #3498db !important; background-color: #ebf5fb !important; }
-        .price-indicator { font-size: 11px; color: #3498db; margin-top: 4px; display: none; }
-        .custom-price ~ .price-indicator { display: block; }
-        .min-sell-price { font-size: 11px; color: #6c757d; margin-top: 4px; }
+        .custom-price-ref { font-size: 11px; color: #6c757d; margin-top: 4px; }
 
         /* ── Messages ── */
         .success-message, .error-message {
@@ -436,8 +434,7 @@
                                         <label>Price <span class="required-mark">*</span></label>
                                         <input type="number" name="price" class="item-price"
                                                step="0.01" min="0" value="" required inputmode="decimal">
-                                        <p class="price-indicator">Custom price applied</p>
-                                        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
+                                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
                                     </div>
                                 </div>
                             </div>
@@ -487,7 +484,9 @@ function collectDraftData() {
             price:      $row.find('[name="price"]').val() || '',
             stock:      $row.find('.item-stock').text() || '--',
             details:    $row.find('.item-details').text() || '--',
-            min_sell:   $row.find('.min-sell-value').text() || '--',
+            agreed_price: $row.find('.custom-price-ref').is(':visible') ? ($row.find('.custom-price-value').text() || '') : '',
+            list_price: $row.data('listPrice'),
+            db_custom_price: $row.data('dbCustomPrice'),
         });
     });
 
@@ -722,10 +721,6 @@ async function restoreItemRow($row, itemData, commonFirm) {
         // Restore display info
         $row.find('.item-details').text(itemData.details || itemData.item_text || '--');
         $row.find('.item-stock').text(itemData.stock || '--');
-        if (itemData.min_sell && itemData.min_sell !== '--') {
-            $row.find('.min-sell-value').text(itemData.min_sell);
-            $row.find('.min-sell-price').show();
-        }
 
         // Refresh stock from server
         loadItemDetails(itemData.item_id, $row);
@@ -735,9 +730,15 @@ async function restoreItemRow($row, itemData, commonFirm) {
     $row.find('[name="quantity"]').val(itemData.quantity || '');
     $row.find('[name="unit"]').val(itemData.unit || 'pcs');
     $row.find('[name="price"]').val(itemData.price || '');
-    if (itemData.price) {
-        $row.find('.item-price').addClass('custom-price');
+    $row.find('.item-price').removeClass('custom-price');
+
+    if (itemData.list_price !== undefined && itemData.list_price !== null && itemData.list_price !== '') {
+        $row.data('listPrice', parseFloat(itemData.list_price));
     }
+    if (itemData.db_custom_price !== undefined && itemData.db_custom_price !== null && itemData.db_custom_price !== '') {
+        $row.data('dbCustomPrice', parseFloat(itemData.db_custom_price));
+    }
+    syncAgreedPriceLine($row);
 }
 
 
@@ -770,6 +771,14 @@ $(document).ready(function() {
     });
 
     $(document).on('change', '.item-select', function() { updatePriceField(this); });
+    $(document).on('change select2:select', '#customer', function() {
+        $('.item-select').each(function() {
+            if ($(this).val()) updatePriceField(this);
+        });
+    });
+    $(document).on('input change', '.item-price', function() {
+        syncAgreedPriceLine($(this).closest('.item-card'));
+    });
     updateItemNumbers();
 
     // ── Form submit ──
@@ -902,6 +911,7 @@ function toggleCommonFirm() {
             initializeSelect2();
         });
         $('.item-price').val('').removeClass('custom-price');
+        $('.custom-price-ref').hide();
         $('.item-details').text('--');
     }
 }
@@ -1042,8 +1052,7 @@ function addItemRowWithData(itemId, itemText, firm) {
                         <label>Price <span class="required-mark">*</span></label>
                         <input type="number" name="price" class="item-price"
                                step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
-                        <p class="price-indicator">Custom price applied</p>
-                        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
+                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
                     </div>
                 </div>
             </div>
@@ -1079,15 +1088,10 @@ function loadItemDetails(itemId, rowElement) {
         success: function(data) {
             rowElement.find('.item-stock').text(data.stock);
             rowElement.find('.item-cost').text(data.cost);
-            if (data.min_selling_price !== undefined) {
-                rowElement.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                rowElement.find('.min-sell-price').show();
-            }
         },
         error: function() {
             rowElement.find('.item-stock').text('Error');
             rowElement.find('.item-cost').text('Error');
-            rowElement.find('.min-sell-price').hide();
         }
     });
 }
@@ -1143,8 +1147,7 @@ function addItemRow() {
                         <label>Price <span class="required-mark">*</span></label>
                         <input type="number" name="price" class="item-price"
                                step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
-                        <p class="price-indicator">Custom price applied</p>
-                        <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
+                        <p class="custom-price-ref" style="display:none;">Agreed price: AED <span class="custom-price-value">--</span></p>
                     </div>
                 </div>
                 <div class="form-group">
@@ -1193,6 +1196,41 @@ function removeItemRow(btn) {
     });
 }
 
+// ── Keep “Agreed price” line in sync: DB custom and/or manual edits vs list price ──
+function syncAgreedPriceLine(row) {
+    var listP = row.data('listPrice');
+    var dbC = row.data('dbCustomPrice');
+    var raw = row.find('.item-price').val();
+    var fieldVal = parseFloat(raw);
+    var $ref = row.find('.custom-price-ref');
+    var $val = row.find('.custom-price-value');
+    var tol = 0.005;
+
+    if (raw === '' || raw === null || isNaN(fieldVal)) {
+        $ref.hide();
+        return;
+    }
+
+    var listNum = (listP !== undefined && listP !== null && listP !== '' && !isNaN(parseFloat(listP)))
+        ? parseFloat(listP) : null;
+
+    if (listNum !== null && Math.abs(fieldVal - listNum) > tol) {
+        $val.text(fieldVal.toFixed(2));
+        $ref.show();
+        return;
+    }
+
+    if (dbC !== undefined && dbC !== null && dbC !== '' && !isNaN(parseFloat(dbC))) {
+        var dbNum = parseFloat(dbC);
+        if (listNum !== null && Math.abs(dbNum - listNum) > tol) {
+            $val.text(dbNum.toFixed(2));
+            $ref.show();
+            return;
+        }
+    }
+    $ref.hide();
+}
+
 // ── Update price field based on customer + item ──
 function updatePriceField(itemSelect) {
     var row = $(itemSelect).closest('.item-card');
@@ -1207,15 +1245,20 @@ function updatePriceField(itemSelect) {
             data: { item_id: itemId, customer_id: customerId },
             dataType: 'json',
             success: function(data) {
-                if (data.custom_price !== null && data.custom_price !== undefined) {
-                    priceField.val(data.final_price).addClass('custom-price');
-                } else if (data.default_price !== null && data.default_price !== undefined) {
-                    priceField.val(data.default_price).removeClass('custom-price');
+                var listNum = (data.default_price !== null && data.default_price !== undefined)
+                    ? parseFloat(data.default_price) : NaN;
+                if (!isNaN(listNum)) {
+                    row.data('listPrice', listNum);
+                    priceField.val(listNum.toFixed(2)).removeClass('custom-price');
+                } else {
+                    row.removeData('listPrice');
                 }
-                if (data.min_selling_price !== undefined) {
-                    row.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                    row.find('.min-sell-price').show();
+                if (data.custom_price !== null && data.custom_price !== undefined && !isNaN(parseFloat(data.custom_price))) {
+                    row.data('dbCustomPrice', parseFloat(data.custom_price));
+                } else {
+                    row.removeData('dbCustomPrice');
                 }
+                syncAgreedPriceLine(row);
                 priceField.prop('disabled', false).attr('placeholder', '0.00');
                 scheduleDraftSave();  // save after price loads
             },
@@ -1226,7 +1269,9 @@ function updatePriceField(itemSelect) {
         });
     } else {
         priceField.val('').removeClass('custom-price');
-        row.find('.min-sell-price').hide();
+        row.removeData('listPrice');
+        row.removeData('dbCustomPrice');
+        row.find('.custom-price-ref').hide();
     }
 }
 
@@ -1242,7 +1287,9 @@ function onItemChange(itemSelect) {
     if (!itemId) {
         stockDisplay.text('--');
         itemDetailsDisplay.text('--');
-        itemCard.find('.min-sell-price').hide();
+        itemCard.removeData('listPrice');
+        itemCard.removeData('dbCustomPrice');
+        itemCard.find('.custom-price-ref').hide();
         return;
     }
 

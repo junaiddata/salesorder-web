@@ -595,14 +595,19 @@ def get_item_price(request):
     ).first()
 
     default_price = item.item_price
-    custom_price = custom_price_obj.custom_price if custom_price_obj else None
+    custom_price = custom_price_obj.custom_price if custom_price_obj is not None else None
 
     # Decide final price: higher of custom or default
-    final_price = custom_price if custom_price is not None and custom_price > item.item_cost else default_price
+    final_price = (
+        custom_price
+        if custom_price is not None and custom_price > item.item_cost
+        else default_price
+    )
 
     data = {
         'default_price': float(default_price),
-        'custom_price': float(custom_price) if custom_price else None,
+        # When a CustomerPrice row exists, always return custom_price (even 0); else null for UI
+        'custom_price': float(custom_price_obj.custom_price) if custom_price_obj is not None else None,
         'final_price': float(final_price),
         'min_selling_price': float(item.item_price),
     }
