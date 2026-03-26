@@ -569,7 +569,7 @@
     <!-- Filters -->
     <div class="card filters-card">
       <form id="filters" class="filters-grid" method="get">
-        {% if is_admin %}<input type="hidden" name="approval_status" value="{{ filters.approval_status }}">{% endif %}
+        <input type="hidden" name="approval_status" value="{{ filters.approval_status }}">
         <div class="field">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="SO No, Customer, Salesman, LPO Ref...">
@@ -663,8 +663,7 @@
       </div>
     </div>
 
-    {% if is_admin %}
-    <!-- Approval Status Tabs -->
+    <!-- Approval status tabs (same filters for Admin and Salesman; scope is still per user) -->
     <div id="approval-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
       <button type="button" class="btn {% if not filters.approval_status %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="">All</button>
       <button type="button" class="btn {% if filters.approval_status == 'Pending' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Pending">Pending</button>
@@ -676,7 +675,6 @@
       <button type="button" class="btn {% if filters.approval_status == 'MD Approval Required' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="MD Approval Required">MD Approval Required</button>
       <button type="button" class="btn {% if filters.approval_status == 'Scheduled' %}btn-primary{% else %}btn-secondary{% endif %} tab-btn" data-approval="Scheduled">Scheduled</button>
     </div>
-    {% endif %}
 
     <!-- Table -->
     <div class="card table-card">
@@ -821,7 +819,7 @@
       load(collectParams({ page: 1 }));
     });
 
-    // Approval tabs (Admin only)
+    // Approval status tabs
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const approval = this.getAttribute('data-approval') || '';

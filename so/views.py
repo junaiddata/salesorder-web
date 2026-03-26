@@ -361,16 +361,22 @@ from django.db.models import Q
 
 def items_search(request):
     query = request.GET.get('q', '')
-    
+    firms_param = request.GET.get('firms', '')
+    firms = [f.strip() for f in firms_param.split(',') if f.strip()]
+
+    base_qs = Items.objects.all()
+    if firms and 'All' not in firms:
+        base_qs = base_qs.filter(item_firm__in=firms)
+
     if query:
-        items = Items.objects.filter(
+        items = base_qs.filter(
             Q(item_code__icontains=query) |
             Q(item_description__icontains=query) |
             Q(item_upvc__icontains=query)
-        )[:20]  # Limit results for performance
+        )[:30]
     else:
-        items = Items.objects.all()[:20]
-    
+        items = base_qs[:30]
+
     results = []
     for item in items:
         results.append({
@@ -379,9 +385,10 @@ def items_search(request):
             'item_description': item.item_description,
             'item_upvc': item.item_upvc,
             'item_stock': item.item_stock,
+            'item_firm': item.item_firm if hasattr(item, 'item_firm') else '',
             'text': f"{item.item_description}"
         })
-    
+
     return JsonResponse(results, safe=False)
 
 def get_item_details(request):
@@ -417,6 +424,8 @@ def edit_sales_order(request, order_id):
         sales_order.customer = customer
         sales_order.salesman = salesman
         sales_order.lpo_image = lpo_image
+        sales_order.location = request.POST.get('location', '').strip()
+        sales_order.salesman_remarks = request.POST.get('salesman_remarks', '').strip()
         sales_order.save()
 
         # Remove old items
@@ -648,17 +657,19 @@ from django.http import JsonResponse
 
 @require_GET
 def get_items_by_firm(request):
-    firm = request.GET.get('firm', '')
-    cache_key = f'items_by_firm_{firm.lower() or "all"}'
+    # Accept comma-separated 'firms' (multi-select) or legacy single 'firm'
+    firms_param = request.GET.get('firms', '') or request.GET.get('firm', '')
+    firms = [f.strip() for f in firms_param.split(',') if f.strip()]
 
+    cache_key = f'items_by_firms_{"_".join(sorted(f.lower() for f in firms)) or "all"}'
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse({'items': cached})
 
-    if firm == 'All' or not firm:
+    if not firms or 'All' in firms:
         qs = Items.objects.all()
     else:
-        qs = Items.objects.filter(item_firm=firm)
+        qs = Items.objects.filter(item_firm__in=firms)
 
     items = list(
         qs.only('id', 'item_description', 'item_code', 'item_firm', 'item_upvc', 'item_stock')

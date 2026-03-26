@@ -601,15 +601,17 @@
       </div>
     </div>
 
-    <!-- Monthly Pending Summary (Admin) -->
-    {% if is_admin and monthly_pending_data %}
+    <!-- Monthly Pending Summary (Admin, Manager, Salesman) -->
+    {% if monthly_pending_data %}
     <div class="card">
       <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
         <span>Monthly Pending Summary</span>
-        <button type="button" class="btn btn-secondary btn-sm" id="refreshFinanceBtn" title="Refresh">
+        {% if is_admin %}
+        <button type="button" class="btn btn-secondary btn-sm" id="refreshFinanceBtn" title="Refresh customer finance from API">
           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Refresh
         </button>
+        {% endif %}
       </div>
       <div class="card-body">
         {% if has_over_limit %}
@@ -781,6 +783,7 @@
                 <th>St</th>
                 <th class="num">Qty</th>
                 <th class="num">Price</th>
+                <th class="num" title="Min selling price from Item Master (item_price)">Min sell</th>
                 <th class="num" style="background:#fffef5;">Rev.Price</th>
                 {% if is_admin %}
                 <th class="num">Cost</th>
@@ -814,6 +817,7 @@
                 </td>
                 <td class="num">{{ it.quantity|floatformat:2 }}</td>
                 <td class="num">{{ it.unit_price|floatformat:2 }}</td>
+                <td class="num">{% if it.min_selling_price is not None %}{{ it.min_selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="num" style="background:#fffef5;">
                   <input type="number" class="revised-price-input" data-item-id="{{ it.id }}"
                     value="{% if it.revised_price %}{{ it.revised_price|floatformat:2 }}{% endif %}"
@@ -838,7 +842,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if is_admin %}{% if pis %}18{% else %}16{% endif %}{% else %}{% if pis %}15{% else %}13{% endif %}{% endif %}" class="empty-state">No line items found</td>
+                <td colspan="{% if is_admin %}{% if pis %}19{% else %}17{% endif %}{% else %}{% if pis %}16{% else %}14{% endif %}{% endif %}" class="empty-state">No line items found</td>
               </tr>
               {% endfor %}
             </tbody>

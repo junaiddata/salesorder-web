@@ -13,468 +13,192 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        html {
-            height: 100%;
-            -webkit-text-size-adjust: 100%;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        html { height: 100%; -webkit-text-size-adjust: 100%; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
-            min-height: 100vh;
-            height: 100%;
-            overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
+            background-color: #f5f7fa; color: #333; line-height: 1.6;
+            min-height: 100vh; height: 100%; overflow-x: hidden; -webkit-font-smoothing: antialiased;
         }
-        
-        .app-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        /* Mobile App Header */
+        .app-container { min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* ── Header ── */
         .app-header {
-            background: #4CAF50;
-            color: white;
-            padding: 16px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: #4CAF50; color: white; padding: 16px;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
-        .app-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            text-align: center;
-            margin: 0;
-            color: white;
-        }
-        
-        /* Main Container */
+        .app-header h1 { font-size: 20px; font-weight: 600; text-align: center; margin: 0; color: white; }
+
+        /* ── Container ── */
         .container {
-            flex: 1;
-            max-width: 800px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 16px;
-            padding-bottom: 80px; /* Space for fixed submit button */
-        }
-        
-        /* Form Cards */
-        .form-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .section-header {
-            font-size: 17px;
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 16px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .form-group {
-            margin-bottom: 16px;
-        }
-        
-        label {
-            display: block;
-            font-weight: 500;
-            color: #495057;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        
-        .required-mark {
-            color: #e74c3c;
-            margin-left: 2px;
-        }
-        
-        /* Select2 Custom Styles for Mobile */
-        .select2-container {
-            width: 100% !important;
-        }
-        
-        .select2-container .select2-selection--single {
-            height: 48px;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: #333;
-            line-height: 24px;
-            padding-left: 0;
-            padding-right: 0;
-        }
-        
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 46px;
-            right: 12px;
-        }
-        
-        .select2-container--focus .select2-selection--single {
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
-        }
-        
-        /* Select2 Dropdown */
-        .select2-dropdown {
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        .select2-search--dropdown {
-            padding: 8px;
-        }
-        
-        .select2-search--dropdown .select2-search__field {
-            padding: 10px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            width: 100%;
-        }
-        
-        .select2-results__option {
-            padding: 12px 16px;
-            font-size: 16px;
-        }
-        
-        .select2-results__option--highlighted {
-            background-color: #4CAF50;
-        }
-        
-        /* Regular inputs */
-        input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            background-color: #fff;
-            height: 48px;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
-        }
-        
-        input:disabled {
-            background-color: #f8f9fa;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        
-        .help-text {
-            font-size: 13px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        
-        /* Items Section */
-        .item-card {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            position: relative;
-        }
-        
-        .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .item-number {
-            font-weight: 600;
-            color: #495057;
-            font-size: 15px;
-        }
-        
-        .item-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .qty-price-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .wrap-select option {
-            white-space: normal;
+            flex: 1; max-width: 800px; width: 100%;
+            margin: 0 auto; padding: 16px; padding-bottom: 80px;
         }
 
-        .wrap-select {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        /* ── Form Cards ── */
+        .form-card {
+            background: white; border-radius: 12px; padding: 20px;
+            margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        
-        /* Buttons */
+        .section-header {
+            font-size: 17px; font-weight: 600; color: #2c3e50;
+            margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;
+        }
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-weight: 500; color: #495057; margin-bottom: 6px; font-size: 14px; }
+        .required-mark { color: #e74c3c; margin-left: 2px; }
+
+        /* ── Select2 ── */
+        .select2-container { width: 100% !important; }
+        .select2-container .select2-selection--single {
+            height: 48px; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; display: flex; align-items: center;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #333; line-height: 24px; padding-left: 0; padding-right: 0;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 46px; right: 12px;
+        }
+        .select2-container--focus .select2-selection--single {
+            border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+        .select2-dropdown {
+            border: 2px solid #e1e8ed; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .select2-search--dropdown { padding: 8px; }
+        .select2-search--dropdown .select2-search__field {
+            padding: 10px 16px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; width: 100%;
+        }
+        .select2-results__options { max-height: 330px !important; overflow-y: auto !important; }
+        .select2-results__option { padding: 6px 10px; font-size: 14px; line-height: 1.4; }
+        .select2-results__option--highlighted { background-color: #4CAF50; }
+
+        .select2-container--default .select2-selection--multiple {
+            min-height: 48px; padding: 6px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px;
+        }
+        .select2-container--default.select2-container--focus .select2-selection--multiple {
+            border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #4CAF50; color: white; border: none; border-radius: 4px; padding: 2px 8px; margin-top: 6px;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: white; margin-right: 4px;
+        }
+
+        /* ── Inputs ── */
+        input[type="text"], input[type="number"] {
+            width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; transition: all 0.3s ease;
+            background-color: #fff; height: 48px;
+        }
+        input:focus { outline: none; border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1); }
+        input:disabled { background-color: #f8f9fa; cursor: not-allowed; opacity: 0.7; }
+        .help-text { font-size: 13px; color: #6c757d; margin-top: 4px; }
+
+        /* ── Item Cards ── */
+        .item-card {
+            background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;
+            padding: 16px; margin-bottom: 12px; position: relative;
+        }
+        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .item-number { font-weight: 600; color: #495057; font-size: 15px; }
+        .item-grid { display: flex; flex-direction: column; gap: 12px; }
+        .item-unit {
+            width: 100%; padding: 12px 16px; border: 2px solid #e1e8ed;
+            border-radius: 8px; font-size: 16px; background-color: #fff; height: 48px;
+        }
+        .item-unit:focus { outline: none; border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1); }
+        .qty-price-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .wrap-select option { white-space: normal; }
+        .wrap-select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ── Buttons ── */
         .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-            line-height: 1;
-            -webkit-appearance: none;
-            touch-action: manipulation;
+            padding: 12px 20px; border: none; border-radius: 8px; font-size: 15px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            text-decoration: none; line-height: 1; -webkit-appearance: none; touch-action: manipulation;
         }
-        
-        .btn:active {
-            transform: scale(0.98);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .btn-primary {
-            background-color: #4CAF50;
-            color: white;
-        }
-        
-        .btn-primary:active:not(:disabled) {
-            background-color: #45a049;
-        }
-        
-        .btn-secondary {
-            background-color: #fff;
-            color: #4CAF50;
-            border: 2px solid #4CAF50;
-        }
-        
-        .btn-secondary:active:not(:disabled) {
-            background-color: #f0f9f0;
-        }
-        
-        .btn-danger {
-            background-color: #e74c3c;
-            color: white;
-            padding: 8px 12px;
-            font-size: 13px;
-        }
-        
-        .btn-danger:active:not(:disabled) {
-            background-color: #c0392b;
-        }
-        
-        .btn-block {
-            width: 100%;
-        }
-        
-        .btn-add-item {
-            margin-top: 12px;
-            height: 48px;
-        }
-        
-        /* Fixed Submit Button for Mobile */
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-primary { background-color: #4CAF50; color: white; }
+        .btn-primary:active:not(:disabled) { background-color: #45a049; }
+        .btn-secondary { background-color: #fff; color: #4CAF50; border: 2px solid #4CAF50; }
+        .btn-secondary:active:not(:disabled) { background-color: #f0f9f0; }
+        .btn-danger { background-color: #e74c3c; color: white; padding: 8px 12px; font-size: 13px; }
+        .btn-danger:active:not(:disabled) { background-color: #c0392b; }
+        .btn-block { width: 100%; }
+        .btn-add-item { margin-top: 12px; height: 48px; }
+
+        /* ── Submit Section ── */
         .submit-section {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 16px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 50;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: white; padding: 16px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 50;
         }
-        
-        .btn-submit {
-            width: 100%;
-            height: 48px;
-            font-size: 16px;
-        }
-        
-        /* Loading State */
+        .btn-submit { width: 100%; height: 48px; font-size: 16px; }
+
+        /* ── Loading ── */
         .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 0.8s ease-in-out infinite;
+            display: inline-block; width: 16px; height: 16px;
+            border: 3px solid rgba(255,255,255,0.3); border-radius: 50%;
+            border-top-color: white; animation: spin 0.8s ease-in-out infinite;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        /* Custom Price Indicator */
-        .custom-price {
-            border-color: #3498db !important;
-            background-color: #ebf5fb !important;
-        }
-        
-        .price-indicator {
-            font-size: 11px;
-            color: #3498db;
-            margin-top: 4px;
-            display: none;
-        }
-        
-        .custom-price ~ .price-indicator {
-            display: block;
-        }
-        
-        .min-sell-price {
-            font-size: 11px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        
-        /* Messages */
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Price Indicators ── */
+        .custom-price { border-color: #3498db !important; background-color: #ebf5fb !important; }
+        .custom-price-ref { font-size: 11px; color: #6c757d; margin-top: 4px; }
+
+        /* ── Messages ── */
         .success-message, .error-message {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin: 0 16px 16px;
-            font-size: 14px;
-            display: none;
-            animation: slideIn 0.3s ease-out;
+            padding: 12px 16px; border-radius: 8px; margin: 0 16px 16px;
+            font-size: 14px; display: none; animation: slideIn 0.3s ease-out;
         }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
-        .success-message {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-        }
-        
-        .error-message {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-        }
-        
-        /* Item Details Display */
-        .item-details {
-            font-size: 14px;
-            color: #495057;
-            white-space: normal;
-            word-wrap: break-word;
-        }
-        
-        /* Responsive adjustments */
-        @media (min-width: 576px) {
-            .container {
-                padding: 20px;
-            }
-            
-            .app-header {
-                display: none;
-            }
-            
-            .container h1 {
-                display: block;
-                color: #2c3e50;
-                margin-bottom: 30px;
-                font-size: 28px;
-                text-align: center;
-                font-weight: 700;
-            }
-            
-            .submit-section {
-                position: relative;
-                padding: 0;
-                box-shadow: none;
-                margin-top: 32px;
-                text-align: center;
-            }
-            
-            .btn-submit {
-                width: auto;
-                min-width: 200px;
-                padding: 14px 32px;
-            }
-            
-            .item-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
-            
-            .qty-price-grid {
-                grid-column: span 2;
-            }
-        }
-        
-        /* Prevent zoom on input focus on iOS */
-        @supports (-webkit-touch-callout: none) {
-            input, select, textarea {
-                font-size: 16px !important;
-            }
-        }
-        
-        /* Hide desktop title on mobile */
-        @media (max-width: 575px) {
-            .container > h1 {
-                display: none;
-            }
-        }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .success-message { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error-message { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+
+        .item-details { font-size: 14px; color: #495057; white-space: normal; word-wrap: break-word; }
+
         input[type="file"] {
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            padding: 10px 12px;
-            font-size: 16px;
-            background-color: #fff;
-            color: #495057;
-            width: 100%;
+            border: 2px solid #e1e8ed; border-radius: 8px; padding: 10px 12px;
+            font-size: 16px; background-color: #fff; color: #495057; width: 100%;
+        }
+
+        /* ── Responsive ── */
+        @media (min-width: 576px) {
+            .container { padding: 20px; }
+            .app-header { display: none; }
+            .container h1 { display: block; color: #2c3e50; margin-bottom: 30px; font-size: 28px; text-align: center; font-weight: 700; }
+            .submit-section { position: relative; padding: 0; box-shadow: none; margin-top: 32px; text-align: center; }
+            .btn-submit { width: auto; min-width: 200px; padding: 14px 32px; }
+            .item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .qty-price-grid { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 575px) and (max-width: 1024px) {
+            .container { padding: 20px; padding-bottom: 100px; }
+            .app-header { display: block; }
+            .container h1 { display: none; }
+            .submit-section { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 50; }
+            .btn-submit { width: 100%; height: 48px; font-size: 16px; }
+            .item-grid { display: flex; flex-direction: column; gap: 12px; }
+            .qty-price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        }
+        @supports (-webkit-touch-callout: none) {
+            input, select, textarea { font-size: 16px !important; }
+        }
+        @media (max-width: 575px) {
+            .container > h1 { display: none; }
         }
     </style>
 </head>
 <body>
     <div class="app-container">
-        <div class="app-header">
+        <div class="app-header" style="position:relative;">
             <h1>Edit Customer Order</h1>
         </div>
         
@@ -516,17 +240,34 @@
                         </select>
                     </div>
 
-                    <!-- <div class="form-group">
-                        <label for="common_firm">Common Firm (Optional)</label>
-                        <select id="common_firm" name="common_firm" onchange="toggleCommonFirm()" class="searchable-select">
-                            <option value="">Select Common Firm (optional)</option>
-                            <option value="All">All Firms</option>
-                            {% for firm in firms %}
-                                <option value="{{ firm }}">{{ firm }}</option>
-                            {% endfor %}
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" id="location" name="location"
+                               value="{{ sales_order.location|default:'' }}"
+                               placeholder="Enter location">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="salesman_remarks">Salesman Remarks</label>
+                        <input type="text" id="salesman_remarks" name="salesman_remarks"
+                               value="{{ sales_order.salesman_remarks|default:'' }}"
+                               placeholder="Enter salesman remarks">
+                    </div>
+                </div>
+
+                <!-- Items Multi-Select Section -->
+                <div class="form-card" id="items-multiselect-section">
+                    <h2 class="section-header">Select Items</h2>
+                    <div class="form-group">
+                        <label for="item-multiselect">Items <span class="required-mark">*</span></label>
+                        <select id="item-multiselect" class="searchable-select" multiple="multiple">
+                            <option value="">Select Items</option>
                         </select>
-                        <p class="help-text">Choose a firm to apply to all items, or select individually</p>
-                    </div> -->
+                        <p class="help-text">Search and select multiple items at once</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-block" onclick="addSelectedItems()" style="margin-bottom:16px;">
+                        + Add Selected Items to Order
+                    </button>
                 </div>
 
                 <!-- Items Section -->
@@ -544,7 +285,7 @@
                             </div>
                             
                             <div class="item-grid">
-                                <div class="individual-firm form-group" style="display:none;">
+                                <div class="individual-firm form-group">
                                     <label>Firm <span class="required-mark">*</span></label>
                                     <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
                                         <option value="">Select Firm</option>
@@ -587,8 +328,7 @@
                                         <label>Price <span class="required-mark">*</span></label>
                                         <input type="number" name="price" class="item-price" 
                                             step="0.01" min="0" value="{{ order_item.price }}" required inputmode="decimal">
-                                        <p class="price-indicator">Custom price applied</p>
-                                        <p class="min-sell-price">Min selling: AED <span class="min-sell-value">{{ order_item.item.item_price|floatformat:2 }}</span></p>
+                                        <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -620,18 +360,56 @@
     </div>
 
  <script>
+    var suppressCustomerPriceRefresh = false;
+
     $(document).ready(function() {
         // Initialize Select2 for all searchable selects
         initializeSelect2();
+
+        $('#item-multiselect').select2({
+            placeholder: "Search and select multiple items",
+            ajax: {
+                url: '/api/items-search/',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return { q: params.term || '', firms: getSelectedFirms() };
+                },
+                processResults: function(data) {
+                    return {
+                        results: data.map(item => ({
+                            id: item.id,
+                            text: (item.item_description || '') + ' [' + (item.item_firm || '') + '] - Stock: ' + (item.item_stock || 0)
+                        }))
+                    };
+                },
+                cache: false
+            },
+            minimumInputLength: 2,
+            width: '100%',
+            closeOnSelect: false
+        });
         
-        // When item changes, update price and min selling price
-        $(document).on('change', '.item-select', function() {
-            updatePriceField(this);
-            onItemChange(this);
+        $(document).on('change', '.item-select', function() { updatePriceField(this); });
+        $(document).on('change', '.item-select', function() { onItemChange(this); });
+        $(document).on('change select2:select', '#customer', function() {
+            var preserve = suppressCustomerPriceRefresh;
+            suppressCustomerPriceRefresh = false;
+            $('.item-select').each(function() {
+                if ($(this).val()) updatePriceField(this, { preservePrice: preserve });
+            });
         });
         
         // Update item numbers
         updateItemNumbers();
+
+        // List/min + previous-price metadata without overwriting saved line prices
+        $('.item-card').each(function() {
+            var $sel = $(this).find('.item-select');
+            if ($sel.val() && $('#customer').val()) {
+                updatePriceField($sel[0], { preservePrice: true });
+            }
+        });
         
         // Form validation and submit handler
         $('#sales-order-form').on('submit', function(e) {
@@ -735,12 +513,6 @@
             allowClear: true
         });
 
-        // Firm dropdowns → simple select2 (no AJAX)
-        $('#common_firm').select2({
-            placeholder: "Select common firm (optional)",
-            allowClear: true,
-            width: '100%'
-        });
     }
 
     function updateItemNumbers() {
@@ -784,9 +556,10 @@
                         );
                     });
                     
-                    // Set the previously selected customer
+                    // Set the previously selected customer (preserve line prices; same as create metadata refresh)
                     const currentCustomerId = '{{ sales_order.customer.id }}';
                     if (currentCustomerId) {
+                        suppressCustomerPriceRefresh = true;
                         customerSelect.val(currentCustomerId).trigger('change');
                     }
                     
@@ -811,41 +584,18 @@
         }
     }
 
-    function toggleCommonFirm() {
-        const commonFirm = $('#common_firm').val();
-        const showIndividual = !commonFirm;
-        
-        $('.individual-firm').toggle(showIndividual);
-        
-        if (commonFirm) {
-            // Load items for all item selects with common firm
-            $('.item-select').each(function() {
-                loadItemsForSelect(commonFirm, $(this));
-            });
-        } else {
-            // Reset individual firm selections
-            $('.item-firm').val('').trigger('change');
-            $('.item-select').each(function() {
-                if ($(this).hasClass('select2-hidden-accessible')) {
-                    $(this).select2('destroy');
-                }
-                $(this).html('<option value="">Select Firm First</option>')
-                       .prop('disabled', true);
-                initializeSelect2();
-            });
-            $('.item-price').val('').removeClass('custom-price');
-            $('.item-details').text('--'); // Reset item details
-        }
+    /** No global brand filter on edit — per-row firm + bulk search only. */
+    function getSelectedFirms() {
+        return '';
     }
 
-    function loadItemsForSelect(firm, selectElement) {
-        if (!firm) {
-            selectElement.html('<option value="">Select Firm First</option>')
+    function loadItemsForSelect(firmsStr, selectElement) {
+        if (!firmsStr) {
+            selectElement.html('<option value="">Select Brand First</option>')
                        .prop('disabled', true);
             return;
         }
 
-        // Destroy existing Select2 instance if exists
         if (selectElement.hasClass('select2-hidden-accessible')) {
             selectElement.select2('destroy');
         }
@@ -855,7 +605,7 @@
 
         $.ajax({
             url: '/get_items_by_firm/',
-            data: { 'firm': firm },
+            data: { 'firms': firmsStr },
             dataType: 'json',
             success: function(data) {
                 selectElement.empty()
@@ -924,30 +674,96 @@
         const priceField = $(firmSelect).closest('.item-card').find('.item-price');
         const itemDetails = $(firmSelect).closest('.item-card').find('.item-details');
         
-        // Clear price and item details when firm changes
+        const row = $(firmSelect).closest('.item-card');
+        row.removeData('listPrice');
+        row.removeData('dbCustomPrice');
+        row.find('.custom-price-ref').hide();
         priceField.val('').removeClass('custom-price');
         itemDetails.text('--');
         
         loadItemsForSelect(firm, itemSelect);
     }
 
-    function addItemRow() {
+    function loadItemStockForRow(itemId, row) {
+        $.ajax({
+            url: '/get_item_stock/',
+            data: { item_id: itemId },
+            success: function(data) {
+                row.find('.item-stock').text(data.stock);
+            },
+            error: function() {
+                row.find('.item-stock').text('Error');
+            }
+        });
+    }
+
+    function addSelectedItems() {
+        const raw = $('#item-multiselect').select2('data');
+        const selectedItems = Array.isArray(raw) ? raw.slice() : [];
+        const firmsStr = getSelectedFirms();
+        if (selectedItems.length === 0) {
+            showErrorMessage('Please select at least one item');
+            return;
+        }
+        const firstRow = $('.item-card').first();
+        const firstRowItem = firstRow.find('.item-select').val();
+        const items = selectedItems.slice();
+        if (!firstRowItem && items.length > 0) {
+            const firstItem = items.shift();
+            populateFirstRowWithData(firstItem.id, firstItem.text, firmsStr, firstRow);
+        }
+        items.forEach(function(itemData) {
+            addItemRowWithData(itemData.id, itemData.text, firmsStr);
+        });
+        $('#item-multiselect').val(null).trigger('change');
+    }
+
+    function populateFirstRowWithData(itemId, itemText, firm, row) {
+        row.find('.item-select').prop('disabled', false);
+        row.find('.item-select').empty().append('<option value="' + itemId + '" selected>' + itemText + '</option>');
+        row.find('.item-details').text(itemText);
+        row.find('.item-unit').val('pcs');
+        row.find('.btn-danger').show();
+        loadItemStockForRow(itemId, row);
+        updatePriceField(row.find('.item-select')[0]);
+        if (row.find('.item-select').hasClass('select2-hidden-accessible')) {
+            row.find('.item-select').select2('destroy');
+        }
+        row.find('.item-select').select2({
+            width: '100%',
+            minimumInputLength: 2,
+            ajax: {
+                url: '/api/items-search/',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) { return { q: params.term || '' }; },
+                processResults: function(data) {
+                    return {
+                        results: data.map(function(item) {
+                            return {
+                                id: item.id,
+                                text: (item.item_code || '') + ' - ' + (item.item_upvc || '') + ' - ' + (item.item_description || '')
+                            };
+                        })
+                    };
+                },
+                cache: true
+            }
+        });
+    }
+
+    function addItemRowWithData(itemId, itemText, firm) {
         const container = $('#items-container');
-        const commonFirm = $('#common_firm').val();
-        const showIndividual = !commonFirm;
         const itemCount = $('.item-card').length + 1;
-        
+
         const newRow = $(`
-            <div class="item-card" style="display:none;">
+            <div class="item-card">
                 <div class="item-header">
                     <span class="item-number">Item #${itemCount}</span>
-                    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">
-                        Remove
-                    </button>
+                    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">Remove</button>
                 </div>
-                
                 <div class="item-grid">
-                    <div class="individual-firm form-group" style="display:${showIndividual ? 'block' : 'none'}">
+                    <div class="individual-firm form-group">
                         <label>Firm <span class="required-mark">*</span></label>
                         <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
                             <option value="">Select Firm</option>
@@ -957,19 +773,17 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
                     <div class="form-group">
                         <label>Item <span class="required-mark">*</span></label>
-                        <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required ${commonFirm ? '' : 'disabled'}>
-                            ${commonFirm ? '<option value="">Select Item</option>' : '<option value="">Select Firm First</option>'}
+                        <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required>
+                            <option value="${itemId}" selected>${itemText}</option>
                         </select>
-                        <div class="item-details" style="font-size:14px;color:#888;">--</div>
+                        <div class="item-details" style="font-size:14px;color:#888;">${itemText}</div>
                     </div>
                     <div class="form-group">
                         <label>Stock</label>
                         <div class="item-stock" style="font-size:14px;color:#888;">--</div>
                     </div>
-                    
                     <div class="qty-price-grid">
                         <div class="form-group">
                             <label>Quantity <span class="required-mark">*</span></label>
@@ -978,50 +792,132 @@
                         <div class="form-group">
                             <label>Unit <span class="required-mark">*</span></label>
                             <select name="unit" class="item-unit" required>
-                                <option value="pcs"  {% if order_item.unit == 'pcs'  %}selected{% endif %}>pcs</option>
-                                <option value="ctn"  {% if order_item.unit == 'ctn'  %}selected{% endif %}>ctn</option>
-                                <option value="roll" {% if order_item.unit == 'roll' %}selected{% endif %}>roll</option>
+                                <option value="pcs">pcs</option>
+                                <option value="ctn">ctn</option>
+                                <option value="roll">roll</option>
                             </select>
-                            </div>
-                        
+                        </div>
                         <div class="form-group">
                             <label>Price <span class="required-mark">*</span></label>
-                            <input type="number" name="price" class="item-price" 
+                            <input type="number" name="price" class="item-price"
                                    step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
-                            <p class="price-indicator">Custom price applied</p>
-                            <p class="min-sell-price" style="display:none;">Min selling: AED <span class="min-sell-value">--</span></p>
+                            <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="lpo_image">Upload LPO Image (Optional)<span class="required-mark">-</span></label>
+                        <label>Upload LPO Image (Optional)<span class="required-mark">-</span></label>
+                        <input type="file" name="lpo_image" accept="image/*">
+                        <div class="help-text">Accepted formats: JPG, PNG, PDF</div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        container.append(newRow);
+
+        newRow.find('.item-select').select2({
+            width: '100%',
+            minimumInputLength: 2,
+            ajax: {
+                url: '/api/items-search/',
+                dataType: 'json',
+                delay: 250,
+                data: function(params) { return { q: params.term || '' }; },
+                processResults: function(data) {
+                    return {
+                        results: data.map(function(item) {
+                            return {
+                                id: item.id,
+                                text: (item.item_code || '') + ' - ' + (item.item_upvc || '') + ' - ' + (item.item_description || '')
+                            };
+                        })
+                    };
+                },
+                cache: true
+            }
+        });
+
+        loadItemStockForRow(itemId, newRow);
+        updatePriceField(newRow.find('.item-select')[0]);
+        updateItemNumbers();
+    }
+
+    function addItemRow() {
+        const itemCount = $('.item-card').length + 1;
+        const container = $('#items-container');
+
+        const newRow = $(`
+            <div class="item-card" style="display:none;">
+                <div class="item-header">
+                    <span class="item-number">Item #${itemCount}</span>
+                    <button type="button" class="btn btn-danger" onclick="removeItemRow(this)">Remove</button>
+                </div>
+                <div class="item-grid">
+                    <div class="individual-firm form-group">
+                        <label>Firm <span class="required-mark">*</span></label>
+                        <select class="item-firm searchable-select" onchange="loadItemsByFirm(this)">
+                            <option value="">Select Firm</option>
+                            <option value="All">All Firms</option>
+                            {% for firm in firms %}
+                                <option value="{{ firm }}">{{ firm }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Item <span class="required-mark">*</span></label>
+                        <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required disabled>
+                            <option value="">Select Firm First</option>
+                        </select>
+                        <div class="item-details" style="font-size:14px;color:#888;">--</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <div class="item-stock" style="font-size:14px;color:#888;">--</div>
+                    </div>
+                    <div class="qty-price-grid">
+                        <div class="form-group">
+                            <label>Quantity <span class="required-mark">*</span></label>
+                            <input type="number" name="quantity" min="1" value="" required inputmode="numeric">
+                        </div>
+                        <div class="form-group">
+                            <label>Unit <span class="required-mark">*</span></label>
+                            <select name="unit" class="item-unit" required>
+                                <option value="pcs">pcs</option>
+                                <option value="ctn">ctn</option>
+                                <option value="roll">roll</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Price <span class="required-mark">*</span></label>
+                            <input type="number" name="price" class="item-price"
+                                   step="0.01" min="0" required placeholder="0.00" inputmode="decimal">
+                            <p class="custom-price-ref" style="display:none;">Previous price: AED <span class="custom-price-value">--</span></p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="lpo_image">Upload LPO Image (Optional)</label>
                         <input type="file" id="lpo_image" name="lpo_image" accept="image/*">
                         <div class="help-text">Accepted formats: JPG, PNG, PDF</div>
                     </div>
                 </div>
             </div>
         `);
-        
+
         container.append(newRow);
         newRow.slideDown(300);
-        
-        // Initialize Select2 for new elements
+
         newRow.find('.searchable-select').select2({
-            placeholder: function() {
-                return $(this).find('option:first').text();
-            },
+            placeholder: function() { return $(this).find('option:first').text(); },
             allowClear: false,
             width: '100%'
         });
-        
-        // Item change is handled by delegated handler above
-        
-        if (commonFirm) {
-            loadItemsForSelect(commonFirm, newRow.find('.item-select'));
+
+        if (firmsStr) {
+            loadItemsForSelect(firmsStr, newRow.find('.item-select'));
         }
-        
+
         updateItemNumbers();
-        
-        // Smooth scroll to new item
+
         setTimeout(() => {
             newRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 350);
@@ -1051,16 +947,38 @@
         });
     }
     
-    function updatePriceField(itemSelect) {
-        const row = $(itemSelect).closest('.item-card');
-        const customerId = $('#customer').val();
-        const itemId = $(itemSelect).val();
-        const priceField = row.find('.item-price');
-        
+    function applyPreviousPriceDisplay(row) {
+        var listP = row.data('listPrice');
+        var dbC = row.data('dbCustomPrice');
+        var $ref = row.find('.custom-price-ref');
+        var $val = row.find('.custom-price-value');
+        var tol = 0.005;
+
+        var listNum = (listP !== undefined && listP !== null && listP !== '' && !isNaN(parseFloat(listP)))
+            ? parseFloat(listP) : null;
+
+        if (dbC !== undefined && dbC !== null && dbC !== '' && !isNaN(parseFloat(dbC))) {
+            var dbNum = parseFloat(dbC);
+            if (listNum !== null && Math.abs(dbNum - listNum) > tol) {
+                $val.text(dbNum.toFixed(2));
+                $ref.show();
+                return;
+            }
+        }
+        $ref.hide();
+    }
+
+    function updatePriceField(itemSelect, opts) {
+        opts = opts || {};
+        var preservePrice = opts.preservePrice === true;
+        var row = $(itemSelect).closest('.item-card');
+        var customerId = $('#customer').val();
+        var itemId = $(itemSelect).val();
+        var priceField = row.find('.item-price');
+
         if (itemId && customerId) {
-            // Show loading state on price field
             priceField.prop('disabled', true).attr('placeholder', 'Loading...');
-            
+
             $.ajax({
                 url: '/get_item_price/',
                 data: {
@@ -1069,85 +987,71 @@
                 },
                 dataType: 'json',
                 success: function(data) {
-                    console.log('Price data received:', data);
-                    
-                    // Check if custom price exists and use it, otherwise use default price
-                    if (data.custom_price !== null && data.custom_price !== undefined) {
-                        priceField.val(data.final_price);
-                        priceField.addClass('custom-price');
-                    } else if (data.default_price !== null && data.default_price !== undefined) {
-                        priceField.val(data.default_price);
-                        priceField.removeClass('custom-price');
+                    var listNum = (data.default_price !== null && data.default_price !== undefined)
+                        ? parseFloat(data.default_price) : NaN;
+                    if (!isNaN(listNum)) {
+                        row.data('listPrice', listNum);
+                        if (!preservePrice) {
+                            priceField.val(listNum.toFixed(2)).removeClass('custom-price');
+                        }
+                    } else {
+                        row.removeData('listPrice');
+                        if (!preservePrice) {
+                            priceField.val('').removeClass('custom-price');
+                        }
                     }
-                    
-                    // Show min selling price (item_price)
-                    if (data.min_selling_price !== undefined) {
-                        row.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                        row.find('.min-sell-price').show();
+                    if (data.custom_price !== null && data.custom_price !== undefined && !isNaN(parseFloat(data.custom_price))) {
+                        row.data('dbCustomPrice', parseFloat(data.custom_price));
+                    } else {
+                        row.removeData('dbCustomPrice');
                     }
-                    
-                    // Re-enable the field
+                    applyPreviousPriceDisplay(row);
                     priceField.prop('disabled', false).attr('placeholder', '0.00');
                 },
                 error: function(xhr, status, error) {
                     console.error('Error loading price:', error);
                     priceField.prop('disabled', false).attr('placeholder', '0.00');
-                    showErrorMessage('Failed to load price. Please enter manually.');
+                    if (!preservePrice) {
+                        showErrorMessage('Failed to load price. Please enter manually.');
+                    }
                 }
             });
         } else {
-            console.log('Missing itemId or customerId - itemId:', itemId, 'customerId:', customerId);
             priceField.val('').removeClass('custom-price');
-            row.find('.min-sell-price').hide();
+            row.removeData('listPrice');
+            row.removeData('dbCustomPrice');
+            row.find('.custom-price-ref').hide();
         }
     }
 
 function onItemChange(itemSelect) {
-    const itemId = $(itemSelect).val();
-    const itemCard = $(itemSelect).closest('.item-card');
-    const stockDisplay = itemCard.find('.item-stock');
-    const itemDetailsDisplay = itemCard.find('.item-details');
-    const selectedOption = $(itemSelect).find('option:selected').text();
+    var itemId = $(itemSelect).val();
+    var itemCard = $(itemSelect).closest('.item-card');
+    var stockDisplay = itemCard.find('.item-stock');
+    var itemDetailsDisplay = itemCard.find('.item-details');
+    var selectedOption = $(itemSelect).find('option:selected').text();
 
     if (!itemId) {
         stockDisplay.text('--');
         itemDetailsDisplay.text('--');
-        itemCard.find('.min-sell-price').hide();
+        itemCard.removeData('listPrice');
+        itemCard.removeData('dbCustomPrice');
+        itemCard.find('.custom-price-ref').hide();
         return;
     }
 
-    // Update item details display immediately from selected text
-    const itemText = selectedOption;
-    const stockMatch = itemText.match(/Stock: (\d+)/);
-    const descriptionMatch = itemText.match(/(.*?) \(/);
-    
-    if (descriptionMatch && descriptionMatch[1]) {
-        itemDetailsDisplay.text(descriptionMatch[1]);
-    } else {
-        itemDetailsDisplay.text(itemText);
-    }
-    
-    if (stockMatch && stockMatch[1]) {
-        stockDisplay.text(stockMatch[1]);
-    } else {
-        // Fallback to AJAX request if stock not in text
-        stockDisplay.text('Loading...');
-        
-        $.ajax({
-            url: '/get_item_stock/',
-            data: { 'item_id': itemId },
-            success: function(data) {
-                stockDisplay.text(data.stock || '--');
-                if (data.min_selling_price !== undefined) {
-                    itemCard.find('.min-sell-value').text(parseFloat(data.min_selling_price).toFixed(2));
-                    itemCard.find('.min-sell-price').show();
-                }
-            },
-            error: function() {
-                stockDisplay.text('Error');
-            }
-        });
-    }
+    itemDetailsDisplay.text(selectedOption);
+
+    $.ajax({
+        url: '/get_item_stock/',
+        data: { 'item_id': itemId },
+        success: function(data) {
+            stockDisplay.text(data.stock);
+        },
+        error: function() {
+            stockDisplay.text('Error');
+        }
+    });
 }
 
     function validateForm() {

@@ -708,13 +708,15 @@
     </div>
 </div>
 
-{% if user.role.role == 'Admin' %}
+{% if user.role.role == 'Admin' or user.role.role == 'Salesman' %}
 <div class="card mb-4">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h3 class="mb-0">Monthly Pending Summary</h3>
+        {% if user.role.role == 'Admin' %}
         <button type="button" class="btn btn-sm btn-light" id="refreshFinanceBtn" title="Refresh Customer Finance Data">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
+        {% endif %}
     </div>
     <div class="card-body">
         {% if has_over_limit %}

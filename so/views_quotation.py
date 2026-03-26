@@ -678,6 +678,7 @@ def edit_quotation(request, quotation_id):
         quotation.customer = customer
         quotation.salesman = salesman
         quotation.customer_display_name = customer_display_name if customer_display_name else None
+        quotation.remarks = request.POST.get('remarks', '').strip() or None
 
         # Get new items from POST
         item_ids = request.POST.getlist('item')  # dropdown selection

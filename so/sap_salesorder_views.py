@@ -1194,7 +1194,7 @@ def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
 
     is_admin = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
     valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
-    if is_admin and approval_status_filter in valid_approval_statuses:
+    if approval_status_filter in valid_approval_statuses:
         qs = qs.filter(approval_status=approval_status_filter)
 
     if salesmen_filter:
@@ -1414,7 +1414,9 @@ def salesorder_detail(request, so_number):
         stock_data = stock_lookup.get(it.item_no, {})
         it.total_available_stock = stock_data.get('total_available_stock', Decimal("0"))
         it.dip_warehouse_stock = stock_data.get('dip_warehouse_stock', Decimal("0"))
-        
+        # Item master list / min selling price (Items.item_price)
+        it.min_selling_price = stock_data.get("item_price")
+
         # Cost and margin from ItemMaster (for Admin)
         it.item_cost = stock_data.get('item_cost', Decimal("0"))
         unit_price_val = it.unit_price or Decimal("0")
@@ -1501,6 +1503,7 @@ def salesorder_detail(request, so_number):
     # Manager username sees everything Admin sees (cost, margin, remarks, Send buttons, etc.)
     _is_manager = (request.user.username or '').strip().lower() == 'manager'
     is_admin = _is_manager or (hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin')
+    is_salesman = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Salesman'
     can_edit_remarks = is_admin
 
     # Admin-only: Total cost, total margin, margin % (like SAP Quotation)
@@ -1536,7 +1539,7 @@ def salesorder_detail(request, so_number):
     old_months = Decimal("0")
     pending_total_with_order = grand_total
 
-    if is_admin and salesorder.customer_code:
+    if (is_admin or is_salesman) and salesorder.customer_code:
         customer = Customer.objects.filter(customer_code=salesorder.customer_code).first()
         if customer:
             credit_limit = Decimal(str(customer.credit_limit or 0))
@@ -1575,6 +1578,7 @@ def salesorder_detail(request, so_number):
         'total_pi_amount': total_pi_amount,
         'balance_amount': balance_amount,
         'is_admin': is_admin,
+        'is_salesman': is_salesman,
         'approval_status_choices': approval_status_choices,
         'monthly_pending_data': monthly_pending_data,
         'credit_limit': credit_limit,
@@ -1714,10 +1718,8 @@ def export_salesorder_list_pdf(request):
     remarks_filter = request.GET.get('remarks', '').strip()
     approval_status_filter = request.GET.get('approval_status', '').strip()
 
-    # Approval status filter (Admin only)
-    is_admin_export = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
     valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
-    if is_admin_export and approval_status_filter in valid_approval_statuses:
+    if approval_status_filter in valid_approval_statuses:
         qs = qs.filter(approval_status=approval_status_filter)
 
     # Apply Total Range Filter
@@ -2091,9 +2093,8 @@ def export_salesorder_list_excel(request):
     remarks_filter = request.GET.get('remarks', '').strip()
     approval_status_filter = request.GET.get('approval_status', '').strip()
 
-    is_admin_export = hasattr(request.user, 'role') and request.user.role and getattr(request.user.role, 'role', None) == 'Admin'
     valid_approval_statuses = [c[0] for c in APPROVAL_STATUS_CHOICES]
-    if is_admin_export and approval_status_filter in valid_approval_statuses:
+    if approval_status_filter in valid_approval_statuses:
         qs = qs.filter(approval_status=approval_status_filter)
 
     if salesmen_filter:
@@ -2181,9 +2182,8 @@ def export_salesorder_list_excel(request):
             'Pending Total': float(so.pending_total) if so.pending_total is not None else 0.0,
             'Document Total': float(so.document_total) if so.document_total is not None else 0.0,
             'Status': status_display,
+            'Approval Status': approval_display,
         }
-        if is_admin_export:
-            row_data['Approval Status'] = approval_display
         data.append(row_data)
 
     df = pd.DataFrame(data)

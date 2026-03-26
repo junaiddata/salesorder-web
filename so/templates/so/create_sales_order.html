@@ -350,15 +350,13 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="common_firm">Brand:</label>
-                        <select id="common_firm" name="common_firm" onchange="toggleCommonFirm()" class="searchable-select">
-                            <option value="">Select Brand</option>
-                            <option value="All">All Firms</option>
+                        <label for="common_firm">Brand (select one or more):</label>
+                        <select id="common_firm" name="common_firm" class="searchable-select" multiple="multiple">
                             {% for firm in firms %}
                                 <option value="{{ firm }}">{{ firm }}</option>
                             {% endfor %}
                         </select>
-                        <p class="help-text">Choose a firm to apply to all items, or select individually</p>
+                        <p class="help-text">Select brands to load their items; select multiple to combine</p>
                     </div>
 
                     <div class="form-group">
@@ -501,7 +499,7 @@ function collectDraftData() {
         customer_id:       $customer.val() || '',
         customer_text:     $customer.find('option:selected').text() || '',
         new_customer_name: $('#new_customer_name').val() || '',
-        common_firm:       $('#common_firm').val() || '',
+        common_firm:       getSelectedFirms(),
         location:          $('#location').val() || '',
         salesman_remarks:  $('#salesman_remarks').val() || '',
         items: items,
@@ -668,8 +666,14 @@ async function restoreDraft(draft) {
 
         // 3. Common firm → triggers item loading
         if (draft.common_firm) {
-            setSelect2Value($('#common_firm'), draft.common_firm, draft.common_firm);
-            toggleCommonFirm();
+            // Restore multi-select brands (stored as comma-separated string)
+            const firmVals = draft.common_firm.split(',').filter(Boolean);
+            firmVals.forEach(function(f) {
+                if ($('#common_firm').find('option[value="' + f + '"]').length === 0) {
+                    $('#common_firm').append(new Option(f, f, true, true));
+                }
+            });
+            $('#common_firm').val(firmVals).trigger('change');
             // Give items time to load
             await new Promise(r => setTimeout(r, 1500));
         }
@@ -749,23 +753,25 @@ async function restoreItemRow($row, itemData, commonFirm) {
 $(document).ready(function() {
     initializeSelect2();
 
-    // Multi-select for items
+    // Multi-select for items (filtered by selected brands)
     $('#item-multiselect').select2({
         placeholder: "Search and select multiple items",
         ajax: {
             url: '/api/items-search/',
             dataType: 'json',
             delay: 250,
-            data: function(params) { return { q: params.term || '' }; },
+            data: function(params) {
+                return { q: params.term || '', firms: getSelectedFirms() };
+            },
             processResults: function(data) {
                 return { results: data.map(item => ({
                     id: item.id,
-                    text: (item.item_description || '') + ' - Stock: ' + (item.item_stock || 0)
+                    text: (item.item_description || '') + ' [' + (item.item_firm || '') + '] - Stock: ' + (item.item_stock || 0)
                 }))};
             },
-            cache: true
+            cache: false
         },
-        minimumInputLength: 3,
+        minimumInputLength: 2,
         width: '100%',
         closeOnSelect: false
     });
@@ -860,7 +866,12 @@ function initializeSelect2() {
 
     $('#salesman').select2({ placeholder: "Select salesman", minimumResultsForSearch: 5, width: '100%', allowClear: true });
     $('#customer').select2({ placeholder: "Select customer", width: '100%', allowClear: true });
-    $('#common_firm').select2({ placeholder: "Select Brand", allowClear: true, width: '100%' });
+    $('#common_firm').select2({
+        placeholder: "Select brand(s)…",
+        allowClear: true,
+        width: '100%',
+        closeOnSelect: false
+    }).on('change', toggleCommonFirm);
 }
 
 function updateItemNumbers() {
@@ -892,19 +903,29 @@ function loadCustomersBySalesman() {
     });
 }
 
+// ── Helper: comma-string of selected brand values ──
+function getSelectedFirms() {
+    var val = $('#common_firm').val() || [];
+    return Array.isArray(val) ? val.join(',') : (val || '');
+}
+
 // ── Common Firm Toggle ──
 function toggleCommonFirm() {
-    const commonFirm = $('#common_firm').val();
-    const show = !commonFirm;
-    $('.individual-firm').toggle(show);
-    $('#items-multiselect-section').toggle(!!commonFirm);
-    if (commonFirm) {
-        $('.item-select').each(function() { loadItemsForSelect(commonFirm, $(this)); });
+    const firms = $('#common_firm').val() || [];
+    const firmsStr = Array.isArray(firms) ? firms.join(',') : (firms || '');
+    const hasSelection = firms.length > 0;
+    $('.individual-firm').toggle(!hasSelection);
+    $('#items-multiselect-section').toggle(hasSelection);
+    if (hasSelection) {
+        // Reload each row's item dropdown with combined-firm items
+        $('.item-select').each(function() { loadItemsForSelect(firmsStr, $(this)); });
+        // Clear and re-trigger the multiselect so next search uses new firms
+        $('#item-multiselect').val(null).trigger('change');
     } else {
         $('.item-firm').val('').trigger('change');
         $('.item-select').each(function() {
             if ($(this).hasClass('select2-hidden-accessible')) $(this).select2('destroy');
-            $(this).html('<option value="">Select Firm First</option>').prop('disabled', true);
+            $(this).html('<option value="">Select Brand First</option>').prop('disabled', true);
             initializeSelect2();
         });
         $('.item-price').val('').removeClass('custom-price');
@@ -913,13 +934,13 @@ function toggleCommonFirm() {
     }
 }
 
-// ── Load items for a <select> by firm ──
-function loadItemsForSelect(firm, sel) {
-    if (!firm) { sel.html('<option value="">Select Firm First</option>').prop('disabled', true); return; }
+// ── Load items for a <select> by firm(s) ──
+function loadItemsForSelect(firmsStr, sel) {
+    if (!firmsStr) { sel.html('<option value="">Select Brand First</option>').prop('disabled', true); return; }
     if (sel.hasClass('select2-hidden-accessible')) sel.select2('destroy');
     sel.html('<option value="">Loading items...</option>').prop('disabled', true);
     $.ajax({
-        url: '/get_items_by_firm/', data: { firm: firm }, dataType: 'json',
+        url: '/get_items_by_firm/', data: { firms: firmsStr }, dataType: 'json',
         success: function(data) {
             sel.empty().append('<option value="">Select Item</option>');
             $.each(data.items, function(i, item) {
@@ -964,15 +985,15 @@ function loadItemsByFirm(firmSelect) {
 // ── Multi-select add ──
 function addSelectedItems() {
     const selectedItems = $('#item-multiselect').select2('data');
-    const commonFirm = $('#common_firm').val();
+    const firmsStr = getSelectedFirms();
     if (selectedItems.length === 0) { showErrorMessage('Please select at least one item'); return; }
     const firstRow = $('.item-card').first();
     const firstRowItem = firstRow.find('.item-select').val();
     if (!firstRowItem && selectedItems.length > 0) {
         const firstItem = selectedItems.shift();
-        populateFirstRowWithData(firstItem.id, firstItem.text, commonFirm, firstRow);
+        populateFirstRowWithData(firstItem.id, firstItem.text, firmsStr, firstRow);
     }
-    selectedItems.forEach(function(itemData) { addItemRowWithData(itemData.id, itemData.text, commonFirm); });
+    selectedItems.forEach(function(itemData) { addItemRowWithData(itemData.id, itemData.text, firmsStr); });
     $('#item-multiselect').val(null).trigger('change');
 }
 
@@ -1095,10 +1116,10 @@ function loadItemDetails(itemId, rowElement) {
 
 // ── Add empty item row ──
 function addItemRow() {
-    var container = $('#items-container');
-    var commonFirm = $('#common_firm').val();
-    var showIndividual = !commonFirm;
+    var firmsStr = getSelectedFirms();
+    var showIndividual = !firmsStr;
     var itemCount = $('.item-card').length + 1;
+    var container = $('#items-container');
 
     var newRow = $(`
         <div class="item-card" style="display:none;">
@@ -1119,8 +1140,8 @@ function addItemRow() {
                 </div>
                 <div class="form-group">
                     <label>Item <span class="required-mark">*</span></label>
-                    <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required ${commonFirm ? '' : 'disabled'}>
-                        ${commonFirm ? '<option value="">Select Item</option>' : '<option value="">Select Firm First</option>'}
+                    <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required ${firmsStr ? '' : 'disabled'}>
+                        ${firmsStr ? '<option value="">Select Item</option>' : '<option value="">Select Brand First</option>'}
                     </select>
                     <div class="item-details" style="font-size:14px;color:#888;">--</div>
                 </div>
@@ -1159,14 +1180,13 @@ function addItemRow() {
     container.append(newRow);
     newRow.slideDown(300);
 
-    // Init Select2 for new row
     newRow.find('.searchable-select').select2({
         placeholder: function() { return $(this).find('option:first').text(); },
         allowClear: false, width: '100%'
     });
 
-    if (commonFirm) {
-        loadItemsForSelect(commonFirm, newRow.find('.item-select'));
+    if (firmsStr) {
+        loadItemsForSelect(firmsStr, newRow.find('.item-select'));
     }
 
     updateItemNumbers();
