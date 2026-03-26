@@ -78,6 +78,28 @@
 
     .header-actions { display: flex; gap: 5px; flex-wrap: wrap; }
 
+    .header-pdf-option {
+      width: 100%;
+      flex-basis: 100%;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-light);
+    }
+    .header-pdf-option label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .header-pdf-option input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
     /* ─── Buttons ─── */
     .btn {
       display: inline-flex;
@@ -446,7 +468,7 @@
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Open Items
         </a>
-        <a class="btn btn-primary" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
+        <a class="btn btn-primary so-pdf-link" data-pdf-base="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           PDF
         </a>
@@ -457,6 +479,12 @@
         {% if user.is_staff or user.is_superuser %}
           <a class="btn btn-secondary" href="{% url 'upload_salesorders' %}">Upload</a>
         {% endif %}
+      </div>
+      <div class="header-pdf-option">
+        <label>
+          <input type="checkbox" id="so-pdf-include-stock" />
+          Include Tot. Stock, DIP &amp; Open Qty columns on PDF
+        </label>
       </div>
     </header>
 
@@ -793,7 +821,7 @@
                 <th class="num">Rev.Total</th>
                 <th class="num">Open</th>
                 <th class="num">Pending</th>
-                <th class="num">Stock</th>
+                <th class="num">Tot. Stock</th>
                 <th class="num">DIP</th>
                 {% if pis %}
                 <th class="num pi-col">PI Qty</th>
@@ -857,11 +885,11 @@
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
         Back to Sales Orders
       </a>
-      <a class="btn btn-secondary" href="{% url 'sap_salesorder_view_pdf' salesorder.so_number %}" target="_blank">
+      <a class="btn btn-secondary so-pdf-link" data-pdf-base="{% url 'sap_salesorder_view_pdf' salesorder.so_number %}" href="{% url 'sap_salesorder_view_pdf' salesorder.so_number %}" target="_blank">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
         View PDF
       </a>
-      <a class="btn btn-primary" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
+      <a class="btn btn-primary so-pdf-link" data-pdf-base="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}" href="{% url 'export_sap_salesorder_pdf' salesorder.so_number %}">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Export PDF
       </a>
@@ -875,6 +903,23 @@
         var url = '{% url "salesorder_list" %}' + '?' + saved;
         document.querySelectorAll('a.back-to-list').forEach(function(a) { a.href = url; });
       }
+    })();
+  </script>
+
+  <script>
+    (function() {
+      var cb = document.getElementById('so-pdf-include-stock');
+      var links = document.querySelectorAll('a.so-pdf-link[data-pdf-base]');
+      if (!cb || !links.length) return;
+      function syncPdfLinks() {
+        var q = cb.checked ? '?stock=1' : '';
+        links.forEach(function(a) {
+          var base = a.getAttribute('data-pdf-base');
+          if (base) a.href = base + q;
+        });
+      }
+      cb.addEventListener('change', syncPdfLinks);
+      syncPdfLinks();
     })();
   </script>
 

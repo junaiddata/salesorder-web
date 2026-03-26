@@ -58,7 +58,11 @@ from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPPro
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
-from .sap_salesorder_pdf import generate_sap_salesorder_pdf_bytes
+from .sap_salesorder_pdf import (
+    generate_sap_ar_creditmemo_pdf_bytes,
+    generate_sap_ar_invoice_pdf_bytes,
+    generate_sap_salesorder_pdf_bytes,
+)
 from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
@@ -1636,9 +1640,16 @@ def salesorder_search(request):
     })
 
 
-def _generate_sap_salesorder_pdf_bytes(salesorder):
+def _generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
     """Generate SAP Sales Order PDF bytes using Customer Order design."""
-    return generate_sap_salesorder_pdf_bytes(salesorder)
+    return generate_sap_salesorder_pdf_bytes(
+        salesorder, include_stock_columns=include_stock_columns
+    )
+
+
+def _sap_salesorder_pdf_include_stock(request):
+    """True when export/view PDF should include Stock, DIP, and Open Qty columns."""
+    return request.GET.get('stock', '').lower() in ('1', 'true', 'yes', 'on')
 
 
 @login_required
@@ -1654,7 +1665,9 @@ def sap_salesorder_view_pdf(request, so_number):
         if not allowed:
             raise Http404("Salesorder not found")
 
-    pdf_bytes = _generate_sap_salesorder_pdf_bytes(salesorder)
+    pdf_bytes = _generate_sap_salesorder_pdf_bytes(
+        salesorder, include_stock_columns=_sap_salesorder_pdf_include_stock(request)
+    )
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
     filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
@@ -1675,7 +1688,9 @@ def export_sap_salesorder_pdf(request, so_number):
         if not allowed:
             raise Http404("Salesorder not found")
 
-    pdf_bytes = _generate_sap_salesorder_pdf_bytes(salesorder)
+    pdf_bytes = _generate_sap_salesorder_pdf_bytes(
+        salesorder, include_stock_columns=_sap_salesorder_pdf_include_stock(request)
+    )
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
     filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
@@ -7726,6 +7741,44 @@ def arcreditmemo_detail(request, credit_memo_number):
         list_back_label='Back to AR Credit Memos',
     ))
     return render(request, 'salesorders/arcreditmemo_detail.html', ctx)
+
+
+@login_required
+def export_sap_ar_invoice_pdf(request, invoice_number):
+    """Download SAP AR Invoice as PDF (Junaid theme; same access rules as detail)."""
+    invoice = get_object_or_404(SAPARInvoice, invoice_number=invoice_number)
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPARInvoice.objects.filter(
+            Q(pk=invoice.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404('AR Invoice not found')
+
+    pdf_bytes = generate_sap_ar_invoice_pdf_bytes(invoice)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    date_str = invoice.posting_date.strftime('%Y%m%d') if invoice.posting_date else 'NA'
+    filename = f'SAP_AR_Invoice_{invoice.invoice_number}_{date_str}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def export_sap_ar_creditmemo_pdf(request, credit_memo_number):
+    """Download SAP AR Credit Memo as PDF (Junaid theme; same access rules as detail)."""
+    creditmemo = get_object_or_404(SAPARCreditMemo, credit_memo_number=credit_memo_number)
+    if not (request.user.is_superuser or request.user.is_staff):
+        allowed = SAPARCreditMemo.objects.filter(
+            Q(pk=creditmemo.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404('AR Credit Memo not found')
+
+    pdf_bytes = generate_sap_ar_creditmemo_pdf_bytes(creditmemo)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    date_str = creditmemo.posting_date.strftime('%Y%m%d') if creditmemo.posting_date else 'NA'
+    filename = f'SAP_AR_CreditMemo_{creditmemo.credit_memo_number}_{date_str}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @login_required

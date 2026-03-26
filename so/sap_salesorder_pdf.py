@@ -371,17 +371,407 @@ def _to_decimal(x):
         return Decimal('0')
 
 
-def _build_sap_items_table(items_qs, theme, styles, usable_width):
-    """Build SAP line-items table with Rev. Price column and zebra striping."""
+def _format_qty_pdf(qty):
+    """
+    Format quantity for PDF. Never strip trailing zeros from the whole string
+    (e.g. str(Decimal('80')).rstrip('0') -> '8'); only strip after a decimal point.
+    """
+    d = _to_decimal(qty)
+    if d == 0:
+        return '0'
+    s = f'{d:.2f}'
+    return s.rstrip('0').rstrip('.')
+
+
+def _fmt_stock_int_pdf(val):
+    """Total / DIP stock columns — match SO detail (floatformat:0)."""
+    if val is None:
+        return '—'
+    d = _to_decimal(val)
+    return f'{d:,.0f}'
+
+
+def _fmt_open_qty_line_pdf(val):
+    """Open quantity on SO line; None shows em dash."""
+    if val is None:
+        return '—'
+    return _format_qty_pdf(val)
+
+
+def _items_master_stock_dip_lookup(item_codes):
+    """
+    Live Stock / DIP from Items master by item_code — matches salesorder_detail
+    (SO line columns are often unset; the UI uses this lookup).
+    """
+    if not item_codes:
+        return {}
+    from so.models import Items
+
+    lookup = {}
+    for row in Items.objects.filter(item_code__in=item_codes).only(
+        'item_code', 'total_available_stock', 'dip_warehouse_stock'
+    ):
+        lookup[row.item_code] = {
+            'total_available_stock': row.total_available_stock or Decimal('0'),
+            'dip_warehouse_stock': row.dip_warehouse_stock or Decimal('0'),
+        }
+    return lookup
+
+
+def _cancel_status_label_ar(cancel_status, kind='invoice'):
+    """Human-readable cancel status for AR invoice / credit memo PDFs."""
+    if kind == 'credit_memo':
+        mapping = {
+            'csNo': 'Not Cancelled',
+            'csYes': 'Cancelled',
+            'csCancellation': 'Cancellation Credit Memo',
+        }
+    else:
+        mapping = {
+            'csNo': 'Not Cancelled',
+            'csYes': 'Cancelled',
+            'csCancellation': 'Cancellation Invoice',
+        }
+    return mapping.get(cancel_status, cancel_status or '—')
+
+
+def _build_ar_line_items_table(items_qs, theme, styles, usable_width):
+    """Build AR invoice / credit memo line items (no revised-price columns)."""
     col_widths = [
         0.35 * inch,   # #
-        0.95 * inch,   # Item No
-        2.20 * inch,   # Description
+        0.95 * inch,   # Item code
+        2.35 * inch,   # Description
         0.50 * inch,   # Qty
-        0.75 * inch,   # Unit Price
-        0.75 * inch,   # Rev. Price
-        0.85 * inch,   # Total
+        0.80 * inch,   # Unit price
+        0.90 * inch,   # Line total
     ]
+    allocated = sum(col_widths)
+    col_widths[2] += max(0, usable_width - allocated)
+
+    hdr = [
+        Paragraph('#', styles['th_c']),
+        Paragraph('Item Code', styles['th_c']),
+        Paragraph('Description', styles['th']),
+        Paragraph('Qty', styles['th_c']),
+        Paragraph('Unit Price', styles['th_r']),
+        Paragraph('Line Total', styles['th_r']),
+    ]
+    table_data = [hdr]
+
+    for idx, it in enumerate(items_qs, 1):
+        qty = _to_decimal(it.quantity)
+        price = _to_decimal(it.price)
+        line_after = getattr(it, 'line_total_after_discount', None)
+        if line_after is not None:
+            line_display = _to_decimal(line_after)
+        else:
+            line_display = _to_decimal(it.line_total) if getattr(it, 'line_total', None) is not None else (qty * price).quantize(Decimal('0.01'))
+
+        desc = (it.item_description or '—')[:55] + ('…' if len(it.item_description or '') > 55 else '')
+        qty_str = _format_qty_pdf(qty)
+
+        table_data.append([
+            Paragraph(str(idx), styles['td_c']),
+            Paragraph(it.item_code or '—', styles['td_c']),
+            Paragraph(desc, styles['td_bold']),
+            Paragraph(qty_str, styles['td_c']),
+            Paragraph(f'{price:,.2f}', styles['td_r']),
+            Paragraph(f'{line_display:,.2f}', styles['td_r']),
+        ])
+
+    num_rows = len(table_data)
+    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), theme['header_bg']),
+        ('TEXTCOLOR', (0, 0), (-1, 0), theme['text_white']),
+        ('BOX', (0, 0), (-1, -1), 0.75, theme['border_heavy']),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, theme['border_heavy']),
+        ('TOPPADDING', (0, 0), (-1, 0), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+        ('TOPPADDING', (0, 1), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]
+    for i in range(1, num_rows):
+        bg = theme['row_alt'] if i % 2 == 0 else theme['row_white']
+        cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+        if i < num_rows - 1:
+            cmds.append(('LINEBELOW', (0, i), (-1, i), 0.25, theme['border']))
+
+    tbl.setStyle(TableStyle(cmds))
+    return tbl
+
+
+def _build_ar_document_summary(doc, theme, styles, usable_width):
+    """Totals from SAP header fields (same basis as AR detail pages)."""
+    label_w = 1.6 * inch
+    value_w = 1.3 * inch
+    spacer_w = usable_width - label_w - value_w
+    half_spacer = spacer_w / 2
+
+    subtotal = _to_decimal(doc.doc_total_without_vat)
+    vat_amount = _to_decimal(doc.vat_sum)
+    grand_total = _to_decimal(doc.doc_total)
+    subtotal_before_discount = _to_decimal(doc.subtotal_before_discount)
+    discount_pct = getattr(doc, 'discount_percent', None) or Decimal('0')
+
+    rows = []
+    if discount_pct and discount_pct > 0:
+        discount_amount = (subtotal_before_discount - subtotal).copy_abs().quantize(Decimal('0.01'))
+        rows.append([
+            '', '', Paragraph('Subtotal Before Discount:', styles['summary_label']),
+            Paragraph(f'{subtotal_before_discount:,.2f} AED', styles['summary_value']),
+        ])
+        rows.append([
+            '', '', Paragraph(f'Discount ({discount_pct:.1f}%):', styles['summary_label']),
+            Paragraph(f'-{discount_amount:,.2f} AED', styles['summary_value']),
+        ])
+
+    rows.append([
+        '', '', Paragraph('Subtotal (without VAT):', styles['summary_label']),
+        Paragraph(f'{subtotal:,.2f} AED', styles['summary_value']),
+    ])
+
+    rounding = _to_decimal(getattr(doc, 'rounding_diff_amount', None))
+    if rounding != 0:
+        rows.append([
+            '', '', Paragraph('Rounding (SAP):', styles['summary_label']),
+            Paragraph('—', styles['summary_value']),
+        ])
+
+    rows.append([
+        '', '', Paragraph('VAT:', styles['summary_label']),
+        Paragraph(f'{vat_amount:,.2f} AED', styles['summary_value']),
+    ])
+    rows.append([
+        '', '', Paragraph('Grand Total (with VAT):', styles['grand_label']),
+        Paragraph(f'{grand_total:,.2f} AED', styles['grand_value']),
+    ])
+
+    col_widths = [half_spacer, half_spacer, label_w, value_w]
+    tbl = Table(rows, colWidths=col_widths)
+
+    cmds = [
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -2), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -2), 2),
+        ('TOPPADDING', (0, -1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
+        ('LINEABOVE', (2, -1), (3, -1), 1.5, theme['primary']),
+        ('BACKGROUND', (2, -1), (3, -1), theme['grand_total_bg']),
+        ('LINEABOVE', (2, 0), (3, 0), 0.5, theme['border']),
+    ]
+    tbl.setStyle(TableStyle(cmds))
+    return tbl
+
+
+def _build_ar_terms_block(theme, styles, document_kind='invoice'):
+    """Terms for AR invoice / credit memo PDFs."""
+    elements = []
+    elements.append(Spacer(1, SP_SECTION))
+    elements.append(Spacer(1, 1))
+
+    heading_style = ParagraphStyle(
+        'ARTermsHeading', parent=styles['label'],
+        fontSize=FONT_BODY_SM, textColor=theme['text_muted'],
+        fontName='Helvetica-Bold',
+    )
+    elements.append(Paragraph('Terms & Conditions', heading_style))
+    elements.append(Spacer(1, 2))
+
+    if document_kind == 'credit_memo':
+        terms = [
+            '1. This is a system-generated credit memo from Junaid Trading, based on SAP Business One.',
+            '2. Amounts and taxes reflect SAP document totals at posting.',
+            '3. For queries, contact your accounts representative.',
+        ]
+    else:
+        terms = [
+            '1. This is a system-generated invoice from Junaid Trading, based on SAP Business One.',
+            '2. Amounts and taxes reflect SAP document totals at posting.',
+            '3. For payment and account queries, contact your accounts representative.',
+        ]
+    for term in terms:
+        elements.append(Paragraph(term, styles['terms']))
+        elements.append(Spacer(1, 1))
+
+    return elements
+
+
+def generate_sap_ar_invoice_pdf_bytes(invoice):
+    """Generate SAP AR Invoice PDF using the same Junaid theme as SAP Sales Order PDF."""
+    theme = SAP_PDF_THEME
+    items_qs = invoice.items.all().order_by('line_no', 'id')
+
+    page_w, page_h = A4
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=PAGE_MARGIN_H,
+        leftMargin=PAGE_MARGIN_H,
+        topMargin=PAGE_MARGIN_TOP,
+        bottomMargin=PAGE_MARGIN_BOT,
+    )
+    usable_width = page_w - 2 * PAGE_MARGIN_H
+    styles = _build_styles(theme)
+    elements = []
+
+    elements.extend(_build_header(theme, styles, usable_width, title='AR INVOICE'))
+
+    elements.append(_build_section_bar('INVOICE INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    posting_str = invoice.posting_date.strftime('%d %B %Y') if invoice.posting_date else '—'
+    due_str = invoice.doc_due_date.strftime('%d %B %Y') if invoice.doc_due_date else '—'
+    inv_info_rows = [
+        ('Invoice Number', invoice.invoice_number or '—'),
+        ('Posting Date', posting_str),
+        ('Due Date', due_str),
+        ('BP Reference', invoice.bp_reference_no or '—'),
+        ('Cancel Status', _cancel_status_label_ar(invoice.cancel_status, 'invoice')),
+        ('Document Status', invoice.document_status or '—'),
+    ]
+    elements.append(_build_info_table(inv_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.append(_build_section_bar('CUSTOMER INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    customer_info_rows = [
+        ('Customer Name', invoice.customer_name or '—'),
+        ('Customer Code', invoice.customer_code or '—'),
+        ('Salesman', invoice.salesman_name or '—'),
+        ('Store', invoice.store or '—'),
+        ('VAT Number', invoice.vat_number or '—'),
+    ]
+    if len(customer_info_rows) % 2 != 0:
+        customer_info_rows.append(('', ''))
+    elements.append(_build_info_table(customer_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.append(_build_section_bar('LINE ITEMS', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    items_table = _build_ar_line_items_table(items_qs, theme, styles, usable_width)
+    elements.append(items_table)
+    elements.append(Spacer(1, SP_AFTER_TABLE))
+
+    elements.append(_build_ar_document_summary(invoice, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.extend(_build_ar_terms_block(theme, styles, document_kind='invoice'))
+
+    footer_fn = _page_footer_factory(theme)
+    doc.build(elements, onFirstPage=footer_fn, onLaterPages=footer_fn)
+
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
+
+
+def generate_sap_ar_creditmemo_pdf_bytes(creditmemo):
+    """Generate SAP AR Credit Memo PDF using the same Junaid theme as SAP Sales Order PDF."""
+    theme = SAP_PDF_THEME
+    items_qs = creditmemo.items.all().order_by('line_no', 'id')
+
+    page_w, page_h = A4
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=PAGE_MARGIN_H,
+        leftMargin=PAGE_MARGIN_H,
+        topMargin=PAGE_MARGIN_TOP,
+        bottomMargin=PAGE_MARGIN_BOT,
+    )
+    usable_width = page_w - 2 * PAGE_MARGIN_H
+    styles = _build_styles(theme)
+    elements = []
+
+    elements.extend(_build_header(theme, styles, usable_width, title='AR CREDIT MEMO'))
+
+    elements.append(_build_section_bar('CREDIT MEMO INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    posting_str = creditmemo.posting_date.strftime('%d %B %Y') if creditmemo.posting_date else '—'
+    due_str = creditmemo.doc_due_date.strftime('%d %B %Y') if creditmemo.doc_due_date else '—'
+    cm_info_rows = [
+        ('Credit Memo Number', creditmemo.credit_memo_number or '—'),
+        ('Posting Date', posting_str),
+        ('Due Date', due_str),
+        ('BP Reference', creditmemo.bp_reference_no or '—'),
+        ('Cancel Status', _cancel_status_label_ar(creditmemo.cancel_status, 'credit_memo')),
+        ('Document Status', creditmemo.document_status or '—'),
+    ]
+    elements.append(_build_info_table(cm_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.append(_build_section_bar('CUSTOMER INFORMATION', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    customer_info_rows = [
+        ('Customer Name', creditmemo.customer_name or '—'),
+        ('Customer Code', creditmemo.customer_code or '—'),
+        ('Salesman', creditmemo.salesman_name or '—'),
+        ('Store', creditmemo.store or '—'),
+        ('VAT Number', creditmemo.vat_number or '—'),
+    ]
+    if len(customer_info_rows) % 2 != 0:
+        customer_info_rows.append(('', ''))
+    elements.append(_build_info_table(customer_info_rows, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.append(_build_section_bar('LINE ITEMS', theme, styles, usable_width))
+    elements.append(Spacer(1, SP_INNER))
+
+    items_table = _build_ar_line_items_table(items_qs, theme, styles, usable_width)
+    elements.append(items_table)
+    elements.append(Spacer(1, SP_AFTER_TABLE))
+
+    elements.append(_build_ar_document_summary(creditmemo, theme, styles, usable_width))
+    elements.append(Spacer(1, SP_SECTION))
+
+    elements.extend(_build_ar_terms_block(theme, styles, document_kind='credit_memo'))
+
+    footer_fn = _page_footer_factory(theme)
+    doc.build(elements, onFirstPage=footer_fn, onLaterPages=footer_fn)
+
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
+
+
+def _build_sap_items_table(items_qs, theme, styles, usable_width, include_stock_columns=False):
+    """Build SAP line-items table with Rev. Price column and zebra striping."""
+    if include_stock_columns:
+        col_widths = [
+            0.35 * inch,   # #
+            0.88 * inch,   # Item No
+            1.55 * inch,   # Description
+            0.46 * inch,   # Qty
+            0.68 * inch,   # Unit Price
+            0.68 * inch,   # Rev. Price
+            0.72 * inch,   # Rev.Total
+            0.50 * inch,   # Tot. Stock (total available)
+            0.50 * inch,   # DIP
+            0.52 * inch,   # Open Qty
+        ]
+    else:
+        col_widths = [
+            0.35 * inch,   # #
+            0.95 * inch,   # Item No
+            2.20 * inch,   # Description
+            0.50 * inch,   # Qty
+            0.75 * inch,   # Unit Price
+            0.75 * inch,   # Rev. Price
+            0.85 * inch,   # Total
+        ]
     allocated = sum(col_widths)
     col_widths[2] += max(0, usable_width - allocated)
 
@@ -394,10 +784,22 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
         Paragraph('Rev. Price', styles['th_r']),
         Paragraph('Rev.Total', styles['th_r']),
     ]
+    if include_stock_columns:
+        hdr.extend([
+            Paragraph('Tot. Stock', styles['th_r']),
+            Paragraph('DIP', styles['th_r']),
+            Paragraph('Open', styles['th_r']),
+        ])
     table_data = [hdr]
 
+    items_list = list(items_qs)
+    stock_lookup = _items_master_stock_dip_lookup(
+        list({it.item_no for it in items_list if it.item_no})
+    ) if include_stock_columns else {}
+
+    desc_max = 48 if include_stock_columns else 55
     subtotal = Decimal('0')
-    for idx, it in enumerate(items_qs, 1):
+    for idx, it in enumerate(items_list, 1):
         qty = _to_decimal(it.quantity)
         price = _to_decimal(it.price)
         orig_row = _to_decimal(it.row_total) if getattr(it, 'row_total', None) is not None else None
@@ -422,12 +824,11 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
                 price = Decimal("0")
         subtotal += row_total
 
-        desc = (it.description or '—')[:55] + ('…' if len(it.description or '') > 55 else '')
-        # Format qty: avoid rstrip('0') on whole string (80 -> "8"); only strip after decimal
-        qty_str = (f"{qty:.2f}".rstrip('0').rstrip('.')) if qty else "0"
+        desc = (it.description or '—')[:desc_max] + ('…' if len(it.description or '') > desc_max else '')
+        qty_str = _format_qty_pdf(qty)
         rev_price_str = f"{rev_price:,.2f}" if rev_price and rev_price > 0 else "—"
 
-        table_data.append([
+        row_cells = [
             Paragraph(str(idx), styles['td_c']),
             Paragraph(it.item_no or '—', styles['td_c']),
             Paragraph(desc, styles['td_bold']),
@@ -435,7 +836,17 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width):
             Paragraph(f"{price:,.2f}", styles['td_r']),
             Paragraph(rev_price_str, styles['td_r']),
             Paragraph(f"{row_total:,.2f}", styles['td_r']),
-        ])
+        ]
+        if include_stock_columns:
+            sd = stock_lookup.get(it.item_no, {}) if it.item_no else {}
+            tot_st = sd.get('total_available_stock', Decimal('0'))
+            dip_st = sd.get('dip_warehouse_stock', Decimal('0'))
+            row_cells.extend([
+                Paragraph(_fmt_stock_int_pdf(tot_st), styles['td_r']),
+                Paragraph(_fmt_stock_int_pdf(dip_st), styles['td_r']),
+                Paragraph(_fmt_open_qty_line_pdf(getattr(it, 'remaining_open_quantity', None)), styles['td_r']),
+            ])
+        table_data.append(row_cells)
 
     num_rows = len(table_data)
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -554,10 +965,13 @@ def _page_footer_factory(theme):
     return _draw_footer
 
 
-def generate_sap_salesorder_pdf_bytes(salesorder):
+def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
     """
     Generate SAP Sales Order PDF bytes using the Customer Order design.
     Does NOT import or modify views.py.
+
+    When include_stock_columns is True, line items include Stock (total available),
+    DIP warehouse stock, and Open Qty (remaining_open_quantity), matching the SO detail.
     """
     theme = SAP_PDF_THEME
     items_qs = salesorder.items.all().order_by('id')
@@ -611,7 +1025,9 @@ def generate_sap_salesorder_pdf_bytes(salesorder):
     elements.append(_build_section_bar('ORDER ITEMS', theme, styles, usable_width))
     elements.append(Spacer(1, SP_INNER))
 
-    items_table, subtotal = _build_sap_items_table(items_qs, theme, styles, usable_width)
+    items_table, subtotal = _build_sap_items_table(
+        items_qs, theme, styles, usable_width, include_stock_columns=include_stock_columns
+    )
     elements.append(items_table)
     elements.append(Spacer(1, SP_AFTER_TABLE))
 
