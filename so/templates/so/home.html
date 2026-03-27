@@ -925,14 +925,14 @@
                             Combined Report
                         </a>
                     </li>
-                    <!-- {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+                    {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
                     <li>
                         <a href="{% url 'accounts_recording_list' %}">
                             <i class="fas fa-clipboard-check"></i>
                             Accounts Recording
                         </a>
                     </li>
-                    {% endif %} -->
+                    {% endif %}
                     <li>
                         <a href="{% url 'credit_memo_analysis' %}">
                             <i class="fas fa-chart-pie"></i>
