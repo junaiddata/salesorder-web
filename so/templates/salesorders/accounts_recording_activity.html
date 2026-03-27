@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Accounts Recording — Activity log</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+    .header p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 4px; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .filters { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .field label { display: block; font-size: 0.813rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .input {
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      min-width: 200px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 12px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 10px 12px;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: top;
+    }
+    tbody tr:hover { background: #fafbfc; }
+    .col-time { white-space: nowrap; color: var(--text-secondary); font-size: 0.75rem; }
+    .col-user { font-weight: 600; }
+    .col-doc code { font-size: 0.8rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    .changes-list { margin: 0; padding-left: 1.1rem; }
+    .changes-list li { margin-bottom: 4px; color: var(--text); }
+    .arrow { color: var(--text-muted); padding: 0 4px; }
+    .muted { color: var(--text-muted); font-size: 0.75rem; }
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Activity log</h1>
+        <p>Who updated Accounts Recording fields (CTRL, handover, status, internal remark, etc.)</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'accounts_recording_list' %}">← Back to Accounts Recording</a>
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">Home</a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="card">
+      <form class="filters" method="get" action="">
+        <div class="field">
+          <label for="q">Search</label>
+          <input id="q" class="input" type="search" name="q" value="{{ filters.q }}" placeholder="Document no. or username">
+        </div>
+        <div class="field">
+          <label for="page_size">Per page</label>
+          <input id="page_size" class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}" style="width:90px;">
+        </div>
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </form>
+    </div>
+
+    <div class="card" style="overflow:hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>User</th>
+            <th>Document</th>
+            <th>Changes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in page_obj %}
+          <tr>
+            <td class="col-time">{{ log.created_at|date:"d-m-Y H:i" }}</td>
+            <td class="col-user">{{ log.username|default:"—" }}</td>
+            <td class="col-doc">
+              <span class="muted">{{ log.document_kind }}</span>
+              <code>{{ log.document_number }}</code>
+            </td>
+            <td>
+              {% if log.change_lines %}
+              <ul class="changes-list">
+                {% for line in log.change_lines %}
+                <li>
+                  <strong>{{ line.label }}:</strong>
+                  {{ line.old }}<span class="arrow">→</span>{{ line.new }}
+                </li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="empty-state">No activity recorded yet. Changes appear here after saves on Accounts Recording.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <div class="table-footer">
+        <span>Showing {{ page_obj|length }} of {{ total_count }} entries</span>
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      </div>
+      {% elif total_count %}
+      <div class="table-footer">
+        <span>{{ total_count }} {% if total_count == 1 %}entry{% else %}entries{% endif %}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

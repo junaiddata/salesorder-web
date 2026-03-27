@@ -826,6 +826,35 @@ class AccountsRecordingEntry(models.Model):
         return f"{self.document_kind} {self.document_number}"
 
 
+class AccountsRecordingChangeLog(models.Model):
+    """Audit trail: who changed which Accounts Recording fields on which document."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accounts_recording_change_logs",
+    )
+    username = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    document_kind = models.CharField(max_length=20)
+    document_number = models.CharField(max_length=100, db_index=True)
+    changes = models.JSONField(
+        default=dict,
+        help_text='Map of field key to {"old": "...", "new": "..."}',
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["document_kind", "document_number", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.username} @ {self.created_at} {self.document_kind} {self.document_number}"
+
+
 ################ LOGS #######################
 from django.conf import settings
 from django.db import models

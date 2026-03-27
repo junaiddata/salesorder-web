@@ -194,6 +194,7 @@ urlpatterns += [
     path('saparinvoices/combined/export-pdf/', sap_salesorder_views.export_combined_sales_invoices_pdf, name='export_combined_sales_invoices_pdf'),
     path('saparinvoices/combined/export-itemwise-excel/', sap_salesorder_views.export_combined_itemwise_excel, name='export_combined_itemwise_excel'),
     path('saparinvoices/combined/', sap_salesorder_views.combined_sales_invoices_list, name='combined_sales_invoices_list'),
+    path('saparinvoices/accounts-recording/activity/', accounts_recording_views.accounts_recording_activity_log, name='accounts_recording_activity_log'),
     path('saparinvoices/accounts-recording/save/', accounts_recording_views.accounts_recording_save, name='accounts_recording_save'),
     path('saparinvoices/accounts-recording/export-excel/', accounts_recording_views.export_accounts_recording_excel, name='export_accounts_recording_excel'),
     path('saparinvoices/accounts-recording/export-pdf/', accounts_recording_views.export_accounts_recording_pdf, name='export_accounts_recording_pdf'),

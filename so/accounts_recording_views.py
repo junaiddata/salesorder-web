@@ -35,7 +35,12 @@ from .combined_ar_query import (
     combined_ar_totals,
     get_combined_ar_filtered_querysets,
 )
-from .models import SAPARInvoice, SAPARCreditMemo, AccountsRecordingEntry
+from .models import (
+    AccountsRecordingChangeLog,
+    AccountsRecordingEntry,
+    SAPARCreditMemo,
+    SAPARInvoice,
+)
 from .sap_salesorder_views import salesman_scope_q_salesorder
 
 logger = logging.getLogger(__name__)
@@ -45,6 +50,75 @@ _STATUS_VALUES = {c[0] for c in AccountsRecordingEntry.Status.choices}
 HANDED_SAME_AS_DOC = "__doc_salesman__"
 
 _STATUS_LABELS = dict(AccountsRecordingEntry.Status.choices)
+
+_ACC_LOG_FIELD_LABELS = {
+    "ctrl_number": "Ctrl no.",
+    "handed_to_salesman": "Handed to",
+    "handed_over_date": "Handover date",
+    "received_back": "Received back",
+    "status": "Status",
+    "accounts_internal_remark": "A/c internal remark",
+}
+
+
+def _fmt_acc_log_value(val):
+    if val is None or val == "":
+        return "—"
+    if isinstance(val, bool):
+        return "Yes" if val else "No"
+    return str(val)
+
+
+def _entry_snapshot_for_log(entry):
+    if not entry:
+        return None
+    return {
+        "ctrl_number": (entry.ctrl_number or "").strip() or None,
+        "handed_to_salesman": (entry.handed_to_salesman or "").strip() or None,
+        "handed_over_date": entry.handed_over_date.isoformat()
+        if entry.handed_over_date
+        else None,
+        "received_back": bool(entry.received_back),
+        "status": entry.status,
+        "accounts_internal_remark": (entry.accounts_internal_remark or "").strip() or None,
+    }
+
+
+def _diff_acc_snapshots(old_snap, new_snap):
+    """Return {field: {old, new}} for display; empty if nothing changed."""
+    if old_snap is None:
+        out = {}
+        for k, nv in new_snap.items():
+            ov = None
+            if nv != ov:
+                out[k] = {"old": _fmt_acc_log_value(ov), "new": _fmt_acc_log_value(nv)}
+        return out
+    out = {}
+    for k in new_snap:
+        ov, nv = old_snap.get(k), new_snap.get(k)
+        if ov != nv:
+            out[k] = {"old": _fmt_acc_log_value(ov), "new": _fmt_acc_log_value(nv)}
+    return out
+
+
+def _append_accounts_recording_change_log(request, document_kind, document_number, existing_entry, saved_entry):
+    old_snap = _entry_snapshot_for_log(existing_entry)
+    new_snap = _entry_snapshot_for_log(saved_entry)
+    changes = _diff_acc_snapshots(old_snap, new_snap)
+    if not changes:
+        return
+    if "status" in changes:
+        ch = changes["status"]
+        if old_snap and old_snap.get("status") is not None:
+            ch["old"] = _STATUS_LABELS.get(old_snap.get("status"), ch["old"])
+        ch["new"] = _STATUS_LABELS.get(new_snap.get("status"), ch["new"])
+    AccountsRecordingChangeLog.objects.create(
+        user=request.user,
+        username=(request.user.get_username() or "")[:150],
+        document_kind=document_kind,
+        document_number=document_number,
+        changes=changes,
+    )
 
 
 def _accounts_recording_access_allowed(user):
@@ -788,6 +862,52 @@ def accounts_recording_list(request):
 
 
 @login_required
+def accounts_recording_activity_log(request):
+    """Who changed what on Accounts Recording (same access as the main list)."""
+    _require_accounts_recording_access(request)
+    try:
+        page_size = int(request.GET.get("page_size", 50))
+    except ValueError:
+        page_size = 50
+    page_size = max(10, min(page_size, 200))
+    q = request.GET.get("q", "").strip()
+
+    qs = AccountsRecordingChangeLog.objects.all()
+    if q:
+        qs = qs.filter(
+            Q(document_number__icontains=q) | Q(username__icontains=q)
+        )
+
+    paginator = Paginator(qs, page_size)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    for log in page_obj:
+        lines = []
+        changes = log.changes if isinstance(log.changes, dict) else {}
+        for field, pair in changes.items():
+            label = _ACC_LOG_FIELD_LABELS.get(
+                field, field.replace("_", " ").title()
+            )
+            if isinstance(pair, dict):
+                old_v = pair.get("old", "")
+                new_v = pair.get("new", "")
+            else:
+                old_v, new_v = "", ""
+            lines.append({"label": label, "old": old_v, "new": new_v})
+        log.change_lines = lines
+
+    return render(
+        request,
+        "salesorders/accounts_recording_activity.html",
+        {
+            "page_obj": page_obj,
+            "total_count": paginator.count,
+            "filters": {"q": q, "page_size": page_size},
+        },
+    )
+
+
+@login_required
 @require_POST
 def accounts_recording_save(request):
     _require_accounts_recording_access(request)
@@ -874,6 +994,10 @@ def accounts_recording_save(request):
             "status": status_val,
             "accounts_internal_remark": accounts_internal_remark,
         },
+    )
+
+    _append_accounts_recording_change_log(
+        request, document_kind, document_number, existing, entry
     )
 
     return JsonResponse({"success": True, "row": _serialize_entry(entry, doc)})

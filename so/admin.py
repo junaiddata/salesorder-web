@@ -262,3 +262,18 @@ class SAPProformaInvoiceAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at', 'created_by')
         }),
     )
+
+
+@admin.register(AccountsRecordingChangeLog)
+class AccountsRecordingChangeLogAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "username", "document_kind", "document_number")
+    list_filter = ("document_kind",)
+    search_fields = ("document_number", "username")
+    readonly_fields = ("user", "username", "created_at", "document_kind", "document_number", "changes")
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

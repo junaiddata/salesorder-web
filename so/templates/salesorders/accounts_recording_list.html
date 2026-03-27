@@ -540,6 +540,7 @@
         <p>Combined invoices and credit memos — CTRL, handover, and status (saved automatically)</p>
       </div>
       <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'accounts_recording_activity_log' %}">Activity log</a>
         <a class="btn btn-primary" href="{% url 'export_accounts_recording_excel' %}?{{ request.GET.urlencode }}">Export Excel</a>
         <a class="btn btn-secondary" href="{% url 'export_accounts_recording_pdf' %}?{{ request.GET.urlencode }}">Export PDF</a>
         <a class="btn btn-secondary" href="{% url 'combined_sales_invoices_list' %}?{{ request.GET.urlencode }}">Combined Report</a>
