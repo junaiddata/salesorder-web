@@ -123,20 +123,7 @@ class Command(BaseCommand):
             )
             return
 
-        # 1. Load ignore list from DB
-        ignore_codes = set(
-            IgnoreList.objects.values_list("item_code", flat=True)
-        )
-
-        # 3. Get existing item codes from DB
-        existing_codes = set(
-            Items.objects.values_list("item_code", flat=True)
-        )
-
-        new_items = []
-        items_to_update = []
-
-        created, updated, skipped = 0, 0, 0
+        BATCH_SIZE = 500  # rows per SQL statement — keeps queries small enough for Postgres
 
         def safe_float(value):
             """Convert to float safely; return 0 if empty, invalid, or None."""
@@ -146,6 +133,22 @@ class Command(BaseCommand):
                 return float(value)
             except (TypeError, ValueError):
                 return 0
+
+        # 1. Load ignore list from DB
+        ignore_codes = set(
+            IgnoreList.objects.values_list("item_code", flat=True)
+        )
+
+        # 2. Load ALL existing Items into a dict in ONE query (avoids N+1 per row)
+        existing_items = {
+            obj.item_code: obj
+            for obj in Items.objects.all()
+        }
+
+        new_items = []
+        items_to_update = []
+
+        created, updated, skipped = 0, 0, 0
 
         for item in items_data:
             item_code = str(item.get("item_code", "")).strip()
@@ -161,8 +164,8 @@ class Command(BaseCommand):
             total_stock = Decimal(str(safe_float(item.get("total_stock"))))  # DecimalField
             dip_stock = Decimal(str(safe_float(item.get("dip_stock"))))  # DecimalField
 
-            if item_code in existing_codes:
-                obj = Items.objects.get(item_code=item_code)
+            if item_code in existing_items:
+                obj = existing_items[item_code]
                 obj.item_description = item.get("description", "")
                 obj.item_upvc = item.get("upc_code", "")
                 obj.item_cost = cost_price
@@ -188,15 +191,20 @@ class Command(BaseCommand):
                 new_items.append(obj)
                 created += 1
 
-        # 4. Bulk update & bulk create
-        if items_to_update:
-            Items.objects.bulk_update(
-                items_to_update,
-                ["item_description", "item_upvc", "item_cost", "item_firm", "item_price", "item_stock", "total_available_stock", "dip_warehouse_stock"]
-            )
+        UPDATE_FIELDS = [
+            "item_description", "item_upvc", "item_cost", "item_firm",
+            "item_price", "item_stock", "total_available_stock", "dip_warehouse_stock",
+        ]
 
+        # 3. Bulk update in chunks — avoids one giant SQL that drops the Postgres connection
+        if items_to_update:
+            for i in range(0, len(items_to_update), BATCH_SIZE):
+                Items.objects.bulk_update(items_to_update[i:i + BATCH_SIZE], UPDATE_FIELDS)
+
+        # 4. Bulk create in chunks
         if new_items:
-            Items.objects.bulk_create(new_items, ignore_conflicts=True)
+            for i in range(0, len(new_items), BATCH_SIZE):
+                Items.objects.bulk_create(new_items[i:i + BATCH_SIZE], ignore_conflicts=True)
 
         # Invalidate cached stock map used by get_stock_costs() only (avoid wiping all caches).
         cache.delete("junaid_stock_data")
