@@ -181,7 +181,14 @@ SALES_USER_MAP_SO = SALES_USER_MAP
 
 def salesman_scope_q_salesorder(user: "User") -> Q:
     """Return a Q filter limiting SAPSalesorder by salesman_name for non-staff users."""
-    if user.is_superuser or (hasattr(user, 'role') and user.role.role == "Admin"):
+    # Never use hasattr(user, 'role') and user.role — reverse OneToOne can raise
+    # RelatedObjectDoesNotExist when no Role row exists; hasattr is still True.
+    role_obj = None
+    try:
+        role_obj = user.role
+    except Exception:
+        pass
+    if user.is_superuser or (role_obj is not None and getattr(role_obj, "role", None) == "Admin"):
         return Q()  # no restriction
 
     uname = (user.username or "").strip().lower()

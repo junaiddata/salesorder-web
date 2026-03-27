@@ -32,7 +32,6 @@ from .combined_ar_query import (
     combined_ar_ho_salesmen_list,
     combined_ar_salesmen_list,
     combined_ar_summary_metrics,
-    combined_ar_totals,
     get_combined_ar_filtered_querysets,
 )
 from .models import (
@@ -232,6 +231,65 @@ def _parse_date(s):
         return None
 
 
+def _entry_map_for_combined_list(combined_list):
+    """Batch-load AccountsRecordingEntry rows for all documents in combined_list."""
+    pairs = []
+    for doc in combined_list:
+        if doc.document_type == "Invoice":
+            pairs.append((AccountsRecordingEntry.DocumentKind.INVOICE, doc.invoice_number))
+        else:
+            pairs.append((AccountsRecordingEntry.DocumentKind.CREDIT_MEMO, doc.credit_memo_number))
+    entry_map = {}
+    if pairs:
+        q_obj = Q()
+        for dk, dn in pairs:
+            q_obj |= Q(document_kind=dk, document_number=dn)
+        for e in AccountsRecordingEntry.objects.filter(q_obj):
+            entry_map[(e.document_kind, e.document_number)] = e
+    return entry_map
+
+
+def _effective_accounts_status(doc, entry_map):
+    if doc.document_type == "Invoice":
+        k = (AccountsRecordingEntry.DocumentKind.INVOICE, doc.invoice_number)
+    else:
+        k = (AccountsRecordingEntry.DocumentKind.CREDIT_MEMO, doc.credit_memo_number)
+    ent = entry_map.get(k)
+    if not ent:
+        return AccountsRecordingEntry.Status.PENDING
+    return ent.status
+
+
+def _filter_combined_list_by_accounts_status(combined_list, accounts_status_filter):
+    """
+    Filter by Accounts Recording workflow status (pending / with_salesman / in_store / received_by_ac).
+    Documents with no saved row count as pending.
+    """
+    if not accounts_status_filter or accounts_status_filter == "All":
+        return combined_list
+    if accounts_status_filter not in _STATUS_VALUES:
+        return combined_list
+    entry_map = _entry_map_for_combined_list(combined_list)
+    return [
+        d
+        for d in combined_list
+        if _effective_accounts_status(d, entry_map) == accounts_status_filter
+    ]
+
+
+def _totals_from_combined_doc_list(combined_list):
+    tw = Decimal("0")
+    gp = Decimal("0")
+    for d in combined_list:
+        v = getattr(d, "doc_total_without_vat", None)
+        if v is not None:
+            tw += v
+        g = getattr(d, "total_gross_profit", None)
+        if g is not None:
+            gp += g
+    return tw, gp
+
+
 def _build_accounts_recording_export_data(request, user):
     """Full filtered combined list (no pagination) + AccountsRecordingEntry map."""
     invoice_qs, creditmemo_qs, p = get_combined_ar_filtered_querysets(
@@ -262,6 +320,11 @@ def _build_accounts_recording_export_data(request, user):
         reverse=True,
     )
 
+    accounts_status_filter = request.GET.get("accounts_status", "").strip()
+    combined_list = _filter_combined_list_by_accounts_status(
+        combined_list, accounts_status_filter
+    )
+
     pairs = []
     for doc in combined_list:
         if doc.document_type == "Invoice":
@@ -277,7 +340,9 @@ def _build_accounts_recording_export_data(request, user):
         for e in AccountsRecordingEntry.objects.filter(q_obj):
             entry_map[(e.document_kind, e.document_number)] = e
 
-    return combined_list, entry_map, p
+    p_out = dict(p)
+    p_out["accounts_status"] = accounts_status_filter
+    return combined_list, entry_map, p_out
 
 
 def _handed_to_export_text(entry, doc):
@@ -559,9 +624,15 @@ def export_accounts_recording_pdf(request):
     if p.get("end"):
         period_parts.append(f"to {html_escape(str(p['end']))}")
     period_txt = ", ".join(period_parts) if period_parts else "posting date per filters"
+    acc_st = (p.get("accounts_status") or "").strip()
+    if acc_st and acc_st in _STATUS_VALUES:
+        acc_status_lbl = _STATUS_LABELS.get(acc_st, acc_st)
+    else:
+        acc_status_lbl = "All"
     elements.append(
         Paragraph(
-            f"<i>Store: {html_escape(store_lbl)} · Period: {period_txt}</i>",
+            f"<i>Store: {html_escape(store_lbl)} · Period: {period_txt} · "
+            f"A/c status: {html_escape(acc_status_lbl)}</i>",
             gray_label,
         )
     )
@@ -757,8 +828,8 @@ def accounts_recording_list(request):
     start = p["start"]
     end = p["end"]
     total_range = p["total_range"]
+    accounts_status_filter = request.GET.get("accounts_status", "").strip()
 
-    combined_total_without_vat, combined_total_gp = combined_ar_totals(invoice_qs, creditmemo_qs)
     summary = combined_ar_summary_metrics(
         request.user,
         salesman_scope_q_salesorder,
@@ -786,6 +857,13 @@ def accounts_recording_list(request):
             x.document_number if x.document_number else "",
         ),
         reverse=True,
+    )
+
+    combined_list = _filter_combined_list_by_accounts_status(
+        combined_list, accounts_status_filter
+    )
+    combined_total_without_vat, combined_total_gp = _totals_from_combined_doc_list(
+        combined_list
     )
 
     try:
@@ -856,6 +934,7 @@ def accounts_recording_list(request):
                 "page_size": page_size,
                 "total": total_range,
                 "document_type": document_type_filter or "All",
+                "accounts_status": accounts_status_filter,
             },
         },
     )

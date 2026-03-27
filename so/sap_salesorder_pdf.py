@@ -6,9 +6,12 @@ import os
 from io import BytesIO
 from datetime import datetime
 from decimal import Decimal
+from xml.sax.saxutils import escape
 
 import requests
 from django.conf import settings
+
+from so.models import SAPSalesorderItem
 
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
@@ -808,12 +811,13 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width, include_stock_
             unit_price = (orig_row / qty).quantize(Decimal("0.01"))
         else:
             unit_price = price
-        rev_price_raw = getattr(it, 'revised_price', None)
-        rev_price = _to_decimal(rev_price_raw) if rev_price_raw is not None else None
-        if rev_price is not None and rev_price == 0:
-            rev_price = None
+        # Revised unit price (saved on line). Use model field directly; 0 means cleared in UI.
+        rp = it.revised_price
+        if rp is not None and rp == 0:
+            rp = None
+        rev_price = rp
 
-        # Use revised price for row total when available; otherwise use unit price
+        # Use revised price for row total when set and positive; otherwise list/unit price
         effective_price = rev_price if (rev_price is not None and rev_price > 0) else unit_price
         row_total = (qty * effective_price).quantize(Decimal("0.01"))
 
@@ -826,16 +830,20 @@ def _build_sap_items_table(items_qs, theme, styles, usable_width, include_stock_
 
         desc = (it.description or '—')[:desc_max] + ('…' if len(it.description or '') > desc_max else '')
         qty_str = _format_qty_pdf(qty)
-        rev_price_str = f"{rev_price:,.2f}" if rev_price and rev_price > 0 else "—"
+        if rev_price is not None and rev_price > 0:
+            rev_price_str = f"{rev_price:,.2f}"
+        else:
+            rev_price_str = "—"
 
+        # escape() — ReportLab Paragraph uses XML; raw '<', '&' in description breaks following cells
         row_cells = [
-            Paragraph(str(idx), styles['td_c']),
-            Paragraph(it.item_no or '—', styles['td_c']),
-            Paragraph(desc, styles['td_bold']),
-            Paragraph(qty_str, styles['td_c']),
-            Paragraph(f"{price:,.2f}", styles['td_r']),
-            Paragraph(rev_price_str, styles['td_r']),
-            Paragraph(f"{row_total:,.2f}", styles['td_r']),
+            Paragraph(escape(str(idx)), styles['td_c']),
+            Paragraph(escape(str(it.item_no or '—')), styles['td_c']),
+            Paragraph(escape(desc), styles['td_bold']),
+            Paragraph(escape(qty_str), styles['td_c']),
+            Paragraph(escape(f"{price:,.2f}"), styles['td_r']),
+            Paragraph(escape(rev_price_str), styles['td_r']),
+            Paragraph(escape(f"{row_total:,.2f}"), styles['td_r']),
         ]
         if include_stock_columns:
             sd = stock_lookup.get(it.item_no, {}) if it.item_no else {}
@@ -974,7 +982,8 @@ def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
     DIP warehouse stock, and Open Qty (remaining_open_quantity), matching the SO detail.
     """
     theme = SAP_PDF_THEME
-    items_qs = salesorder.items.all().order_by('id')
+    # Fresh query (same ordering as SO detail) so revised_price and all line fields load reliably
+    items_qs = SAPSalesorderItem.objects.filter(salesorder_id=salesorder.pk).order_by('line_no', 'id')
 
     page_w, page_h = A4
     buffer = BytesIO()

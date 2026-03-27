@@ -138,7 +138,7 @@
 
     @media (min-width: 1024px) {
       .filters-grid {
-        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto;
       }
     }
 
@@ -603,6 +603,16 @@
             <option value="">All Stores</option>
             <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
             <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Accounts status</label>
+          <select class="select" name="accounts_status" title="Filter by workflow status (same as Status column)">
+            <option value="" {% if not filters.accounts_status %}selected{% endif %}>All statuses</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filters.accounts_status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
           </select>
         </div>
 
