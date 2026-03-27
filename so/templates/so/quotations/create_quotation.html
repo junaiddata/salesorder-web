@@ -348,6 +348,7 @@
                     <div class="form-group">
                         <label for="common_firm">Brand (select one or more):</label>
                         <select id="common_firm" name="common_firm" class="searchable-select" multiple="multiple">
+                            <option value="All">All Firms</option>
                             {% for firm in firms %}
                                 <option value="{{ firm }}">{{ firm }}</option>
                             {% endfor %}
