@@ -1,0 +1,32 @@
+{% for doc in docs %}
+  {% with entry=doc.accounts_entry %}
+<tr>
+  <td>
+    {% if doc.document_type == 'Invoice' %}
+      <span class="badge badge-invoice">Invoice</span>
+    {% else %}
+      <span class="badge badge-creditmemo">Cr. memo</span>
+    {% endif %}
+  </td>
+  <td class="text-muted">{{ doc.posting_date|date:"d-m-y"|default:"—" }}</td>
+  <td>
+    {% if doc.document_type == 'Invoice' %}
+      {{ doc.invoice_number }}
+    {% else %}
+      {{ doc.credit_memo_number }}
+    {% endif %}
+  </td>
+  <td>{{ doc.customer_name }}</td>
+  <td class="text-muted">{{ doc.salesman_name|default:"—" }}</td>
+  <td>{{ doc.accounts_handed_display|default:"—" }}</td>
+  <td class="text-muted">{% if entry and entry.handed_over_date %}{{ entry.handed_over_date|date:"d-m-y" }}{% else %}—{% endif %}</td>
+  <td class="text-muted">{{ doc.bp_reference_no|default:"—" }}</td>
+  <td class="text-muted">{{ doc.store|default:"—" }}</td>
+  <td><span class="badge badge-status">With Salesman</span></td>
+</tr>
+  {% endwith %}
+{% empty %}
+<tr>
+  <td colspan="10" class="empty-state">No documents in this list.</td>
+</tr>
+{% endfor %}

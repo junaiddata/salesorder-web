@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Invoices with me — Accounts</title>
+  <title>Handed Invoices — Accounts</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -115,17 +115,44 @@
       color: var(--text-secondary);
     }
     .empty-state { text-align: center; padding: 36px 20px; color: var(--text-secondary); font-size: 0.875rem; }
+    .bucket-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .bucket-head h2 { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
+    .bucket-count {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header class="header">
       <div>
-        <h1>Invoices with me</h1>
+        <h1>Handed Invoices</h1>
         <p>
-          AR invoices and credit memos marked in <strong>Accounts Recording</strong> as
-          <strong>With Salesman</strong> where you are the handed-to / invoiced salesman (per your login mapping).
-          Same date and store rules as the combined report (default HO when not specified).
+          AR invoices and credit memos in <strong>Accounts Recording</strong> with status
+          <strong>With Salesman</strong>. Same date and store rules as the combined report (default HO when not specified).
+          {% if with_me_section_mode == 'salesmen' %}
+          Rows are grouped into <strong>one section per salesman</strong> or explicit handed-to name.
+          {% if with_me_salesmen_scope_note %}Your list is limited to the handover names on your login.{% endif %}
+          {% elif with_me_section_mode == 'salesman_mine_others' %}
+          <strong>With you</strong> — documents where you are the handed-to / custodian.
+          <strong>Invoices with others</strong> — your invoiced documents handed to a different salesman.
+          {% else %}
+          You see rows that match your login mapping (handed-to or invoiced salesman), with pagination.
+          {% endif %}
         </p>
       </div>
       <div class="header-actions">
@@ -147,14 +174,56 @@
           <label for="q">Search</label>
           <input id="q" class="input" type="search" name="q" value="{{ filters.q }}" placeholder="Doc no., customer, LPO…">
         </div>
+        {% if not use_accounts_buckets %}
         <div class="field">
           <label for="page_size">Per page</label>
           <input id="page_size" class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:90px;">
         </div>
+        {% endif %}
         <button class="btn btn-primary" type="submit">Apply</button>
       </form>
     </div>
 
+    {% if use_accounts_buckets %}
+      {% if not with_me_sections %}
+    <div class="card">
+      <p class="empty-state">No documents are currently With Salesman in your scope, or none match your search.</p>
+    </div>
+      {% else %}
+      {% for section in with_me_sections %}
+    <div class="card table-wrap" style="padding:0;">
+      <div class="bucket-head">
+        <h2>{{ section.title }}</h2>
+        <span class="bucket-count">{{ section.docs|length }} document{{ section.docs|length|pluralize }}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Posting date</th>
+            <th>Document</th>
+            <th>Customer</th>
+            <th>Invoiced salesman</th>
+            <th>Handed to (accounts)</th>
+            <th>Handover date</th>
+            <th>LPO / BP</th>
+            <th>Store</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% include 'salesorders/_accounts_with_me_tbody.html' with docs=section.docs %}
+        </tbody>
+      </table>
+    </div>
+      {% endfor %}
+      {% endif %}
+      {% if total_count %}
+    <div class="table-footer" style="margin-top:8px;padding:10px 0;background:transparent;border:none;">
+      <span>{{ total_count }} document{{ total_count|pluralize }} total</span>
+    </div>
+      {% endif %}
+    {% else %}
     <div class="card table-wrap" style="padding:0;">
       <table>
         <thead>
@@ -172,38 +241,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for doc in page_obj %}
-            {% with entry=doc.accounts_entry %}
-          <tr>
-            <td>
-              {% if doc.document_type == 'Invoice' %}
-                <span class="badge badge-invoice">Invoice</span>
-              {% else %}
-                <span class="badge badge-creditmemo">Cr. memo</span>
-              {% endif %}
-            </td>
-            <td class="text-muted">{{ doc.posting_date|date:"d-m-y"|default:"—" }}</td>
-            <td>
-              {% if doc.document_type == 'Invoice' %}
-                {{ doc.invoice_number }}
-              {% else %}
-                {{ doc.credit_memo_number }}
-              {% endif %}
-            </td>
-            <td>{{ doc.customer_name }}</td>
-            <td class="text-muted">{{ doc.salesman_name|default:"—" }}</td>
-            <td>{{ doc.accounts_handed_display|default:"—" }}</td>
-            <td class="text-muted">{% if entry and entry.handed_over_date %}{{ entry.handed_over_date|date:"d-m-y" }}{% else %}—{% endif %}</td>
-            <td class="text-muted">{{ doc.bp_reference_no|default:"—" }}</td>
-            <td class="text-muted">{{ doc.store|default:"—" }}</td>
-            <td><span class="badge badge-status">With Salesman</span></td>
-          </tr>
-            {% endwith %}
-          {% empty %}
-          <tr>
-            <td colspan="10" class="empty-state">No documents are currently with you under Accounts Recording (or none match your search).</td>
-          </tr>
-          {% endfor %}
+          {% include 'salesorders/_accounts_with_me_tbody.html' with docs=page_obj %}
         </tbody>
       </table>
       {% if page_obj.paginator.num_pages > 1 %}
@@ -215,6 +253,7 @@
       <div class="table-footer"><span>{{ total_count }} document{{ total_count|pluralize }}</span></div>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 </body>
 </html>

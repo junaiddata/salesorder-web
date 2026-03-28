@@ -48,6 +48,100 @@ _STATUS_VALUES = {c[0] for c in AccountsRecordingEntry.Status.choices}
 # Handed-to dropdown: explicit "same as document salesman" (stored as NULL in DB)
 HANDED_SAME_AS_DOC = "__doc_salesman__"
 
+# Non-SAP “Handed to” targets (accounts): own optgroup on Accounts Recording.
+ACCOUNTS_RECORDING_HANDED_TO_EXTRA_NAMES = ("HISHAM", "SAVIA")
+
+# Usernames (lowercase) whose Handed Invoices list is limited to these handed-to names
+# (even if their role is Admin; use before the usual admin→see-all rule).
+ACCOUNTS_RECORDING_WITH_ME_USERNAME_NAMES = {
+    "savia": ["SAVIA", "HISHAM"],
+}
+
+_ACCOUNTS_TEAM_BUCKET_KEYS = frozenset(
+    n.strip().lower() for n in ACCOUNTS_RECORDING_HANDED_TO_EXTRA_NAMES if n and str(n).strip()
+)
+
+
+def _with_me_should_split_accounts_team_buckets(allowed_names):
+    if allowed_names is None:
+        return False
+    for n in allowed_names:
+        if (n or "").strip().lower() in _ACCOUNTS_TEAM_BUCKET_KEYS:
+            return True
+    return False
+
+
+def _user_sees_all_with_salesman_for_me(allowed_names):
+    """True for superuser, staff, and Admin role without a pinned “with me” name list."""
+    return allowed_names is None
+
+
+def _with_me_admin_salesman_bucket(entry, doc):
+    """
+    Bucket key + display title for Handed Invoices: one container per person
+    (explicit handed-to name, or invoiced salesman when handover is “same as invoiced”).
+    """
+    if not entry:
+        return "__unassigned__", "— Unassigned"
+    stored = (entry.handed_to_salesman or "").strip()
+    doc_nm = (getattr(doc, "salesman_name", None) or "").strip()
+    if stored:
+        if doc_nm and stored.lower() == doc_nm.lower():
+            lk = doc_nm.lower()
+            return lk, doc_nm
+        lk = stored.lower()
+        return lk, stored
+    if entry.handed_over_date and doc_nm:
+        lk = doc_nm.lower()
+        return lk, doc_nm
+    if doc_nm:
+        lk = doc_nm.lower()
+        return lk, doc_nm
+    return "__unassigned__", "— Unassigned"
+
+
+def _build_with_me_admin_salesman_sections(combined_list):
+    """Partition documents into sorted sections [{slug, title, docs}, ...]."""
+    entry_map_full = _entry_map_for_combined_list(combined_list)
+    bucket_map = {}
+    for doc in combined_list:
+        ent = entry_map_full.get(_accounts_doc_key(doc))
+        norm, label = _with_me_admin_salesman_bucket(ent, doc)
+        if norm not in bucket_map:
+            bucket_map[norm] = {"title": label, "docs": []}
+        bucket_map[norm]["docs"].append(doc)
+
+    def section_sort_key(item):
+        norm, data = item
+        if norm == "__unassigned__":
+            return (1, (data["title"] or "").lower())
+        return (0, (data["title"] or "").lower())
+
+    ordered = sorted(bucket_map.items(), key=section_sort_key)
+    sections = []
+    for norm, data in ordered:
+        slug = norm.replace(" ", "-").replace("/", "-")[:80] if norm != "__unassigned__" else "unassigned"
+        sections.append(
+            {
+                "slug": slug,
+                "title": data["title"],
+                "docs": data["docs"],
+            }
+        )
+    return sections
+
+
+def _enrich_docs_accounts_with_me(documents):
+    entry_map = _entry_map_for_combined_list(documents)
+    for doc in documents:
+        ent = entry_map.get(_accounts_doc_key(doc))
+        setattr(doc, "accounts_entry", ent)
+        setattr(
+            doc,
+            "accounts_handed_display",
+            _handed_to_export_text(ent, doc) if ent else "",
+        )
+
 _STATUS_LABELS = dict(AccountsRecordingEntry.Status.choices)
 
 _ACC_LOG_FIELD_LABELS = {
@@ -264,9 +358,14 @@ def _effective_accounts_status(doc, entry_map):
 
 def _user_allowed_salesman_names_for_accounts_recording(user):
     """
-    For “with me” filtering: None = show all WITH_SALESMAN rows (admin/staff/superuser).
+    For Handed Invoices filtering: None = show all WITH_SALESMAN rows (admin/staff/superuser).
     Otherwise list of SAP salesman_name strings from SALES_USER_MAP (same idea as salesman_scope).
     """
+    uname = (user.username or "").strip().lower()
+    pinned_with_me = ACCOUNTS_RECORDING_WITH_ME_USERNAME_NAMES.get(uname)
+    if pinned_with_me:
+        return [str(n) for n in pinned_with_me]
+
     if user.is_superuser or user.is_staff:
         return None
     role_obj = None
@@ -278,7 +377,6 @@ def _user_allowed_salesman_names_for_accounts_recording(user):
         return None
     from .views import SALES_USER_MAP
 
-    uname = (user.username or "").strip().lower()
     names = SALES_USER_MAP.get(uname)
     if names:
         return [str(n) for n in names]
@@ -289,7 +387,7 @@ def _user_allowed_salesman_names_for_accounts_recording(user):
 def _ar_document_numbers_handed_to_user(user):
     """
     AR document numbers in Accounts Recording (WITH_SALESMAN) where handed_to_salesman matches
-    the user's allowed names. Widens queryset scope for “Invoices with me” when the invoiced
+    the user's allowed names. Widens queryset scope for Handed Invoices when the invoiced
     salesman differs from who physically holds the documents.
     Admins (allowed_names None) and users with no mapped names return empty lists.
     """
@@ -351,7 +449,7 @@ def _entry_with_salesman_targets_user(entry, doc, allowed_names):
 
 
 def _filter_combined_with_salesman_with_me(combined_list, user):
-    """Keep documents whose Accounts status is WITH_SALESMAN and handover targets this user’s SALES_USER_MAP names."""
+    """Handed Invoices: WITH_SALESMAN only, handover targets this user (or full list for admins)."""
     entry_map = _entry_map_for_combined_list(combined_list)
     allowed_names = _user_allowed_salesman_names_for_accounts_recording(user)
     out = []
@@ -363,6 +461,50 @@ def _filter_combined_with_salesman_with_me(combined_list, user):
             continue
         out.append(doc)
     return out
+
+
+def _pagination_preserving_querystring(request) -> str:
+    q = request.GET.copy()
+    q.pop("page", None)
+    s = q.urlencode()
+    return f"{s}&" if s else ""
+
+
+def _filter_combined_to_with_salesman_status_only(combined_list):
+    """Documents whose Accounts Recording status is WITH_SALESMAN (before mine/others split)."""
+    entry_map = _entry_map_for_combined_list(combined_list)
+    out = []
+    for doc in combined_list:
+        ent = entry_map.get(_accounts_doc_key(doc))
+        if ent and ent.status == AccountsRecordingEntry.Status.WITH_SALESMAN:
+            out.append(doc)
+    return out
+
+
+def _with_me_sort_key_doc(doc):
+    return (
+        doc.posting_date if doc.posting_date else datetime.min.date(),
+        doc.document_number if doc.document_number else "",
+    )
+
+
+def _split_handed_invoices_mine_and_others(with_salesman_list, allowed_names):
+    """For salesmen: With you vs Invoices with others (WITH_SALESMAN only)."""
+    mine, others = [], []
+    entry_map = _entry_map_for_combined_list(with_salesman_list)
+    for doc in with_salesman_list:
+        ent = entry_map.get(_accounts_doc_key(doc))
+        if not ent or ent.status != AccountsRecordingEntry.Status.WITH_SALESMAN:
+            continue
+        if _entry_with_salesman_targets_user(ent, doc, allowed_names):
+            mine.append(doc)
+            continue
+        doc_nm = (getattr(doc, "salesman_name", None) or "").strip()
+        if _name_in_allowed_salesman_aliases(doc_nm, allowed_names):
+            others.append(doc)
+    mine.sort(key=_with_me_sort_key_doc, reverse=True)
+    others.sort(key=_with_me_sort_key_doc, reverse=True)
+    return mine, others
 
 
 def _with_me_search_match(doc, q):
@@ -1020,7 +1162,10 @@ def accounts_recording_list(request):
         setattr(doc, "accounts_handed_select_value", _handed_select_value(ent, getattr(doc, "salesman_name", None)))
 
     all_salesmen = combined_ar_salesmen_list(request.user, salesman_scope_q_salesorder)
-    salesmen_ho = combined_ar_ho_salesmen_list(request.user, salesman_scope_q_salesorder)
+    salesmen_ho = sorted(
+        set(combined_ar_ho_salesmen_list(request.user, salesman_scope_q_salesorder))
+    )
+    accounts_handed_extra_options = list(ACCOUNTS_RECORDING_HANDED_TO_EXTRA_NAMES)
     is_admin = request.user.is_superuser or request.user.is_staff or (
         hasattr(request.user, "role") and request.user.role.role == "Admin"
     )
@@ -1035,6 +1180,7 @@ def accounts_recording_list(request):
             "total_gross_profit_value": combined_total_gp,
             "salesmen": all_salesmen,
             "salesmen_ho": salesmen_ho,
+            "accounts_handed_extra_options": accounts_handed_extra_options,
             "today_sales": summary["today_sales"],
             "today_gp": summary["today_gp"],
             "month_sales": summary["month_sales"],
@@ -1044,6 +1190,7 @@ def accounts_recording_list(request):
             "is_admin": is_admin,
             "status_choices": AccountsRecordingEntry.Status.choices,
             "acc_handover_today": date.today().isoformat(),
+            "pagination_qs": _pagination_preserving_querystring(request),
             "filters": {
                 "q": q,
                 "salesmen_filter": salesmen_filter,
@@ -1063,9 +1210,8 @@ def accounts_recording_list(request):
 @login_required
 def accounts_recording_with_me(request):
     """
-    Salesman (and scoped users): AR invoices/credit memos in Accounts Recording with
-    status “With Salesman” where the handover targets them (SALES_USER_MAP / document salesman).
-    Admins see all such rows in the filtered date/store scope. Read-only (no inline save).
+    Handed Invoices: AR in Accounts Recording with status “With Salesman” only, scoped by user.
+    Admins/staff: grouped by salesman/handed-to. Salesmen: “With you” vs “Invoices with others”. Read-only.
     """
     extra_inv, extra_cm = _ar_document_numbers_handed_to_user(request.user)
     invoice_qs, creditmemo_qs, p = get_combined_ar_filtered_querysets(
@@ -1090,19 +1236,80 @@ def accounts_recording_with_me(request):
         setattr(cm, "document_number", cm.credit_memo_number)
 
     combined_list = invoice_list + creditmemo_list
-    combined_list.sort(
-        key=lambda x: (
-            x.posting_date if x.posting_date else datetime.min.date(),
-            x.document_number if x.document_number else "",
-        ),
-        reverse=True,
+    combined_list.sort(key=_with_me_sort_key_doc, reverse=True)
+
+    allowed_for_me = _user_allowed_salesman_names_for_accounts_recording(request.user)
+    pinned_accounts_handover_list = _with_me_should_split_accounts_team_buckets(
+        allowed_for_me
     )
+    broad_admin_with_me = _user_sees_all_with_salesman_for_me(allowed_for_me)
+
+    q_search = request.GET.get("q", "").strip()
+
+    if pinned_accounts_handover_list or broad_admin_with_me:
+        combined_list = _filter_combined_with_salesman_with_me(
+            combined_list, request.user
+        )
+        if q_search:
+            combined_list = [
+                d for d in combined_list if _with_me_search_match(d, q_search)
+            ]
+        with_me_sections = _build_with_me_admin_salesman_sections(combined_list)
+        for sec in with_me_sections:
+            _enrich_docs_accounts_with_me(sec["docs"])
+        return render(
+            request,
+            "salesorders/accounts_recording_with_me.html",
+            {
+                "use_accounts_buckets": True,
+                "with_me_section_mode": "salesmen",
+                "with_me_salesmen_scope_note": bool(pinned_accounts_handover_list),
+                "with_me_sections": with_me_sections,
+                "total_count": len(combined_list),
+                "filters": {
+                    "q": q_search,
+                },
+            },
+        )
+
+    if allowed_for_me:
+        combined_ws = _filter_combined_to_with_salesman_status_only(combined_list)
+        mine, with_others = _split_handed_invoices_mine_and_others(
+            combined_ws, allowed_for_me
+        )
+        if q_search:
+            mine = [d for d in mine if _with_me_search_match(d, q_search)]
+            with_others = [
+                d for d in with_others if _with_me_search_match(d, q_search)
+            ]
+        with_me_sections = [
+            {"slug": "with-you", "title": "With you", "docs": mine},
+            {
+                "slug": "with-others",
+                "title": "Invoices with others",
+                "docs": with_others,
+            },
+        ]
+        for sec in with_me_sections:
+            _enrich_docs_accounts_with_me(sec["docs"])
+        return render(
+            request,
+            "salesorders/accounts_recording_with_me.html",
+            {
+                "use_accounts_buckets": True,
+                "with_me_section_mode": "salesman_mine_others",
+                "with_me_salesmen_scope_note": False,
+                "with_me_sections": with_me_sections,
+                "total_count": len(mine) + len(with_others),
+                "filters": {
+                    "q": q_search,
+                },
+            },
+        )
 
     combined_list = _filter_combined_with_salesman_with_me(
         combined_list, request.user
     )
-
-    q_search = request.GET.get("q", "").strip()
     if q_search:
         combined_list = [
             d for d in combined_list if _with_me_search_match(d, q_search)
@@ -1132,6 +1339,9 @@ def accounts_recording_with_me(request):
         request,
         "salesorders/accounts_recording_with_me.html",
         {
+            "use_accounts_buckets": False,
+            "with_me_section_mode": "none",
+            "with_me_salesmen_scope_note": False,
             "page_obj": page_obj,
             "total_count": paginator.count,
             "filters": {

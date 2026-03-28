@@ -1,6 +1,6 @@
 {% for doc in page_obj %}
 {% with entry=doc.accounts_entry sel=doc.accounts_handed_select_value %}
-<tr class="acc-row" data-doc-kind="{% if doc.document_type == 'Invoice' %}invoice{% else %}credit_memo{% endif %}" data-doc-number="{{ doc.document_number }}">
+<tr class="acc-row acc-status-row acc-status-row--{% if entry %}{{ entry.status }}{% else %}pending{% endif %}" data-doc-kind="{% if doc.document_type == 'Invoice' %}invoice{% else %}credit_memo{% endif %}" data-doc-number="{{ doc.document_number }}">
   <td class="col-narrow">
     {% if doc.document_type == 'Invoice' %}
       <span class="badge badge-invoice">Invoice</span>
@@ -26,12 +26,19 @@
     <select class="cell-select acc-handed" title="Handed to: choose a salesman or Same as invoiced salesman.">
       <option value="" {% if not sel %}selected{% endif %}>— Select —</option>
       <option value="__doc_salesman__" {% if sel == '__doc_salesman__' %}selected{% endif %}>Same as invoiced salesman</option>
-      {% if sel and sel != '__doc_salesman__' and sel not in salesmen_ho %}
+      {% if sel and sel != '__doc_salesman__' and sel not in salesmen_ho and sel not in accounts_handed_extra_options %}
         <option value="{{ sel }}" selected>{{ sel }}</option>
       {% endif %}
-      {% for s in salesmen_ho %}
-        <option value="{{ s }}" {% if sel == s %}selected{% endif %}>{{ s }}</option>
+      {% for s in accounts_handed_extra_options %}
+        <optgroup label="{{ s }}">
+          <option value="{{ s }}" {% if sel == s %}selected{% endif %}>{{ s }}</option>
+        </optgroup>
       {% endfor %}
+      <optgroup label="Salesmen (HO)">
+        {% for s in salesmen_ho %}
+          <option value="{{ s }}" {% if sel == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </optgroup>
     </select>
   </td>
   <td>

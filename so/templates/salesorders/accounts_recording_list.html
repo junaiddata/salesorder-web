@@ -505,6 +505,21 @@
       cursor: not-allowed;
     }
 
+    .pagination-info {
+      padding: 0 8px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    /* Accounts status row tint (Accounts Recording list only) */
+    tbody tr.acc-row.acc-status-row--received_by_ac { background: #dcfce7; }
+    tbody tr.acc-row.acc-status-row--in_store { background: #fef9c3; }
+    tbody tr.acc-row.acc-status-row--with_salesman { background: #fee2e2; }
+    tbody tr.acc-row.acc-status-row--pending { background: transparent; }
+    tbody tr.acc-row.acc-status-row--received_by_ac:hover { background: #bbf7d0; }
+    tbody tr.acc-row.acc-status-row--in_store:hover { background: #fef08a; }
+    tbody tr.acc-row.acc-status-row--with_salesman:hover { background: #fecaca; }
+
     .total-count {
       font-size: 0.75rem;
       color: var(--text-secondary);
@@ -537,9 +552,10 @@
     <header class="header">
       <div class="header-left">
         <h1>Accounts Recording</h1>
-        <p>Combined invoices and credit memos — CTRL, handover, and status (saved automatically)</p>
+        <p>Combined invoices and credit memos — CTRL, handover, and status (saved automatically). Handed to includes <strong>HISHAM</strong> and <strong>SAVIA</strong>.</p>
       </div>
       <div class="header-actions">
+        <a class="btn btn-primary" href="{% url 'accounts_recording_with_me' %}">Handed Invoices</a>
         <a class="btn btn-secondary" href="{% url 'accounts_recording_activity_log' %}">Activity log</a>
         <a class="btn btn-primary" href="{% url 'export_accounts_recording_excel' %}?{{ request.GET.urlencode }}">Export Excel</a>
         <a class="btn btn-secondary" href="{% url 'export_accounts_recording_pdf' %}?{{ request.GET.urlencode }}">Export PDF</a>
@@ -719,7 +735,7 @@
       <!-- Footer -->
       <div class="table-footer">
         <div class="total-count">Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> documents</div>
-        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+        {% include 'salesorders/_pagination_query.html' with page_obj=page_obj pagination_qs=pagination_qs %}
       </div>
     </div>
   </div>
@@ -755,6 +771,17 @@
       };
     }
 
+    const ACC_STATUS_ROW_PREFIX = 'acc-status-row--';
+    function syncAccRowStatusClass(tr) {
+      const st = tr.querySelector('.acc-status');
+      if (!st) return;
+      const v = st.value || 'pending';
+      tr.classList.forEach(function(c) {
+        if (c.indexOf(ACC_STATUS_ROW_PREFIX) === 0) tr.classList.remove(c);
+      });
+      tr.classList.add(ACC_STATUS_ROW_PREFIX + v);
+    }
+
     function applyRowFromServer(tr, row) {
       if (!row) return;
       const st = tr.querySelector('.acc-status');
@@ -776,6 +803,7 @@
       hd.value = hv || '';
       const cx = tr.querySelector('.acc-ctrl');
       if (row.ctrl_number !== undefined) cx.value = row.ctrl_number || '';
+      syncAccRowStatusClass(tr);
     }
 
     function saveRow(tr, manualStatus) {
@@ -831,6 +859,7 @@
     }
 
     document.querySelectorAll('tr.acc-row').forEach(function(tr) {
+      syncAccRowStatusClass(tr);
       const st = tr.querySelector('.acc-status');
       st.addEventListener('change', function() { saveRow(tr, true); });
 
