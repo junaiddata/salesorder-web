@@ -939,6 +939,15 @@
                             Credit Notes Analysis
                         </a>
                     </li>
+                </ul>
+            </li>
+            <li class="has-submenu">
+                <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
+                    <i class="fas fa-balance-scale"></i>
+                    Quoted &amp; sold items
+                    <span class="live-badge-small">LIVE</span>
+                </a>
+                <ul class="submenu">
                     <li>
                         <a href="{% url 'item_quoted_analysis' %}">
                             <i class="fas fa-quote-left"></i>
