@@ -10,6 +10,7 @@ from xml.sax.saxutils import escape
 
 import requests
 from django.conf import settings
+from django.db.models import Q
 
 from so.models import SAPSalesorderItem
 
@@ -83,6 +84,18 @@ PAGE_MARGIN_BOT = 0.5 * inch
 SP_SECTION = 6
 SP_INNER = 3
 SP_AFTER_TABLE = 4
+
+
+def _sap_salesorder_item_open_row_q():
+    """
+    SO line is "open" for these row_status values (matches _open_row_status_q in sap_salesorder_views).
+    """
+    return (
+        Q(row_status__iexact='open')
+        | Q(row_status__iexact='o')
+        | Q(row_status__iexact='OPEN')
+        | Q(row_status__iexact='O')
+    )
 
 
 def _build_styles(theme):
@@ -973,17 +986,23 @@ def _page_footer_factory(theme):
     return _draw_footer
 
 
-def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
+def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False, open_items_only=False):
     """
     Generate SAP Sales Order PDF bytes using the Customer Order design.
     Does NOT import or modify views.py.
 
     When include_stock_columns is True, line items include Stock (total available),
     DIP warehouse stock, and Open Qty (remaining_open_quantity), matching the SO detail.
+
+    When open_items_only is True, only lines with open row_status (O / Open) are included;
+    totals reflect those lines only.
     """
     theme = SAP_PDF_THEME
     # Fresh query (same ordering as SO detail) so revised_price and all line fields load reliably
     items_qs = SAPSalesorderItem.objects.filter(salesorder_id=salesorder.pk).order_by('line_no', 'id')
+    if open_items_only:
+        items_qs = items_qs.filter(_sap_salesorder_item_open_row_q())
+    open_pdf_has_no_lines = bool(open_items_only and not items_qs.exists())
 
     page_w, page_h = A4
     buffer = BytesIO()
@@ -1031,13 +1050,22 @@ def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
     elements.append(Spacer(1, SP_SECTION))
 
     # 4. Line Items
-    elements.append(_build_section_bar('ORDER ITEMS', theme, styles, usable_width))
+    items_section_title = (
+        'ORDER ITEMS — OPEN LINES ONLY' if open_items_only else 'ORDER ITEMS'
+    )
+    elements.append(_build_section_bar(items_section_title, theme, styles, usable_width))
     elements.append(Spacer(1, SP_INNER))
 
     items_table, subtotal = _build_sap_items_table(
         items_qs, theme, styles, usable_width, include_stock_columns=include_stock_columns
     )
     elements.append(items_table)
+    if open_pdf_has_no_lines:
+        elements.append(Spacer(1, SP_INNER))
+        elements.append(Paragraph(
+            'No line items with open status (O / Open).',
+            styles['notes'],
+        ))
     elements.append(Spacer(1, SP_AFTER_TABLE))
 
     # 5. Summary

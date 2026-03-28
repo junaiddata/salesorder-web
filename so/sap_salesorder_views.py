@@ -1647,16 +1647,25 @@ def salesorder_search(request):
     })
 
 
-def _generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False):
+def _generate_sap_salesorder_pdf_bytes(
+    salesorder, include_stock_columns=False, open_items_only=False
+):
     """Generate SAP Sales Order PDF bytes using Customer Order design."""
     return generate_sap_salesorder_pdf_bytes(
-        salesorder, include_stock_columns=include_stock_columns
+        salesorder,
+        include_stock_columns=include_stock_columns,
+        open_items_only=open_items_only,
     )
 
 
 def _sap_salesorder_pdf_include_stock(request):
     """True when export/view PDF should include Stock, DIP, and Open Qty columns."""
     return request.GET.get('stock', '').lower() in ('1', 'true', 'yes', 'on')
+
+
+def _sap_salesorder_pdf_open_items_only(request):
+    """True when export/view PDF should include only open (O / Open) line items."""
+    return request.GET.get('open', '').lower() in ('1', 'true', 'yes', 'on')
 
 
 @login_required
@@ -1672,12 +1681,16 @@ def sap_salesorder_view_pdf(request, so_number):
         if not allowed:
             raise Http404("Salesorder not found")
 
+    open_only = _sap_salesorder_pdf_open_items_only(request)
     pdf_bytes = _generate_sap_salesorder_pdf_bytes(
-        salesorder, include_stock_columns=_sap_salesorder_pdf_include_stock(request)
+        salesorder,
+        include_stock_columns=_sap_salesorder_pdf_include_stock(request),
+        open_items_only=open_only,
     )
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
-    filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
+    suffix = '_OpenLines' if open_only else ''
+    filename = f"SAP_Salesorder_{salesorder.so_number}{suffix}_{date_str}.pdf"
     response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
 
@@ -1695,12 +1708,16 @@ def export_sap_salesorder_pdf(request, so_number):
         if not allowed:
             raise Http404("Salesorder not found")
 
+    open_only = _sap_salesorder_pdf_open_items_only(request)
     pdf_bytes = _generate_sap_salesorder_pdf_bytes(
-        salesorder, include_stock_columns=_sap_salesorder_pdf_include_stock(request)
+        salesorder,
+        include_stock_columns=_sap_salesorder_pdf_include_stock(request),
+        open_items_only=open_only,
     )
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
-    filename = f"SAP_Salesorder_{salesorder.so_number}_{date_str}.pdf"
+    suffix = '_OpenLines' if open_only else ''
+    filename = f"SAP_Salesorder_{salesorder.so_number}{suffix}_{date_str}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 

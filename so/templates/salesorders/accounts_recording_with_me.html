@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoices with me — Accounts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px 60px; }
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .header h1 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.02em; }
+    .header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px; max-width: 36rem; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .filters { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .field label { display: block; font-size: 0.813rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .input {
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      min-width: 220px;
+    }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    thead th {
+      padding: 10px 12px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    tbody td {
+      padding: 10px 12px;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid var(--border-light);
+    }
+    tbody tr:hover { background: #f8fafc; }
+    .badge {
+      display: inline-flex;
+      padding: 2px 8px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+    .badge-invoice { background: #dbeafe; color: #1e40af; }
+    .badge-creditmemo { background: #fef3c7; color: #92400e; }
+    .badge-status { background: #e0e7ff; color: #3730a3; }
+    .text-muted { color: var(--text-secondary); }
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border-top: 1px solid var(--border-light);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .empty-state { text-align: center; padding: 36px 20px; color: var(--text-secondary); font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Invoices with me</h1>
+        <p>
+          AR invoices and credit memos marked in <strong>Accounts Recording</strong> as
+          <strong>With Salesman</strong> where you are the handed-to / invoiced salesman (per your login mapping).
+          Same date and store rules as the combined report (default HO when not specified).
+        </p>
+      </div>
+      <div class="header-actions">
+        {% if user.is_superuser or user.is_staff or user.role.role == 'Admin' %}
+          <a class="btn btn-secondary" href="{% url 'accounts_recording_list' %}">Accounts Recording</a>
+        {% endif %}
+        <a class="btn btn-secondary" href="{% url 'combined_sales_invoices_list' %}">Combined sales</a>
+        {% if user.role.role == 'Salesman' %}
+          <a class="btn btn-secondary" href="{% url 'sales_home' %}">Sales home</a>
+        {% else %}
+          <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="card">
+      <form class="filters" method="get" action="">
+        <div class="field">
+          <label for="q">Search</label>
+          <input id="q" class="input" type="search" name="q" value="{{ filters.q }}" placeholder="Doc no., customer, LPO…">
+        </div>
+        <div class="field">
+          <label for="page_size">Per page</label>
+          <input id="page_size" class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:90px;">
+        </div>
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </form>
+    </div>
+
+    <div class="card table-wrap" style="padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Posting date</th>
+            <th>Document</th>
+            <th>Customer</th>
+            <th>Invoiced salesman</th>
+            <th>Handed to (accounts)</th>
+            <th>Handover date</th>
+            <th>LPO / BP</th>
+            <th>Store</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in page_obj %}
+            {% with entry=doc.accounts_entry %}
+          <tr>
+            <td>
+              {% if doc.document_type == 'Invoice' %}
+                <span class="badge badge-invoice">Invoice</span>
+              {% else %}
+                <span class="badge badge-creditmemo">Cr. memo</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ doc.posting_date|date:"d-m-y"|default:"—" }}</td>
+            <td>
+              {% if doc.document_type == 'Invoice' %}
+                {{ doc.invoice_number }}
+              {% else %}
+                {{ doc.credit_memo_number }}
+              {% endif %}
+            </td>
+            <td>{{ doc.customer_name }}</td>
+            <td class="text-muted">{{ doc.salesman_name|default:"—" }}</td>
+            <td>{{ doc.accounts_handed_display|default:"—" }}</td>
+            <td class="text-muted">{% if entry and entry.handed_over_date %}{{ entry.handed_over_date|date:"d-m-y" }}{% else %}—{% endif %}</td>
+            <td class="text-muted">{{ doc.bp_reference_no|default:"—" }}</td>
+            <td class="text-muted">{{ doc.store|default:"—" }}</td>
+            <td><span class="badge badge-status">With Salesman</span></td>
+          </tr>
+            {% endwith %}
+          {% empty %}
+          <tr>
+            <td colspan="10" class="empty-state">No documents are currently with you under Accounts Recording (or none match your search).</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <div class="table-footer">
+        <span>Showing {{ page_obj|length }} of {{ total_count }}</span>
+        {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      </div>
+      {% elif total_count %}
+      <div class="table-footer"><span>{{ total_count }} document{{ total_count|pluralize }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

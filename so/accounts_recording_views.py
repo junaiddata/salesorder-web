@@ -249,15 +249,135 @@ def _entry_map_for_combined_list(combined_list):
     return entry_map
 
 
-def _effective_accounts_status(doc, entry_map):
+def _accounts_doc_key(doc):
     if doc.document_type == "Invoice":
-        k = (AccountsRecordingEntry.DocumentKind.INVOICE, doc.invoice_number)
-    else:
-        k = (AccountsRecordingEntry.DocumentKind.CREDIT_MEMO, doc.credit_memo_number)
-    ent = entry_map.get(k)
+        return (AccountsRecordingEntry.DocumentKind.INVOICE, doc.invoice_number)
+    return (AccountsRecordingEntry.DocumentKind.CREDIT_MEMO, doc.credit_memo_number)
+
+
+def _effective_accounts_status(doc, entry_map):
+    ent = entry_map.get(_accounts_doc_key(doc))
     if not ent:
         return AccountsRecordingEntry.Status.PENDING
     return ent.status
+
+
+def _user_allowed_salesman_names_for_accounts_recording(user):
+    """
+    For “with me” filtering: None = show all WITH_SALESMAN rows (admin/staff/superuser).
+    Otherwise list of SAP salesman_name strings from SALES_USER_MAP (same idea as salesman_scope).
+    """
+    if user.is_superuser or user.is_staff:
+        return None
+    role_obj = None
+    try:
+        role_obj = user.role
+    except Exception:
+        pass
+    if role_obj is not None and getattr(role_obj, "role", None) == "Admin":
+        return None
+    from .views import SALES_USER_MAP
+
+    uname = (user.username or "").strip().lower()
+    names = SALES_USER_MAP.get(uname)
+    if names:
+        return [str(n) for n in names]
+    token = uname.replace(".", " ").strip()
+    return [token] if token else []
+
+
+def _ar_document_numbers_handed_to_user(user):
+    """
+    AR document numbers in Accounts Recording (WITH_SALESMAN) where handed_to_salesman matches
+    the user's allowed names. Widens queryset scope for “Invoices with me” when the invoiced
+    salesman differs from who physically holds the documents.
+    Admins (allowed_names None) and users with no mapped names return empty lists.
+    """
+    allowed = _user_allowed_salesman_names_for_accounts_recording(user)
+    if allowed is None or not allowed:
+        return [], []
+    name_q = Q()
+    for n in allowed:
+        nn = (n or "").strip()
+        if nn:
+            name_q |= Q(handed_to_salesman__iexact=nn)
+    if not name_q:
+        return [], []
+    base = AccountsRecordingEntry.objects.filter(
+        status=AccountsRecordingEntry.Status.WITH_SALESMAN,
+    ).filter(name_q)
+    inv_nums = list(
+        base.filter(
+            document_kind=AccountsRecordingEntry.DocumentKind.INVOICE,
+        ).values_list("document_number", flat=True)
+    )
+    cm_nums = list(
+        base.filter(
+            document_kind=AccountsRecordingEntry.DocumentKind.CREDIT_MEMO,
+        ).values_list("document_number", flat=True)
+    )
+    return inv_nums, cm_nums
+
+
+def _name_in_allowed_salesman_aliases(name, allowed_names):
+    if not name or not allowed_names:
+        return False
+    nl = (name or "").strip().lower()
+    for a in allowed_names:
+        if nl == (a or "").strip().lower():
+            return True
+    return False
+
+
+def _entry_with_salesman_targets_user(entry, doc, allowed_names):
+    """
+    True if this Accounts row is considered “with” one of allowed_names.
+    allowed_names=None → any user (no name restriction).
+    Mirrors handover UX: stored handed_to, same-as-invoiced salesman, or date-only handover → doc salesman.
+    """
+    if allowed_names is None:
+        return True
+    if not allowed_names:
+        return False
+    doc_nm = (getattr(doc, "salesman_name", None) or "").strip()
+    stored = (entry.handed_to_salesman or "").strip()
+    if stored:
+        if doc_nm and stored.lower() == doc_nm.lower():
+            return _name_in_allowed_salesman_aliases(doc_nm, allowed_names)
+        return _name_in_allowed_salesman_aliases(stored, allowed_names)
+    if entry.handed_over_date:
+        return _name_in_allowed_salesman_aliases(doc_nm, allowed_names)
+    return _name_in_allowed_salesman_aliases(doc_nm, allowed_names)
+
+
+def _filter_combined_with_salesman_with_me(combined_list, user):
+    """Keep documents whose Accounts status is WITH_SALESMAN and handover targets this user’s SALES_USER_MAP names."""
+    entry_map = _entry_map_for_combined_list(combined_list)
+    allowed_names = _user_allowed_salesman_names_for_accounts_recording(user)
+    out = []
+    for doc in combined_list:
+        ent = entry_map.get(_accounts_doc_key(doc))
+        if not ent or ent.status != AccountsRecordingEntry.Status.WITH_SALESMAN:
+            continue
+        if not _entry_with_salesman_targets_user(ent, doc, allowed_names):
+            continue
+        out.append(doc)
+    return out
+
+
+def _with_me_search_match(doc, q):
+    if not q or not str(q).strip():
+        return True
+    s = str(q).strip().lower()
+    parts = [
+        doc.invoice_number if doc.document_type == "Invoice" else doc.credit_memo_number,
+        getattr(doc, "customer_name", None),
+        getattr(doc, "salesman_name", None),
+        getattr(doc, "bp_reference_no", None),
+        getattr(doc, "customer_code", None),
+    ]
+    blob = " ".join(str(p or "") for p in parts).lower()
+    return s in blob
 
 
 def _filter_combined_list_by_accounts_status(combined_list, accounts_status_filter):
@@ -935,6 +1055,88 @@ def accounts_recording_list(request):
                 "total": total_range,
                 "document_type": document_type_filter or "All",
                 "accounts_status": accounts_status_filter,
+            },
+        },
+    )
+
+
+@login_required
+def accounts_recording_with_me(request):
+    """
+    Salesman (and scoped users): AR invoices/credit memos in Accounts Recording with
+    status “With Salesman” where the handover targets them (SALES_USER_MAP / document salesman).
+    Admins see all such rows in the filtered date/store scope. Read-only (no inline save).
+    """
+    extra_inv, extra_cm = _ar_document_numbers_handed_to_user(request.user)
+    invoice_qs, creditmemo_qs, p = get_combined_ar_filtered_querysets(
+        request,
+        request.user,
+        salesman_scope_q_salesorder,
+        default_store_when_unspecified="HO",
+        posting_date_start_floor=ACCOUNTS_RECORDING_POSTING_DATE_FLOOR,
+        extra_invoice_numbers=extra_inv,
+        extra_creditmemo_numbers=extra_cm,
+    )
+    invoice_qs = invoice_qs.order_by("-posting_date", "-invoice_number")
+    creditmemo_qs = creditmemo_qs.order_by("-posting_date", "-credit_memo_number")
+
+    invoice_list = list(invoice_qs)
+    creditmemo_list = list(creditmemo_qs)
+    for inv in invoice_list:
+        setattr(inv, "document_type", "Invoice")
+        setattr(inv, "document_number", inv.invoice_number)
+    for cm in creditmemo_list:
+        setattr(cm, "document_type", "Credit Memo")
+        setattr(cm, "document_number", cm.credit_memo_number)
+
+    combined_list = invoice_list + creditmemo_list
+    combined_list.sort(
+        key=lambda x: (
+            x.posting_date if x.posting_date else datetime.min.date(),
+            x.document_number if x.document_number else "",
+        ),
+        reverse=True,
+    )
+
+    combined_list = _filter_combined_with_salesman_with_me(
+        combined_list, request.user
+    )
+
+    q_search = request.GET.get("q", "").strip()
+    if q_search:
+        combined_list = [
+            d for d in combined_list if _with_me_search_match(d, q_search)
+        ]
+
+    try:
+        page_size = int(request.GET.get("page_size", 50))
+    except ValueError:
+        page_size = 50
+    page_size = max(5, min(page_size, 100))
+
+    paginator = Paginator(combined_list, page_size)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    entry_map_page = _entry_map_for_combined_list(list(page_obj))
+
+    for doc in page_obj:
+        ent = entry_map_page.get(_accounts_doc_key(doc))
+        setattr(doc, "accounts_entry", ent)
+        setattr(
+            doc,
+            "accounts_handed_display",
+            _handed_to_export_text(ent, doc) if ent else "",
+        )
+
+    return render(
+        request,
+        "salesorders/accounts_recording_with_me.html",
+        {
+            "page_obj": page_obj,
+            "total_count": paginator.count,
+            "filters": {
+                "q": q_search,
+                "page_size": page_size,
             },
         },
     )

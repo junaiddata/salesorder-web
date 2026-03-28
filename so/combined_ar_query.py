@@ -144,6 +144,8 @@ def get_combined_ar_filtered_querysets(
     scope_q_fn,
     default_store_when_unspecified=None,
     posting_date_start_floor=None,
+    extra_invoice_numbers=None,
+    extra_creditmemo_numbers=None,
 ):
     """
     Return (invoice_qs, creditmemo_qs, params_dict) with filters applied.
@@ -152,6 +154,8 @@ def get_combined_ar_filtered_querysets(
     has no ``store`` query parameter (first visit). Submitting store= (All Stores) still clears it.
     If posting_date_start_floor is set, posting_date is never before that date; ``p["start"]`` is
     updated so filter forms show the effective start date.
+    extra_invoice_numbers / extra_creditmemo_numbers: optional lists of document numbers to include
+    even when the invoiced salesman is outside the user's scope (e.g. Accounts Recording handed-to).
     """
     p = dict(get_combined_ar_request_params(request))
     if default_store_when_unspecified is not None and "store" not in request.GET:
@@ -169,8 +173,16 @@ def get_combined_ar_filtered_querysets(
 
     if not (user.is_superuser or user.is_staff):
         sq = scope_q_fn(user)
-        invoice_qs = invoice_qs.filter(sq)
-        creditmemo_qs = creditmemo_qs.filter(sq)
+        inv_ex = [x for x in (extra_invoice_numbers or []) if x]
+        cm_ex = [x for x in (extra_creditmemo_numbers or []) if x]
+        if inv_ex:
+            invoice_qs = invoice_qs.filter(sq | Q(invoice_number__in=inv_ex))
+        else:
+            invoice_qs = invoice_qs.filter(sq)
+        if cm_ex:
+            creditmemo_qs = creditmemo_qs.filter(sq | Q(credit_memo_number__in=cm_ex))
+        else:
+            creditmemo_qs = creditmemo_qs.filter(sq)
 
     invoice_qs = apply_combined_ar_filters(
         invoice_qs,

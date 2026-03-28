@@ -84,6 +84,9 @@
       margin-top: 4px;
       padding-top: 10px;
       border-top: 1px solid var(--border-light);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .header-pdf-option label {
       display: inline-flex;
@@ -484,6 +487,10 @@
         <label>
           <input type="checkbox" id="so-pdf-include-stock" />
           Include Tot. Stock, DIP &amp; Open Qty columns on PDF
+        </label>
+        <label>
+          <input type="checkbox" id="so-pdf-open-only" />
+          Export only open line items (same Junaid PDF layout as full export)
         </label>
       </div>
     </header>
@@ -908,17 +915,22 @@
 
   <script>
     (function() {
-      var cb = document.getElementById('so-pdf-include-stock');
+      var stockCb = document.getElementById('so-pdf-include-stock');
+      var openCb = document.getElementById('so-pdf-open-only');
       var links = document.querySelectorAll('a.so-pdf-link[data-pdf-base]');
-      if (!cb || !links.length) return;
+      if (!links.length) return;
       function syncPdfLinks() {
-        var q = cb.checked ? '?stock=1' : '';
+        var params = [];
+        if (stockCb && stockCb.checked) params.push('stock=1');
+        if (openCb && openCb.checked) params.push('open=1');
+        var q = params.length ? ('?' + params.join('&')) : '';
         links.forEach(function(a) {
           var base = a.getAttribute('data-pdf-base');
           if (base) a.href = base + q;
         });
       }
-      cb.addEventListener('change', syncPdfLinks);
+      if (stockCb) stockCb.addEventListener('change', syncPdfLinks);
+      if (openCb) openCb.addEventListener('change', syncPdfLinks);
       syncPdfLinks();
     })();
   </script>
