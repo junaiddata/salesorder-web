@@ -19,6 +19,31 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from . import item_sold_analysis_views
 
 
+def _safe_float_pdf(x):
+    if x is None:
+        return 0.0
+    try:
+        v = float(x)
+        if v != v:  # NaN
+            return 0.0
+        return v
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+
+
+def _safe_int_pdf(x):
+    """Integer for PDF cells; avoids ValueError from NaN or non-numeric values."""
+    v = _safe_float_pdf(x)
+    try:
+        return int(v)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _fmt_amount_pdf(x):
+    return f"{_safe_float_pdf(x):,.0f}"
+
+
 @login_required
 def export_item_sold_analysis_pdf(request):
     """
@@ -92,31 +117,25 @@ def export_item_sold_analysis_pdf(request):
             (item['item_code'] or '')[:20],
             (item['item_description'] or '')[:35],
             (item['upc_code'] or '')[:12],
-            str(int(item.get('total_stock', 0) or 0)),
-            str(int(item.get('import_ordered', 0) or 0)),
-            str(int(item.get('qty_sold_2025', 0) or 0)),
-            str(int(item.get('qty_sold_2026', 0) or 0)),
-            f"{(item.get('total_amount_2025') or 0):,.0f}",
-            f"{(item.get('total_amount_2026') or 0):,.0f}",
-            str(item.get('total_invoices_2025', 0) or 0),
-            str(item.get('total_invoices_2026', 0) or 0),
-            str(item.get('customer_sold_count', 0) or 0),
+            str(_safe_int_pdf(item.get('total_stock', 0))),
+            str(_safe_int_pdf(item.get('import_ordered', 0))),
+            str(_safe_int_pdf(item.get('qty_sold_2025', 0))),
+            str(_safe_int_pdf(item.get('qty_sold_2026', 0))),
+            _fmt_amount_pdf(item.get('total_amount_2025', 0)),
+            _fmt_amount_pdf(item.get('total_amount_2026', 0)),
+            str(_safe_int_pdf(item.get('total_invoices_2025', 0))),
+            str(_safe_int_pdf(item.get('total_invoices_2026', 0))),
+            str(_safe_int_pdf(item.get('customer_sold_count', 0))),
         ]
         data.append(row)
 
-    # Totals row (grand totals may be Decimal)
-    gt25 = grand_total_2025
-    gt26 = grand_total_2026
-    if hasattr(gt25, '__float__'):
-        gt25 = float(gt25)
-    if hasattr(gt26, '__float__'):
-        gt26 = float(gt26)
+    # Totals row (grand totals may be Decimal / float; guard NaN and bad types)
     data.append([
         '', '', 'TOTAL', '', '-', '-',
-        str(int(gt25 or 0)),
-        str(int(gt26 or 0)),
+        str(_safe_int_pdf(grand_total_2025)),
+        str(_safe_int_pdf(grand_total_2026)),
         '-', '-', '-', '-',
-        str(grand_total_customers or 0),
+        str(_safe_int_pdf(grand_total_customers)),
     ])
 
     t = Table(data, colWidths=[18, 55, 100, 45, 35, 40, 40, 40, 55, 55, 35, 35, 30])
