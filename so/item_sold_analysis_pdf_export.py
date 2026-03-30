@@ -13,7 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
 from . import item_sold_analysis_views
@@ -139,14 +139,15 @@ def export_item_sold_analysis_pdf(request):
     ])
 
     t = Table(data, colWidths=[18, 55, 100, 45, 35, 40, 40, 40, 55, 55, 35, 35, 30])
+    # Table ALIGN must be strings ('LEFT','RIGHT','CENTER'); TA_* enums are ints and break ReportLab ≥4.4
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 7),
-        ('ALIGN', (0, 0), (0, -1), TA_CENTER),
-        ('ALIGN', (5, 0), (-1, -1), TA_RIGHT),
-        ('ALIGN', (1, 0), (4, -1), TA_LEFT),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (5, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (1, 0), (4, -1), 'LEFT'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('TOPPADDING', (0, 0), (-1, 0), 6),
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f1f5f9')),
