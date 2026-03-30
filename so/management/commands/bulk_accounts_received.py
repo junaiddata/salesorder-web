@@ -1,23 +1,21 @@
 """
-One-off / bulk: set Accounts Recording to “Received by A/c” with Received back ticked.
+One-off / bulk: set Accounts Recording **invoice** rows to “Received by A/c” with Received back ticked.
 
-By default, lines are matched against SAPARInvoice (and optionally SAPARCreditMemo) so rows
-are created/updated even when no Accounts Recording row existed yet (that is why a plain
-file match against AccountsRecordingEntry often found almost nothing).
+Lines are matched against SAPARInvoice only (no credit memos). Creates AccountsRecordingEntry
+rows when missing.
 
 Usage (from folder containing manage.py):
   python manage.py bulk_accounts_received --file invoices.txt --dry-run
   python manage.py bulk_accounts_received --file invoices.txt
-  python manage.py bulk_accounts_received --file mixed.txt --credit-memos
-  python manage.py bulk_accounts_received --file x.txt --entries-only   # old behaviour
+  python manage.py bulk_accounts_received --file x.txt --entries-only   # existing rows only
 
-File: one document number per line; empty and # comments skipped.
+File: one invoice number per line; empty and # comments skipped.
 """
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from so.models import AccountsRecordingEntry, SAPARInvoice, SAPARCreditMemo
+from so.models import AccountsRecordingEntry, SAPARInvoice
 
 
 def _normalize_token(s):
@@ -44,11 +42,10 @@ def _register_lookup(mp, kind, canonical, *keys):
                 mp[variant] = (kind, canonical)
 
 
-def _build_sap_lookup(include_credit_memos=False):
-    """
-    Map many string variants -> (document_kind, canonical_number as stored in SAP / Accounts).
-    """
+def _build_invoice_lookup():
+    """Map string variants -> (INVOICE kind, canonical invoice_number as in SAP)."""
     mp = {}
+    kind = AccountsRecordingEntry.DocumentKind.INVOICE
 
     def variants_for(num):
         out = {num, num.strip(), num.lower()}
@@ -61,18 +58,8 @@ def _build_sap_lookup(include_credit_memos=False):
     for inv_num in SAPARInvoice.objects.values_list("invoice_number", flat=True).iterator(
         chunk_size=2000
     ):
-        kind = AccountsRecordingEntry.DocumentKind.INVOICE
         for v in variants_for(inv_num):
             _register_lookup(mp, kind, inv_num, v)
-
-    if include_credit_memos:
-        for cm_num in SAPARCreditMemo.objects.values_list("credit_memo_number", flat=True).iterator(
-            chunk_size=2000
-        ):
-            kind = AccountsRecordingEntry.DocumentKind.CREDIT_MEMO
-            for v in variants_for(cm_num):
-                _register_lookup(mp, kind, cm_num, v)
-
     return mp
 
 
@@ -111,8 +98,8 @@ def _read_lines(path):
 
 class Command(BaseCommand):
     help = (
-        "Bulk set Accounts Recording to Received by A/c + received back. "
-        "Matches file lines to SAP AR invoices (creates Accounting rows if missing)."
+        "Bulk set Accounts Recording invoices to Received by A/c + received back. "
+        "Matches file lines to SAPARInvoice only (creates rows if missing)."
     )
 
     def add_arguments(self, parser):
@@ -120,17 +107,12 @@ class Command(BaseCommand):
             "--file",
             "-f",
             required=True,
-            help="UTF-8 text file: one invoice number (or credit memo number with --credit-memos) per line",
+            help="UTF-8 text file: one SAP invoice number per line",
         )
         parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Report only; do not write to the database",
-        )
-        parser.add_argument(
-            "--credit-memos",
-            action="store_true",
-            help="Also match SAP credit memo numbers (same file; tries invoice first, then memo)",
         )
         parser.add_argument(
             "--entries-only",
@@ -146,7 +128,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         file_path = options["file"]
         dry_run = options["dry_run"]
-        include_credit_memos = options["credit_memos"]
         entries_only = options["entries_only"]
         missing_path = options.get("write_missing")
 
@@ -161,48 +142,47 @@ class Command(BaseCommand):
         self.stdout.write(f"Unique lines in file: {len(lines)}")
 
         target_status = AccountsRecordingEntry.Status.RECEIVED_BY_AC
+        invoice_kind = AccountsRecordingEntry.DocumentKind.INVOICE
 
         if entries_only:
             self._run_entries_only(lines, dry_run, missing_path, target_status)
             return
 
-        self.stdout.write("Loading SAP AR numbers for lookup…")
-        sap_lookup = _build_sap_lookup(include_credit_memos=include_credit_memos)
+        self.stdout.write("Loading SAP invoice numbers for lookup…")
+        sap_lookup = _build_invoice_lookup()
 
         targets = []
         not_in_sap = []
-        seen_targets = set()
+        seen_canon = set()
 
         for raw in lines:
             resolved = _resolve_line(raw, sap_lookup)
             if not resolved:
                 not_in_sap.append(raw)
                 continue
-            kind, canonical = resolved
-            key = (kind, canonical)
-            if key not in seen_targets:
-                seen_targets.add(key)
-                targets.append(key)
+            _, canonical = resolved
+            if canonical not in seen_canon:
+                seen_canon.add(canonical)
+                targets.append(canonical)
 
         self.stdout.write(
-            f"Resolved to {len(targets)} distinct SAP document(s); "
-            f"{len(not_in_sap)} line(s) not found in SAPARInvoice"
-            f"{'/SAPARCreditMemo' if include_credit_memos else ''}."
+            f"Resolved to {len(targets)} distinct invoice(s); "
+            f"{len(not_in_sap)} line(s) not found in SAPARInvoice."
         )
 
         if dry_run:
             self.stdout.write(
                 self.style.WARNING(
-                    f"DRY RUN: would update_or_create {len(targets)} Accounts Recording row(s)."
+                    f"DRY RUN: would update_or_create {len(targets)} Accounts Recording invoice row(s)."
                 )
             )
         else:
             created = 0
             updated = 0
             now = timezone.now()
-            for kind, canonical in targets:
-                obj, was_created = AccountsRecordingEntry.objects.update_or_create(
-                    document_kind=kind,
+            for canonical in targets:
+                _, was_created = AccountsRecordingEntry.objects.update_or_create(
+                    document_kind=invoice_kind,
                     document_number=canonical,
                     defaults={
                         "status": target_status,
@@ -227,7 +207,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     f"Wrote {len(not_in_sap)} unmatched line(s) to {missing_path} "
-                    f"(not in SAP DB with current keys)"
+                    f"(not in SAPARInvoice)"
                 )
             )
 

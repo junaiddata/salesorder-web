@@ -2333,7 +2333,11 @@ def salesorder_update_salesman_remarks(request, so_number):
     """Update salesman remarks. Salesman and Admin can edit."""
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
 
-    if not (request.user.is_superuser or request.user.is_staff):
+    if not (
+        request.user.is_superuser
+        or request.user.is_staff
+        or (request.user.username or '').strip().lower() == 'manager'
+    ):
         allowed = SAPSalesorder.objects.filter(
             Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
         ).exists()
@@ -2361,7 +2365,13 @@ def salesorder_item_save_revised_price(request):
             return JsonResponse({'success': False, 'error': 'item_id required'}, status=400)
 
         so_item = get_object_or_404(SAPSalesorderItem, pk=item_id)
-        if not (request.user.is_superuser or request.user.is_staff):
+        # Same access as salesorder_detail: staff/superuser, username manager, or salesman scope
+        # (not Django Role alone — scope uses SALES_USER_MAP + salesman_name matching).
+        if not (
+            request.user.is_superuser
+            or request.user.is_staff
+            or (request.user.username or '').strip().lower() == 'manager'
+        ):
             allowed = SAPSalesorder.objects.filter(
                 Q(pk=so_item.salesorder_id) & salesman_scope_q_salesorder(request.user)
             ).exists()

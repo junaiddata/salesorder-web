@@ -447,6 +447,8 @@
   </style>
 </head>
 <body>
+  {# Always expose CSRF for fetch(); admin-only forms are not guaranteed to render first. #}
+  <form style="display:none" aria-hidden="true" method="post">{% csrf_token %}</form>
   <div class="container">
 
     <!-- Header -->
