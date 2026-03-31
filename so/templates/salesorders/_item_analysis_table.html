@@ -4,6 +4,10 @@
   <tr class="totals-row">
     <td class="sticky-col" style="left: 0; font-weight: 700; background: var(--primary-light);">TOTAL</td>
     <td class="sticky-col" style="left: 150px; font-weight: 700; background: var(--primary-light);"></td>
+    {% if is_admin %}
+    <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">—</td>
+    <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">—</td>
+    {% endif %}
     {% for totals in totals_list %}
       <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
       {% if is_admin %}<td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
@@ -21,6 +25,10 @@
       {% endif %}
     </td>
     <td class="sticky-col item-description" style="left: 150px;">{{ item.item_description|default:"Unknown" }}</td>
+    {% if is_admin %}
+    <td class="sticky-col text-right">{{ item.total_available_stock|default_if_none:"0"|floatformat:0|intcomma }}</td>
+    <td class="sticky-col text-right">{% if item.item_price is not None %}{{ item.item_price|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+    {% endif %}
     {% for year_data in item.year_list %}
       <td class="text-right">{{ year_data.total_sales|default:0|floatformat:2|intcomma }}</td>
       {% if is_admin %}<td class="text-right">{{ year_data.total_gp|default:0|floatformat:2|intcomma }}</td>{% endif %}
@@ -31,7 +39,7 @@
   </tr>
   {% empty %}
   <tr>
-    <td colspan="{% widthratio years|length 1 4 %}" class="empty-state">
+    <td colspan="{% with ny=years|length %}{% if is_admin %}{{ ny|add:ny|add:ny|add:ny|add:ny|add:4 }}{% else %}{{ ny|add:ny|add:ny|add:2 }}{% endif %}{% endwith %}" class="empty-state">
       <i class="fas fa-inbox"></i>
       <p>No item data available</p>
     </td>

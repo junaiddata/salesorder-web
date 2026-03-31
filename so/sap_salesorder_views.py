@@ -8952,7 +8952,29 @@ def item_analysis(request):
                     'avg_rate': Decimal('0'),
                     'total_quantity': Decimal('0')
                 })
-    
+
+    # Live stock & item master price from Items (Admin only; same pattern as salesorder_detail)
+    if is_admin and items_list:
+        master_codes = [item['item_code'] for item in items_list if item.get('item_code')]
+        master_lookup = {}
+        if master_codes:
+            for row in Items.objects.filter(item_code__in=master_codes).only(
+                'item_code', 'total_available_stock', 'item_price'
+            ):
+                master_lookup[row.item_code] = {
+                    'total_available_stock': row.total_available_stock or Decimal('0'),
+                    'item_price': Decimal(str(row.item_price or 0)),
+                }
+        for item in items_list:
+            code = item.get('item_code') or ''
+            m = master_lookup.get(code)
+            if m:
+                item['total_available_stock'] = m['total_available_stock']
+                item['item_price'] = m['item_price']
+            else:
+                item['total_available_stock'] = Decimal('0')
+                item['item_price'] = None
+
     # Paginate items - show 1000 items per page
     page_size = 1000
     paginator = Paginator(items_list, page_size)
@@ -9515,7 +9537,28 @@ def export_item_analysis_pdf(request):
         key=lambda x: sum(y.get('total_sales', Decimal('0')) for y in x['years'].values()),
         reverse=True
     )
-    
+
+    if is_admin and items_list:
+        pdf_master_codes = [item['item_code'] for item in items_list if item.get('item_code')]
+        pdf_master_lookup = {}
+        if pdf_master_codes:
+            for row in Items.objects.filter(item_code__in=pdf_master_codes).only(
+                'item_code', 'total_available_stock', 'item_price'
+            ):
+                pdf_master_lookup[row.item_code] = {
+                    'total_available_stock': row.total_available_stock or Decimal('0'),
+                    'item_price': Decimal(str(row.item_price or 0)),
+                }
+        for item in items_list:
+            code = item.get('item_code') or ''
+            m = pdf_master_lookup.get(code)
+            if m:
+                item['total_available_stock'] = m['total_available_stock']
+                item['item_price'] = m['item_price']
+            else:
+                item['total_available_stock'] = Decimal('0')
+                item['item_price'] = None
+
     # Create PDF
     response = HttpResponse(content_type='application/pdf')
     filename = f"Item_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -9593,11 +9636,17 @@ def export_item_analysis_pdf(request):
         fontName='Helvetica-Bold'
     )
     
-    header_data = [[
+    header_row = [
         Paragraph('Item Code', header_style),
         Paragraph('Description', header_style),
-        Paragraph('UPC', header_style)
-    ]]
+    ]
+    if is_admin:
+        header_row.extend([
+            Paragraph('Tot. Stock', header_style),
+            Paragraph('Item price', header_style),
+        ])
+    header_row.append(Paragraph('UPC', header_style))
+    header_data = [header_row]
     for year in years:
         if is_admin:
             header_data[0].extend([
@@ -9630,10 +9679,15 @@ def export_item_analysis_pdf(request):
         # Use Paragraph for text wrapping
         item_code_para = Paragraph(item['item_code'], wrap_style)
         item_desc_para = Paragraph(item['item_description'] or '', wrap_style)
+        row = [item_code_para, item_desc_para]
+        if is_admin:
+            ts = item.get('total_available_stock', Decimal('0'))
+            ip = item.get('item_price')
+            row.append(Paragraph(f"{ts:,.0f}", wrap_style))
+            row.append(Paragraph(f"{ip:,.2f}" if ip is not None else "—", wrap_style))
         item_upc_para = Paragraph(item['upc_code'] or '', wrap_style)
-        
-        row = [item_code_para, item_desc_para, item_upc_para]
-        
+        row.append(item_upc_para)
+
         for year in years:
             year_data = item['years'].get(year, {})
             sales = year_data.get('total_sales', Decimal('0'))
@@ -9653,7 +9707,10 @@ def export_item_analysis_pdf(request):
     
     # Create table with adjusted column widths to fit landscape A4
     # Landscape A4: 11.69 x 8.27 inches, minus margins (0.5*2 = 1 inch each side) = 10.69 inches available
-    col_widths = [0.75*inch, 1.5*inch, 0.7*inch]  # Item Code, Description, UPC
+    col_widths = [0.75*inch, 1.5*inch]
+    if is_admin:
+        col_widths.extend([0.55*inch, 0.6*inch])
+    col_widths.append(0.7*inch)  # UPC
     for year in years:
         col_widths.append(0.75*inch)  # Sales
         if is_admin:
@@ -9670,13 +9727,15 @@ def export_item_analysis_pdf(request):
         col_widths = [w * scale_factor for w in col_widths]
     
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    pdf_first_numeric_col = 3 + (2 if is_admin else 0)
     
     # Table style with smaller fonts and proper wrapping
     table_style = TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (pdf_first_numeric_col, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 7),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
@@ -9923,6 +9982,27 @@ def export_item_analysis_excel(request):
     items_list = [i for i in items_list if i['item_code'] and i['item_code'].strip()]
     items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
 
+    if is_admin and items_list:
+        xl_master_codes = [item['item_code'] for item in items_list if item.get('item_code')]
+        xl_master_lookup = {}
+        if xl_master_codes:
+            for row in Items.objects.filter(item_code__in=xl_master_codes).only(
+                'item_code', 'total_available_stock', 'item_price'
+            ):
+                xl_master_lookup[row.item_code] = {
+                    'total_available_stock': row.total_available_stock or Decimal('0'),
+                    'item_price': Decimal(str(row.item_price or 0)),
+                }
+        for item in items_list:
+            code = item.get('item_code') or ''
+            m = xl_master_lookup.get(code)
+            if m:
+                item['total_available_stock'] = m['total_available_stock']
+                item['item_price'] = m['item_price']
+            else:
+                item['total_available_stock'] = Decimal('0')
+                item['item_price'] = None
+
     year_totals = {}
     for year in years:
         year_totals[year] = {
@@ -9972,7 +10052,10 @@ def export_item_analysis_excel(request):
         bottom=Side(style='thin'),
     )
 
-    headers = ['Item Code', 'Description', 'UPC']
+    headers = ['Item Code', 'Description']
+    if is_admin:
+        headers.extend(['Tot. Stock', 'Item price'])
+    headers.append('UPC')
     for year in years:
         headers.append(f'{year} Sales')
         if is_admin:
@@ -9981,6 +10064,8 @@ def export_item_analysis_excel(request):
         headers.append(f'{year} Qty')
         headers.append(f'{year} Avg Rate')
 
+    base_text_cols = len(headers) - (5 * len(years) if is_admin else 3 * len(years))
+
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=start_data_row, column=col, value=h)
         c.fill = header_fill
@@ -9988,7 +10073,10 @@ def export_item_analysis_excel(request):
         c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         c.border = thin_border
 
-    totals_row = ['TOTAL', '', '']
+    totals_row = ['TOTAL', '']
+    if is_admin:
+        totals_row.extend(['—', '—'])
+    totals_row.append('')
     for year in years:
         t = year_totals[year]
         totals_row.append(float(t['total_sales']))
@@ -10001,13 +10089,13 @@ def export_item_analysis_excel(request):
         c = ws.cell(row=start_data_row + 1, column=col, value=val)
         c.fill = totals_fill
         c.font = totals_font
-        c.alignment = Alignment(horizontal='right' if col > 3 else 'left', vertical='center')
+        c.alignment = Alignment(horizontal='right' if col > base_text_cols else 'left', vertical='center')
         c.border = thin_border
-        if isinstance(val, (int, float)) and col > 3 and col <= len(headers):
+        if isinstance(val, (int, float)) and col > base_text_cols and col <= len(headers):
             h = headers[col - 1]
             if 'GP%' in h:
                 c.number_format = '0.00"%"'
-            elif 'Qty' in h:
+            elif 'Qty' in h or 'Stock' in h:
                 c.number_format = '#,##0'
             else:
                 c.number_format = '#,##0.00'
@@ -10016,8 +10104,12 @@ def export_item_analysis_excel(request):
         row_vals = [
             item['item_code'],
             item['item_description'] or 'Unknown',
-            item.get('upc_code', '') or '',
         ]
+        if is_admin:
+            row_vals.append(float(item.get('total_available_stock', Decimal('0'))))
+            ip = item.get('item_price')
+            row_vals.append(float(ip) if ip is not None else None)
+        row_vals.append(item.get('upc_code', '') or '')
         for year in years:
             yd = item['years_data'][year]
             row_vals.append(float(yd['total_sales']))
@@ -10029,17 +10121,20 @@ def export_item_analysis_excel(request):
         for col, val in enumerate(row_vals, 1):
             c = ws.cell(row=row_idx, column=col, value=val)
             c.border = thin_border
-            c.alignment = Alignment(horizontal='right' if col > 3 else 'left', vertical='center')
-            if isinstance(val, (int, float)) and col > 3:
+            c.alignment = Alignment(horizontal='right' if col > base_text_cols else 'left', vertical='center')
+            if isinstance(val, (int, float)) and col > base_text_cols:
                 col_header = headers[col - 1] if col <= len(headers) else ''
                 if 'GP%' in col_header:
                     c.number_format = '0.00"%"'
-                elif 'Qty' in col_header:
+                elif 'Qty' in col_header or 'Stock' in col_header:
                     c.number_format = '#,##0'
                 else:
                     c.number_format = '#,##0.00'
 
-    col_widths = [14, 35, 14]
+    col_widths = [14, 35]
+    if is_admin:
+        col_widths.extend([11, 12])
+    col_widths.append(14)
     for _ in years:
         col_widths.append(14)
         if is_admin:
@@ -10052,7 +10147,7 @@ def export_item_analysis_excel(request):
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(headers))
     ws.row_dimensions[start_data_row].height = 22
-    ws.freeze_panes = f'D{start_data_row + 1}'
+    ws.freeze_panes = f'{get_column_letter(base_text_cols + 1)}{start_data_row + 1}'
 
     output = BytesIO()
     wb.save(output)
