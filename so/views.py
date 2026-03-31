@@ -5125,6 +5125,34 @@ def sync_customer_finance_form(request):
     return redirect('sync_settings')
 
 
+@login_required
+@require_POST
+def sync_payment_details_form(request):
+    """
+    Form POST endpoint for syncing pending invoices (GetPaymentDetails) from Settings page.
+    Runs sync and redirects back to Settings with message.
+    """
+    from so.management.commands.sync_payment_details import sync_payment_details as sync_function
+    from django.contrib import messages
+
+    try:
+        stats = sync_function()
+        messages.success(
+            request,
+            (
+                f'Pending invoices sync completed: {stats.get("created", 0)} rows stored '
+                f'(skipped no customer: {stats.get("skipped_no_customer", 0)}, '
+                f'non-pending: {stats.get("skipped_non_pending", 0)})'
+            ),
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Error syncing payment details")
+        messages.error(request, f"Error syncing pending invoices: {str(e)}")
+    return redirect('sync_settings')
+
+
 @csrf_exempt
 @require_POST
 def sync_customer_finance_api_receive(request):
@@ -5397,3 +5425,58 @@ def process_finance_data(finance_data):
         raise
     
     return stats
+
+
+@csrf_exempt
+@require_POST
+def sync_payment_details_api_receive(request):
+    """
+    Receive payment details data from PC script via HTTP API.
+    This endpoint is called by the payment-details PC sync script.
+    """
+    from django.conf import settings
+    import json
+    import logging
+    from so.management.commands.sync_payment_details import process_payment_details_data
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body)
+        else:
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                data = request.POST.dict()
+
+        api_key = data.get('api_key')
+        expected_key = getattr(settings, 'VPS_API_KEY', 'your-secret-api-key')
+        if not api_key or api_key != expected_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key',
+            }, status=401)
+
+        payment_details_data = data.get('payment_details_data', [])
+        if not payment_details_data:
+            return JsonResponse({
+                'success': False,
+                'error': 'No payment details data provided',
+            })
+
+        stats = process_payment_details_data(payment_details_data, full_refresh=True)
+        return JsonResponse({
+            'success': True,
+            'stats': stats,
+            'message': (
+                f"Synced {stats.get('created', 0)} pending invoices "
+                f"(skipped no-customer: {stats.get('skipped_no_customer', 0)})"
+            ),
+        })
+    except Exception as e:
+        logger.exception("Error receiving payment details data")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)

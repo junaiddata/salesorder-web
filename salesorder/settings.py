@@ -172,6 +172,7 @@ SAP_PURCHASE_ORDER_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/PurchaseOr
 SAP_AR_INVOICE_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARInvoice"
 SAP_AR_CREDIT_MEMO_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/ARCreditMemo"
 SAP_FINANCE_SUMMARY_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/FinanceSummary"
+SAP_GET_PAYMENT_DETAILS_API_URL = f"{SAP_API_BASE_HOST}/IntegrationApi/api/GetPaymentDetails"
 SAP_API_TIMEOUT = 30
 SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders + last 3 days = 4 days total
 # Optional: SAP_SYNC_FROM_DATE / SAP_SYNC_TO_DATE (YYYY-MM-DD) - used when From/To date range selected in Settings sync

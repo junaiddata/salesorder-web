@@ -84,6 +84,37 @@ class Customer(models.Model):
         return self.customer_name
 
 
+class CustomerPendingInvoice(models.Model):
+    customer = models.ForeignKey(
+        'Customer',
+        on_delete=models.CASCADE,
+        related_name='pending_invoices',
+    )
+    doc_num = models.BigIntegerField()
+    doc_date = models.DateField(blank=True, null=True)
+    num_at_card = models.CharField(max_length=255, blank=True, null=True)
+    doc_total = models.FloatField(default=0.0)
+    paid_to_date = models.FloatField(default=0.0)
+    balance_due = models.FloatField(default=0.0)
+    slp_name = models.CharField(max_length=255, blank=True, null=True)
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['customer', 'doc_num'],
+                name='unique_customer_pending_invoice_docnum',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['customer', 'doc_date']),
+            models.Index(fields=['customer', 'balance_due']),
+        ]
+
+    def __str__(self):
+        return f"{self.customer.customer_code} - {self.doc_num}"
+
+
 class Salesman(models.Model):
     salesman_name = models.CharField(max_length=100)
 

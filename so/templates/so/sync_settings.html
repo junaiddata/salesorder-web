@@ -132,6 +132,12 @@
           {% csrf_token %}
           <button type="submit" class="sync-btn"><i class="fas fa-users"></i> Customer Finance</button>
         </form>
+        <form method="post" action="{% url 'sync_payment_details_form' %}">
+          {% csrf_token %}
+          <button type="submit" class="sync-btn" style="background:#0d9488;">
+            <i class="fas fa-file-invoice-dollar"></i> Pending Invoices (GetPaymentDetails)
+          </button>
+        </form>
         <form method="post" action="{% url 'check_salesorder_margins_form' %}">
           {% csrf_token %}
           <button type="submit" class="sync-btn" style="background:#dc2626;">

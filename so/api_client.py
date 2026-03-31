@@ -1717,3 +1717,56 @@ class SAPAPIClient:
         except Exception as e:
             logger.error(f"Unexpected error in finance summary API request: {e}, url: {base_url}")
             return []
+
+    def fetch_payment_details(self, from_date: str, to_date: str) -> List[Dict]:
+        """
+        Fetch customer payment details from GetPaymentDetails API endpoint.
+
+        Args:
+            from_date: Start date in YYYY-MM-DD format
+            to_date: End date in YYYY-MM-DD format
+
+        Returns:
+            List of payment detail records from API
+        """
+        base_url = getattr(
+            settings,
+            'SAP_GET_PAYMENT_DETAILS_API_URL',
+            'http://192.168.1.103/IntegrationApi/api/GetPaymentDetails',
+        )
+        payload = {"FromDate": from_date, "ToDate": to_date}
+        logger.info(f"Fetching payment details from API: {from_date} to {to_date}")
+
+        try:
+            response = requests.post(
+                base_url,
+                json=payload,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if isinstance(data, dict):
+                payment_data = data.get('Data', [])
+                count = data.get('Count', len(payment_data))
+                logger.info(f"Fetched {len(payment_data)} payment detail records (Total: {count})")
+                return payment_data
+            if isinstance(data, list):
+                logger.info(f"Fetched {len(data)} payment detail records")
+                return data
+
+            logger.warning(f"Unexpected payment details API response format: {type(data)}")
+            return []
+
+        except requests.exceptions.Timeout:
+            logger.error(f"API request timeout after {self.timeout}s: {base_url}")
+            raise RuntimeError(f"SAP API timeout ({self.timeout}s). Check if SSH tunnel is connected.") from None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"API connection error: {e}, url: {base_url}")
+            raise RuntimeError("Cannot connect to SAP API. Is the SSH tunnel running? (ssh -N -R 8443:192.168.1.103:80 root@VPS)") from None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request error: {e}, url: {base_url}")
+            raise RuntimeError(f"SAP API error: {e}") from None
+        except Exception as e:
+            logger.error(f"Unexpected error in payment details API request: {e}, url: {base_url}")
+            return []

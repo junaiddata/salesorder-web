@@ -269,6 +269,17 @@
     .progress-fill.danger {
       background: var(--danger);
     }
+
+    .pending-invoices-table th,
+    .pending-invoices-table td {
+      padding: 8px 10px;
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+
+    .pending-invoices-table th {
+      font-size: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -441,6 +452,49 @@
             </span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Pending Invoices -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Pending Invoices</h2>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.875rem;">
+          Total pending balance: <strong style="color: var(--text);">{{ pending_invoices_total_balance|floatformat:2|intcomma }} AED</strong>
+          {% if pending_invoices_last_synced_at %}
+            | Last synced: {{ pending_invoices_last_synced_at|date:"d M Y H:i" }}
+          {% endif %}
+        </div>
+        {% if pending_invoices %}
+        <table class="pending-invoices-table">
+          <thead>
+            <tr>
+              <th>Doc Date</th>
+              <th>Invoice #</th>
+              <th>Customer Ref</th>
+              <th class="text-right">Doc Total</th>
+              <th class="text-right">Paid To Date</th>
+              <th class="text-right">Balance Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in pending_invoices %}
+            <tr>
+              <td>{{ inv.doc_date|date:"d-m-Y"|default:"—" }}</td>
+              <td>{{ inv.doc_num }}</td>
+              <td>{{ inv.num_at_card|default:"—" }}</td>
+              <td class="text-right">{{ inv.doc_total|floatformat:2|intcomma }}</td>
+              <td class="text-right">{{ inv.paid_to_date|floatformat:2|intcomma }}</td>
+              <td class="text-right amount-danger">{{ inv.balance_due|floatformat:2|intcomma }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p style="color: var(--text-secondary);">No pending invoice lines synced yet.</p>
+        {% endif %}
       </div>
     </div>
 

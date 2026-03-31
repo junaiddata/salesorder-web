@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 import pandas as pd
 from io import BytesIO
-from so.models import Customer, Salesman, FinanceCreditEditLog
+from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice
 from so.views import SALES_USER_MAP
 from so.finance_statement_scope import (
     assert_user_can_access_finance_customer,
@@ -306,6 +306,19 @@ def finance_statement_detail(request, customer_id):
         .order_by('-created_at')
         .first()
     )
+    pending_invoices = (
+        CustomerPendingInvoice.objects
+        .filter(customer=customer)
+        .order_by('-doc_date', '-doc_num')
+    )
+    pending_invoices_total_balance = (
+        pending_invoices.aggregate(
+            total=Coalesce(Sum('balance_due'), Value(0.0, output_field=FloatField()))
+        )['total']
+    )
+    pending_invoices_last_synced_at = (
+        pending_invoices.aggregate(last_synced=Max('synced_at'))['last_synced']
+    )
 
     context = {
         'customer': customer,
@@ -327,6 +340,9 @@ def finance_statement_detail(request, customer_id):
         'credit_utilization': credit_utilization,
         'is_manager': is_manager,
         'latest_credit_edit': latest_credit_edit,
+        'pending_invoices': pending_invoices,
+        'pending_invoices_total_balance': pending_invoices_total_balance,
+        'pending_invoices_last_synced_at': pending_invoices_last_synced_at,
     }
     
     return render(request, 'finance_statement/finance_statement_detail.html', context)

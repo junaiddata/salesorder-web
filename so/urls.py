@@ -42,7 +42,9 @@ urlpatterns = [
     path('customers/delete/<int:customer_id>/', views.delete_customer, name='delete_customer'),
     path('customers/sync-finance/', views.sync_customer_finance_summary, name='sync_customer_finance_summary'),
     path('customers/sync-finance-form/', views.sync_customer_finance_form, name='sync_customer_finance_form'),
+    path('customers/sync-payment-details-form/', views.sync_payment_details_form, name='sync_payment_details_form'),
     path('customers/sync-finance-api-receive/', views.sync_customer_finance_api_receive, name='sync_customer_finance_api_receive'),
+    path('customers/sync-payment-details-api-receive/', views.sync_payment_details_api_receive, name='sync_payment_details_api_receive'),
 
     path('settings/', views.sync_settings, name='sync_settings'),
     path('settings/sync/', views.sync_settings_form, name='sync_settings_form'),

@@ -1055,6 +1055,8 @@ def export_finance_statement_detail_pdf(request, customer_id):
     else:
         six_plus_end_str = ""
 
+    from so.models import CustomerPendingInvoice
+
     total_monthly = sum(m['amount'] for m in monthly_data)
     total_outstanding = customer.total_outstanding or 0
     pdc_received = customer.pdc_received or 0
@@ -1083,6 +1085,16 @@ def export_finance_statement_detail_pdf(request, customer_id):
     
     credit_limit = customer.credit_limit or 0
     has_over_limit = total_with_pdc > credit_limit and credit_limit > 0
+    pending_invoices_qs = (
+        CustomerPendingInvoice.objects
+        .filter(customer=customer)
+        .order_by('-doc_date', '-doc_num')
+    )
+    pending_invoices_total_balance = (
+        pending_invoices_qs.aggregate(
+            total=Coalesce(Sum('balance_due'), Value(0.0, output_field=FloatField()))
+        )['total']
+    )
 
     # ── Build PDF ──
     response = HttpResponse(content_type='application/pdf')
@@ -1209,7 +1221,99 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(_build_kpi_bar(outstanding_kpis, styles, usable_width * 0.75))
     elements.append(Spacer(1, SP_SECTION))
 
-    # ── 4. Monthly Pending Table ──
+    # ── 4. Pending Invoices (Compact) ──
+    elements.append(_build_section_header('Pending Invoices (Compact)', styles, usable_width))
+    elements.append(Spacer(1, SP_AFTER_HEADER))
+
+    compact_label_style = ParagraphStyle(
+        'CompactLabel',
+        parent=styles['cell'],
+        fontSize=FONT_BODY_SM,
+        textColor=CLR_TEXT_MUTED,
+    )
+    compact_value_style = ParagraphStyle(
+        'CompactValue',
+        parent=styles['cell_bold'],
+        fontSize=FONT_BODY_SM,
+    )
+    compact_value_r_style = ParagraphStyle(
+        'CompactValueRight',
+        parent=styles['cell_bold_r'],
+        fontSize=FONT_BODY_SM,
+    )
+
+    pending_kpi = Table(
+        [[
+            Paragraph('Total Pending Balance', compact_label_style),
+            Paragraph(_fmt(pending_invoices_total_balance) + ' AED', compact_value_r_style),
+        ]],
+        colWidths=[2.4 * inch, 1.5 * inch],
+    )
+    pending_kpi.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), CLR_BG_ZEBRA),
+        ('BOX', (0, 0), (-1, -1), 0.5, CLR_BORDER),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+    ]))
+    elements.append(pending_kpi)
+    elements.append(Spacer(1, 4))
+
+    pending_preview_rows = list(
+        pending_invoices_qs.values(
+            'doc_date', 'doc_num', 'num_at_card', 'doc_total', 'paid_to_date', 'balance_due'
+        )[:18]
+    )
+    pending_total_count = pending_invoices_qs.count()
+
+    if pending_preview_rows:
+        pending_col_widths = [0.9 * inch, 0.95 * inch, 1.35 * inch, 0.95 * inch, 0.95 * inch, 1.0 * inch]
+        pending_rows = [[
+            Paragraph('Date', styles['header_cell']),
+            Paragraph('Invoice #', styles['header_cell']),
+            Paragraph('Customer Ref', styles['header_cell']),
+            Paragraph('Doc Total', styles['header_cell_r']),
+            Paragraph('Paid', styles['header_cell_r']),
+            Paragraph('Balance', styles['header_cell_r']),
+        ]]
+
+        for row in pending_preview_rows:
+            doc_date = row.get('doc_date')
+            date_text = doc_date.strftime('%d-%m-%y') if doc_date else '—'
+            pending_rows.append([
+                Paragraph(date_text, compact_value_style),
+                Paragraph(str(row.get('doc_num') or '—'), compact_value_style),
+                Paragraph((row.get('num_at_card') or '—')[:24], compact_label_style),
+                Paragraph(_fmt(row.get('doc_total') or 0), compact_value_r_style),
+                Paragraph(_fmt(row.get('paid_to_date') or 0), compact_value_r_style),
+                Paragraph(_fmt(row.get('balance_due') or 0), compact_value_r_style),
+            ])
+
+        if pending_total_count > len(pending_preview_rows):
+            pending_rows.append([
+                Paragraph(f'<i>Showing first {len(pending_preview_rows)} of {pending_total_count} rows</i>', compact_label_style),
+                Paragraph('', compact_label_style),
+                Paragraph('', compact_label_style),
+                Paragraph('', compact_label_style),
+                Paragraph('', compact_label_style),
+                Paragraph('', compact_label_style),
+            ])
+
+        pending_table = Table(pending_rows, colWidths=pending_col_widths, repeatRows=1)
+        ts_pending = _standard_data_table_style(len(pending_rows), has_total_row=False)
+        ts_pending.add('ALIGN', (3, 0), (5, -1), 'RIGHT')
+        ts_pending.add('TOPPADDING', (0, 0), (-1, -1), 2)
+        ts_pending.add('BOTTOMPADDING', (0, 0), (-1, -1), 2)
+        pending_table.setStyle(ts_pending)
+        elements.append(pending_table)
+    else:
+        elements.append(Paragraph('No pending invoice lines synced yet.', compact_label_style))
+
+    elements.append(Spacer(1, SP_SECTION))
+
+    # ── 5. Monthly Pending Table ──
     elements.append(_build_section_header('Monthly Pending (Last 6 Months)', styles, usable_width))
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
@@ -1240,7 +1344,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(month_table)
     elements.append(Spacer(1, SP_SECTION))
 
-    # ── 5. Aged Pending Section ──
+    # ── 6. Aged Pending Section ──
     elements.append(_build_section_header('Aged Pending', styles, usable_width))
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
@@ -1286,7 +1390,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(aged_table)
     elements.append(Spacer(1, SP_SECTION + 4))
 
-    # ── 6. Grand Total Summary ──
+    # ── 7. Grand Total Summary ──
     elements.append(_build_section_header('Total Summary', styles, usable_width))
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
