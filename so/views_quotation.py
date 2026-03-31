@@ -10,6 +10,14 @@ from django.db.models import Q
 from .utils import parse_device_info
 
 
+def _is_manager_account(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (getattr(user, "username", None) or "").strip().lower() == "manager"
+    )
+
+
 @csrf_exempt
 @transaction.atomic
 def create_quotation(request):
@@ -531,6 +539,22 @@ def view_quotation_details(request, quotation_id):
             messages.warning(request, 'Quotation put on hold.')
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
+        elif action == 'manager_change_division' and _is_manager_account(request.user):
+            new_div = (request.POST.get('division') or '').strip().upper()
+            if new_div not in ('JUNAID', 'ALABAMA'):
+                messages.error(request, 'Invalid division.')
+            elif quotation.division == new_div:
+                messages.info(request, 'Division is already set to that value.')
+            else:
+                quotation.division = new_div
+                quotation.save(update_fields=['division'])
+                messages.success(
+                    request,
+                    f'Division updated to {quotation.get_division_display()}. '
+                    f'PDF exports will use that letterhead. Quotation number {quotation.quotation_number} is unchanged.',
+                )
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
     return render(request, "so/quotations/view_quotation_details.html", {
         "quotation": quotation,
         "quotation_items": quotation_items,
@@ -543,6 +567,7 @@ def view_quotation_details(request, quotation_id):
         "total_cost": total_cost,
         "total_margin": total_margin,
         "margin_percent": margin_percent,
+        "is_manager": _is_manager_account(request.user),
     })
 
 

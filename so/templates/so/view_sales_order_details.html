@@ -499,6 +499,14 @@
             <span style="color: var(--sap-gray-700);">Order: {{ sales_order.order_number }}</span>
         </nav>
 
+        {% if messages %}
+        <div class="mb-3">
+            {% for message in messages %}
+            <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% elif 'warning' in message.tags %}alert-warning{% else %}alert-info{% endif %} mb-2 py-2 px-3 border-0 rounded" role="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <!-- Page Header -->
         <div class="page-header">
             <div class="page-title">
@@ -548,6 +556,10 @@
                         <span class="info-value">{{ sales_order.order_date|date:"F j, Y" }}</span>
                     </div>
                     <div class="info-item">
+                        <span class="info-label">Division (PDF letterhead)</span>
+                        <span class="info-value">{{ sales_order.get_division_display }}</span>
+                    </div>
+                    <div class="info-item">
                         <span class="info-label">Credit Limit</span>
                         <span class="info-value">{{credit_limit }} AED</span>
                     </div>
@@ -585,6 +597,29 @@
                 </div>
             </div>
         </div>
+
+        {% if is_manager %}
+        <div class="sap-card" style="margin-bottom: 24px; border: 1px solid #ffc107;">
+            <div class="sap-card-header" style="background: #fff8e6;">
+                <h5 style="margin:0;"><i class="fas fa-building"></i> Manager — division &amp; PDF branding</h5>
+            </div>
+            <div class="sap-card-body">
+                <p class="text-muted small mb-3" style="margin:0 0 12px 0;">Sets Junaid vs Alabama letterhead for <strong>PDF export</strong>. The order number (e.g. CO… / AL…) is not changed.</p>
+                <form method="post" class="d-flex flex-wrap align-items-end gap-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="manager_change_division">
+                    <div>
+                        <label for="id_order_division" class="form-label small mb-1">Division</label>
+                        <select name="division" id="id_order_division" class="form-select form-select-sm" style="min-width: 200px;">
+                            <option value="JUNAID" {% if sales_order.division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                            <option value="ALABAMA" {% if sales_order.division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm">Update division</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
         
         {% if sales_order.lpo_image %}
 <div class="sap-card">

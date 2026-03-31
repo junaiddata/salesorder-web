@@ -1079,6 +1079,14 @@ def get_last_six_months():
     return list(reversed(months))  # So oldest first like Feb → Jul
 
 
+def _is_manager_account(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (getattr(user, "username", None) or "").strip().lower() == "manager"
+    )
+
+
 def view_sales_order_details(request, order_id):
     sales_order = get_object_or_404(SalesOrder, id=order_id)
     customer = sales_order.customer
@@ -1127,6 +1135,23 @@ def view_sales_order_details(request, order_id):
                 # For regular form submissions
                 messages.success(request, 'Remarks updated successfully!')
                 return redirect('view_sales_order_details', order_id=order_id)
+        elif action == 'manager_change_division' and _is_manager_account(request.user):
+            from django.contrib import messages as django_messages
+            new_div = (request.POST.get('division') or '').strip().upper()
+            if new_div not in ('JUNAID', 'ALABAMA'):
+                django_messages.error(request, 'Invalid division.')
+            elif sales_order.division == new_div:
+                django_messages.info(request, 'Division is already set to that value.')
+            else:
+                old = sales_order.division
+                sales_order.division = new_div
+                sales_order.save(update_fields=['division'])
+                django_messages.success(
+                    request,
+                    f'Division updated to {sales_order.get_division_display()}. '
+                    f'PDF exports will use that letterhead. Order number {sales_order.order_number} is unchanged.',
+                )
+            return redirect('view_sales_order_details', order_id=order_id)
 
 
     grand_total = sales_order.total_amount + sales_order.tax
@@ -1196,6 +1221,7 @@ def view_sales_order_details(request, order_id):
         'old_months': old_months,
         'pending_total_without': pending_total,
         'messag': messag if 'messag' in locals() else None,
+        'is_manager': _is_manager_account(request.user),
         # No need to explicitly pass remarks as it's part of sales_order
     })
 
