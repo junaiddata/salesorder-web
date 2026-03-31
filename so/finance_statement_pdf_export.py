@@ -1237,14 +1237,14 @@ def export_finance_statement_detail_pdf(request, customer_id):
         fontSize=FONT_BODY_SM,
     )
 
-    pending_preview_rows = list(
+    # Full list (PDF table spans pages; header repeats via repeatRows=1)
+    pending_invoice_rows = list(
         pending_invoices_qs.values(
             'doc_date', 'doc_num', 'num_at_card', 'doc_total', 'paid_to_date', 'balance_due'
-        )[:18]
+        )
     )
-    pending_total_count = pending_invoices_qs.count()
 
-    if pending_preview_rows:
+    if pending_invoice_rows:
         pending_col_widths = [0.9 * inch, 0.95 * inch, 1.35 * inch, 0.95 * inch, 0.95 * inch, 1.0 * inch]
         pending_rows = [[
             Paragraph('Date', styles['header_cell']),
@@ -1255,7 +1255,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
             Paragraph('Balance', styles['header_cell_r']),
         ]]
 
-        for row in pending_preview_rows:
+        for row in pending_invoice_rows:
             doc_date = row.get('doc_date')
             date_text = doc_date.strftime('%d-%m-%y') if doc_date else '—'
             pending_rows.append([
@@ -1265,16 +1265,6 @@ def export_finance_statement_detail_pdf(request, customer_id):
                 Paragraph(_fmt(row.get('doc_total') or 0), compact_value_r_style),
                 Paragraph(_fmt(row.get('paid_to_date') or 0), compact_value_r_style),
                 Paragraph(_fmt(row.get('balance_due') or 0), compact_value_r_style),
-            ])
-
-        if pending_total_count > len(pending_preview_rows):
-            pending_rows.append([
-                Paragraph(f'<i>Showing first {len(pending_preview_rows)} of {pending_total_count} rows</i>', compact_label_style),
-                Paragraph('', compact_label_style),
-                Paragraph('', compact_label_style),
-                Paragraph('', compact_label_style),
-                Paragraph('', compact_label_style),
-                Paragraph('', compact_label_style),
             ])
 
         pending_table = Table(pending_rows, colWidths=pending_col_widths, repeatRows=1)
