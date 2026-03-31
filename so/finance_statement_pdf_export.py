@@ -1217,7 +1217,7 @@ def export_finance_statement_detail_pdf(request, customer_id):
     elements.append(Spacer(1, SP_SECTION))
 
     # ── 4. Pending Invoices (Compact) ──
-    elements.append(_build_section_header('Pending Invoices (Compact)', styles, usable_width))
+    elements.append(_build_section_header('Pending Invoices', styles, usable_width))
     elements.append(Spacer(1, SP_AFTER_HEADER))
 
     compact_label_style = ParagraphStyle(
