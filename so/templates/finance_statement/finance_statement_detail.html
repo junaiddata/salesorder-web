@@ -461,12 +461,6 @@
         <h2>Pending Invoices</h2>
       </div>
       <div class="card-body">
-        <div style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.875rem;">
-          Total pending balance: <strong style="color: var(--text);">{{ pending_invoices_total_balance|floatformat:2|intcomma }} AED</strong>
-          {% if pending_invoices_last_synced_at %}
-            | Last synced: {{ pending_invoices_last_synced_at|date:"d M Y H:i" }}
-          {% endif %}
-        </div>
         {% if pending_invoices %}
         <table class="pending-invoices-table">
           <thead>

@@ -311,14 +311,6 @@ def finance_statement_detail(request, customer_id):
         .filter(customer=customer)
         .order_by('-doc_date', '-doc_num')
     )
-    pending_invoices_total_balance = (
-        pending_invoices.aggregate(
-            total=Coalesce(Sum('balance_due'), Value(0.0, output_field=FloatField()))
-        )['total']
-    )
-    pending_invoices_last_synced_at = (
-        pending_invoices.aggregate(last_synced=Max('synced_at'))['last_synced']
-    )
 
     context = {
         'customer': customer,
@@ -341,8 +333,6 @@ def finance_statement_detail(request, customer_id):
         'is_manager': is_manager,
         'latest_credit_edit': latest_credit_edit,
         'pending_invoices': pending_invoices,
-        'pending_invoices_total_balance': pending_invoices_total_balance,
-        'pending_invoices_last_synced_at': pending_invoices_last_synced_at,
     }
     
     return render(request, 'finance_statement/finance_statement_detail.html', context)

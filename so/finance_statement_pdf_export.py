@@ -1090,11 +1090,6 @@ def export_finance_statement_detail_pdf(request, customer_id):
         .filter(customer=customer)
         .order_by('-doc_date', '-doc_num')
     )
-    pending_invoices_total_balance = (
-        pending_invoices_qs.aggregate(
-            total=Coalesce(Sum('balance_due'), Value(0.0, output_field=FloatField()))
-        )['total']
-    )
 
     # ── Build PDF ──
     response = HttpResponse(content_type='application/pdf')
@@ -1241,25 +1236,6 @@ def export_finance_statement_detail_pdf(request, customer_id):
         parent=styles['cell_bold_r'],
         fontSize=FONT_BODY_SM,
     )
-
-    pending_kpi = Table(
-        [[
-            Paragraph('Total Pending Balance', compact_label_style),
-            Paragraph(_fmt(pending_invoices_total_balance) + ' AED', compact_value_r_style),
-        ]],
-        colWidths=[2.4 * inch, 1.5 * inch],
-    )
-    pending_kpi.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), CLR_BG_ZEBRA),
-        ('BOX', (0, 0), (-1, -1), 0.5, CLR_BORDER),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-    ]))
-    elements.append(pending_kpi)
-    elements.append(Spacer(1, 4))
 
     pending_preview_rows = list(
         pending_invoices_qs.values(
