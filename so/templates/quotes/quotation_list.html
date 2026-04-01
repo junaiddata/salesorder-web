@@ -447,7 +447,7 @@
       margin-bottom: 0.75rem;
     }
     .quotation-calendar-section .section-title {
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       font-weight: 700;
       color: var(--text);
       margin: 0;
@@ -467,7 +467,7 @@
       margin-bottom: 1rem;
     }
     .qcal-calendar-header label {
-      font-size: 0.75rem;
+      font-size: 0.82rem;
       font-weight: 600;
       color: var(--text-secondary);
       margin-right: 4px;
@@ -476,7 +476,7 @@
       padding: 6px 10px;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      font-size: 0.8rem;
+      font-size: 0.87rem;
       background: var(--surface);
       color: var(--text);
     }
@@ -497,14 +497,14 @@
       min-width: 140px;
     }
     .qcal-month-summary-label {
-      font-size: 0.7rem;
+      font-size: 0.77rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: var(--text-secondary);
     }
     .qcal-month-summary-number {
-      font-size: 1.05rem;
+      font-size: 1.12rem;
       font-weight: 700;
       color: var(--text);
       font-variant-numeric: tabular-nums;
@@ -567,25 +567,25 @@
       color: var(--text-muted);
     }
     .qcal-calendar-day-label {
-      font-size: 0.65rem;
+      font-size: 0.73rem;
       font-weight: 600;
       color: var(--text-secondary);
       margin-bottom: 0.25rem;
     }
     .qcal-calendar-day-value {
-      font-size: 0.7rem;
+      font-size: 0.78rem;
       font-weight: 700;
       color: var(--text);
-      line-height: 1.2;
+      line-height: 1.15;
       flex-grow: 1;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .qcal-calendar-day-count {
-      font-size: 0.55rem;
+      font-size: 0.63rem;
       color: var(--text-secondary);
-      line-height: 1.15;
+      line-height: 1.1;
     }
   </style>
 </head>
@@ -723,7 +723,7 @@
             <option value="{{ num }}" {% if qcal_month == num %}selected{% endif %}>{{ name }}</option>
             {% endfor %}
           </select>
-          <span id="qcal-loading" style="font-size: 0.75rem; color: var(--text-muted); display: none;">Loading…</span>
+          <span id="qcal-loading" style="font-size: 0.82rem; color: var(--text-muted); display: none;">Loading…</span>
         </div>
         <div id="qcal-grid-container">
           {% include 'quotes/_quotation_calendar_body.html' with month_days=quotation_month_days today=today quotation_month_total_value=quotation_month_total_value quotation_month_quotation_count=quotation_month_quotation_count %}
