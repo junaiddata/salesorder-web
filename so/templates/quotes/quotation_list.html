@@ -510,6 +510,18 @@
       transform: translateY(-2px);
       box-shadow: var(--shadow-md);
     }
+    .qcal-calendar-day[data-iso-date] {
+      cursor: pointer;
+    }
+    .qcal-calendar-day[data-iso-date]:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .qcal-calendar-day-selected {
+      outline: 2px solid var(--primary) !important;
+      outline-offset: 1px;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
     .qcal-calendar-day-today {
       border-color: var(--primary) !important;
       background: var(--primary-light) !important;
@@ -752,9 +764,20 @@
       return params;
     }
 
+    function syncCalendarSelectionHighlight() {
+      document.querySelectorAll('.qcal-calendar-day-selected').forEach(function (el) {
+        el.classList.remove('qcal-calendar-day-selected');
+      });
+      const start = form.querySelector('input[name="start"]');
+      const end = form.querySelector('input[name="end"]');
+      if (!start || !end || !start.value || !end.value || start.value !== end.value) return;
+      const cell = document.querySelector('#qcal-grid-container .qcal-calendar-day[data-iso-date="' + start.value + '"]');
+      if (cell) cell.classList.add('qcal-calendar-day-selected');
+    }
+
     function load(params) {
       const url = '{% url "quotation_search" %}?'+qs(params);
-      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+      return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
         .then(data => {
           body.innerHTML = data.rows_html;
@@ -770,9 +793,20 @@
               });
             }
           }
+          syncCalendarSelectionHighlight();
         })
         .catch(console.error);
     }
+
+    window.syncQuotationCalendarSelectionHighlight = syncCalendarSelectionHighlight;
+
+    window.filterQuotationsByPostingDate = function (isoDate) {
+      const start = form.querySelector('input[name="start"]');
+      const end = form.querySelector('input[name="end"]');
+      if (start) start.value = isoDate;
+      if (end) end.value = isoDate;
+      load(collectParams({ page: 1 }));
+    };
 
     form.addEventListener('submit', function(e) {
       e.preventDefault();
@@ -800,6 +834,27 @@
       const page = a.getAttribute('data-page');
       load(collectParams({ page }));
     });
+
+    const qcalGrid = document.getElementById('qcal-grid-container');
+    if (qcalGrid) {
+      qcalGrid.addEventListener('click', function (e) {
+        const cell = e.target.closest('.qcal-calendar-day[data-iso-date]');
+        if (!cell) return;
+        e.preventDefault();
+        const iso = cell.getAttribute('data-iso-date');
+        if (iso && window.filterQuotationsByPostingDate) window.filterQuotationsByPostingDate(iso);
+      });
+      qcalGrid.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const cell = e.target.closest('.qcal-calendar-day[data-iso-date]');
+        if (!cell) return;
+        e.preventDefault();
+        const iso = cell.getAttribute('data-iso-date');
+        if (iso && window.filterQuotationsByPostingDate) window.filterQuotationsByPostingDate(iso);
+      });
+    }
+
+    syncCalendarSelectionHighlight();
   })();
 
   // Export PDF Logic
@@ -841,6 +896,7 @@
         }).then(function (r) { return r.text(); }).then(function (html) {
           gridContainer.innerHTML = html;
           updateCalendarTitle();
+          if (window.syncQuotationCalendarSelectionHighlight) window.syncQuotationCalendarSelectionHighlight();
         }).catch(function () {
           gridContainer.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Could not load calendar.</div>';
         }).finally(function () {

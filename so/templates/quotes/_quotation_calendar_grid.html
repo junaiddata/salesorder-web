@@ -1,7 +1,12 @@
 {% load humanize %}
 <div class="qcal-calendar-grid">
     {% for day in month_days %}
-    <div class="qcal-calendar-day {% if day.date == today %}qcal-calendar-day-today{% endif %} {% if not day.has_quotations %}qcal-calendar-day-empty{% endif %}">
+    <div class="qcal-calendar-day {% if day.date == today %}qcal-calendar-day-today{% endif %} {% if not day.has_quotations %}qcal-calendar-day-empty{% endif %}"
+         role="button"
+         tabindex="0"
+         data-iso-date="{{ day.date|date:'Y-m-d' }}"
+         aria-label="Filter list by {{ day.formatted_date }}"
+         title="Click to filter quotations by this posting date">
         <div class="qcal-calendar-day-label">{{ day.formatted_date }}</div>
         <div class="qcal-calendar-day-value">{{ day.total_value|floatformat:0|intcomma }}</div>
         <div class="qcal-calendar-day-count">{{ day.quotation_count }} {% if day.quotation_count == 1 %}quotation{% else %}quotations{% endif %}</div>
