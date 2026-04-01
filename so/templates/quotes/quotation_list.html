@@ -480,6 +480,35 @@
       background: var(--surface);
       color: var(--text);
     }
+    .qcal-month-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin-bottom: 1rem;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+    }
+    .qcal-month-summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 140px;
+    }
+    .qcal-month-summary-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .qcal-month-summary-number {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
     .qcal-calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -697,7 +726,7 @@
           <span id="qcal-loading" style="font-size: 0.75rem; color: var(--text-muted); display: none;">Loading…</span>
         </div>
         <div id="qcal-grid-container">
-          {% include 'quotes/_quotation_calendar_grid.html' with month_days=quotation_month_days today=today %}
+          {% include 'quotes/_quotation_calendar_body.html' with month_days=quotation_month_days today=today quotation_month_total_value=quotation_month_total_value quotation_month_quotation_count=quotation_month_quotation_count %}
         </div>
       </div>
     </div>

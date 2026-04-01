@@ -1,0 +1,12 @@
+{% load humanize %}
+<div class="qcal-month-summary">
+  <div class="qcal-month-summary-item">
+    <span class="qcal-month-summary-label">Month total value</span>
+    <span class="qcal-month-summary-number">{{ quotation_month_total_value|floatformat:2|intcomma }}</span>
+  </div>
+  <div class="qcal-month-summary-item">
+    <span class="qcal-month-summary-label">Quotations this month</span>
+    <span class="qcal-month-summary-number">{{ quotation_month_quotation_count|intcomma }}</span>
+  </div>
+</div>
+{% include 'quotes/_quotation_calendar_grid.html' with month_days=month_days today=today %}

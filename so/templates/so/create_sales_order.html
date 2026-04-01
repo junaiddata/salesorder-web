@@ -1377,11 +1377,18 @@ $(document).on('select2:open', function() {
     }
 });
 
-$(document).on('select2:open', function() {
-    var searchField = $('.select2-container--open .select2-search__field');
-    var results = $('.select2-container--open .select2-results__options');
-    if (results.length && searchField.length) {
-        results.on('scroll', function() { searchField.blur(); });
+// Keep keyboard stable on mobile while typing in Select2.
+// Previously, scrolling results blurred the search field and hid the keyboard.
+$(document).on('select2:open', function(e) {
+    if (window.innerWidth >= 576) return;
+    var openedSelectId = e && e.target ? (e.target.id || '') : '';
+    if (openedSelectId !== 'common_firm' && openedSelectId !== 'item-multiselect') return;
+
+    var $searchField = $('.select2-container--open .select2-search__field');
+    if ($searchField.length) {
+        setTimeout(function() {
+            $searchField.trigger('focus');
+        }, 0);
     }
 });
 

@@ -506,12 +506,12 @@ def edit_sales_order(request, order_id):
 @login_required
 @require_POST
 def delete_sales_order(request, order_id):
-    """Delete a pending customer sales order (admin only)."""
+    """Delete a pending customer sales order (Admin/Salesman/superuser)."""
     sales_order = get_object_or_404(SalesOrder, id=order_id)
 
-    # Restrict delete to admins/superusers only
+    # Restrict delete to Admin/Salesman/superuser only
     user_role = getattr(getattr(request.user, "role", None), "role", "")
-    if not (request.user.is_superuser or user_role == "Admin"):
+    if not (request.user.is_superuser or user_role in ("Admin", "Salesman")):
         return HttpResponseForbidden("You are not authorized to delete this sales order.")
 
     if sales_order.order_status != "Pending":
@@ -3604,10 +3604,27 @@ def quotation_list(request):
             'has_quotations': cnt > 0,
         })
 
+    # Full selected month totals (same scope as calendar; entire month by posting_date)
+    quotation_month_scope_qs = quotation_scope_qs.filter(
+        posting_date__year=qcal_year,
+        posting_date__month=qcal_month,
+    )
+    month_scope_agg = quotation_month_scope_qs.aggregate(
+        total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField())),
+        cnt=Count('id'),
+    )
+    quotation_month_total_value = month_scope_agg['total'] if month_scope_agg['total'] is not None else Decimal('0')
+    quotation_month_quotation_count = month_scope_agg['cnt'] or 0
+
     if request.GET.get('ajax') == 'quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         calendar_html = render_to_string(
-            'quotes/_quotation_calendar_grid.html',
-            {'month_days': quotation_month_days, 'today': today},
+            'quotes/_quotation_calendar_body.html',
+            {
+                'month_days': quotation_month_days,
+                'today': today,
+                'quotation_month_total_value': quotation_month_total_value,
+                'quotation_month_quotation_count': quotation_month_quotation_count,
+            },
             request=request,
         )
         return HttpResponse(calendar_html, content_type='text/html')
@@ -3753,6 +3770,8 @@ def quotation_list(request):
         'calendar_months': calendar_months,
         'calendar_display': calendar_display,
         'quotation_month_days': quotation_month_days,
+        'quotation_month_total_value': quotation_month_total_value,
+        'quotation_month_quotation_count': quotation_month_quotation_count,
         'today': today,
         'filters': {
             'q': q,
