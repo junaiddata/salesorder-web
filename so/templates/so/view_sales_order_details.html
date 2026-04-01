@@ -907,7 +907,8 @@
                 Edit Order
             </a>
         {% endif %}
-        {% if sales_order.order_status == "Pending" and (user.is_superuser or user.role.role == 'Admin' or user.role.role == 'Salesman') %}
+        {% if sales_order.order_status == "Pending" %}
+            {% if user.is_superuser or user.role.role == 'Admin' or user.role.role == 'Salesman' %}
                 <form method="POST"
                       action="{% url 'delete_sales_order' sales_order.id %}"
                       style="margin: 0; display: inline-block;"
@@ -918,6 +919,7 @@
                         Delete Order
                     </button>
                 </form>
+            {% endif %}
         {% endif %}
             <a href="{% url 'view_sales_orders' %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-arrow-left"></i>
