@@ -28,7 +28,7 @@ from django.http import JsonResponse
 from .utils import send_telegram_message 
 from datetime import date, datetime, timedelta
 from django.db.models.functions import Coalesce
-from django.db.models import Sum, Value, DecimalField
+from django.db.models import Sum, Value, DecimalField, Count
 from django.contrib.auth.decorators import login_required
 
 def role_required(*required_roles):  # Accept multiple roles
@@ -3551,8 +3551,66 @@ def upload_quotations(request):
 # =====================
 @login_required
 def quotation_list(request):
-    # Scope by logged-in user
-    qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
+    import calendar
+    from django.template.loader import render_to_string
+    from decimal import Decimal
+
+    # Scope by logged-in user (list filters apply to qs; calendar uses scope only)
+    quotation_scope_qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
+    qs = quotation_scope_qs
+
+    # --- Quotation calendar (posting_date; not affected by list filters) ---
+    today = date.today()
+    current_year = today.year
+    current_month = today.month
+    qcal_year_raw = request.GET.get('qcal_year', '').strip()
+    qcal_month_raw = request.GET.get('qcal_month', '').strip()
+    calendar_year_min = 2024
+    calendar_year_max = current_year + 1
+    calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
+    try:
+        qcal_year = int(qcal_year_raw) if qcal_year_raw else current_year
+        qcal_month = int(qcal_month_raw) if qcal_month_raw else current_month
+    except (ValueError, TypeError):
+        qcal_year = current_year
+        qcal_month = current_month
+    if qcal_year not in calendar_years:
+        qcal_year = current_year
+    if qcal_month < 1 or qcal_month > 12:
+        qcal_month = current_month
+    month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
+    calendar_display = date(qcal_year, qcal_month, 1)
+
+    _, last_day_in_month = calendar.monthrange(qcal_year, qcal_month)
+    is_calendar_current_month = qcal_year == current_year and qcal_month == current_month
+    last_calendar_day = min(today.day, last_day_in_month) if is_calendar_current_month else last_day_in_month
+
+    quotation_month_days = []
+    for day_num in range(1, last_calendar_day + 1):
+        day_date = date(qcal_year, qcal_month, day_num)
+        day_qs = quotation_scope_qs.filter(posting_date=day_date)
+        agg = day_qs.aggregate(
+            total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField())),
+            cnt=Count('id'),
+        )
+        total_val = agg['total'] if agg['total'] is not None else Decimal('0')
+        cnt = agg['cnt'] or 0
+        quotation_month_days.append({
+            'date': day_date,
+            'formatted_date': f"{month_names_short[qcal_month - 1]} {day_num}",
+            'total_value': total_val,
+            'quotation_count': cnt,
+            'has_quotations': cnt > 0,
+        })
+
+    if request.GET.get('ajax') == 'quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        calendar_html = render_to_string(
+            'quotes/_quotation_calendar_grid.html',
+            {'month_days': quotation_month_days, 'today': today},
+            request=request,
+        )
+        return HttpResponse(calendar_html, content_type='text/html')
 
     # Filters
     q = request.GET.get('q', '').strip()
@@ -3689,6 +3747,13 @@ def quotation_list(request):
         'total_2026': total_2026,      # ✅ send to template
         'salesmen': salesmen,
         'total_value': total_value,      # ✅ send to template
+        'qcal_year': qcal_year,
+        'qcal_month': qcal_month,
+        'calendar_years': calendar_years,
+        'calendar_months': calendar_months,
+        'calendar_display': calendar_display,
+        'quotation_month_days': quotation_month_days,
+        'today': today,
         'filters': {
             'q': q,
             'salesmen_filter': salesmen_filter,  # ✅ for multi-select

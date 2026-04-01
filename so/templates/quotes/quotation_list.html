@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -434,6 +435,117 @@
       color: var(--text);
       font-size: 0.875rem;
     }
+
+    /* Quotation calendar (matches home.html calendar layout; independent of list filters) */
+    .quotation-calendar-section {
+      margin-bottom: 20px;
+    }
+    .quotation-calendar-section .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .quotation-calendar-section .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0;
+    }
+    .quotation-calendar-widget {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .qcal-calendar-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .qcal-calendar-header label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-right: 4px;
+    }
+    .qcal-calendar-header select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .qcal-calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.5rem;
+    }
+    @media (max-width: 1200px) {
+      .qcal-calendar-grid { grid-template-columns: repeat(5, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .qcal-calendar-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .qcal-calendar-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .qcal-calendar-day {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.3rem;
+      text-align: center;
+      transition: all 0.2s ease;
+      min-height: 72px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .qcal-calendar-day:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    .qcal-calendar-day-today {
+      border-color: var(--primary) !important;
+      background: var(--primary-light) !important;
+      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2) !important;
+    }
+    .qcal-calendar-day-empty {
+      background: var(--bg) !important;
+      border-color: var(--border-light) !important;
+      opacity: 0.75;
+    }
+    .qcal-calendar-day-empty .qcal-calendar-day-label,
+    .qcal-calendar-day-empty .qcal-calendar-day-value,
+    .qcal-calendar-day-empty .qcal-calendar-day-count {
+      color: var(--text-muted);
+    }
+    .qcal-calendar-day-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+    .qcal-calendar-day-value {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qcal-calendar-day-count {
+      font-size: 0.55rem;
+      color: var(--text-secondary);
+      line-height: 1.15;
+    }
   </style>
 </head>
 <body>
@@ -548,6 +660,32 @@
         <div class="stat-item">
           <span class="stat-label">2026:</span>
           <span class="stat-value highlight">{{ total_2026|default:0|floatformat:2 }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="quotation-calendar-section">
+      <div class="section-header">
+        <h2 class="section-title" data-quotation-calendar-title>{{ calendar_display|date:"F Y" }} — Quotations by posting date</h2>
+      </div>
+      <div class="quotation-calendar-widget">
+        <div class="qcal-calendar-header">
+          <label for="qcal-year">Year</label>
+          <select id="qcal-year" aria-label="Quotation calendar year">
+            {% for y in calendar_years %}
+            <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+          <label for="qcal-month" style="margin-left: 4px;">Month</label>
+          <select id="qcal-month" aria-label="Quotation calendar month">
+            {% for num, name in calendar_months %}
+            <option value="{{ num }}" {% if qcal_month == num %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+          <span id="qcal-loading" style="font-size: 0.75rem; color: var(--text-muted); display: none;">Loading…</span>
+        </div>
+        <div id="qcal-grid-container">
+          {% include 'quotes/_quotation_calendar_grid.html' with month_days=quotation_month_days today=today %}
         </div>
       </div>
     </div>
@@ -677,6 +815,41 @@
         window.location.href = exportUrl;
       });
     }
+
+    // Quotation calendar (qcal_year / qcal_month only; does not use list filters)
+    (function() {
+      var calYear = document.getElementById('qcal-year');
+      var calMonth = document.getElementById('qcal-month');
+      var gridContainer = document.getElementById('qcal-grid-container');
+      var loadingEl = document.getElementById('qcal-loading');
+      var calendarTitleEl = document.querySelector('[data-quotation-calendar-title]');
+      var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      if (!calYear || !calMonth || !gridContainer) return;
+      function updateCalendarTitle() {
+        if (!calendarTitleEl) return;
+        var m = parseInt(calMonth.value, 10);
+        calendarTitleEl.textContent = (MONTH_LONG[m - 1] || '') + ' ' + calYear.value + ' — Quotations by posting date';
+      }
+      function loadCalendar() {
+        if (loadingEl) loadingEl.style.display = 'inline';
+        var url = new URL(window.location.pathname, window.location.origin);
+        url.searchParams.set('qcal_year', calYear.value);
+        url.searchParams.set('qcal_month', calMonth.value);
+        url.searchParams.set('ajax', 'quotation_calendar');
+        fetch(url.toString(), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.text(); }).then(function (html) {
+          gridContainer.innerHTML = html;
+          updateCalendarTitle();
+        }).catch(function () {
+          gridContainer.innerHTML = '<div style="padding:1rem;color:var(--text-muted);">Could not load calendar.</div>';
+        }).finally(function () {
+          if (loadingEl) loadingEl.style.display = 'none';
+        });
+      }
+      calYear.addEventListener('change', loadCalendar);
+      calMonth.addEventListener('change', loadCalendar);
+    })();
   });
 
   // Multi-Select Logic
