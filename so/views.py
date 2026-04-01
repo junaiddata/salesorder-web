@@ -3397,6 +3397,7 @@ SALES_USER_MAP = {
     "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
     "alabamakadar": ["KADER", "A.KADER", "A. KADER"],
     "alabamamusharaf": ["MUSHARAF", "A.MUSHARAF", "A. MUSHARAF"],
+    "aflah":["AFLAH"]
     
 }
 
