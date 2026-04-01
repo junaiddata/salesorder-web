@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,6 +371,103 @@
     opacity: 0.08; /* 5% Opacity (Lower because blue is dark) */
     /* filter: grayscale(100%); Optional: makes it grey */
 }
+
+        /* In-app quotation calendar (scope only; not list filters) */
+        .inapp-calendar-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+        }
+        .inapp-calendar-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #2d3748;
+        }
+        .ic-cal-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .ic-cal-header label { font-size: 0.8rem; color: #6c757d; margin-right: 4px; }
+        .ic-cal-header select {
+            padding: 6px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .ic-month-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 12px 14px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+        .ic-month-summary-block { min-width: 200px; }
+        .ic-month-summary-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6c757d;
+            font-weight: 600;
+        }
+        .ic-month-summary-nums { font-size: 1rem; font-weight: 700; color: #2d3748; }
+        .ic-month-summary-sep { margin: 0 6px; color: #adb5bd; font-weight: 400; }
+        .ic-month-summary-cnt { font-weight: 600; color: #4361ee; font-size: 0.9rem; }
+        .ic-cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+        @media (max-width: 1200px) { .ic-cal-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (max-width: 768px) { .ic-cal-grid { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 480px) { .ic-cal-grid { grid-template-columns: repeat(3, 1fr); } }
+        .ic-cal-day {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 6px 4px;
+            min-height: 88px;
+            background: #fff;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .ic-cal-day[data-iso-date] { cursor: pointer; }
+        .ic-cal-day:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .ic-cal-day-today {
+            border-color: #4361ee !important;
+            background: #eef2ff !important;
+        }
+        .ic-cal-day-empty { opacity: 0.72; background: #f8f9fa !important; }
+        .ic-cal-day-selected {
+            outline: 2px solid #4361ee;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+        }
+        .ic-cal-day-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #6c757d;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+        .ic-cal-day-row {
+            font-size: 0.6rem;
+            line-height: 1.25;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 2px 4px;
+            justify-content: center;
+        }
+        .ic-cal-tag { color: #868e96; font-weight: 600; }
+        .ic-cal-val { font-weight: 700; color: #2d3748; }
+        .ic-cal-cnt { color: #4361ee; font-size: 0.55rem; }
     </style>
 </head>
 <body>
@@ -473,6 +571,30 @@
 </div>
 </div>
 
+        {% if show_inapp_calendar %}
+        <!-- Calendar: Admin only; quotation_date totals (Junaid / Alabama); independent of list filters -->
+        <div class="inapp-calendar-section">
+            <h2 data-inapp-calendar-title>{{ calendar_display|date:"F Y" }} — In-app quotations</h2>
+            <div class="ic-cal-header">
+                <label for="ic-qcal-year">Year</label>
+                <select id="ic-qcal-year" aria-label="Calendar year">
+                    {% for y in calendar_years %}
+                    <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+                <label for="ic-qcal-month" class="ms-1">Month</label>
+                <select id="ic-qcal-month" aria-label="Calendar month">
+                    {% for num, name in calendar_months %}
+                    <option value="{{ num }}" {% if qcal_month == num %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <span id="ic-qcal-loading" class="text-muted small" style="display:none;">Loading…</span>
+            </div>
+            <div id="ic-calendar-ajax-root">
+                {% include 'so/quotations/_inapp_quotation_calendar_body.html' with month_days=inapp_month_days today=today junaid_month_total=junaid_month_total junaid_month_count=junaid_month_count alabama_month_total=alabama_month_total alabama_month_count=alabama_month_count %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Quotations List -->
         <div class="quotations-container" id="quotationsContainer">
@@ -515,21 +637,39 @@
       return params;
     }
 
+    function syncInappCalendarSelectionHighlight() {
+      document.querySelectorAll('.ic-cal-day-selected').forEach(function (el) {
+        el.classList.remove('ic-cal-day-selected');
+      });
+      const sd = startDate && startDate.value;
+      const ed = endDate && endDate.value;
+      if (!sd || !ed || sd !== ed) return;
+      const cell = document.querySelector('#ic-calendar-ajax-root .ic-cal-day[data-iso-date="' + sd + '"]');
+      if (cell) cell.classList.add('ic-cal-day-selected');
+    }
+
     function loadQuotations(params) {
       quotationsContainer.style.opacity = '0.6';
       const url = '{% url "view_quotations_ajax" %}?' + params.toString();
-      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+      return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
         .then(data => {
           quotationsContainer.innerHTML = data.html;
           quotationsContainer.style.opacity = '1';
           if (searchHidden) searchHidden.value = searchInput.value || '';
+          syncInappCalendarSelectionHighlight();
         })
         .catch(err => {
           quotationsContainer.style.opacity = '1';
           console.error(err);
         });
     }
+
+    window.filterInappQuotationsByPostingDate = function (isoDate) {
+      if (startDate) startDate.value = isoDate;
+      if (endDate) endDate.value = isoDate;
+      loadQuotations(collectParams({ page: '1' }));
+    };
 
     if (filtersForm) {
       filtersForm.addEventListener('submit', function(e) {
@@ -547,6 +687,63 @@
         loadQuotations(collectParams({ page: '1' }));
       }, 250));
     }
+
+    const icCalRoot = document.getElementById('ic-calendar-ajax-root');
+    if (icCalRoot) {
+      icCalRoot.addEventListener('click', function (e) {
+        const cell = e.target.closest('.ic-cal-day[data-iso-date]');
+        if (!cell) return;
+        e.preventDefault();
+        const iso = cell.getAttribute('data-iso-date');
+        if (iso && window.filterInappQuotationsByPostingDate) window.filterInappQuotationsByPostingDate(iso);
+      });
+      icCalRoot.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const cell = e.target.closest('.ic-cal-day[data-iso-date]');
+        if (!cell) return;
+        e.preventDefault();
+        const iso = cell.getAttribute('data-iso-date');
+        if (iso && window.filterInappQuotationsByPostingDate) window.filterInappQuotationsByPostingDate(iso);
+      });
+    }
+
+    const icQcalYear = document.getElementById('ic-qcal-year');
+    const icQcalMonth = document.getElementById('ic-qcal-month');
+    const icQcalLoading = document.getElementById('ic-qcal-loading');
+    const icCalTitle = document.querySelector('[data-inapp-calendar-title]');
+    const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    function updateInappCalTitle() {
+      if (!icCalTitle || !icQcalYear || !icQcalMonth) return;
+      var m = parseInt(icQcalMonth.value, 10);
+      icCalTitle.textContent = (MONTH_LONG[m - 1] || '') + ' ' + icQcalYear.value + ' — In-app quotations';
+    }
+    function loadInappCalendar() {
+      if (!icQcalYear || !icQcalMonth || !icCalRoot) return;
+      if (icQcalLoading) icQcalLoading.style.display = 'inline';
+      var url = new URL('{% url "view_quotations" %}', window.location.origin);
+      url.searchParams.set('qcal_year', icQcalYear.value);
+      url.searchParams.set('qcal_month', icQcalMonth.value);
+      url.searchParams.set('ajax', 'inapp_quotation_calendar');
+      fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          icCalRoot.innerHTML = html;
+          updateInappCalTitle();
+          syncInappCalendarSelectionHighlight();
+        })
+        .catch(function () {
+          icCalRoot.innerHTML = '<div class="p-3 text-muted">Could not load calendar.</div>';
+        })
+        .finally(function () {
+          if (icQcalLoading) icQcalLoading.style.display = 'none';
+        });
+    }
+    if (icQcalYear && icQcalMonth) {
+      icQcalYear.addEventListener('change', loadInappCalendar);
+      icQcalMonth.addEventListener('change', loadInappCalendar);
+    }
+
+    syncInappCalendarSelectionHighlight();
 
     // Pagination click -> AJAX
     document.addEventListener('click', function(e) {

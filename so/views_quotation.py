@@ -239,7 +239,117 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.contrib.auth.decorators import login_required
 
+
+def _inapp_quotation_scope_for_calendar(request):
+    """Same visibility as the quotations list, without search/date/status/division filters."""
+    qs = Quotation.objects.all()
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() in ['so', 'manager']:
+            pass
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+            qs = qs.filter(division='ALABAMA')
+        else:
+            qs = qs.filter(division='JUNAID')
+    elif request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+        from .views import SALES_USER_MAP
+        current_username = (request.user.username or "").strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            qs = qs.filter(salesman__salesman_name__in=allowed_names)
+        else:
+            qs = qs.none()
+    return qs
+
+
 def view_quotations(request):
+    import calendar
+    from datetime import date as date_cls
+    from django.db.models import Sum, Count, FloatField, Value
+    from django.db.models.functions import Coalesce
+    from django.http import HttpResponse, HttpResponseForbidden
+
+    show_inapp_calendar = (
+        request.user.is_authenticated
+        and hasattr(request.user, 'role')
+        and getattr(request.user.role, 'role', None) == 'Admin'
+    )
+
+    if request.GET.get('ajax') == 'inapp_quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if not show_inapp_calendar:
+            return HttpResponseForbidden('Forbidden')
+
+    if show_inapp_calendar:
+        today = date_cls.today()
+        current_year = today.year
+        current_month = today.month
+        qcal_year_raw = request.GET.get('qcal_year', '').strip()
+        qcal_month_raw = request.GET.get('qcal_month', '').strip()
+        calendar_year_min = 2020
+        calendar_year_max = current_year + 1
+        calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
+        try:
+            qcal_year = int(qcal_year_raw) if qcal_year_raw else current_year
+            qcal_month = int(qcal_month_raw) if qcal_month_raw else current_month
+        except (ValueError, TypeError):
+            qcal_year = current_year
+            qcal_month = current_month
+        if qcal_year not in calendar_years:
+            qcal_year = current_year
+        if qcal_month < 1 or qcal_month > 12:
+            qcal_month = current_month
+
+        month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
+        calendar_display = date_cls(qcal_year, qcal_month, 1)
+
+        scope_qs = _inapp_quotation_scope_for_calendar(request)
+
+        _, last_day_in_month = calendar.monthrange(qcal_year, qcal_month)
+        is_calendar_current_month = qcal_year == current_year and qcal_month == current_month
+        last_calendar_day = min(today.day, last_day_in_month) if is_calendar_current_month else last_day_in_month
+
+        def _agg_division(qs, div):
+            r = qs.filter(division=div).aggregate(
+                total=Coalesce(Sum('grand_total'), Value(0.0, output_field=FloatField())),
+                cnt=Count('id'),
+            )
+            return float(r['total'] or 0), r['cnt'] or 0
+
+        inapp_month_days = []
+        for day_num in range(1, last_calendar_day + 1):
+            day_date = date_cls(qcal_year, qcal_month, day_num)
+            day_qs = scope_qs.filter(quotation_date=day_date)
+            j_total, j_cnt = _agg_division(day_qs, 'JUNAID')
+            a_total, a_cnt = _agg_division(day_qs, 'ALABAMA')
+            inapp_month_days.append({
+                'date': day_date,
+                'formatted_date': f"{month_names_short[qcal_month - 1]} {day_num}",
+                'junaid_total': j_total,
+                'junaid_count': j_cnt,
+                'alabama_total': a_total,
+                'alabama_count': a_cnt,
+                'has_quotations': (j_cnt + a_cnt) > 0,
+            })
+
+        month_qs = scope_qs.filter(quotation_date__year=qcal_year, quotation_date__month=qcal_month)
+        junaid_month_total, junaid_month_count = _agg_division(month_qs, 'JUNAID')
+        alabama_month_total, alabama_month_count = _agg_division(month_qs, 'ALABAMA')
+
+        if request.GET.get('ajax') == 'inapp_quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            html = render_to_string(
+                'so/quotations/_inapp_quotation_calendar_body.html',
+                {
+                    'month_days': inapp_month_days,
+                    'today': today,
+                    'junaid_month_total': junaid_month_total,
+                    'junaid_month_count': junaid_month_count,
+                    'alabama_month_total': alabama_month_total,
+                    'alabama_month_count': alabama_month_count,
+                },
+                request=request,
+            )
+            return HttpResponse(html, content_type='text/html')
+
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     salesman_filter = request.GET.get('salesman_filter')
@@ -328,7 +438,7 @@ def view_quotations(request):
         query_params.append(f"q={q}")
     query_string = "&".join(query_params)
 
-    return render(request, 'so/quotations/view_quotations.html', {
+    context = {
         'quotations': quotations_page,
         'all_salesmen': all_salesmen,
         'selected_salesman': salesman_filter,
@@ -338,7 +448,23 @@ def view_quotations(request):
         'selected_division': division or 'All',
         'search_query': q,
         'query_string': query_string,
-    })
+        'show_inapp_calendar': show_inapp_calendar,
+    }
+    if show_inapp_calendar:
+        context.update({
+            'qcal_year': qcal_year,
+            'qcal_month': qcal_month,
+            'calendar_years': calendar_years,
+            'calendar_months': calendar_months,
+            'calendar_display': calendar_display,
+            'inapp_month_days': inapp_month_days,
+            'junaid_month_total': junaid_month_total,
+            'junaid_month_count': junaid_month_count,
+            'alabama_month_total': alabama_month_total,
+            'alabama_month_count': alabama_month_count,
+            'today': today,
+        })
+    return render(request, 'so/quotations/view_quotations.html', context)
 
 
 @login_required

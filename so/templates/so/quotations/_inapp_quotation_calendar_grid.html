@@ -1,0 +1,23 @@
+{% load humanize %}
+<div class="ic-cal-grid">
+    {% for day in month_days %}
+    <div class="ic-cal-day {% if day.date == today %}ic-cal-day-today{% endif %} {% if not day.has_quotations %}ic-cal-day-empty{% endif %}"
+         role="button"
+         tabindex="0"
+         data-iso-date="{{ day.date|date:'Y-m-d' }}"
+         aria-label="Filter list by {{ day.formatted_date }}"
+         title="Click to filter quotations by this date">
+        <div class="ic-cal-day-label">{{ day.formatted_date }}</div>
+        <div class="ic-cal-day-row">
+            <span class="ic-cal-tag">Junaid</span>
+            <span class="ic-cal-val">{{ day.junaid_total|floatformat:0|intcomma }}</span>
+            <span class="ic-cal-cnt">({{ day.junaid_count }})</span>
+        </div>
+        <div class="ic-cal-day-row">
+            <span class="ic-cal-tag">Alabama</span>
+            <span class="ic-cal-val">{{ day.alabama_total|floatformat:0|intcomma }}</span>
+            <span class="ic-cal-cnt">({{ day.alabama_count }})</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>

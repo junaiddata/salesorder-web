@@ -1,0 +1,20 @@
+{% load humanize %}
+<div class="ic-month-summary">
+    <div class="ic-month-summary-block">
+        <div class="ic-month-summary-title">Junaid (month)</div>
+        <div class="ic-month-summary-nums">
+            <span class="ic-month-summary-val">{{ junaid_month_total|floatformat:2|intcomma }}</span>
+            <span class="ic-month-summary-sep">·</span>
+            <span class="ic-month-summary-cnt">{{ junaid_month_count|intcomma }} qt</span>
+        </div>
+    </div>
+    <div class="ic-month-summary-block">
+        <div class="ic-month-summary-title">Alabama (month)</div>
+        <div class="ic-month-summary-nums">
+            <span class="ic-month-summary-val">{{ alabama_month_total|floatformat:2|intcomma }}</span>
+            <span class="ic-month-summary-sep">·</span>
+            <span class="ic-month-summary-cnt">{{ alabama_month_count|intcomma }} qt</span>
+        </div>
+    </div>
+</div>
+{% include 'so/quotations/_inapp_quotation_calendar_grid.html' with month_days=month_days today=today %}

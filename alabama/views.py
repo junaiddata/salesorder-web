@@ -42,10 +42,38 @@ def normalize_alabama_salesman(name):
     return mapping.get(key, name.strip())
 
 
+def _expand_alabama_salesman_names_for_scope(canonical_names):
+    """
+    Expand names from SALES_USER_MAP with all raw/normalized variants from AlabamaSalesmanMapping
+    (Settings). So e.g. canonical 'KADER' also matches Excel 'A.KADER', 'A. KADER', etc.
+    """
+    if not canonical_names:
+        return set()
+    result = set()
+    for n in canonical_names:
+        if n and str(n).strip():
+            result.add(str(n).strip())
+    canon_lower = {x.lower() for x in result}
+    try:
+        for raw, norm in AlabamaSalesmanMapping.objects.values_list('raw_name', 'normalized_name'):
+            nl = (norm or '').strip().lower()
+            if nl and nl in canon_lower:
+                r = (raw or '').strip()
+                v = (norm or '').strip()
+                if r:
+                    result.add(r)
+                if v:
+                    result.add(v)
+    except Exception:
+        pass
+    return result
+
+
 def alabama_salesman_scope_q(user, field='sales_employee'):
     """
     Return Q filter for Alabama models by salesman (sales_employee or salesman_name).
-    Reuses SALES_USER_MAP from so.views. Admin/superuser/manager sees all.
+    Reuses SALES_USER_MAP from so.views, expanded with AlabamaSalesmanMapping variants.
+    Admin/superuser/manager sees all.
     """
     try:
         if user.is_superuser or (user.username or '').strip().lower() == 'manager':
@@ -66,8 +94,9 @@ def alabama_salesman_scope_q(user, field='sales_employee'):
     uname = (user.username or '').strip().lower()
     names = SALES_USER_MAP.get(uname)
     if names:
+        expanded = _expand_alabama_salesman_names_for_scope(names)
         q = Q()
-        for n in names:
+        for n in expanded:
             q |= Q(**{f'{field}__iexact': n})
         return q
 
