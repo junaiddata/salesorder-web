@@ -856,7 +856,7 @@
                 <td class="num">{{ it.unit_price|floatformat:2 }}</td>
                 <td class="num">{% if it.min_selling_price is not None %}{{ it.min_selling_price|floatformat:2 }}{% else %}—{% endif %}</td>
                 <td class="num" style="background:#fffef5;">
-                  <input type="number" class="revised-price-input" data-item-id="{{ it.id }}"
+                  <input type="number" class="revised-price-input" data-so-id="{{ salesorder.id }}" data-line-no="{{ it.line_no }}"
                     value="{% if it.revised_price %}{{ it.revised_price|floatformat:2 }}{% endif %}"
                     placeholder="—" min="0" step="0.01"
                     style="width:62px;padding:3px 5px;border:1.5px solid #e2e8f0;border-radius:4px;font-size:0.73rem;text-align:right;font-family:inherit;background:white;"
@@ -953,14 +953,15 @@
           var done = 0;
           var hasError = false;
           inputs.forEach(function(input) {
-            var itemId = input.getAttribute('data-item-id');
+            var soId = parseInt(input.getAttribute('data-so-id'), 10);
+            var lineNo = parseInt(input.getAttribute('data-line-no'), 10);
             var val = (input.value || '').trim();
             var num = val === '' ? null : parseFloat(val);
             if (num !== null && (isNaN(num) || num < 0)) num = null;
             fetch('{% url "salesorder_item_save_revised_price" %}', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-              body: JSON.stringify({ item_id: parseInt(itemId, 10), revised_price: num }),
+              body: JSON.stringify({ so_id: soId, line_no: lineNo, revised_price: num }),
               credentials: 'same-origin'
             })
             .then(function(r) { return r.json(); })

@@ -76,8 +76,7 @@ from .sync_services import (
     sync_salesorders_core,
     sync_arinvoices_core,
     sync_arcreditmemos_core,
-    snapshot_revised_prices_by_so,
-    restore_revised_prices_after_item_rebuild,
+    upsert_salesorder_items,
 )
 
 
@@ -595,53 +594,25 @@ def upload_salesorders(request):
                             SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
                         )
 
-                        _rev_snap = snapshot_revised_prices_by_so(so_numbers)
-                        # Delete existing items for these salesorders in ONE query
-                        SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
-
-                        # Build items list + bulk insert
-                        items_to_create = []
-
-                        def _dec_any(x) -> Decimal:
-                            try:
-                                if x is None or (isinstance(x, float) and pd.isna(x)):
-                                    return Decimal("0")
-                                return Decimal(str(x))
-                            except Exception:
-                                return Decimal("0")
-
+                        from collections import defaultdict
+                        items_by_so = defaultdict(list)
                         for r in df.itertuples(index=False):
-                            so_no = r.so_number
-                            so_id = order_id_map.get(so_no)
-                            if not so_id:
-                                continue
-                            items_to_create.append(
-                                SAPSalesorderItem(
-                                    salesorder_id=so_id,
-                                    line_no=int(getattr(r, 'line_no', 1)),
-                                    item_no=r.item_no or "",
-                                    description=r.description or "",
-                                    quantity=_dec_any(r.quantity_n),
-                                    price=Decimal("0"),
-                                    row_total=_dec_any(r.row_total_n),
-                                    row_status=(r.row_status_norm or ""),
-                                    job_type=r.job_type or "",
-                                    manufacture=r.manufacture or "",
-                                    remaining_open_quantity=_dec_any(r.remaining_open_quantity_n),
-                                    pending_amount=_dec_any(r.pending_amount_n),
-                                    total_available_stock=_dec_any(r.total_available_stock_n),
-                                    dip_warehouse_stock=_dec_any(r.dip_warehouse_stock_n),
-                                )
-                            )
-
-                            if len(items_to_create) >= 10000:
-                                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
-                                items_to_create = []
-
-                        if items_to_create:
-                            SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=10000)
-
-                        restore_revised_prices_after_item_rebuild(_rev_snap)
+                            items_by_so[r.so_number].append({
+                                'line_no': int(getattr(r, 'line_no', 1)),
+                                'item_no': r.item_no or '',
+                                'description': r.description or '',
+                                'quantity': r.quantity_n,
+                                'price': 0,
+                                'row_total': r.row_total_n,
+                                'row_status': r.row_status_norm or '',
+                                'job_type': r.job_type or '',
+                                'manufacture': r.manufacture or '',
+                                'remaining_open_quantity': r.remaining_open_quantity_n,
+                                'pending_amount': r.pending_amount_n,
+                                'total_available_stock': r.total_available_stock_n,
+                                'dip_warehouse_stock': r.dip_warehouse_stock_n,
+                            })
+                        upsert_salesorder_items(order_id_map, dict(items_by_so))
 
                     messages.success(
                         request,
@@ -941,55 +912,12 @@ def sync_salesorders_api_receive(request):
                 SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
             )
             
-            _rev_snap = snapshot_revised_prices_by_so(so_numbers)
-            # Delete existing items for these salesorders
-            SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
-            
-            # Build items list + bulk insert
-            items_to_create = []
-            
-            def _dec_any(x) -> Decimal:
-                try:
-                    if x is None or (isinstance(x, float) and pd.isna(x)):
-                        return Decimal("0")
-                    return Decimal(str(x))
-                except Exception:
-                    return Decimal("0")
-            
+            items_by_so = {}
             for mapped in orders:
                 so_no = mapped.get('so_number')
-                so_id = order_id_map.get(so_no)
-                if not so_id:
-                    continue
-                
-                for item_data in mapped.get('items', []):
-                    items_to_create.append(
-                        SAPSalesorderItem(
-                            salesorder_id=so_id,
-                            line_no=item_data.get('line_no', 1),
-                            item_no=item_data.get('item_no', ''),
-                            description=item_data.get('description', ''),
-                            quantity=_dec_any(item_data.get('quantity', 0)),
-                            price=_dec_any(item_data.get('price', 0)),
-                            row_total=_dec_any(item_data.get('row_total', 0)),
-                            row_status=item_data.get('row_status', 'C'),
-                            job_type=item_data.get('job_type', ''),
-                            manufacture=item_data.get('manufacture', ''),
-                            remaining_open_quantity=_dec_any(item_data.get('remaining_open_quantity', 0)),
-                            pending_amount=_dec_any(item_data.get('pending_amount', 0)),
-                            total_available_stock=_dec_any(item_data.get('total_available_stock', 0)),
-                            dip_warehouse_stock=_dec_any(item_data.get('dip_warehouse_stock', 0)),
-                        )
-                    )
-                    
-                    if len(items_to_create) >= 20000:
-                        SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
-                        items_to_create = []
-            
-            if items_to_create:
-                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
-            
-            restore_revised_prices_after_item_rebuild(_rev_snap)
+                if so_no:
+                    items_by_so[so_no] = mapped.get('items', [])
+            upsert_salesorder_items(order_id_map, items_by_so)
             
             stats['total_items'] = sum(len(m.get('items', [])) for m in orders)
             
@@ -2355,18 +2283,22 @@ def salesorder_update_salesman_remarks(request, so_number):
 @login_required
 @require_POST
 def salesorder_item_save_revised_price(request):
-    """AJAX: Save revised price for an SO line item. Salesman and Admin can edit."""
+    """AJAX: Save revised price for an SO line item. Salesman and Admin can edit.
+    Accepts (so_id + line_no) for stable addressing, with item_id fallback."""
     try:
         data = json.loads(request.body) if request.body else {}
+        so_id = data.get('so_id')
+        line_no = data.get('line_no')
         item_id = data.get('item_id')
         revised_price = data.get('revised_price')
 
-        if not item_id:
-            return JsonResponse({'success': False, 'error': 'item_id required'}, status=400)
+        if so_id and line_no is not None:
+            so_item = get_object_or_404(SAPSalesorderItem, salesorder_id=so_id, line_no=int(line_no))
+        elif item_id:
+            so_item = get_object_or_404(SAPSalesorderItem, pk=item_id)
+        else:
+            return JsonResponse({'success': False, 'error': 'so_id+line_no or item_id required'}, status=400)
 
-        so_item = get_object_or_404(SAPSalesorderItem, pk=item_id)
-        # Same access as salesorder_detail: staff/superuser, username manager, or salesman scope
-        # (not Django Role alone — scope uses SALES_USER_MAP + salesman_name matching).
         if not (
             request.user.is_superuser
             or request.user.is_staff
@@ -2392,7 +2324,8 @@ def salesorder_item_save_revised_price(request):
         so_item.save(update_fields=['revised_price'])
         return JsonResponse({
             'success': True,
-            'item_id': item_id,
+            'so_id': so_item.salesorder_id,
+            'line_no': so_item.line_no,
             'revised_price': float(so_item.revised_price) if so_item.revised_price else None,
         })
     except json.JSONDecodeError:

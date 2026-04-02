@@ -531,11 +531,13 @@ class SAPSalesorderItem(models.Model):
     revised_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True, help_text="Optional revised unit price (salesman can edit)")
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['salesorder', 'line_no'], name='unique_so_line'),
+        ]
         indexes = [
-            models.Index(fields=['salesorder', 'line_no']),
-            models.Index(fields=['item_no']),  # For manufacturer lookup optimization
-            models.Index(fields=['pending_amount']),  # For pending_total calculation
-            models.Index(fields=['row_status']),  # For status filtering
+            models.Index(fields=['item_no']),
+            models.Index(fields=['pending_amount']),
+            models.Index(fields=['row_status']),
         ]
 
     def __str__(self):

@@ -54,6 +54,127 @@ def restore_revised_prices_after_item_rebuild(snapshot):
         )
 
 
+def upsert_salesorder_items(order_id_map, items_by_so_number, dec_fn=None):
+    """
+    Upsert SAPSalesorderItem rows keyed by (salesorder_id, line_no).
+
+    * Updates existing rows in place — preserves PK and revised_price.
+    * Creates new rows for lines added in SAP.
+    * Deletes rows for lines removed from SAP (and cleans up duplicates).
+    * Repairs broken SAPProformaInvoiceLine.so_item foreign keys.
+
+    order_id_map:        {so_number: salesorder_id}
+    items_by_so_number:  {so_number: [dict(line_no, item_no, description, quantity,
+                          price, row_total, row_status, job_type, manufacture,
+                          remaining_open_quantity, pending_amount,
+                          total_available_stock, dip_warehouse_stock), ...]}
+    dec_fn:              optional callable for numeric coercion (default: _dec_any)
+    """
+    if not order_id_map or not items_by_so_number:
+        return
+
+    _d = dec_fn or _dec_any
+    so_ids = set(order_id_map.values())
+
+    existing = {}
+    dup_ids = []
+    for item in SAPSalesorderItem.objects.filter(salesorder_id__in=so_ids).order_by('id'):
+        key = (item.salesorder_id, item.line_no)
+        if key in existing:
+            prev = existing[key]
+            if item.revised_price is not None and prev.revised_price is None:
+                dup_ids.append(prev.id)
+                existing[key] = item
+            else:
+                dup_ids.append(item.id)
+        else:
+            existing[key] = item
+    if dup_ids:
+        SAPSalesorderItem.objects.filter(id__in=dup_ids).delete()
+
+    to_create = []
+    to_update = []
+    seen_keys = set()
+
+    for so_no, items_list in items_by_so_number.items():
+        so_id = order_id_map.get(so_no)
+        if not so_id:
+            continue
+        for d in items_list:
+            line_no = int(d.get('line_no', 1))
+            key = (so_id, line_no)
+            seen_keys.add(key)
+
+            vals = {
+                'item_no': d.get('item_no') or '',
+                'description': d.get('description') or '',
+                'quantity': _d(d.get('quantity', 0)),
+                'price': _d(d.get('price', 0)),
+                'row_total': _d(d.get('row_total', 0)),
+                'row_status': d.get('row_status') or 'C',
+                'job_type': d.get('job_type') or '',
+                'manufacture': d.get('manufacture') or '',
+                'remaining_open_quantity': _d(d.get('remaining_open_quantity', 0)),
+                'pending_amount': _d(d.get('pending_amount', 0)),
+                'total_available_stock': _d(d.get('total_available_stock', 0)),
+                'dip_warehouse_stock': _d(d.get('dip_warehouse_stock', 0)),
+            }
+
+            if key in existing:
+                obj = existing[key]
+                for field, val in vals.items():
+                    setattr(obj, field, val)
+                to_update.append(obj)
+            else:
+                to_create.append(SAPSalesorderItem(
+                    salesorder_id=so_id, line_no=line_no, **vals,
+                ))
+
+    del_ids = [obj.id for key, obj in existing.items() if key not in seen_keys]
+    if del_ids:
+        SAPSalesorderItem.objects.filter(id__in=del_ids).delete()
+
+    _UPD_FIELDS = [
+        'item_no', 'description', 'quantity', 'price', 'row_total',
+        'row_status', 'job_type', 'manufacture', 'remaining_open_quantity',
+        'pending_amount', 'total_available_stock', 'dip_warehouse_stock',
+    ]
+    if to_update:
+        SAPSalesorderItem.objects.bulk_update(to_update, fields=_UPD_FIELDS, batch_size=5000)
+    if to_create:
+        SAPSalesorderItem.objects.bulk_create(to_create, batch_size=10000)
+
+    _repair_pi_so_item_fks(order_id_map)
+
+
+def _repair_pi_so_item_fks(order_id_map):
+    """Re-link SAPProformaInvoiceLine.so_item where FK was nulled by old delete-and-recreate syncs."""
+    if not order_id_map:
+        return
+    so_numbers = list(order_id_map.keys())
+
+    item_map = {}
+    for item in SAPSalesorderItem.objects.filter(
+        salesorder__so_number__in=so_numbers
+    ).select_related('salesorder'):
+        item_map[(item.salesorder.so_number, item.line_no)] = item
+
+    broken = SAPProformaInvoiceLine.objects.filter(
+        so_number__in=so_numbers,
+        so_item__isnull=True,
+    )
+
+    to_fix = []
+    for pl in broken:
+        match = item_map.get((pl.so_number, pl.line_no))
+        if match:
+            pl.so_item = match
+            to_fix.append(pl)
+
+    if to_fix:
+        SAPProformaInvoiceLine.objects.bulk_update(to_fix, fields=['so_item'], batch_size=5000)
+
+
 # Per-entity file loggers (for Settings sync - same files as management commands)
 _LOG_DIR = Path(__file__).resolve().parent.parent / 'logs'
 _LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -255,42 +376,12 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
             order_id_map = dict(
                 SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
             )
-            _rev_snap = snapshot_revised_prices_by_so(so_numbers)
-            SAPSalesorderItem.objects.filter(salesorder__so_number__in=so_numbers).delete()
-
-            items_to_create = []
+            items_by_so = {}
             for mapped in mapped_orders:
                 so_no = mapped.get('so_number')
-                so_id = order_id_map.get(so_no)
-                if not so_id:
-                    continue
-                for item_data in mapped.get('items', []):
-                    items_to_create.append(
-                        SAPSalesorderItem(
-                            salesorder_id=so_id,
-                            line_no=item_data.get('line_no', 1),
-                            item_no=item_data.get('item_no', ''),
-                            description=item_data.get('description', ''),
-                            quantity=_dec_any(item_data.get('quantity', 0)),
-                            price=_dec_any(item_data.get('price', 0)),
-                            row_total=_dec_any(item_data.get('row_total', 0)),
-                            row_status=item_data.get('row_status', 'C'),
-                            job_type=item_data.get('job_type', ''),
-                            manufacture=item_data.get('manufacture', ''),
-                            remaining_open_quantity=_dec_any(item_data.get('remaining_open_quantity', 0)),
-                            pending_amount=_dec_any(item_data.get('pending_amount', 0)),
-                            total_available_stock=_dec_any(item_data.get('total_available_stock', 0)),
-                            dip_warehouse_stock=_dec_any(item_data.get('dip_warehouse_stock', 0)),
-                        )
-                    )
-                    if len(items_to_create) >= 10000:
-                        SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=10000)
-                        items_to_create = []
-
-            if items_to_create:
-                SAPSalesorderItem.objects.bulk_create(items_to_create, batch_size=20000)
-
-            restore_revised_prices_after_item_rebuild(_rev_snap)
+                if so_no:
+                    items_by_so[so_no] = mapped.get('items', [])
+            upsert_salesorder_items(order_id_map, items_by_so)
 
             sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_orders)
 
