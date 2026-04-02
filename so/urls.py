@@ -62,6 +62,7 @@ urlpatterns = [
     path('finance-statement/export-pdf/', finance_statement_pdf_export.export_finance_statement_list_pdf, name='export_finance_statement_list_pdf'),
     path('finance-statement/<int:customer_id>/export/', finance_statement_views.export_finance_statement_detail_excel, name='export_finance_statement_detail_excel'),
     path('finance-statement/<int:customer_id>/export-pdf/', finance_statement_pdf_export.export_finance_statement_detail_pdf, name='export_finance_statement_detail_pdf'),
+    path('finance-statement/<int:customer_id>/export-customer-statement-pdf/', finance_statement_pdf_export.export_customer_statement_pdf, name='export_customer_statement_pdf'),
     path('finance-statement/credit-edits/export-pdf/', finance_statement_pdf_export.export_finance_credit_edit_list_pdf, name='export_finance_credit_edit_list_pdf'),
 
     ################ ITEM MANAGEMENT ##################

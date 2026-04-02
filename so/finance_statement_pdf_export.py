@@ -27,11 +27,12 @@ from reportlab.platypus import (
     PageBreak, KeepTogether,
 )
 
-from so.models import Customer, Salesman, FinanceCreditEditLog
+from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice
 from so.finance_statement_scope import (
     assert_user_can_access_finance_customer,
     finance_statement_customer_scope_q,
 )
+from calendar import monthrange
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1424,6 +1425,704 @@ def export_finance_statement_detail_pdf(request, customer_id):
 
     # ── Build and return ──
     doc.build(elements, onFirstPage=_build_page_footer, onLaterPages=_build_page_footer)
+    response.write(buffer.getvalue())
+    return response
+
+
+from datetime import datetime
+from io import BytesIO
+
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch, mm
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+)
+
+# ── Colour palette (from the image) ──────────────────────────────────
+CLR_PRIMARY = colors.HexColor('#1B3A5C')        # dark navy header text
+CLR_ACCENT = colors.HexColor('#2980B9')          # blue left-bar accent
+CLR_ACCENT_LINE = colors.HexColor('#2980B9')     # blue horizontal rules
+CLR_GOLD = colors.HexColor('#DAA520')            # gold/yellow dotted lines
+CLR_GOLD_LIGHT = colors.HexColor('#E8C84A')      # lighter gold
+CLR_BG_HEADER = colors.HexColor('#F0F4F8')       # light grey header bg
+CLR_BG_ZEBRA = colors.HexColor('#F9FAFB')        # zebra stripe
+CLR_WHITE = colors.white
+CLR_BLACK = colors.black
+CLR_GREY = colors.HexColor('#6B7280')
+CLR_LIGHT_GREY = colors.HexColor('#D1D5DB')
+CLR_BORDER_HEAVY = colors.HexColor('#374151')
+
+
+def _fmt(val):
+    """Format number with 2 decimal places and comma separator."""
+    try:
+        return f'{float(val):,.2f}'
+    except (ValueError, TypeError):
+        return '0.00'
+
+
+def _build_styles():
+    """Build all paragraph styles used in the statement."""
+    base = getSampleStyleSheet()
+    styles = {}
+
+    styles['title'] = ParagraphStyle(
+        'title',
+        parent=base['Normal'],
+        fontSize=16,
+        fontName='Helvetica-Bold',
+        textColor=CLR_PRIMARY,
+        leading=20,
+    )
+
+    styles['company_name'] = ParagraphStyle(
+        'company_name',
+        parent=base['Normal'],
+        fontSize=11,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        leading=14,
+    )
+
+    styles['cell'] = ParagraphStyle(
+        'cell',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica',
+        textColor=CLR_BLACK,
+        leading=9,
+    )
+
+    styles['cell_grey'] = ParagraphStyle(
+        'cell_grey',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica',
+        textColor=CLR_GREY,
+        leading=9,
+    )
+
+    styles['cell_bold'] = ParagraphStyle(
+        'cell_bold',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        leading=9,
+    )
+
+    styles['cell_bold_large'] = ParagraphStyle(
+        'cell_bold_large',
+        parent=base['Normal'],
+        fontSize=9,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        leading=11,
+    )
+
+    styles['cell_r'] = ParagraphStyle(
+        'cell_r',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica',
+        textColor=CLR_BLACK,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+
+    styles['cell_bold_r'] = ParagraphStyle(
+        'cell_bold_r',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+
+    styles['header_cell'] = ParagraphStyle(
+        'header_cell',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_PRIMARY,
+        leading=9,
+    )
+
+    styles['header_cell_r'] = ParagraphStyle(
+        'header_cell_r',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_PRIMARY,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+
+    styles['note'] = ParagraphStyle(
+        'note',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica',
+        textColor=CLR_BLACK,
+        leading=10,
+    )
+
+    styles['note_bold'] = ParagraphStyle(
+        'note_bold',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        leading=10,
+    )
+
+    styles['currency_label'] = ParagraphStyle(
+        'currency_label',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica',
+        textColor=CLR_GREY,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+
+    styles['currency_value'] = ParagraphStyle(
+        'currency_value',
+        parent=base['Normal'],
+        fontSize=7,
+        fontName='Helvetica-Bold',
+        textColor=CLR_BLACK,
+        alignment=TA_RIGHT,
+        leading=9,
+    )
+
+    return styles
+
+
+def _build_page_footer(canvas, doc):
+    """Draw page number footer."""
+    canvas.saveState()
+    canvas.setFont('Helvetica', 7)
+    canvas.setFillColor(CLR_GREY)
+    canvas.drawCentredString(A4[0] / 2, 14, f'Page {canvas.getPageNumber()}')
+    canvas.restoreState()
+
+
+@login_required
+def export_customer_statement_pdf(request, customer_id):
+    """
+    Export customer statement PDF matching the company statement template.
+    """
+    customer = get_object_or_404(
+        Customer.objects.select_related('salesman'),
+        id=customer_id,
+    )
+    assert_user_can_access_finance_customer(request, customer)
+
+    today = datetime.now().date()
+
+    # ── Query invoices ────────────────────────────────────────────────
+    invoices_base_qs = (
+        CustomerPendingInvoice.objects
+        .filter(customer=customer)
+        .exclude(doc_date__isnull=True)
+    )
+    month_rows_qs = invoices_base_qs.order_by('doc_date', 'doc_num')
+    prior_period_balance = 0.0
+    month_rows = list(
+        month_rows_qs.values(
+            'doc_num', 'doc_date', 'num_at_card',
+            'doc_total', 'balance_due',
+        )
+    )
+
+    # Running balance
+    running_balance = float(prior_period_balance)
+    month_table_rows = []
+    total_amount = 0.0
+    for row in month_rows:
+        amount = float(row.get('doc_total') or 0)
+        open_bal = float(row.get('balance_due') or 0)
+        total_amount += amount
+        running_balance += open_bal
+        month_table_rows.append({
+            'doc_num': row.get('doc_num'),
+            'bp_ref': row.get('num_at_card') or '—',
+            'post_date': row.get('doc_date').strftime('%d.%m.%y') if row.get('doc_date') else '—',
+            'details': f"A/R Invoices - {customer.customer_code}",
+            'amount': amount,
+            'balance': running_balance,
+        })
+
+    # ── Aging buckets (no separate "future" column — future-dated docs roll into 0–60)
+    aging = {
+        '0_60': 0.0,
+        '61_120': 0.0,
+        '121_180': 0.0,
+        '181_365': 0.0,
+        '366_plus': 0.0,
+    }
+    for row in invoices_base_qs.values('doc_date', 'balance_due'):
+        doc_date = row.get('doc_date')
+        bal = float(row.get('balance_due') or 0)
+        if not doc_date:
+            continue
+        days = (today - doc_date).days
+        if days < 0:
+            aging['0_60'] += bal
+        elif days <= 60:
+            aging['0_60'] += bal
+        elif days <= 120:
+            aging['61_120'] += bal
+        elif days <= 180:
+            aging['121_180'] += bal
+        elif days <= 365:
+            aging['181_365'] += bal
+        else:
+            aging['366_plus'] += bal
+
+    total_balance_due = sum(aging.values())
+
+    # Aging percentages
+    aging_pct = {}
+    for k, v in aging.items():
+        aging_pct[k] = (v / total_balance_due * 100) if total_balance_due else 0.0
+
+    # ── PDF Setup ─────────────────────────────────────────────────────
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="customer_statement_'
+        f'{customer.customer_code}_{today.strftime("%Y_%m_%d")}.pdf"'
+    )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=28,
+        leftMargin=28,
+        topMargin=28,
+        bottomMargin=28,
+    )
+    page_width = A4[0] - 56  # total usable width
+    styles = _build_styles()
+    elements = []
+
+    # ══════════════════════════════════════════════════════════════════
+    # HEADER ROW: Company name (left) | "Customer Statement" (right)
+    # ══════════════════════════════════════════════════════════════════
+
+    # Build the right-side title with blue left bar
+    title_inner = Table(
+        [[Paragraph('<b>Customer Statement</b>', ParagraphStyle(
+            'StmtTitle', parent=styles['title'], fontSize=16, textColor=CLR_PRIMARY,
+        ))]],
+        colWidths=[2.2 * inch],
+    )
+    title_inner.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LINEBEFORE', (0, 0), (0, 0), 4, CLR_ACCENT),
+    ]))
+
+    left_w = page_width - 2.4 * inch
+    right_w = 2.4 * inch
+    header_table = Table(
+        [[
+            Paragraph(
+                '<b>Junaid Sanitary &amp; Electrical Materials Trading (L.L.C)</b>',
+                styles['company_name'],
+            ),
+            title_inner,
+        ]],
+        colWidths=[left_w, right_w],
+    )
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+
+    # Blue line under header
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(
+        width='100%', thickness=2, color=CLR_ACCENT,
+        spaceAfter=6, spaceBefore=0,
+    ))
+
+    # ══════════════════════════════════════════════════════════════════
+    # META ROW 1: Posting Date / From / To / Ageing Date / Aged By
+    # ══════════════════════════════════════════════════════════════════
+    salesman_name = ''
+    if hasattr(customer, 'salesman') and customer.salesman:
+        salesman_name = getattr(customer.salesman, 'name', str(customer.salesman))
+
+    meta_row1 = [
+        Paragraph('<font color="#6B7280">Posting Date:</font>', styles['cell_grey']),
+        Paragraph('<b>From</b>', styles['cell_bold']),
+        Paragraph('<font color="#6B7280">To</font>', styles['cell_grey']),
+        Paragraph(f'<b>{today.strftime("%d.%m.%y")}</b>', styles['cell_bold']),
+        Paragraph('<font color="#6B7280">Ageing Date:</font>', styles['cell_grey']),
+        Paragraph(f'<b>{today.strftime("%d.%m.%y")}</b>', styles['cell_bold']),
+    ]
+    meta_row2 = [
+        Paragraph('<font color="#6B7280">BP:</font>', styles['cell_grey']),
+        Paragraph(f'<b>From  {customer.customer_code}</b>', styles['cell_bold']),
+        Paragraph('<font color="#6B7280">To</font>', styles['cell_grey']),
+        Paragraph(f'<b>{customer.customer_code}</b>', styles['cell_bold']),
+        Paragraph('<font color="#6B7280">Aged By:</font>', styles['cell_grey']),
+        Paragraph('<b>Post. Date</b>', styles['cell_bold']),
+    ]
+
+    meta_cw = [0.7 * inch, 1.4 * inch, 0.3 * inch, 1.2 * inch, 0.8 * inch, 1.0 * inch]
+    meta_table = Table([meta_row1, meta_row2], colWidths=meta_cw)
+    meta_table.setStyle(TableStyle([
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(meta_table)
+
+    # Currency row right-aligned
+    currency_table = Table(
+        [[
+            Paragraph('', styles['cell']),
+            Paragraph('<font color="#6B7280">Currency:</font>', styles['currency_label']),
+            Paragraph('<b>AED</b>', styles['currency_value']),
+        ]],
+        colWidths=[page_width - 1.6 * inch, 0.8 * inch, 0.8 * inch],
+    )
+    currency_table.setStyle(TableStyle([
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    elements.append(currency_table)
+
+    # Gold dotted separator
+    elements.append(Spacer(1, 2))
+    elements.append(HRFlowable(
+        width='100%', thickness=1, color=CLR_GOLD,
+        dash=(2, 2), spaceAfter=4, spaceBefore=0,
+    ))
+
+    # ══════════════════════════════════════════════════════════════════
+    # CUSTOMER INFO BLOCK
+    # ══════════════════════════════════════════════════════════════════
+    # Row 1: Customer code + Customer name (bold, larger)
+    cust_header = Table(
+        [[
+            Paragraph(f'<b>{customer.customer_code}</b>', styles['cell_bold_large']),
+            Paragraph(f'<b>{customer.customer_name}</b>', styles['cell_bold_large']),
+        ]],
+        colWidths=[1.2 * inch, page_width - 1.2 * inch],
+    )
+    cust_header.setStyle(TableStyle([
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(cust_header)
+    elements.append(Spacer(1, 2))
+
+    # Contact info grid (4 columns)
+    contact_person = getattr(customer, 'contact_person', '') or ''
+    email = getattr(customer, 'email', '') or ''
+    fax = getattr(customer, 'fax', '') or ''
+    phone = customer.phone_number or '—'
+    address = (customer.address or '—')[:90]
+    credit_limit = _fmt(customer.credit_limit or 0)
+    payment_terms = f'{customer.credit_days or "—"}'
+    sales_employee_no = getattr(customer, 'sales_employee_no', '') or ''
+
+    col1_w = 0.65 * inch
+    col2_w = 1.3 * inch
+    col3_w = 1.0 * inch
+    col4_w = 1.8 * inch
+    col5_w = 0.85 * inch
+    col6_w = page_width - col1_w - col2_w - col3_w - col4_w - col5_w
+
+    info_rows = [
+        [
+            Paragraph('<font color="#6B7280">Phone #:</font>', styles['cell_grey']),
+            Paragraph(f'{phone}', styles['cell']),
+            Paragraph('<font color="#6B7280">Contact Person:</font>', styles['cell_grey']),
+            Paragraph(f'{contact_person}', styles['cell']),
+            Paragraph('<font color="#6B7280">Credit Limit:</font>', styles['cell_grey']),
+            Paragraph(f'{credit_limit}', styles['cell_r']),
+        ],
+        [
+            Paragraph('<font color="#6B7280">Fax #:</font>', styles['cell_grey']),
+            Paragraph(f'{fax}', styles['cell']),
+            Paragraph('<font color="#6B7280">Email ID:</font>', styles['cell_grey']),
+            Paragraph(f'{email}', styles['cell']),
+            Paragraph('<font color="#6B7280">Payment Terms:</font>', styles['cell_grey']),
+            Paragraph(f'{payment_terms}', styles['cell_r']),
+        ],
+        [
+            Paragraph('<font color="#6B7280">Address:</font>', styles['cell_grey']),
+            Paragraph(f'{address}', styles['cell']),
+            Paragraph('<font color="#6B7280">Sales Employee:</font>', styles['cell_grey']),
+            Paragraph(f'{salesman_name}', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+        ],
+        [
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('<font color="#6B7280">Sales Employee No:</font>', styles['cell_grey']),
+            Paragraph(f'{sales_employee_no}', styles['cell']),
+            Paragraph('', styles['cell']),
+            Paragraph('', styles['cell']),
+        ],
+    ]
+
+    info_table = Table(
+        info_rows,
+        colWidths=[col1_w, col2_w, col3_w, col4_w, col5_w, col6_w],
+    )
+    info_table.setStyle(TableStyle([
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(info_table)
+
+    # Gold dotted separator
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(
+        width='100%', thickness=1, color=CLR_GOLD,
+        dash=(2, 2), spaceAfter=4, spaceBefore=0,
+    ))
+
+    # ══════════════════════════════════════════════════════════════════
+    # PRIOR PERIOD BALANCE
+    # ══════════════════════════════════════════════════════════════════
+    prior_table = Table(
+        [[Paragraph('<b>Prior Period Balance</b>', styles['cell_bold'])]],
+        colWidths=[page_width],
+    )
+    prior_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(prior_table)
+
+    # Blue line under prior period balance
+    elements.append(HRFlowable(
+        width='100%', thickness=1.5, color=CLR_ACCENT,
+        spaceAfter=6, spaceBefore=2,
+    ))
+
+    # ══════════════════════════════════════════════════════════════════
+    # STATEMENT TABLE
+    # ══════════════════════════════════════════════════════════════════
+    doc_col = 0.95 * inch
+    bp_col = 0.95 * inch
+    post_col = 0.7 * inch
+    amt_col = 0.85 * inch
+    bal_col = 0.85 * inch
+    detail_col = page_width - doc_col - bp_col - post_col - amt_col - bal_col
+
+    stmt_cols = [doc_col, bp_col, post_col, detail_col, amt_col, bal_col]
+
+    stmt_rows = [[
+        Paragraph('<b>Document</b>', styles['header_cell']),
+        Paragraph('<b>BP Ref. No.</b>', styles['header_cell']),
+        Paragraph('<b>Post. Date</b>', styles['header_cell']),
+        Paragraph('<b>Details</b>', styles['header_cell']),
+        Paragraph('<b>Amount</b>', styles['header_cell_r']),
+        Paragraph('<b>Balance</b>', styles['header_cell_r']),
+    ]]
+
+    for row in month_table_rows:
+        stmt_rows.append([
+            Paragraph(f'IN {row["doc_num"]}', styles['cell']),
+            Paragraph(str(row['bp_ref'])[:24], styles['cell']),
+            Paragraph(row['post_date'], styles['cell']),
+            Paragraph(row['details'], styles['cell']),
+            Paragraph(_fmt(row['amount']), styles['cell_r']),
+            Paragraph(_fmt(row['balance']), styles['cell_r']),
+        ])
+
+    if not month_table_rows:
+        stmt_rows.append([
+            Paragraph('—', styles['cell']),
+            Paragraph('—', styles['cell']),
+            Paragraph('—', styles['cell']),
+            Paragraph('No pending invoices found.', styles['cell']),
+            Paragraph(_fmt(0), styles['cell_r']),
+            Paragraph(_fmt(prior_period_balance), styles['cell_r']),
+        ])
+
+    # Total row
+    stmt_rows.append([
+        Paragraph('<b>Total</b>', styles['cell_bold']),
+        Paragraph('', styles['cell']),
+        Paragraph('', styles['cell']),
+        Paragraph('', styles['cell']),
+        Paragraph('', styles['cell_bold_r']),
+        Paragraph(f'<b>AED {_fmt(running_balance)}</b>', styles['cell_bold_r']),
+    ])
+
+    statement_table = Table(stmt_rows, colWidths=stmt_cols, repeatRows=1)
+
+    # Build table style matching image: gold dotted row separators, blue top/bottom
+    num_rows = len(stmt_rows)
+    ts_cmds = [
+        # Header row styling
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_PRIMARY),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+
+        # Blue line above header
+        ('LINEABOVE', (0, 0), (-1, 0), 1.5, CLR_ACCENT),
+        # Blue line below header
+        ('LINEBELOW', (0, 0), (-1, 0), 1.5, CLR_ACCENT),
+
+        # General padding
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # Right-align amount and balance columns
+        ('ALIGN', (-2, 0), (-1, -1), 'RIGHT'),
+
+        # Total row: blue line above and below
+        ('LINEABOVE', (0, -1), (-1, -1), 1.5, CLR_ACCENT),
+        ('LINEBELOW', (0, -1), (-1, -1), 1.5, CLR_ACCENT),
+        ('BACKGROUND', (0, -1), (-1, -1), CLR_WHITE),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    ]
+
+    # Gold dotted lines between data rows
+    for i in range(1, num_rows - 1):
+        ts_cmds.append(
+            ('LINEBELOW', (0, i), (-1, i), 0.5, CLR_GOLD, 1, (2, 2))
+        )
+
+    statement_table.setStyle(TableStyle(ts_cmds))
+    elements.append(statement_table)
+    elements.append(Spacer(1, 10))
+
+    # ══════════════════════════════════════════════════════════════════
+    # AGING GRID
+    # ══════════════════════════════════════════════════════════════════
+    # Blue line above aging
+    elements.append(HRFlowable(
+        width='100%', thickness=1.5, color=CLR_ACCENT,
+        spaceAfter=4, spaceBefore=0,
+    ))
+
+    aging_col_w = page_width / 7.0  # label + Balance Due + 5 buckets
+    aging_header = [
+        Paragraph('', styles['header_cell']),
+        Paragraph('<b>Balance Due</b>', styles['header_cell_r']),
+        Paragraph('<b>0 - 60</b>', styles['header_cell_r']),
+        Paragraph('<b>61 - 120</b>', styles['header_cell_r']),
+        Paragraph('<b>121 - 180</b>', styles['header_cell_r']),
+        Paragraph('<b>181 - 365</b>', styles['header_cell_r']),
+        Paragraph('<b>366+</b>', styles['header_cell_r']),
+    ]
+    aging_totals = [
+        Paragraph('<b>Total</b>', styles['cell_bold']),
+        Paragraph(_fmt(total_balance_due), styles['cell_r']),
+        Paragraph(_fmt(aging['0_60']), styles['cell_r']),
+        Paragraph(_fmt(aging['61_120']), styles['cell_r']),
+        Paragraph(_fmt(aging['121_180']), styles['cell_r']),
+        Paragraph(_fmt(aging['181_365']), styles['cell_r']),
+        Paragraph(_fmt(aging['366_plus']), styles['cell_r']),
+    ]
+    pct_sum = (
+        aging_pct.get('0_60', 0)
+        + aging_pct.get('61_120', 0)
+        + aging_pct.get('121_180', 0)
+        + aging_pct.get('181_365', 0)
+        + aging_pct.get('366_plus', 0)
+    )
+    aging_pcts = [
+        Paragraph('<b>Ageing (%)</b>', styles['cell_bold']),
+        Paragraph(f'{pct_sum:.2f} %', styles['cell_r']),
+        Paragraph(f'{aging_pct["0_60"]:.2f} %', styles['cell_r']),
+        Paragraph(f'{aging_pct["61_120"]:.2f} %', styles['cell_r']),
+        Paragraph(f'{aging_pct["121_180"]:.2f} %', styles['cell_r']),
+        Paragraph(f'{aging_pct["181_365"]:.2f} %', styles['cell_r']),
+        Paragraph(f'{aging_pct["366_plus"]:.2f} %', styles['cell_r']),
+    ]
+
+    aging_rows_data = [aging_header, aging_totals, aging_pcts]
+    aging_table = Table(
+        aging_rows_data,
+        colWidths=[aging_col_w] * 7,
+    )
+    aging_ts_cmds = [
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # Gold dotted line below header
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, CLR_GOLD, 1, (2, 2)),
+        # Gold dotted line below totals
+        ('LINEBELOW', (0, 1), (-1, 1), 0.5, CLR_GOLD, 1, (2, 2)),
+        # Blue line below aging pcts (bottom)
+        ('LINEBELOW', (0, 2), (-1, 2), 1.5, CLR_ACCENT),
+    ]
+    aging_table.setStyle(TableStyle(aging_ts_cmds))
+    elements.append(aging_table)
+
+    # ══════════════════════════════════════════════════════════════════
+    # NOTES SECTION
+    # ══════════════════════════════════════════════════════════════════
+    elements.append(Spacer(1, 16))
+
+    note_text = (
+        "<b>*Kindly make the payment against the due invoices.</b><br/>"
+        "<b>*If there is any discrepancy in this statement, kindly let us know "
+        "within 15 days upon the receipt of this statement.</b><br/>"
+        "<b>*Incase of, exceeding payment than the credit days allowed "
+        "JUNAID(JSEMT) is entitled to charge &amp; receive 10% of invoice "
+        "value in addition to actual towards legal expenses</b><br/>"
+        "<b>*This is computer generated statement, signature not required</b>"
+    )
+
+    note_table = Table(
+        [[Paragraph(note_text, styles['note'])]],
+        colWidths=[page_width],
+    )
+    note_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, CLR_BORDER_HEAVY),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+    ]))
+    elements.append(note_table)
+
+    # ── Build PDF ─────────────────────────────────────────────────────
+    doc.build(
+        elements,
+        onFirstPage=_build_page_footer,
+        onLaterPages=_build_page_footer,
+    )
     response.write(buffer.getvalue())
     return response
 

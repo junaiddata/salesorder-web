@@ -308,6 +308,10 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
           Export PDF
         </a>
+        <a href="{% url 'export_customer_statement_pdf' customer.id %}" id="customer-statement-export-link" class="btn btn-primary" style="background: #0f766e; border-color: #0f766e;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11h6m-6 4h6M8 3h6l5 5v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1h2z"/></svg>
+          Export Customer Statement
+        </a>
         <a href="{% url 'finance_statement_list' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-secondary">← Back to List</a>
       </div>
     </header>
@@ -607,6 +611,11 @@
         url += (url.indexOf('?') >= 0 ? '&' : '?') + 'include_internal_remarks=1';
       }
       window.location = url;
+    });
+
+    document.getElementById('customer-statement-export-link').addEventListener('click', function(e) {
+      e.preventDefault();
+      window.location = this.getAttribute('href');
     });
   </script>
 </body>
