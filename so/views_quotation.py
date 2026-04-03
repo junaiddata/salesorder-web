@@ -8,6 +8,12 @@ from .models import SalesOrder, OrderItem
 from .utils import get_client_ip, label_network
 from django.db.models import Q
 from .utils import parse_device_info
+from urllib.parse import quote
+from .salesman_mapping import (
+    expand_quotation_salesman_picks,
+    get_quotation_salesman_canonical_choices_sorted,
+    normalize_quotation_salesman_picks_to_canonicals,
+)
 
 
 def _is_manager_account(user):
@@ -261,6 +267,227 @@ def _inapp_quotation_scope_for_calendar(request):
     return qs
 
 
+def _combined_quotation_sap_effective_division(request):
+    """
+    Same rules as in-app admin company + division dropdown: returns
+    ('ALABAMA'|'JUNAID'|None, impossible: bool). None = no extra SAP division filter.
+    """
+    admin_div = None
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        uname = (request.user.username or '').strip().lower()
+        if uname in ('so', 'manager'):
+            admin_div = None
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+            admin_div = 'ALABAMA'
+        else:
+            admin_div = 'JUNAID'
+
+    sel = (request.GET.get('division') or 'All').strip()
+    if sel in ('', 'All'):
+        chosen = None
+    else:
+        chosen = sel.upper()
+        if chosen not in ('ALABAMA', 'JUNAID'):
+            chosen = None
+
+    if admin_div:
+        if chosen:
+            if chosen != admin_div:
+                return None, True
+            return chosen, False
+        return admin_div, False
+    if chosen:
+        return chosen, False
+    return None, False
+
+
+def _sap_quotation_alabama_hints_q():
+    """Heuristic match for SAP rows tied to Alabama (no division field on SAP header)."""
+    return (
+        Q(salesman_name__icontains='ALABAMA')
+        | Q(customer_name__icontains='Alabama')
+        | Q(bill_to__icontains='Alabama')
+    )
+
+
+def _quotation_salesman_pick_list(request):
+    """Names from multiselect GET (repeated salesman_filter). Empty list = no salesman filter."""
+    out = []
+    for s in request.GET.getlist('salesman_filter'):
+        t = (s or '').strip()
+        if t and t != 'All':
+            out.append(t)
+    return out
+
+
+def inapp_quotations_filtered_qs(request):
+    """
+    Quotations queryset matching view_quotations / view_quotations_ajax filters (GET params).
+    Ordered by -created_at. Uses select_related for list/export efficiency.
+    """
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    salesmen_pick = _quotation_salesman_pick_list(request)
+    status = request.GET.get('status', 'All')
+    division = request.GET.get('division', 'All')
+    q = (request.GET.get('q') or '').strip()
+
+    quotations = Quotation.objects.all().select_related('customer', 'salesman')
+
+    if status and status != 'All':
+        quotations = quotations.filter(status=status)
+
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        if request.user.username.lower() in ['so', 'manager']:
+            pass
+        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
+            quotations = quotations.filter(division='ALABAMA')
+        else:
+            quotations = quotations.filter(division='JUNAID')
+
+    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+        from .views import SALES_USER_MAP
+        current_username = (request.user.username or "").strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            quotations = quotations.filter(salesman__salesman_name__in=allowed_names)
+        else:
+            quotations = quotations.none()
+    elif salesmen_pick:
+        sm_q = Q()
+        for name in expand_quotation_salesman_picks(salesmen_pick):
+            sm_q |= Q(salesman__salesman_name__iexact=name)
+        quotations = quotations.filter(sm_q)
+
+    if start_date:
+        quotations = quotations.filter(quotation_date__gte=start_date)
+    if end_date:
+        quotations = quotations.filter(quotation_date__lte=end_date)
+
+    if division and division != 'All':
+        div = (division or '').strip().upper()
+        if div in ('ALABAMA', 'JUNAID'):
+            quotations = quotations.filter(division=div)
+
+    if q:
+        quotations = quotations.filter(
+            Q(quotation_number__icontains=q)
+            | Q(customer__customer_name__icontains=q)
+            | Q(customer__customer_code__icontains=q)
+            | Q(salesman__salesman_name__icontains=q)
+            | Q(remarks__icontains=q)
+            | Q(customer_display_name__icontains=q)
+        )
+
+    return quotations.order_by('-created_at')
+
+
+def sap_quotations_filtered_qs_combined(request):
+    """
+    SAP quotations with salesman_scope_q and GET filters aligned with the combined list:
+    dates, search, salesman (iexact), division/admin company (heuristic), app-style status.
+    """
+    from .models import SAPQuotation
+    from .views import salesman_scope_q
+
+    eff_div, div_impossible = _combined_quotation_sap_effective_division(request)
+    if div_impossible:
+        return SAPQuotation.objects.none()
+
+    qs = SAPQuotation.objects.filter(salesman_scope_q(request.user))
+    start_date = request.GET.get('start_date', '').strip()
+    end_date = request.GET.get('end_date', '').strip()
+    salesmen_pick = _quotation_salesman_pick_list(request)
+    status = (request.GET.get('status') or 'All').strip()
+    q = (request.GET.get('q') or '').strip()
+
+    if eff_div == 'ALABAMA':
+        qs = qs.filter(_sap_quotation_alabama_hints_q())
+    elif eff_div == 'JUNAID':
+        qs = qs.exclude(_sap_quotation_alabama_hints_q())
+
+    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
+        pass
+    elif salesmen_pick:
+        sm_q = Q()
+        for name in expand_quotation_salesman_picks(salesmen_pick):
+            sm_q |= Q(salesman_name__iexact=name)
+        qs = qs.filter(sm_q)
+
+    if status and status != 'All':
+        if status in ('Pending', 'On Hold'):
+            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
+        # App "Approved" has no SAP equivalent; leave SAP unfiltered by document status.
+
+    if start_date:
+        qs = qs.filter(posting_date__gte=start_date)
+    if end_date:
+        qs = qs.filter(posting_date__lte=end_date)
+
+    if q:
+        if q.isdigit():
+            qs = qs.filter(q_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(q_number__icontains=q) |
+                Q(customer_code__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q)
+            )
+    return qs
+
+
+def _style_inapp_quotation_excel_worksheet(worksheet):
+    """Header styling, autosized columns (with sensible mins/maxes), freeze header row."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    body_align_wrap = Alignment(vertical="center", wrap_text=True)
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for column in worksheet.columns:
+        col_letter = column[0].column_letter
+        header_title = str(column[0].value or "")
+        max_length = len(header_title)
+        for cell in column:
+            if cell.row == 1:
+                continue
+            try:
+                if cell.value is not None:
+                    max_length = max(max_length, len(str(cell.value)))
+            except Exception:
+                pass
+            if header_title in ('Price', 'Total Value', 'Quantity'):
+                cell.alignment = Alignment(vertical="center", horizontal="right")
+            else:
+                cell.alignment = body_align_wrap
+        if header_title == 'Source':
+            adjusted_width = max(max_length + 2, 11)
+        elif header_title in ('Customer Name', 'Item Name'):
+            adjusted_width = min(max(max_length + 4, 28), 55)
+        elif header_title in ('Price', 'Total Value'):
+            adjusted_width = min(max(max_length + 4, 16), 22)
+        elif header_title == 'Quantity':
+            adjusted_width = min(max(max_length + 3, 14), 18)
+        elif header_title == 'Date':
+            adjusted_width = max(max_length + 2, 14)
+        else:
+            adjusted_width = min(max(max_length + 3, 16), 48)
+        worksheet.column_dimensions[col_letter].width = adjusted_width
+
+    worksheet.row_dimensions[1].height = 24
+    worksheet.freeze_panes = "A2"
+
+
 def view_quotations(request):
     import calendar
     from datetime import date as date_cls
@@ -352,68 +579,18 @@ def view_quotations(request):
 
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    salesman_filter = request.GET.get('salesman_filter')
     page = request.GET.get('page', 1)
     status = request.GET.get('status', 'All')  # Default to 'All'
     division = request.GET.get('division', 'All')
     q = (request.GET.get('q') or '').strip()
 
-    # Initial queryset - all quotations
-    quotations = Quotation.objects.all()
-
-    # Apply status filter
-    if status and status != 'All':
-        quotations = quotations.filter(status=status)
-    
-    # Apply user-based division restrictions
-    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
-        if request.user.username.lower() in ['so', 'manager']:
-            pass  # so/manager see all quotations
-        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
-            quotations = quotations.filter(division='ALABAMA')
-        else:
-            quotations = quotations.filter(division='JUNAID')
-
-    # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
-    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-        from .views import SALES_USER_MAP
-        current_username = (request.user.username or "").strip().lower()
-        allowed_names = SALES_USER_MAP.get(current_username)
-        if allowed_names:
-            quotations = quotations.filter(salesman__salesman_name__in=allowed_names)
-        else:
-            quotations = quotations.none()
-    elif salesman_filter and salesman_filter != 'All':
-        quotations = quotations.filter(salesman__salesman_name=salesman_filter)
-
-    # Apply date filters
-    if start_date:
-        quotations = quotations.filter(quotation_date__gte=start_date)
-    if end_date:
-        quotations = quotations.filter(quotation_date__lte=end_date)
-
-    # Division filter
-    if division and division != 'All':
-        div = (division or '').strip().upper()
-        if div in ('ALABAMA', 'JUNAID'):
-            quotations = quotations.filter(division=div)
-
-    # Search query (backend)
-    if q:
-        quotations = quotations.filter(
-            Q(quotation_number__icontains=q)
-            | Q(customer__customer_name__icontains=q)
-            | Q(customer__customer_code__icontains=q)
-            | Q(salesman__salesman_name__icontains=q)
-            | Q(remarks__icontains=q)
-            | Q(customer_display_name__icontains=q)
-        )
+    quotations = inapp_quotations_filtered_qs(request)
 
     # Get all unique salesmen for the filter dropdown
     all_salesmen = Salesman.objects.all().order_by('salesman_name')
 
     # Pagination - 12 items per page (3x4 grid)
-    paginator = Paginator(quotations.order_by('-created_at'), 12)
+    paginator = Paginator(quotations, 12)
 
     try:
         quotations_page = paginator.page(page)
@@ -430,8 +607,8 @@ def view_quotations(request):
         query_params.append(f"start_date={start_date}")
     if end_date:
         query_params.append(f"end_date={end_date}")
-    if salesman_filter:
-        query_params.append(f"salesman_filter={salesman_filter}")
+    for sm in _quotation_salesman_pick_list(request):
+        query_params.append('salesman_filter=' + quote(sm))
     if division and division != 'All':
         query_params.append(f"division={division}")
     if q:
@@ -441,7 +618,7 @@ def view_quotations(request):
     context = {
         'quotations': quotations_page,
         'all_salesmen': all_salesmen,
-        'selected_salesman': salesman_filter,
+        'selected_salesman': request.GET.get('salesman_filter'),
         'current_status': status,
         'start_date': start_date,
         'end_date': end_date,
@@ -482,59 +659,14 @@ def view_quotations_ajax(request):
     """
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    salesman_filter = request.GET.get('salesman_filter')
     page = request.GET.get('page', 1)
     status = request.GET.get('status', 'All')
     division = request.GET.get('division', 'All')
     q = (request.GET.get('q') or '').strip()
 
-    quotations = Quotation.objects.all()
+    quotations = inapp_quotations_filtered_qs(request)
 
-    if status and status != 'All':
-        quotations = quotations.filter(status=status)
-
-    # Apply user-based division restrictions
-    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
-        if request.user.username.lower() in ['so', 'manager']:
-            pass  # so/manager see all quotations
-        elif getattr(request.user.role, 'company', 'Junaid') == 'Alabama':
-            quotations = quotations.filter(division='ALABAMA')
-        else:
-            quotations = quotations.filter(division='JUNAID')
-
-    # Salesman restriction (source: SALES_USER_MAP by username, same as view_sales_orders)
-    if request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role.role == 'Salesman':
-        from .views import SALES_USER_MAP
-        current_username = (request.user.username or "").strip().lower()
-        allowed_names = SALES_USER_MAP.get(current_username)
-        if allowed_names:
-            quotations = quotations.filter(salesman__salesman_name__in=allowed_names)
-        else:
-            quotations = quotations.none()
-    elif salesman_filter and salesman_filter != 'All':
-        quotations = quotations.filter(salesman__salesman_name=salesman_filter)
-
-    if start_date:
-        quotations = quotations.filter(quotation_date__gte=start_date)
-    if end_date:
-        quotations = quotations.filter(quotation_date__lte=end_date)
-
-    if division and division != 'All':
-        div = (division or '').strip().upper()
-        if div in ('ALABAMA', 'JUNAID'):
-            quotations = quotations.filter(division=div)
-
-    if q:
-        quotations = quotations.filter(
-            Q(quotation_number__icontains=q)
-            | Q(customer__customer_name__icontains=q)
-            | Q(customer__customer_code__icontains=q)
-            | Q(salesman__salesman_name__icontains=q)
-            | Q(remarks__icontains=q)
-            | Q(customer_display_name__icontains=q)
-        )
-
-    paginator = Paginator(quotations.order_by('-created_at'), 12)
+    paginator = Paginator(quotations, 12)
     try:
         quotations_page = paginator.page(page)
     except PageNotAnInteger:
@@ -549,8 +681,8 @@ def view_quotations_ajax(request):
         query_params.append(f"start_date={start_date}")
     if end_date:
         query_params.append(f"end_date={end_date}")
-    if salesman_filter:
-        query_params.append(f"salesman_filter={salesman_filter}")
+    for sm in _quotation_salesman_pick_list(request):
+        query_params.append('salesman_filter=' + quote(sm))
     if division and division != 'All':
         query_params.append(f"division={division}")
     if q:
@@ -562,7 +694,7 @@ def view_quotations_ajax(request):
         {
             'quotations': quotations_page,
             'current_status': status or 'All',
-            'selected_salesman': salesman_filter,
+            'selected_salesman': request.GET.get('salesman_filter'),
             'selected_division': division or 'All',
             'start_date': start_date,
             'end_date': end_date,
@@ -572,6 +704,387 @@ def view_quotations_ajax(request):
     )
 
     return JsonResponse({'html': html, 'count': paginator.count})
+
+
+@login_required
+@require_GET
+def export_inapp_quotations_consolidated_excel(request):
+    """Excel: one row per quotation — number, customer code, name, grand total. Respects list filters."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    qs = inapp_quotations_filtered_qs(request)
+    rows = []
+    for quot in qs.iterator(chunk_size=500):
+        cust = quot.customer
+        name = quot.customer_display_name or (cust.customer_name if cust else '')
+        d = quot.quotation_date
+        date_str = d.strftime('%Y-%m-%d') if d else ''
+        rows.append({
+            'Quotation Number': quot.quotation_number or '',
+            'Date': date_str,
+            'Customer Code': cust.customer_code if cust else '',
+            'Customer Name': name,
+            'Total Value': float(quot.grand_total or 0),
+        })
+    cols = ['Quotation Number', 'Date', 'Customer Code', 'Customer Name', 'Total Value']
+    df = pd.DataFrame(rows, columns=cols)
+    if df.empty:
+        df = pd.DataFrame(columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Quotations', index=False)
+        _style_inapp_quotation_excel_worksheet(writer.sheets['Quotations'])
+    output.seek(0)
+    filename = 'inapp_quotations_%s.xlsx' % timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="%s"' % filename
+    return response
+
+
+@login_required
+@require_GET
+def export_inapp_quotations_items_excel(request):
+    """Excel: one row per line item — quotation, customer, item no/name, unit price, line total. Respects list filters."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    base_qs = inapp_quotations_filtered_qs(request)
+    item_qs = (
+        QuotationItem.objects.filter(quotation__in=base_qs)
+        .select_related('quotation', 'quotation__customer', 'item')
+        .order_by('quotation_id', 'id')
+    )
+    rows = []
+    for li in item_qs.iterator(chunk_size=1000):
+        q = li.quotation
+        cust = q.customer
+        name = q.customer_display_name or (cust.customer_name if cust else '')
+        item_no = li.item.item_code if li.item_id else ''
+        item_name = li.item.item_description if li.item_id else ''
+        price = float(li.price or 0)
+        line_total = float(li.line_total or ((li.quantity or 0) * price))
+        d = q.quotation_date
+        date_str = d.strftime('%Y-%m-%d') if d else ''
+        rows.append({
+            'Quotation Number': q.quotation_number or '',
+            'Date': date_str,
+            'Customer Code': cust.customer_code if cust else '',
+            'Customer Name': name,
+            'Item No': item_no,
+            'Item Name': item_name,
+            'Price': price,
+            'Total Value': line_total,
+        })
+    cols = [
+        'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
+        'Item No', 'Item Name', 'Price', 'Total Value',
+    ]
+    df = pd.DataFrame(rows, columns=cols)
+    if df.empty:
+        df = pd.DataFrame(columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Quotation Lines', index=False)
+        _style_inapp_quotation_excel_worksheet(writer.sheets['Quotation Lines'])
+    output.seek(0)
+    filename = 'inapp_quotation_lines_%s.xlsx' % timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="%s"' % filename
+    return response
+
+
+def _combined_list_export_source(request):
+    source = (request.GET.get('source') or 'all').strip().lower()
+    if source not in ('all', 'sap', 'app'):
+        source = 'all'
+    return source
+
+
+def _combined_sort_date(s):
+    from datetime import date as date_cls
+    from datetime import datetime as dt_cls
+    if not s:
+        return date_cls(1900, 1, 1)
+    try:
+        return dt_cls.strptime(s, '%Y-%m-%d').date()
+    except ValueError:
+        return date_cls(1900, 1, 1)
+
+
+@login_required
+@require_GET
+def export_combined_quotations_consolidated_excel(request):
+    """Combined SAP + in-app quotations, one row per quote; same filters as combined list."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    source = _combined_list_export_source(request)
+    rows = []
+    if source in ('all', 'sap'):
+        sap_qs = sap_quotations_filtered_qs_combined(request).order_by('-posting_date', '-id')
+        for s in sap_qs.iterator(chunk_size=500):
+            d = s.posting_date
+            date_str = d.strftime('%Y-%m-%d') if d else ''
+            rows.append({
+                'Source': 'SAP',
+                'Quotation Number': s.q_number,
+                'Date': date_str,
+                'Customer Code': s.customer_code or '',
+                'Customer Name': s.customer_name or '',
+                'Total Value': float(s.document_total or 0),
+                'Status': (s.status or ''),
+                'Salesman': s.salesman_name or '',
+            })
+    if source in ('all', 'app'):
+        app_qs = inapp_quotations_filtered_qs(request).order_by('-quotation_date', '-id')
+        for a in app_qs.iterator(chunk_size=500):
+            cust = a.customer
+            d = a.quotation_date
+            date_str = d.strftime('%Y-%m-%d') if d else ''
+            name = a.customer_display_name or (cust.customer_name if cust else '')
+            rows.append({
+                'Source': 'App',
+                'Quotation Number': a.quotation_number or '',
+                'Date': date_str,
+                'Customer Code': cust.customer_code if cust else '',
+                'Customer Name': name,
+                'Total Value': float(a.grand_total or 0),
+                'Status': (a.status or ''),
+                'Salesman': a.salesman.salesman_name if a.salesman_id else '',
+            })
+    rows.sort(
+        key=lambda r: (
+            _combined_sort_date(r['Date']),
+            r.get('Quotation Number') or '',
+            r.get('Source') or '',
+        ),
+        reverse=True,
+    )
+    cols = [
+        'Source', 'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
+        'Total Value', 'Status', 'Salesman',
+    ]
+    df = pd.DataFrame(rows, columns=cols)
+    if df.empty:
+        df = pd.DataFrame(columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Combined Quotations', index=False)
+        _style_inapp_quotation_excel_worksheet(writer.sheets['Combined Quotations'])
+    output.seek(0)
+    filename = 'combined_quotations_%s.xlsx' % timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="%s"' % filename
+    return response
+
+
+@login_required
+@require_GET
+def export_combined_quotations_items_excel(request):
+    """Combined SAP + in-app line items; respects combined filters."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+    from .models import SAPQuotationItem
+
+    source = _combined_list_export_source(request)
+    rows = []
+    if source in ('all', 'sap'):
+        sap_base = sap_quotations_filtered_qs_combined(request)
+        sap_items = (
+            SAPQuotationItem.objects.filter(quotation__in=sap_base)
+            .select_related('quotation')
+            .order_by('quotation_id', 'id')
+        )
+        for li in sap_items.iterator(chunk_size=1000):
+            q = li.quotation
+            d = q.posting_date
+            date_str = d.strftime('%Y-%m-%d') if d else ''
+            price = float(li.price or 0)
+            qty = float(li.quantity or 0)
+            line_total = float(li.row_total) if li.row_total is not None else qty * price
+            rows.append({
+                'Source': 'SAP',
+                'Quotation Number': q.q_number,
+                'Date': date_str,
+                'Customer Code': q.customer_code or '',
+                'Customer Name': q.customer_name or '',
+                'Item No': li.item_no or '',
+                'Item Name': li.description or '',
+                'Quantity': qty,
+                'Price': price,
+                'Total Value': line_total,
+            })
+    if source in ('all', 'app'):
+        app_base = inapp_quotations_filtered_qs(request)
+        app_items = (
+            QuotationItem.objects.filter(quotation__in=app_base)
+            .select_related('quotation', 'quotation__customer', 'item')
+            .order_by('quotation_id', 'id')
+        )
+        for li in app_items.iterator(chunk_size=1000):
+            qo = li.quotation
+            cust = qo.customer
+            d = qo.quotation_date
+            date_str = d.strftime('%Y-%m-%d') if d else ''
+            name = qo.customer_display_name or (cust.customer_name if cust else '')
+            item_no = li.item.item_code if li.item_id else ''
+            item_name = li.item.item_description if li.item_id else ''
+            price = float(li.price or 0)
+            qty = float(li.quantity or 0)
+            line_total = float(li.line_total or (qty * price))
+            rows.append({
+                'Source': 'App',
+                'Quotation Number': qo.quotation_number or '',
+                'Date': date_str,
+                'Customer Code': cust.customer_code if cust else '',
+                'Customer Name': name,
+                'Item No': item_no,
+                'Item Name': item_name,
+                'Quantity': qty,
+                'Price': price,
+                'Total Value': line_total,
+            })
+    rows.sort(
+        key=lambda r: (
+            _combined_sort_date(r['Date']),
+            r.get('Quotation Number') or '',
+            r.get('Source') or '',
+            r.get('Item No') or '',
+        ),
+        reverse=True,
+    )
+    cols = [
+        'Source', 'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
+        'Item No', 'Item Name', 'Quantity', 'Price', 'Total Value',
+    ]
+    df = pd.DataFrame(rows, columns=cols)
+    if df.empty:
+        df = pd.DataFrame(columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Combined Lines', index=False)
+        _style_inapp_quotation_excel_worksheet(writer.sheets['Combined Lines'])
+    output.seek(0)
+    filename = 'combined_quotation_lines_%s.xlsx' % timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="%s"' % filename
+    return response
+
+
+@login_required
+def combined_quotations_list(request):
+    """
+    Single list merging SAP quotations (posting_date) and in-app quotations (quotation_date),
+    sorted by date descending. Reuses in-app filter GET params; source=all|sap|app.
+    """
+    from datetime import date as date_cls
+    from django.urls import reverse
+
+    source = (request.GET.get('source') or 'all').strip().lower()
+    if source not in ('all', 'sap', 'app'):
+        source = 'all'
+
+    rows = []
+    if source in ('all', 'sap'):
+        sap_qs = sap_quotations_filtered_qs_combined(request).order_by('-posting_date', '-id')
+        for s in sap_qs.iterator(chunk_size=500):
+            d = s.posting_date
+            rows.append({
+                'display_date': d,
+                'source': 'SAP',
+                'source_label': 'SAP',
+                'number': s.q_number,
+                'customer_code': s.customer_code or '',
+                'customer_name': s.customer_name or '',
+                'total': float(s.document_total or 0),
+                'status': (s.status or '')[:80],
+                'salesman': s.salesman_name or '',
+                'detail_url': reverse('quotation_detail', args=[s.q_number]),
+            })
+    if source in ('all', 'app'):
+        app_qs = inapp_quotations_filtered_qs(request).order_by('-quotation_date', '-id')
+        for a in app_qs.iterator(chunk_size=500):
+            cust = a.customer
+            d = a.quotation_date
+            name = a.customer_display_name or (cust.customer_name if cust else '')
+            rows.append({
+                'display_date': d,
+                'source': 'APP',
+                'source_label': 'App',
+                'number': a.quotation_number or '',
+                'customer_code': cust.customer_code if cust else '',
+                'customer_name': name,
+                'total': float(a.grand_total or 0),
+                'status': (a.status or '')[:80],
+                'salesman': a.salesman.salesman_name if a.salesman_id else '',
+                'detail_url': reverse('view_quotation_details', args=[a.id]),
+            })
+
+    _min_date = date_cls(1900, 1, 1)
+    rows.sort(
+        key=lambda r: ((r['display_date'] or _min_date), r.get('number') or ''),
+        reverse=True,
+    )
+
+    page = request.GET.get('page', 1)
+    try:
+        page_size = int(request.GET.get('page_size', 50))
+    except ValueError:
+        page_size = 50
+    page_size = max(10, min(page_size, 200))
+
+    paginator = Paginator(rows, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    qd = request.GET.copy()
+    qd.pop('page', None)
+    query_string = qd.urlencode()
+
+    salesman_canonical_choices = get_quotation_salesman_canonical_choices_sorted()
+
+    return render(request, 'so/quotations/combined_quotations.html', {
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+        'query_string': query_string,
+        'salesman_canonical_choices': salesman_canonical_choices,
+        'selected_salesmen': normalize_quotation_salesman_picks_to_canonicals(
+            _quotation_salesman_pick_list(request)
+        ),
+        'start_date': request.GET.get('start_date', ''),
+        'end_date': request.GET.get('end_date', ''),
+        'search_query': request.GET.get('q', ''),
+        'selected_division': request.GET.get('division', 'All'),
+        'current_status': request.GET.get('status', 'All'),
+        'source': source,
+        'page_size': page_size,
+    })
+
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse

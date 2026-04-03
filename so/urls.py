@@ -110,7 +110,12 @@ urlpatterns = [
 
     # Quotation URLs
     path('quotations/', views_quotation.view_quotations, name='view_quotations'),
+    path('quotations/combined/', views_quotation.combined_quotations_list, name='combined_quotations_list'),
+    path('quotations/combined/export-consolidated-excel/', views_quotation.export_combined_quotations_consolidated_excel, name='export_combined_quotations_consolidated_excel'),
+    path('quotations/combined/export-items-excel/', views_quotation.export_combined_quotations_items_excel, name='export_combined_quotations_items_excel'),
     path('quotations/ajax/', views_quotation.view_quotations_ajax, name='view_quotations_ajax'),
+    path('quotations/export-consolidated-excel/', views_quotation.export_inapp_quotations_consolidated_excel, name='export_inapp_quotations_consolidated_excel'),
+    path('quotations/export-items-excel/', views_quotation.export_inapp_quotations_items_excel, name='export_inapp_quotations_items_excel'),
     path('quotations/create/', views_quotation.create_quotation, name='create_quotation'),
     path('quotations/<int:quotation_id>/details/', views_quotation.view_quotation_details, name='view_quotation_details'),
     path('quotations/<int:quotation_id>/edit/', views_quotation.edit_quotation, name='edit_quotation'),

@@ -492,6 +492,9 @@
                     <a href="{% url 'create_quotation' %}" class="btn btn-light">
                         <i class="fas fa-plus-circle me-2"></i>Create New Quotation
                     </a>
+                    <a href="{% url 'combined_quotations_list' %}" class="btn btn-light">
+                        <i class="fas fa-layer-group me-2"></i>Combined (SAP + App)
+                    </a>
                 </div>
             </div>
         </div>
@@ -544,7 +547,9 @@
         </div>
 
         <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
-        <a href="{% url 'view_quotations' %}" class="btn btn-outline-secondary btn-sm mb-2 mb-lg-0">Reset</a>
+        <a href="{% url 'view_quotations' %}" class="btn btn-outline-secondary btn-sm me-2 mb-2 mb-lg-0">Reset</a>
+        <button type="button" class="btn btn-success btn-sm me-2 mb-2 mb-lg-0" id="btnExportInappConsolidatedExcel" title="Export filtered quotations (one row per quote)"><i class="fas fa-file-excel me-1"></i> Excel summary</button>
+        <button type="button" class="btn btn-outline-success btn-sm mb-2 mb-lg-0" id="btnExportInappItemsExcel" title="Export filtered quotations (one row per line item)"><i class="fas fa-file-excel me-1"></i> Excel by item</button>
     </form>
 </div>
 </div>
@@ -637,6 +642,12 @@
       return params;
     }
 
+    function buildInappExportParams() {
+      const p = collectParams({ page: '1' });
+      p.delete('page');
+      return p;
+    }
+
     function syncInappCalendarSelectionHighlight() {
       document.querySelectorAll('.ic-cal-day-selected').forEach(function (el) {
         el.classList.remove('ic-cal-day-selected');
@@ -675,6 +686,19 @@
       filtersForm.addEventListener('submit', function(e) {
         e.preventDefault();
         loadQuotations(collectParams({ page: '1' }));
+      });
+    }
+
+    const btnExCons = document.getElementById('btnExportInappConsolidatedExcel');
+    const btnExItems = document.getElementById('btnExportInappItemsExcel');
+    if (btnExCons) {
+      btnExCons.addEventListener('click', function() {
+        window.location.href = '{% url "export_inapp_quotations_consolidated_excel" %}?' + buildInappExportParams().toString();
+      });
+    }
+    if (btnExItems) {
+      btnExItems.addEventListener('click', function() {
+        window.location.href = '{% url "export_inapp_quotations_items_excel" %}?' + buildInappExportParams().toString();
       });
     }
 

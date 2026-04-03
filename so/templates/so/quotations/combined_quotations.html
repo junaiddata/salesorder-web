@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined quotations — SAP &amp; App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --combo-border: #e2e8f0;
+            --combo-border-light: #f1f5f9;
+            --combo-surface: #ffffff;
+            --combo-bg: #f1f5f9;
+            --combo-text: #0f172a;
+            --combo-text-secondary: #475569;
+            --combo-text-muted: #94a3b8;
+            --combo-text-placeholder: #a0aec0;
+            --combo-primary: #2563eb;
+            --combo-primary-hover: #1d4ed8;
+            --combo-primary-light: #dbeafe;
+            --combo-primary-ghost: #eff6ff;
+            --combo-danger: #dc2626;
+            --combo-danger-light: #fee2e2;
+            --combo-radius-sm: 8px;
+            --combo-radius-xs: 6px;
+            --combo-shadow-lg: 0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.04);
+            --combo-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+            --combo-font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+        }
+        body { background: #f5f7fb; font-family: var(--combo-font); }
+        .page-header {
+            background: linear-gradient(135deg, #050329 0%, #010567 100%);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            color: white;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        .filter-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.06);
+        }
+        .badge-sap { background: #e0e7ff; color: #3730a3; }
+        .badge-app { background: #ecfdf5; color: #047857; }
+        .table-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.06); }
+        .table thead th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; background: #f8fafc; }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* Multi-select (same pattern as Purchase Stock Requirement) */
+        .filter-card .field-ms { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .filter-card .field-ms label {
+            font-size: 0.75rem; font-weight: 600; color: var(--combo-text-secondary);
+            text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .filter-card .multi-select { position: relative; width: 100%; min-width: 0; }
+        .filter-card .select-box {
+            padding: 9px 14px; border: 1.5px solid var(--combo-border); border-radius: var(--combo-radius-sm);
+            background: var(--combo-surface); cursor: pointer; display: flex; align-items: center;
+            justify-content: space-between; gap: 8px; font-size: 0.875rem; font-family: var(--combo-font);
+            transition: all var(--combo-transition); min-height: 42px;
+        }
+        .filter-card .select-box:hover { border-color: #94a3b8; }
+        .filter-card .select-box.active { border-color: var(--combo-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .filter-card .select-box-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--combo-text); }
+        .filter-card .select-box-text.placeholder { color: var(--combo-text-placeholder); }
+        .filter-card .select-box-badges { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
+        .filter-card .select-badge {
+            display: inline-flex; align-items: center; gap: 4px; background: var(--combo-primary-light);
+            color: var(--combo-primary); padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;
+            font-weight: 500; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+        }
+        .filter-card .select-badge-count {
+            background: var(--combo-primary); color: white; padding: 2px 8px; border-radius: 4px;
+            font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+        }
+        .filter-card .select-box-chevron {
+            color: var(--combo-text-muted); font-size: 0.7rem; transition: transform var(--combo-transition); flex-shrink: 0;
+        }
+        .filter-card .select-box.active .select-box-chevron { transform: rotate(180deg); }
+        .filter-card .select-box-clear {
+            display: none; align-items: center; justify-content: center; width: 20px; height: 20px;
+            border-radius: 50%; background: transparent; color: var(--combo-text-muted); font-size: 0.65rem;
+            cursor: pointer; border: none; padding: 0; flex-shrink: 0; transition: all var(--combo-transition);
+        }
+        .filter-card .select-box-clear:hover { background: var(--combo-danger-light); color: var(--combo-danger); }
+        .filter-card .select-box-clear.visible { display: inline-flex; }
+        .filter-card .options-container {
+            position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--combo-surface);
+            border: 1px solid var(--combo-border); border-radius: var(--combo-radius-sm); box-shadow: var(--combo-shadow-lg);
+            z-index: 1050; display: none; overflow: hidden; animation: comboDropdownIn 0.15s ease;
+        }
+        @keyframes comboDropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .filter-card .options-container.active { display: block; }
+        .filter-card .options-header {
+            padding: 10px 12px 8px; border-bottom: 1px solid var(--combo-border-light); background: var(--combo-surface);
+            position: sticky; top: 0; z-index: 10;
+        }
+        .filter-card .options-search {
+            width: 100%; padding: 8px 10px 8px 32px; border: 1.5px solid var(--combo-border); border-radius: var(--combo-radius-xs);
+            font-size: 0.8125rem; font-family: var(--combo-font); background: var(--combo-bg); color: var(--combo-text);
+            transition: border-color var(--combo-transition);
+        }
+        .filter-card .options-search:focus { outline: none; border-color: var(--combo-primary); }
+        .filter-card .options-search-wrap { position: relative; }
+        .filter-card .options-search-wrap i {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75rem;
+            color: var(--combo-text-muted); pointer-events: none;
+        }
+        .filter-card .options-actions { display: flex; justify-content: space-between; margin-top: 8px; }
+        .filter-card .options-action-btn {
+            font-size: 0.7rem; font-weight: 600; font-family: var(--combo-font); color: var(--combo-primary);
+            background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px;
+            transition: all var(--combo-transition); text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .filter-card .options-action-btn:hover { background: var(--combo-primary-ghost); }
+        .filter-card .options-action-btn.danger { color: var(--combo-danger); }
+        .filter-card .options-action-btn.danger:hover { background: var(--combo-danger-light); }
+        .filter-card .options-list { max-height: 240px; overflow-y: auto; padding: 4px 0; }
+        .filter-card .option-label {
+            display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer;
+            font-size: 0.8125rem; transition: background var(--combo-transition); color: var(--combo-text); user-select: none;
+        }
+        .filter-card .option-label:hover { background: var(--combo-bg); }
+        .filter-card .option-label.option-hidden { display: none; }
+        .filter-card .option-label input[type="checkbox"] {
+            appearance: none; -webkit-appearance: none; width: 16px; height: 16px; border: 1.5px solid #cbd5e1;
+            border-radius: 4px; background: var(--combo-surface); cursor: pointer; flex-shrink: 0; position: relative;
+            transition: all var(--combo-transition);
+        }
+        .filter-card .option-label input[type="checkbox"]:checked {
+            background: var(--combo-primary); border-color: var(--combo-primary);
+        }
+        .filter-card .option-label input[type="checkbox"]:checked::after {
+            content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.55rem;
+            color: white; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
+        .filter-card .option-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .filter-card .options-empty {
+            padding: 20px 14px; text-align: center; color: var(--combo-text-muted); font-size: 0.8125rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h1 class="h4 mb-1">Combined quotations</h1>
+            <p class="mb-0 small opacity-75">SAP (posting date) and in-app (quotation date), newest first.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'view_quotations' %}" class="btn btn-light btn-sm"><i class="fas fa-file-alt me-1"></i>App quotations</a>
+            <a href="{% url 'quotation_list' %}" class="btn btn-light btn-sm"><i class="fas fa-database me-1"></i>SAP quotations</a>
+            {% if request.user.role.role == 'Salesman' %}
+            <a href="{% url 'sales_home' %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
+            {% else %}
+            <a href="{% url 'home' %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="filter-card">
+        <form method="get" id="combinedFiltersForm" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Search</label>
+                <input type="text" class="form-control form-control-sm" name="q" value="{{ search_query|default:'' }}" placeholder="Number / customer / salesman">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">From</label>
+                <input type="date" class="form-control form-control-sm" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">To</label>
+                <input type="date" class="form-control form-control-sm" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Source</label>
+                <select class="form-select form-select-sm" name="source">
+                    <option value="all" {% if source == 'all' %}selected{% endif %}>All</option>
+                    <option value="sap" {% if source == 'sap' %}selected{% endif %}>SAP only</option>
+                    <option value="app" {% if source == 'app' %}selected{% endif %}>App only</option>
+                </select>
+            </div>
+            {% if not request.user.role.role == 'Salesman' %}
+            <div class="col-md-3 col-lg-3">
+                <div class="field-ms">
+                    <label>Salesman</label>
+                    <div class="multi-select" id="sm-wrapper">
+                        <div class="select-box" id="sm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="select-box-text placeholder" id="sm-display">Select salesman(s)…</span>
+                            <button type="button" class="select-box-clear" id="sm-clear" title="Clear all" aria-label="Clear selection">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <i class="fas fa-chevron-down select-box-chevron"></i>
+                        </div>
+                        <div class="options-container" id="sm-options" role="listbox" aria-label="Select salesmen">
+                            <div class="options-header">
+                                <div class="options-search-wrap">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="sm-search" class="options-search" placeholder="Search salesmen…" autocomplete="off" aria-label="Search salesmen">
+                                </div>
+                                <div class="options-actions">
+                                    <button type="button" class="options-action-btn" id="sm-select-all">Select All</button>
+                                    <button type="button" class="options-action-btn danger" id="sm-clear-all">Clear All</button>
+                                </div>
+                            </div>
+                            <div class="options-list" id="sm-options-list" role="group">
+                                {% for canon in salesman_canonical_choices %}
+                                <label class="option-label" data-value="{{ canon }}" role="option">
+                                    <input type="checkbox" name="salesman_filter" value="{{ canon }}" {% if canon in selected_salesmen %}checked{% endif %}>
+                                    <span class="option-text">{{ canon }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="options-empty" id="sm-no-results" style="display:none;">No salesmen found</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Division</label>
+                <select class="form-select form-select-sm" name="division">
+                    <option value="All" {% if selected_division == 'All' %}selected{% endif %}>All</option>
+                    <option value="JUNAID" {% if selected_division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                    <option value="ALABAMA" {% if selected_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Status</label>
+                <select class="form-select form-select-sm" name="status">
+                    <option value="All" {% if current_status == 'All' %}selected{% endif %}>All</option>
+                    <option value="Approved" {% if current_status == 'Approved' %}selected{% endif %}>Approved</option>
+                    <option value="On Hold" {% if current_status == 'On Hold' %}selected{% endif %}>On Hold</option>
+                    <option value="Pending" {% if current_status == 'Pending' %}selected{% endif %}>Pending</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted">Rows</label>
+                <select class="form-select form-select-sm" name="page_size">
+                    <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter me-1"></i>Apply</button>
+            </div>
+            <div class="col-12">
+                <hr class="my-2">
+                <span class="small text-muted me-2">Export (current filters):</span>
+                <button type="button" class="btn btn-success btn-sm me-1" id="btnCombinedExportSummary"><i class="fas fa-file-excel me-1"></i>Excel — summary</button>
+                <button type="button" class="btn btn-outline-success btn-sm" id="btnCombinedExportItems"><i class="fas fa-file-excel me-1"></i>Excel — line items</button>
+            </div>
+        </form>
+        <p class="small text-muted mb-0 mt-2">Dates: SAP uses <strong>posting date</strong>, app uses <strong>quotation date</strong>. Division follows the same rules for both (SAP uses hints: salesman/customer/bill-to containing Alabama). Status <strong>Pending</strong> or <strong>On Hold</strong> limits SAP to open documents; <strong>Approved</strong> filters the app list only. Salesman choices group SAP spellings (e.g. MUZAIN includes B.MR.MUZAIN) via <code>so/salesman_mapping.py</code> and <code>SALES_USER_MAP</code>.</p>
+    </div>
+
+    <div class="table-card">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+            <span class="small text-muted">Total rows: <strong>{{ total_count }}</strong></span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Source</th>
+                        <th>Quotation</th>
+                        <th>Customer code</th>
+                        <th>Customer name</th>
+                        <th class="num">Total</th>
+                        <th>Status</th>
+                        <th>Salesman</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page_obj %}
+                    <tr>
+                        <td>{% if row.display_date %}{{ row.display_date|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if row.source == 'SAP' %}
+                            <span class="badge badge-sap rounded-pill">SAP</span>
+                            {% else %}
+                            <span class="badge badge-app rounded-pill">App</span>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ row.number }}</code></td>
+                        <td>{{ row.customer_code }}</td>
+                        <td>{{ row.customer_name }}</td>
+                        <td class="num">{{ row.total|floatformat:2 }}</td>
+                        <td><small>{{ row.status }}</small></td>
+                        <td><small>{{ row.salesman }}</small></td>
+                        <td><a href="{{ row.detail_url }}" class="btn btn-outline-primary btn-sm py-0">Open</a></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">No quotations match the filters.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="px-3 py-2 border-top">
+            <ul class="pagination pagination-sm mb-0 justify-content-center flex-wrap">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_string %}&amp;{{ query_string }}{% endif %}">Previous</a></li>
+                {% endif %}
+                <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_string %}&amp;{{ query_string }}{% endif %}">Next</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+<script>
+(function () {
+  'use strict';
+
+  function combinedExportParams() {
+    var form = document.getElementById('combinedFiltersForm');
+    if (!form) return '';
+    var fd = new FormData(form);
+    var params = new URLSearchParams();
+    fd.forEach(function (value, key) {
+      if (key === 'page_size') return;
+      params.append(key, value);
+    });
+    return params.toString();
+  }
+  var uSummary = "{% url 'export_combined_quotations_consolidated_excel' %}";
+  var uItems = "{% url 'export_combined_quotations_items_excel' %}";
+  var btnS = document.getElementById('btnCombinedExportSummary');
+  var btnI = document.getElementById('btnCombinedExportItems');
+  if (btnS) btnS.addEventListener('click', function () {
+    var q = combinedExportParams();
+    window.location.href = q ? (uSummary + '?' + q) : uSummary;
+  });
+  if (btnI) btnI.addEventListener('click', function () {
+    var q = combinedExportParams();
+    window.location.href = q ? (uItems + '?' + q) : uItems;
+  });
+
+  var smWrapper = document.getElementById('sm-wrapper');
+  var smTrigger = document.getElementById('sm-trigger');
+  var smOptions = document.getElementById('sm-options');
+  var smList = document.getElementById('sm-options-list');
+  var smDisplay = document.getElementById('sm-display');
+  var smSearch = document.getElementById('sm-search');
+  var smClearBtn = document.getElementById('sm-clear');
+  var smSelectAll = document.getElementById('sm-select-all');
+  var smClearAll = document.getElementById('sm-clear-all');
+  var smNoResults = document.getElementById('sm-no-results');
+
+  if (!smWrapper || !smTrigger || !smOptions || !smList) return;
+
+  function getCheckboxes() {
+    return smList.querySelectorAll('input[type="checkbox"]');
+  }
+  function getLabels() {
+    return Array.from(smList.querySelectorAll('.option-label'));
+  }
+  function getVisibleLabels() {
+    return getLabels().filter(function (l) { return !l.classList.contains('option-hidden'); });
+  }
+  function sortLabels() {
+    var labels = getLabels();
+    var checked = [];
+    var unchecked = [];
+    labels.forEach(function (l) {
+      var cb = l.querySelector('input[type="checkbox"]');
+      if (cb && cb.checked) checked.push(l);
+      else unchecked.push(l);
+    });
+    var frag = document.createDocumentFragment();
+    checked.forEach(function (l) { frag.appendChild(l); });
+    unchecked.forEach(function (l) { frag.appendChild(l); });
+    smList.appendChild(frag);
+  }
+  function updateDisplay() {
+    var boxes = Array.from(getCheckboxes());
+    var checked = boxes.filter(function (c) { return c.checked; });
+    var count = checked.length;
+    if (smClearBtn) smClearBtn.classList.toggle('visible', count > 0);
+    if (count === 0) {
+      smDisplay.className = 'select-box-text placeholder';
+      smDisplay.textContent = 'Select salesman(s)…';
+    } else if (count === 1) {
+      smDisplay.className = 'select-box-text';
+      smDisplay.innerHTML = '';
+      var badge = document.createElement('span');
+      badge.className = 'select-badge';
+      badge.textContent = checked[0].value;
+      smDisplay.appendChild(badge);
+    } else if (count <= 2) {
+      smDisplay.className = 'select-box-text';
+      smDisplay.innerHTML = '';
+      var container = document.createElement('span');
+      container.className = 'select-box-badges';
+      checked.forEach(function (cb) {
+        var b = document.createElement('span');
+        b.className = 'select-badge';
+        b.textContent = cb.value;
+        container.appendChild(b);
+      });
+      smDisplay.appendChild(container);
+    } else {
+      smDisplay.className = 'select-box-text';
+      smDisplay.innerHTML = '';
+      var container2 = document.createElement('span');
+      container2.className = 'select-box-badges';
+      var badge1 = document.createElement('span');
+      badge1.className = 'select-badge';
+      badge1.textContent = checked[0].value;
+      container2.appendChild(badge1);
+      var more = document.createElement('span');
+      more.className = 'select-badge-count';
+      more.textContent = '+' + (count - 1) + ' more';
+      container2.appendChild(more);
+      smDisplay.appendChild(container2);
+    }
+  }
+  function openDropdown() {
+    smOptions.classList.add('active');
+    smTrigger.classList.add('active');
+    smTrigger.setAttribute('aria-expanded', 'true');
+    sortLabels();
+    setTimeout(function () { if (smSearch) smSearch.focus(); }, 50);
+  }
+  function closeDropdown() {
+    smOptions.classList.remove('active');
+    smTrigger.classList.remove('active');
+    smTrigger.setAttribute('aria-expanded', 'false');
+    if (smSearch) smSearch.value = '';
+    getLabels().forEach(function (l) { l.classList.remove('option-hidden'); });
+    if (smNoResults) smNoResults.style.display = 'none';
+  }
+  function toggleDropdown() {
+    if (smOptions.classList.contains('active')) closeDropdown();
+    else openDropdown();
+  }
+  smTrigger.addEventListener('click', function (e) {
+    if (e.target.closest('.select-box-clear')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDropdown();
+  });
+  smTrigger.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleDropdown();
+    }
+  });
+  smOptions.addEventListener('click', function (e) { e.stopPropagation(); });
+  if (smClearBtn) {
+    smClearBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      getCheckboxes().forEach(function (cb) { cb.checked = false; });
+      updateDisplay();
+    });
+  }
+  if (smSelectAll) {
+    smSelectAll.addEventListener('click', function () {
+      getVisibleLabels().forEach(function (l) {
+        var cb = l.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = true;
+      });
+      updateDisplay();
+      sortLabels();
+    });
+  }
+  if (smClearAll) {
+    smClearAll.addEventListener('click', function () {
+      getCheckboxes().forEach(function (cb) { cb.checked = false; });
+      updateDisplay();
+      sortLabels();
+    });
+  }
+  smList.addEventListener('change', function (e) {
+    if (e.target.type === 'checkbox') updateDisplay();
+  });
+  if (smSearch) {
+    smSearch.addEventListener('input', function () {
+      var term = this.value.toLowerCase().trim();
+      var labels = getLabels();
+      var visibleCount = 0;
+      labels.forEach(function (label) {
+        var text = (label.getAttribute('data-value') || '').toLowerCase();
+        var optText = (label.querySelector('.option-text') || {}).textContent || '';
+        var match = term === '' || text.includes(term) || optText.toLowerCase().includes(term);
+        label.classList.toggle('option-hidden', !match);
+        if (match) visibleCount++;
+      });
+      if (smNoResults) smNoResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    });
+    smSearch.addEventListener('click', function (e) { e.stopPropagation(); });
+  }
+  document.addEventListener('click', function (e) {
+    if (!smWrapper.contains(e.target)) closeDropdown();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDropdown();
+  });
+  updateDisplay();
+})();
+</script>
+</body>
+</html>
