@@ -173,6 +173,7 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/send-remarks-telegram-pdf/', sap_salesorder_views.salesorder_send_remarks_telegram_pdf, name='salesorder_send_remarks_telegram_pdf'),
     path('sapsalesorders/<str:so_number>/salesman-remarks/', sap_salesorder_views.salesorder_update_salesman_remarks, name='salesorder_update_salesman_remarks'),
     path('sapsalesorders/item/revised-price/', sap_salesorder_views.salesorder_item_save_revised_price, name='salesorder_item_save_revised_price'),
+    path('sapsalesorders/<str:so_number>/revised-margin.json', sap_salesorder_views.salesorder_revised_margin_json, name='salesorder_revised_margin_json'),
     path('sapsalesorders/<str:so_number>/approval/', sap_salesorder_views.salesorder_update_approval, name='salesorder_update_approval'),
     
     # SAP AR Invoice URLs

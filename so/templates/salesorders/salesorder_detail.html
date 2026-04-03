@@ -612,9 +612,9 @@
               {% endif %}
             </div>
             {% if is_admin %}
-            <div class="metrics-row">
+            <div class="metrics-row" style="flex-wrap:wrap;">
               {% if has_zero_cost_items %}
-              <div style="padding:6px 10px; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); font-size:0.73rem; flex:1;">
+              <div style="padding:6px 10px; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); font-size:0.73rem; flex:1; min-width:200px;">
                 <strong>Note:</strong> Some items have cost 0.0 — margins may be incomplete.
               </div>
               {% else %}
@@ -631,6 +631,16 @@
                 <div class="metric-value" style="color:var(--success);">{{ margin_percent|floatformat:1 }}%</div>
               </div>
               {% endif %}
+              <div id="revised-margin-metrics-wrap" class="revised-margin-metrics-wrap" style="display:{% if has_any_revised_price %}flex{% else %}none{% endif %}; flex-wrap:wrap; gap:8px; align-items:stretch;">
+              <div class="metric-box" style="background:#e8f4fc; border:1px solid rgba(14,165,233,0.25);">
+                <div class="metric-label">Rev. margin <span style="font-weight:400; color:var(--text-muted);">(revised price)</span></div>
+                <div class="metric-value" id="revised-margin-amount" style="color:#0369a1;">{{ total_revised_margin|floatformat:2 }}</div>
+              </div>
+              <div class="metric-box" style="background:#e8f4fc; border:1px solid rgba(14,165,233,0.25);">
+                <div class="metric-label">Rev. margin %</div>
+                <div class="metric-value" id="revised-margin-pct" style="color:#0369a1;">{{ revised_margin_percent|floatformat:1 }}%</div>
+              </div>
+              </div>
             </div>
             {% endif %}
           </div>
@@ -803,7 +813,7 @@
     <div class="card line-items-card">
       <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <span>Line Items ({{ items|length }})</span>
-        <button type="button" class="btn btn-success btn-sm" id="save-all-revised-prices-btn" title="Save all revised prices">
+        <button type="button" class="btn btn-success btn-sm" id="save-all-revised-prices-btn" title="Save all revised prices"{% if is_admin %} data-revised-margin-url="{% url 'salesorder_revised_margin_json' salesorder.so_number %}"{% endif %}>
           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Save Revised Prices
         </button>
@@ -942,16 +952,40 @@
       var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
       var csrftoken = csrf ? csrf.value : (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
       var saveBtn = document.getElementById('save-all-revised-prices-btn');
+      function refreshRevisedMarginAfterSave(btn) {
+        var url = btn && btn.getAttribute('data-revised-margin-url');
+        var wrap = document.getElementById('revised-margin-metrics-wrap');
+        var elAmt = document.getElementById('revised-margin-amount');
+        var elPct = document.getElementById('revised-margin-pct');
+        if (!url || !wrap || !elAmt || !elPct) return;
+        fetch(url, { credentials: 'same-origin' })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.success) return;
+            elAmt.textContent = Number(data.total_revised_margin).toFixed(2);
+            elPct.textContent = Number(data.revised_margin_percent).toFixed(1) + '%';
+            wrap.style.display = data.has_any_revised_price ? 'flex' : 'none';
+          })
+          .catch(function() {});
+      }
       if (saveBtn) {
         saveBtn.addEventListener('click', function() {
           var inputs = document.querySelectorAll('.revised-price-input');
           if (!inputs.length) return;
           var origHtml = this.innerHTML;
+          var btn = this;
           this.disabled = true;
           this.innerHTML = 'Saving…';
           var total = inputs.length;
           var done = 0;
           var hasError = false;
+          function finishSave() {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = origHtml;
+            saveBtn.style.background = hasError ? '#fee2e2' : '#d1fae5';
+            setTimeout(function() { saveBtn.style.background = ''; }, 1500);
+            refreshRevisedMarginAfterSave(btn);
+          }
           inputs.forEach(function(input) {
             var soId = parseInt(input.getAttribute('data-so-id'), 10);
             var lineNo = parseInt(input.getAttribute('data-line-no'), 10);
@@ -968,22 +1002,12 @@
             .then(function(data) {
               done++;
               if (!data.success) hasError = true;
-              if (done === total) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = origHtml;
-                saveBtn.style.background = hasError ? '#fee2e2' : '#d1fae5';
-                setTimeout(function() { saveBtn.style.background = ''; }, 1500);
-              }
+              if (done === total) finishSave();
             })
             .catch(function() {
               done++;
               hasError = true;
-              if (done === total) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = origHtml;
-                saveBtn.style.background = '#fee2e2';
-                setTimeout(function() { saveBtn.style.background = ''; }, 1500);
-              }
+              if (done === total) finishSave();
             });
           });
         });

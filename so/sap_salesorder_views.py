@@ -1271,6 +1271,56 @@ def salesorder_list(request):
     })
 
 
+def _compute_revised_margin_from_items(items, discount_percentage_exact, total_cost):
+    """Document-level revised margin: effective unit = revised_price or line unit_price; same header discount % as order."""
+    discount_percentage_exact = discount_percentage_exact or Decimal("0.00")
+    has_any_revised_price = any(it.revised_price is not None for it in items)
+    revised_subtotal = Decimal("0.00")
+    for it in items:
+        if it.revised_price is not None:
+            eff = (it.revised_price or Decimal("0")).quantize(Decimal("0.01"))
+        else:
+            eff = it.unit_price or Decimal("0")
+        qty_val = it.quantity or Decimal("0")
+        revised_subtotal += (eff * qty_val).quantize(Decimal("0.01"))
+    revised_discount_amount = (
+        (revised_subtotal * discount_percentage_exact / 100).quantize(Decimal("0.01"))
+        if revised_subtotal
+        else Decimal("0.00")
+    )
+    revised_total_before_tax = (revised_subtotal - revised_discount_amount).quantize(Decimal("0.01"))
+    total_revised_margin = (revised_total_before_tax - total_cost).quantize(Decimal("0.01"))
+    revised_margin_percent = (
+        (total_revised_margin / revised_total_before_tax * 100).quantize(Decimal("0.01"))
+        if revised_total_before_tax and revised_total_before_tax > 0
+        else Decimal("0.00")
+    )
+    return has_any_revised_price, total_revised_margin, revised_margin_percent
+
+
+def _items_fresh_with_unit_price_and_cost_for_margin(salesorder):
+    """Reload SO lines from DB and attach unit_price + item_cost (for AJAX margin refresh)."""
+    from so.models import Items
+
+    items = list(
+        SAPSalesorderItem.objects.filter(salesorder=salesorder).order_by("line_no", "id")
+    )
+    item_codes = [it.item_no for it in items if it.item_no]
+    stock_lookup = {}
+    if item_codes:
+        for row in Items.objects.filter(item_code__in=item_codes).only("item_code", "item_cost"):
+            stock_lookup[row.item_code] = Decimal(str(row.item_cost or 0))
+    for it in items:
+        qty = it.quantity or Decimal("0")
+        row_total = it.row_total or Decimal("0")
+        if qty and qty != 0:
+            it.unit_price = (row_total / qty).quantize(Decimal("0.01"))
+        else:
+            it.unit_price = Decimal("0.00")
+        it.item_cost = stock_lookup.get(it.item_no, Decimal("0")) if it.item_no else Decimal("0")
+    return items
+
+
 @login_required
 def salesorder_detail(request, so_number):
     salesorder = get_object_or_404(
@@ -1365,6 +1415,12 @@ def salesorder_detail(request, so_number):
         else:
             it.margin_pct = Decimal("0.00")
 
+        # Effective unit for revised-margin totals: explicit revised_price else SAP line unit
+        if it.revised_price is not None:
+            it.effective_unit_for_margin = (it.revised_price or Decimal("0")).quantize(Decimal("0.01"))
+        else:
+            it.effective_unit_for_margin = unit_price_val
+
         # Attach PI allocation info (using item ID for accurate matching)
         it.pi_allocated_qty = allocated.get(it.id, Decimal("0"))
         it.pi_remaining_qty = max(Decimal("0"), qty - it.pi_allocated_qty)
@@ -1378,7 +1434,14 @@ def salesorder_detail(request, so_number):
                 stock_data = stock_lookup.get(it.item_no, {})
                 manufacture = (it.manufacture or '').strip() or stock_data.get('item_firm', '')
                 it.req_margin = Decimal(str(_get_required_margin(manufacture, brand_margins)))
-                it.margin_below_req = it.req_margin is not None and (it.margin_pct or Decimal("0")) < it.req_margin
+                cost_val = getattr(it, 'item_cost', None) or Decimal("0")
+                eff = getattr(it, 'effective_unit_for_margin', None) or (it.unit_price or Decimal("0"))
+                margin_pct_for_req = (
+                    ((eff - cost_val) / eff * 100).quantize(Decimal("0.01"))
+                    if eff and eff > 0
+                    else Decimal("0.00")
+                )
+                it.margin_below_req = it.req_margin is not None and margin_pct_for_req < it.req_margin
         else:
             for it in items:
                 it.req_margin = None
@@ -1460,6 +1523,14 @@ def salesorder_detail(request, so_number):
         total_sales = total_before_tax or Decimal("0.00")
         total_margin = (total_sales - total_cost).quantize(Decimal("0.01"))
         margin_percent = (total_margin / total_sales * 100).quantize(Decimal("0.01")) if total_sales and total_sales > 0 else Decimal("0.00")
+
+        has_any_revised_price, total_revised_margin, revised_margin_percent = _compute_revised_margin_from_items(
+            items, discount_percentage_exact, total_cost
+        )
+    else:
+        has_any_revised_price = False
+        total_revised_margin = Decimal("0.00")
+        revised_margin_percent = Decimal("0.00")
     # Approved and Rejected are only for username 'manager'; others see all except those two
     MANAGER_ONLY_STATUSES = ('Approved', 'Rejected')
     if request.user.username == 'manager':
@@ -1531,6 +1602,9 @@ def salesorder_detail(request, so_number):
         'total_cost': total_cost,
         'total_margin': total_margin,
         'margin_percent': margin_percent,
+        'has_any_revised_price': has_any_revised_price if is_admin else False,
+        'total_revised_margin': total_revised_margin if is_admin else Decimal("0.00"),
+        'revised_margin_percent': revised_margin_percent if is_admin else Decimal("0.00"),
         'has_zero_cost_items': has_zero_cost_items,
         'can_edit_remarks': can_edit_remarks,
         'can_send_telegram': can_send_remarks_telegram(salesorder),
@@ -2333,6 +2407,48 @@ def salesorder_item_save_revised_price(request):
     except Exception as e:
         logger.exception('Error saving revised price')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def salesorder_revised_margin_json(request, so_number):
+    """JSON: revised margin totals after saving revised prices (same logic as order detail). Admin/manager only."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+    _is_manager = (request.user.username or '').strip().lower() == 'manager'
+    is_admin = _is_manager or (
+        hasattr(request.user, 'role')
+        and request.user.role
+        and getattr(request.user.role, 'role', None) == 'Admin'
+    )
+    if not is_admin:
+        return JsonResponse({'success': False, 'error': 'Not allowed'}, status=403)
+
+    items = _items_fresh_with_unit_price_and_cost_for_margin(salesorder)
+    if not items:
+        return JsonResponse({
+            'success': True,
+            'has_any_revised_price': False,
+            'total_revised_margin': 0.0,
+            'revised_margin_percent': 0.0,
+        })
+    total_cost = Decimal("0.00")
+    for it in items:
+        cost_val = getattr(it, 'item_cost', None) or Decimal("0")
+        qty_val = it.quantity or Decimal("0")
+        total_cost += (cost_val * qty_val).quantize(Decimal("0.01"))
+    discount_pct = salesorder.discount_percentage or Decimal("0.00")
+    has_any, total_rev, rev_pct = _compute_revised_margin_from_items(items, discount_pct, total_cost)
+    return JsonResponse({
+        'success': True,
+        'has_any_revised_price': has_any,
+        'total_revised_margin': float(total_rev),
+        'revised_margin_percent': float(rev_pct),
+    })
 
 
 @login_required
