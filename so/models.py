@@ -465,6 +465,11 @@ class SAPSalesorder(models.Model):
     nf_ref = models.CharField(max_length=500, blank=True, null=True, help_text="NFRef from TaxExtension - quotation reference")
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True, help_text="Internal remarks (Admin only - salesman can view)")
+    management_remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text="PDF remarks: shown on exported SO PDF; visible to all on order detail.",
+    )
     salesman_remarks = models.TextField(blank=True, null=True, help_text="Remarks from salesman (salesman can edit)")
     bill_to = models.TextField(blank=True, null=True)
     approval_status = models.CharField(

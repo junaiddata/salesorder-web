@@ -2331,6 +2331,36 @@ def salesorder_update_remarks(request, so_number):
 
 @login_required
 @require_POST
+def salesorder_update_management_remarks(request, so_number):
+    """Update PDF remarks (management_remarks field). Admin/Manager only."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+
+    if not (request.user.is_superuser or request.user.is_staff or (request.user.username or '').strip().lower() == 'manager'):
+        allowed = SAPSalesorder.objects.filter(
+            Q(pk=salesorder.pk) & salesman_scope_q_salesorder(request.user)
+        ).exists()
+        if not allowed:
+            raise Http404("Salesorder not found")
+
+    _is_manager = (request.user.username or '').strip().lower() == 'manager'
+    _is_admin = _is_manager or (
+        hasattr(request.user, 'role')
+        and request.user.role
+        and getattr(request.user.role, 'role', None) == 'Admin'
+    )
+    if not (request.user.is_superuser or request.user.is_staff or _is_admin):
+        messages.error(request, "Only administrators can update PDF remarks.")
+        return redirect("salesorder_detail", so_number=salesorder.so_number)
+
+    new_text = (request.POST.get('management_remarks') or '').strip()
+    salesorder.management_remarks = new_text if new_text else None
+    salesorder.save(update_fields=['management_remarks'])
+    messages.success(request, 'PDF remarks updated.')
+    return redirect('salesorder_detail', so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
 def salesorder_update_salesman_remarks(request, so_number):
     """Update salesman remarks. Salesman and Admin can edit."""
     salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)

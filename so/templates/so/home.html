@@ -489,6 +489,37 @@
             color: var(--gray-800);
         }
 
+        /* Month summary (same idea as quotation calendar) */
+        .home-calendar-month-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin-bottom: 1rem;
+            padding: 12px 14px;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+        }
+        .home-calendar-month-summary-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 140px;
+        }
+        .home-calendar-month-summary-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray-600);
+        }
+        .home-calendar-month-summary-number {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            font-variant-numeric: tabular-nums;
+        }
+
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -1197,7 +1228,7 @@
                         <span id="calendar-loading" style="font-size: 0.75rem; color: var(--gray-500); display: none;">Loading…</span>
                     </div>
                     <div id="calendar-grid-container">
-                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin %}
+                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
                     </div>
                 </div>
             </div>

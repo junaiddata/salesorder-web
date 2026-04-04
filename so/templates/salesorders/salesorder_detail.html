@@ -218,7 +218,7 @@
     /* ─── Remarks ─── */
     .remarks-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 10px;
     }
 
@@ -728,7 +728,25 @@
         </div>
       </div>
 
-      <!-- Internal Remarks -->
+      <!-- PDF remarks (exported SO PDF / customer-facing) -->
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-header">PDF remarks{% if not can_edit_remarks %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;"> · view only</span>{% endif %}</div>
+        <div class="card-body">
+          {% if can_edit_remarks %}
+          <form method="post" action="{% url 'salesorder_update_management_remarks' salesorder.so_number %}">
+            {% csrf_token %}
+            <textarea name="management_remarks" class="remarks-textarea" placeholder="Shown on exported SO PDF…">{{ salesorder.management_remarks|default_if_none:"" }}</textarea>
+            <div style="margin-top:6px; text-align:right;">
+              <button class="btn btn-success btn-sm" type="submit">Save</button>
+            </div>
+          </form>
+          {% else %}
+          <div class="remarks-readonly">{{ salesorder.management_remarks|default:"—" }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Management Remarks (internal / Telegram) -->
       <div class="card" style="margin-bottom:0;">
         <div class="card-header">Management Remarks {% if not can_edit_remarks %}<span style="font-weight:normal;color:var(--text-muted);font-size:0.7rem;">(view only)</span>{% endif %}</div>
         <div class="card-body">

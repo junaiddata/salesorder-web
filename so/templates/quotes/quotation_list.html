@@ -903,7 +903,7 @@
       });
     }
 
-    // Quotation calendar (qcal_year / qcal_month only; does not use list filters)
+    // Quotation calendar: same filters as list (like home calendar keeps store=); year/month swapped via qcal_*
     (function() {
       var calYear = document.getElementById('qcal-year');
       var calMonth = document.getElementById('qcal-month');
@@ -919,7 +919,7 @@
       }
       function loadCalendar() {
         if (loadingEl) loadingEl.style.display = 'inline';
-        var url = new URL(window.location.pathname, window.location.origin);
+        var url = new URL(window.location.href);
         url.searchParams.set('qcal_year', calYear.value);
         url.searchParams.set('qcal_month', calMonth.value);
         url.searchParams.set('ajax', 'quotation_calendar');

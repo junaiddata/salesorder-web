@@ -1673,6 +1673,7 @@ def home(request):
         day_sales_val = day_sales or Decimal('0')
         day_gp_val = day_gp or Decimal('0')
         day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
+        day_doc_count = day_invoices.count() + day_creditmemos.count()
 
         month_days.append({
             'day': day_num,
@@ -1680,14 +1681,30 @@ def home(request):
             'formatted_date': f"{month_names_short[cal_month - 1]} {day_num}",
             'sales': day_sales_val,
             'gp': day_gp_val,
+            'doc_count': day_doc_count,
             'gp_pct': round(day_gp_pct, 1),
             'has_sales': bool(day_sales and day_sales > Decimal('0')),
         })
 
+    # Keep month summary exactly aligned with what is shown in day cards.
+    calendar_grid_month_sales = sum((d['sales'] for d in month_days), Decimal('0'))
+    calendar_grid_month_gp = sum((d['gp'] for d in month_days), Decimal('0'))
+    calendar_grid_month_doc_count = sum((d['doc_count'] for d in month_days))
+    _cms = float(calendar_grid_month_sales)
+    calendar_grid_month_gp_pct = round(float(calendar_grid_month_gp) / _cms * 100, 1) if _cms else 0
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
         calendar_html = render_to_string(
             'so/_home_calendar_grid.html',
-            {'month_days': month_days, 'today': today, 'is_admin': is_admin},
+            {
+                'month_days': month_days,
+                'today': today,
+                'is_admin': is_admin,
+                'calendar_grid_month_sales': calendar_grid_month_sales,
+                'calendar_grid_month_gp': calendar_grid_month_gp,
+                'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+                'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
+            },
             request=request,
         )
         return HttpResponse(calendar_html, content_type='text/html')
@@ -1720,6 +1737,10 @@ def home(request):
         'calendar_years': calendar_years,
         'calendar_months': calendar_months,
         'calendar_display': calendar_display,
+        'calendar_grid_month_sales': calendar_grid_month_sales,
+        'calendar_grid_month_gp': calendar_grid_month_gp,
+        'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+        'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
     })
 
 def sales_home(request):
@@ -3549,17 +3570,105 @@ def upload_quotations(request):
 # =====================
 # Quotation: List
 # =====================
+def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting_date_range=False):
+    """
+    Apply quotation list GET filters (salesman multiselect, total band, remarks, q, status).
+    If apply_posting_date_range is False, start/end list dates are not applied so the calendar
+    month matches the selected grid month (same idea as home calendar using store filter only).
+    """
+    from datetime import datetime as _dt
+
+    qs = base_qs
+
+    salesmen_filter = request.GET.getlist('salesman')
+    if salesmen_filter:
+        clean_salesmen = [s for s in salesmen_filter if s.strip()]
+        if clean_salesmen:
+            qs = qs.filter(salesman_name__in=clean_salesmen)
+
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    status = request.GET.get('status', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    remarks_filter = request.GET.get('remarks', '').strip()
+    q = request.GET.get('q', '').strip()
+
+    if total_range:
+        if total_range == "0-5000":
+            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
+        elif total_range == "5001-10000":
+            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
+        elif total_range == "10001-25000":
+            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
+        elif total_range == "25001-50000":
+            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
+        elif total_range == "50001-100000":
+            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
+        elif total_range == "100000+":
+            qs = qs.filter(document_total__gt=100000)
+
+    if remarks_filter == "YES":
+        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
+    elif remarks_filter == "NO":
+        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
+
+    if q:
+        if q.isdigit():
+            qs = qs.filter(q_number__istartswith=q)
+        elif len(q) < 3:
+            qs = qs.filter(
+                Q(customer_name__istartswith=q) |
+                Q(salesman_name__istartswith=q)
+            )
+        else:
+            qs = qs.filter(
+                Q(q_number__icontains=q) |
+                Q(customer_name__icontains=q) |
+                Q(salesman_name__icontains=q)
+            )
+
+    if status:
+        status_normalized = status.upper()
+        if status_normalized in ['O', 'OPEN']:
+            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
+        elif status_normalized in ['C', 'CLOSED']:
+            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
+        else:
+            qs = qs.filter(status__iexact=status)
+
+    if apply_posting_date_range:
+        def _parse_date(s):
+            if not s:
+                return None
+            try:
+                if len(s) == 7:
+                    return _dt.strptime(s + '-01', '%Y-%m-%d').date()
+                return _dt.strptime(s, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+        start_date = _parse_date(start)
+        end_date = _parse_date(end)
+        if start_date:
+            qs = qs.filter(posting_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(posting_date__lte=end_date)
+
+    return qs
+
+
 @login_required
 def quotation_list(request):
     import calendar
     from django.template.loader import render_to_string
     from decimal import Decimal
 
-    # Scope by logged-in user (list filters apply to qs; calendar uses scope only)
     quotation_scope_qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
-    qs = quotation_scope_qs
+    quotation_calendar_qs = _sap_quotation_list_apply_request_filters(
+        quotation_scope_qs, request, apply_posting_date_range=False
+    )
 
-    # --- Quotation calendar (posting_date; not affected by list filters) ---
+    # --- Quotation calendar: same list filters as the table (except list start/end dates) ---
     today = date.today()
     current_year = today.year
     current_month = today.month
@@ -3589,7 +3698,7 @@ def quotation_list(request):
     quotation_month_days = []
     for day_num in range(1, last_calendar_day + 1):
         day_date = date(qcal_year, qcal_month, day_num)
-        day_qs = quotation_scope_qs.filter(posting_date=day_date)
+        day_qs = quotation_calendar_qs.filter(posting_date=day_date)
         agg = day_qs.aggregate(
             total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField())),
             cnt=Count('id'),
@@ -3604,8 +3713,8 @@ def quotation_list(request):
             'has_quotations': cnt > 0,
         })
 
-    # Full selected month totals (same scope as calendar; entire month by posting_date)
-    quotation_month_scope_qs = quotation_scope_qs.filter(
+    # Full selected month totals (filtered like home calendar for store, but for list filters)
+    quotation_month_scope_qs = quotation_calendar_qs.filter(
         posting_date__year=qcal_year,
         posting_date__month=qcal_month,
     )
@@ -3629,91 +3738,18 @@ def quotation_list(request):
         )
         return HttpResponse(calendar_html, content_type='text/html')
 
-    # Filters
-    q = request.GET.get('q', '').strip()
-    # salesman = request.GET.get('salesman', '').strip()
-    # In quotation_list and quotation_search views:
-    salesmen_filter = request.GET.getlist('salesman') # Gets ['Name1', 'Name2']
+    qs_for_years = quotation_calendar_qs
+    qs = _sap_quotation_list_apply_request_filters(
+        quotation_scope_qs, request, apply_posting_date_range=True
+    )
 
-    # ✅ FIX: Apply List Filter
-    if salesmen_filter:
-        # Filter out empty strings
-        clean_salesmen = [s for s in salesmen_filter if s.strip()]
-        if clean_salesmen:
-            qs = qs.filter(salesman_name__in=clean_salesmen)
+    q = request.GET.get('q', '').strip()
+    salesmen_filter = request.GET.getlist('salesman')
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
-    status = request.GET.get('status', '').strip()  # ✅ added
-    total_range = request.GET.get('total', '').strip()     # ✅ NEW
-    remarks_filter = request.GET.get('remarks', '').strip()  # ✅ NEW
-
-    if total_range:
-        if total_range == "0-5000":
-            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
-        elif total_range == "5001-10000":
-            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
-        elif total_range == "10001-25000":
-            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
-        elif total_range == "25001-50000":
-            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
-        elif total_range == "50001-100000":
-            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
-        elif total_range == "100000+":
-            qs = qs.filter(document_total__gt=100000)
-
-    if remarks_filter == "YES":
-        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
-    elif remarks_filter == "NO":
-        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
-
-
-
-    if q:
-        if q.isdigit():
-            qs = qs.filter(q_number__istartswith=q)
-        elif len(q) < 3:
-            qs = qs.filter(
-                Q(customer_name__istartswith=q) |
-                Q(salesman_name__istartswith=q)
-            )
-        else:
-            qs = qs.filter(
-                Q(q_number__icontains=q) |
-                Q(customer_name__icontains=q) |
-                Q(salesman_name__icontains=q)
-            )
-
-
-
-    # ✅ Status filter - normalize to OPEN/CLOSED
-    if status:
-        # Normalize status values for filtering
-        status_normalized = status.upper()
-        if status_normalized in ['O', 'OPEN']:
-            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
-        elif status_normalized in ['C', 'CLOSED']:
-            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
-        else:
-            qs = qs.filter(status__iexact=status)
-
-    # Parse dates (YYYY-MM or YYYY-MM-DD)
-    def parse_date(s):
-        if not s:
-            return None
-        try:
-            if len(s) == 7:  # YYYY-MM
-                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
-            return datetime.strptime(s, '%Y-%m-%d').date()
-        except ValueError:
-            return None
-    qs_for_years = qs.all() 
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
-
+    status = request.GET.get('status', '').strip()
+    total_range = request.GET.get('total', '').strip()
+    remarks_filter = request.GET.get('remarks', '').strip()
 
     # ---------------------------------------------------------
     # 6. CALCULATIONS

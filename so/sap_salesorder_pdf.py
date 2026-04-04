@@ -208,6 +208,11 @@ def _build_styles(theme):
             fontName='Helvetica', fontSize=FONT_NOTES,
             textColor=theme['text_muted'], leading=FONT_NOTES + 3,
         ),
+        'management_remarks': ParagraphStyle(
+            'SAPMgmtRemarks', parent=base,
+            fontName='Helvetica', fontSize=FONT_BODY,
+            textColor=theme['text'], leading=FONT_BODY + 4,
+        ),
         'terms': ParagraphStyle(
             'SAPTerms', parent=base,
             fontName='Helvetica', fontSize=FONT_TERMS,
@@ -258,6 +263,14 @@ def _load_logo(theme):
         except Exception:
             continue
     return None
+
+
+def _paragraph_multiline_for_pdf(text, style):
+    """Plain text to ReportLab Paragraph; escapes XML and preserves line breaks."""
+    t = escape(str(text).strip())
+    t = t.replace('\r\n', '\n').replace('\r', '\n')
+    t = t.replace('\n', '<br/>')
+    return Paragraph(t, style)
 
 
 def _build_header(theme, styles, usable_width, title='SALES ORDER'):
@@ -1073,7 +1086,15 @@ def generate_sap_salesorder_pdf_bytes(salesorder, include_stock_columns=False, o
     elements.append(summary_block)
     elements.append(Spacer(1, SP_SECTION))
 
-    # 6. Terms & Conditions
+    # 6. PDF remarks (optional)
+    mgmt_text = (getattr(salesorder, 'management_remarks', None) or '').strip()
+    if mgmt_text:
+        elements.append(_build_section_bar('REMARKS', theme, styles, usable_width))
+        elements.append(Spacer(1, SP_INNER))
+        elements.append(_paragraph_multiline_for_pdf(mgmt_text, styles['management_remarks']))
+        elements.append(Spacer(1, SP_SECTION))
+
+    # 7. Terms & Conditions
     elements.extend(_build_terms_block(theme, styles))
 
     # Build

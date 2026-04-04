@@ -169,6 +169,7 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/export/', sap_salesorder_views.export_sap_salesorder_pdf, name='export_sap_salesorder_pdf'),
     path('sapsalesorders/<str:so_number>/export-open/', sap_salesorder_views.export_sap_salesorder_open_items_pdf, name='export_sap_salesorder_open_items_pdf'),
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
+    path('sapsalesorders/<str:so_number>/management-remarks/', sap_salesorder_views.salesorder_update_management_remarks, name='salesorder_update_management_remarks'),
     path('sapsalesorders/<str:so_number>/send-remarks-telegram/', sap_salesorder_views.salesorder_send_remarks_telegram, name='salesorder_send_remarks_telegram'),
     path('sapsalesorders/<str:so_number>/send-remarks-telegram-pdf/', sap_salesorder_views.salesorder_send_remarks_telegram_pdf, name='salesorder_send_remarks_telegram_pdf'),
     path('sapsalesorders/<str:so_number>/salesman-remarks/', sap_salesorder_views.salesorder_update_salesman_remarks, name='salesorder_update_salesman_remarks'),
