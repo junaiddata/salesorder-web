@@ -1466,7 +1466,7 @@ def _fmt(val):
         return '0.00'
 
 
-def _build_styles():
+def _build_customer_statement_styles():
     """Build all paragraph styles used in the statement."""
     base = getSampleStyleSheet()
     styles = {}
@@ -1711,7 +1711,7 @@ def export_customer_statement_pdf(request, customer_id):
         bottomMargin=28,
     )
     page_width = A4[0] - 56  # total usable width
-    styles = _build_styles()
+    styles = _build_customer_statement_styles()
     elements = []
 
     # ══════════════════════════════════════════════════════════════════
