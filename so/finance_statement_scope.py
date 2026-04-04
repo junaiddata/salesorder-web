@@ -8,6 +8,22 @@ from django.http import Http404
 from so.views import SALES_USER_MAP
 
 
+def apply_finance_store_filter_by_salesman(queryset, store_filter):
+    """
+    Apply HO/Others split by salesman name prefix.
+    Others: salesman starts with "R." or "E." (case-insensitive).
+    HO: everything else.
+    """
+    sf = (store_filter or "").strip()
+    others_q = Q(salesman__salesman_name__istartswith="R.") | Q(salesman__salesman_name__istartswith="E.")
+
+    if sf == "Others":
+        return queryset.filter(others_q)
+    if sf == "HO":
+        return queryset.exclude(others_q)
+    return queryset
+
+
 def finance_statement_user_sees_all_customers(user) -> bool:
     if not user or not user.is_authenticated:
         return False

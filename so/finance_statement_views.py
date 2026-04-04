@@ -16,6 +16,7 @@ from io import BytesIO
 from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice
 from so.views import SALES_USER_MAP
 from so.finance_statement_scope import (
+    apply_finance_store_filter_by_salesman,
     assert_user_can_access_finance_customer,
     finance_statement_customer_scope_q,
     finance_statement_user_sees_all_customers,
@@ -72,11 +73,8 @@ def finance_statement_list(request):
     if salesmen_filter:
         customers = customers.filter(salesman__id__in=salesmen_filter)
     
-    # Apply store filter (HO or Others)
-    if store_filter == 'HO':
-        customers = customers.filter(customer_code__startswith='HO')
-    elif store_filter == 'Others':
-        customers = customers.exclude(customer_code__startswith='HO')
+    # Apply store filter (HO/Others by salesman prefix: R. or E. => Others)
+    customers = apply_finance_store_filter_by_salesman(customers, store_filter)
     
     # Apply sorting
     if sort_order == 'desc':
@@ -480,11 +478,8 @@ def export_finance_statement_list_excel(request):
     if salesmen_filter:
         customers = customers.filter(salesman__id__in=salesmen_filter)
     
-    # Apply store filter (HO or Others)
-    if store_filter == 'HO':
-        customers = customers.filter(customer_code__startswith='HO')
-    elif store_filter == 'Others':
-        customers = customers.exclude(customer_code__startswith='HO')
+    # Apply store filter (HO/Others by salesman prefix: R. or E. => Others)
+    customers = apply_finance_store_filter_by_salesman(customers, store_filter)
     
     customers = customers.order_by('customer_name')
     
@@ -555,10 +550,15 @@ def export_finance_statement_list_excel(request):
 @login_required
 def export_finance_statement_detail_excel(request, customer_id):
     """
-    Export Finance Statement Detail to Excel
+    Export Finance Statement Detail to Excel (summary + pending invoices sheet).
     """
     customer = get_object_or_404(Customer.objects.select_related('salesman'), id=customer_id)
     assert_user_can_access_finance_customer(request, customer)
+
+    pending_invoices = (
+        CustomerPendingInvoice.objects.filter(customer=customer)
+        .order_by("-doc_date", "-doc_num")
+    )
 
     # Prepare monthly pending data
     today = datetime.now().date()
@@ -615,17 +615,46 @@ def export_finance_statement_detail_excel(request, customer_id):
     
     # Create Excel file
     df = pd.DataFrame(data)
+
+    _pending_columns = [
+        'Doc Date', 'Invoice #', 'Customer Ref', 'Doc Total', 'Paid To Date', 'Balance Due',
+    ]
+    pending_rows = []
+    for inv in pending_invoices:
+        pending_rows.append({
+            'Doc Date': inv.doc_date.strftime('%d-%m-%Y') if inv.doc_date else '',
+            'Invoice #': inv.doc_num,
+            'Customer Ref': (inv.num_at_card or '').strip(),
+            'Doc Total': float(inv.doc_total or 0),
+            'Paid To Date': float(inv.paid_to_date or 0),
+            'Balance Due': float(inv.balance_due or 0),
+        })
+    df_pending = pd.DataFrame(pending_rows, columns=_pending_columns)
+    if not df_pending.empty:
+        totals_row = {
+            'Doc Date': '',
+            'Invoice #': '',
+            'Customer Ref': 'TOTAL',
+            'Doc Total': df_pending['Doc Total'].sum(),
+            'Paid To Date': df_pending['Paid To Date'].sum(),
+            'Balance Due': df_pending['Balance Due'].sum(),
+        }
+        df_pending = pd.concat([df_pending, pd.DataFrame([totals_row])], ignore_index=True)
     
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='Finance Statement', index=False)
+        df_pending.to_excel(writer, sheet_name='Pending Invoices', index=False)
         
         workbook = writer.book
-        worksheet = writer.sheets['Finance Statement']
-        
-        # Auto-adjust column widths
-        worksheet.column_dimensions['A'].width = 35
-        worksheet.column_dimensions['B'].width = 20
+        ws_summary = writer.sheets['Finance Statement']
+        ws_summary.column_dimensions['A'].width = 35
+        ws_summary.column_dimensions['B'].width = 20
+
+        ws_pending = writer.sheets['Pending Invoices']
+        pending_widths = {'A': 12, 'B': 14, 'C': 22, 'D': 14, 'E': 14, 'F': 14}
+        for col, w in pending_widths.items():
+            ws_pending.column_dimensions[col].width = w
     
     output.seek(0)
     response = HttpResponse(

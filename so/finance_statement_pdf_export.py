@@ -29,6 +29,7 @@ from reportlab.platypus import (
 
 from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice
 from so.finance_statement_scope import (
+    apply_finance_store_filter_by_salesman,
     assert_user_can_access_finance_customer,
     finance_statement_customer_scope_q,
 )
@@ -646,10 +647,7 @@ def export_finance_statement_list_pdf(request):
         )
     if salesman_filter:
         customers = customers.filter(salesman__id=salesman_filter)
-    if store_filter == 'HO':
-        customers = customers.filter(customer_code__startswith='HO')
-    elif store_filter == 'Others':
-        customers = customers.exclude(customer_code__startswith='HO')
+    customers = apply_finance_store_filter_by_salesman(customers, store_filter)
 
     customers = customers.order_by('-total_outstanding_with_pdc', 'customer_name')
 
