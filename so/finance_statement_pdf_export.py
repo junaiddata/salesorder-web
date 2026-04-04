@@ -113,7 +113,9 @@ CLR_PRIMARY      = HexColor('#1B2A4A')
 CLR_PRIMARY_LT   = HexColor('#2C4A7C')
 CLR_ACCENT       = HexColor('#D4912A')
 CLR_ACCENT_LT    = HexColor('#F5E6CC')
-CLR_BG_HEADER    = HexColor('#1B2A4A')
+CLR_BG_HEADER    = HexColor('#1B2A4A')  # legacy name; data tables use CLR_TABLE_HEADER_BG below
+CLR_TABLE_HEADER_BG = HexColor('#F0F4F8')   # column header row (black text)
+CLR_TABLE_HEADER_GROUP = HexColor('#E2E8F0')  # grouped date columns in compact table
 CLR_BG_TOTAL     = HexColor('#EBF0F7')
 CLR_BG_ZEBRA     = HexColor('#F8F9FB')
 CLR_BG_SECTION   = HexColor('#F3F4F6')
@@ -210,12 +212,12 @@ def _build_styles():
         'header_cell': ParagraphStyle(
             'PDFHdrCell', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_BODY,
-            textColor=CLR_WHITE, leading=FONT_BODY + 3,
+            textColor=CLR_TEXT, leading=FONT_BODY + 3,
         ),
         'header_cell_r': ParagraphStyle(
             'PDFHdrCellR', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_BODY,
-            textColor=CLR_WHITE, leading=FONT_BODY + 3,
+            textColor=CLR_TEXT, leading=FONT_BODY + 3,
             alignment=TA_RIGHT,
         ),
         # ── KPI / footer ──
@@ -263,18 +265,18 @@ def _build_compact_styles():
         'hdr': ParagraphStyle(
             'CHdr', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
-            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
+            textColor=CLR_TEXT, leading=FONT_C_HEADER + 2,
         ),
         'hdr_r': ParagraphStyle(
             'CHdrR', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
-            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
+            textColor=CLR_TEXT, leading=FONT_C_HEADER + 2,
             alignment=TA_RIGHT,
         ),
         'hdr_c': ParagraphStyle(
             'CHdrC', parent=base,
             fontName='Helvetica-Bold', fontSize=FONT_C_HEADER,
-            textColor=CLR_WHITE, leading=FONT_C_HEADER + 2,
+            textColor=CLR_TEXT, leading=FONT_C_HEADER + 2,
             alignment=TA_CENTER,
         ),
         # Data cells
@@ -480,8 +482,8 @@ def _build_section_header(text, styles, width):
 def _build_table_style_simple(num_rows):
     """Table style for simple mode (9 columns, comfortable spacing)."""
     cmds = [
-        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
-        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_TABLE_HEADER_BG),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_TEXT),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), FONT_BODY),
         ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
@@ -516,8 +518,8 @@ def _standard_data_table_style(num_rows, has_total_row=True):
     Used by finance statement detail PDF, credit edit list, and sap_purchaseorder_pdf_export.
     """
     cmds = [
-        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
-        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_TABLE_HEADER_BG),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_TEXT),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), FONT_BODY),
         ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
@@ -552,8 +554,8 @@ def _build_table_style_compact(num_rows, date_col_start, date_col_end, summary_c
     """
     cmds = [
         # ── Header row ──
-        ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
-        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_WHITE),
+        ('BACKGROUND', (0, 0), (-1, 0), CLR_TABLE_HEADER_BG),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_TEXT),
 
         # ── Outer border ──
         ('BOX', (0, 0), (-1, -1), 0.75, CLR_BORDER_HEAVY),
@@ -579,8 +581,8 @@ def _build_table_style_compact(num_rows, date_col_start, date_col_end, summary_c
         # Between aging columns (6+ / 6++) and summary
         ('LINEAFTER', (summary_col_start - 1, 0), (summary_col_start - 1, -1), 0.75, CLR_BORDER_HEAVY),
 
-        # ── Date column header tint — subtle differentiation ──
-        ('BACKGROUND', (date_col_start, 0), (date_col_end, 0), HexColor('#2C4A7C')),
+        # ── Date column header tint — subtle differentiation (light, for black text) ──
+        ('BACKGROUND', (date_col_start, 0), (date_col_end, 0), CLR_TABLE_HEADER_GROUP),
     ]
 
     # Zebra striping + subtle row lines
@@ -1550,7 +1552,7 @@ def _build_customer_statement_styles():
         parent=base['Normal'],
         fontSize=7,
         fontName='Helvetica-Bold',
-        textColor=CLR_PRIMARY,
+        textColor=CLR_BLACK,
         leading=9,
     )
 
@@ -1559,7 +1561,7 @@ def _build_customer_statement_styles():
         parent=base['Normal'],
         fontSize=7,
         fontName='Helvetica-Bold',
-        textColor=CLR_PRIMARY,
+        textColor=CLR_BLACK,
         alignment=TA_RIGHT,
         leading=9,
     )
@@ -1985,7 +1987,7 @@ def export_customer_statement_pdf(request, customer_id):
     ts_cmds = [
         # Header row styling
         ('BACKGROUND', (0, 0), (-1, 0), CLR_BG_HEADER),
-        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_PRIMARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), CLR_BLACK),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
 
         # Blue line above header
