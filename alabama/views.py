@@ -1296,8 +1296,14 @@ def quotation_upload(request):
         aliases = {
             'document_number': ['document number', 'documentnumber', 'doc no', 'q number'],
             'posting_date': ['posting date', 'postingdate'],
-            'customer_code': ['customer/supplier no.', 'customer/supplier no', 'customer code', 'customercode', 'customer no'],
-            'customer_name': ['customer/supplier name', 'customer/supplier name.', 'customer name', 'customername'],
+            'customer_code': [
+                'customer/supplier no.', 'customer/supplier no', 'customer code', 'customercode', 'customer no',
+                'customer/vendor code', 'customer vendor code',
+            ],
+            'customer_name': [
+                'customer/supplier name', 'customer/supplier name.', 'customer name', 'customername',
+                'customer/vendor name', 'customer vendor name',
+            ],
             'salesman_name': ['sales employee name', 'sales employee name.', 'salesman', 'salesman name'],
             'manufacturer_name': ['manufacturer name', 'manufacturer name.', 'manufacturer', 'brand'],
             'bp_reference_no': ['bp reference no.', 'bp reference no', 'bp reference'],
@@ -1375,7 +1381,7 @@ def quotation_upload(request):
                 missing = [r for r in required if r not in col_map.values()]
             if missing:
                 return render(request, 'alabama/quotation_upload.html', {
-                    'error': f'Missing columns: {", ".join(str(m) for m in missing)}. Expected: Document Number, Posting Date, Customer/Supplier No., Customer/Supplier Name, Sales Employee Name, Manufacturer Name, BP Reference No., Item No., Item/Service Description, Quantity, Price, Row Total, Document Total, Status, Bill To',
+                    'error': f'Missing columns: {", ".join(str(m) for m in missing)}. Expected: Document Number, Posting Date, Customer/Supplier or Customer/Vendor Code & Name, Sales Employee Name, Manufacturer Name, BP Reference No., Item No., Item/Service Description, Quantity, Price, Row Total, Document Total, Status, Bill To',
                     'active_page': 'quotation_upload',
                 })
 
