@@ -1543,25 +1543,37 @@ def home(request):
     # Get store filter (default to HO)
     store_filter = request.GET.get('store', 'HO').strip()
 
-    # Calendar month selector (default: current month, same partial-month behavior as before)
+    # Calendar month selector: one or more months via repeated cal_month= (combined totals & grid)
     cal_year_raw = request.GET.get('cal_year', '').strip()
-    cal_month_raw = request.GET.get('cal_month', '').strip()
     calendar_year_min = 2024  # SAP calendar data available from this year onward
     calendar_year_max = current_year + 1
     calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
     try:
         cal_year = int(cal_year_raw) if cal_year_raw else current_year
-        cal_month = int(cal_month_raw) if cal_month_raw else current_month
     except (ValueError, TypeError):
         cal_year = current_year
-        cal_month = current_month
     if cal_year not in calendar_years:
         cal_year = current_year
-    if cal_month < 1 or cal_month > 12:
-        cal_month = current_month
+
+    cal_months = []
+    for raw in request.GET.getlist('cal_month'):
+        try:
+            m = int(str(raw).strip())
+            if 1 <= m <= 12:
+                cal_months.append(m)
+        except (ValueError, TypeError):
+            continue
+    cal_months = sorted(set(cal_months))
+    if not cal_months:
+        cal_months = [current_month]
+    cal_month = cal_months[0]
     month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
-    calendar_display = date(cal_year, cal_month, 1)
+    calendar_display = date(cal_year, cal_months[0], 1)
+    if len(cal_months) == 1:
+        calendar_period_label = calendar_display.strftime('%B %Y')
+    else:
+        calendar_period_label = ', '.join(calendar.month_name[m] for m in cal_months) + ' ' + str(cal_year)
     
     # Get base querysets with salesman scope
     invoice_qs_base = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -1643,48 +1655,49 @@ def home(request):
             week_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
         )
     
-    # Calendar days: current month shows 1..today only; other months show full month
-    _, last_day_in_month = calendar.monthrange(cal_year, cal_month)
-    is_calendar_current_month = cal_year == current_year and cal_month == current_month
-    last_calendar_day = min(today.day, last_day_in_month) if is_calendar_current_month else last_day_in_month
-
+    # Calendar days: for each selected month, same rules (current month → 1..today only)
     month_days = []
-    for day_num in range(1, last_calendar_day + 1):
-        day_date = date(cal_year, cal_month, day_num)
+    for grid_month in cal_months:
+        _, last_day_in_month = calendar.monthrange(cal_year, grid_month)
+        is_grid_current_month = cal_year == current_year and grid_month == current_month
+        last_calendar_day = min(today.day, last_day_in_month) if is_grid_current_month else last_day_in_month
 
-        if store_filter and store_filter != 'Total':
-            day_invoices = invoice_qs_base.filter(posting_date=day_date, store=store_filter)
-            day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date, store=store_filter)
-        else:
-            day_invoices = invoice_qs_base.filter(posting_date=day_date)
-            day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date)
+        for day_num in range(1, last_calendar_day + 1):
+            day_date = date(cal_year, grid_month, day_num)
 
-        day_sales = (
-            day_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
-            day_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
-        )
-        day_gp = Decimal('0')
-        if is_admin:
-            day_gp = (
-                day_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
-                day_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+            if store_filter and store_filter != 'Total':
+                day_invoices = invoice_qs_base.filter(posting_date=day_date, store=store_filter)
+                day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date, store=store_filter)
+            else:
+                day_invoices = invoice_qs_base.filter(posting_date=day_date)
+                day_creditmemos = creditmemo_qs_base.filter(posting_date=day_date)
+
+            day_sales = (
+                day_invoices.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total'] +
+                day_creditmemos.aggregate(total=Coalesce(Sum('doc_total_without_vat'), Decimal('0')))['total']
             )
+            day_gp = Decimal('0')
+            if is_admin:
+                day_gp = (
+                    day_invoices.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total'] +
+                    day_creditmemos.aggregate(total=Coalesce(Sum('total_gross_profit'), Decimal('0')))['total']
+                )
 
-        day_sales_val = day_sales or Decimal('0')
-        day_gp_val = day_gp or Decimal('0')
-        day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
-        day_doc_count = day_invoices.count() + day_creditmemos.count()
+            day_sales_val = day_sales or Decimal('0')
+            day_gp_val = day_gp or Decimal('0')
+            day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
+            day_doc_count = day_invoices.count() + day_creditmemos.count()
 
-        month_days.append({
-            'day': day_num,
-            'date': day_date,
-            'formatted_date': f"{month_names_short[cal_month - 1]} {day_num}",
-            'sales': day_sales_val,
-            'gp': day_gp_val,
-            'doc_count': day_doc_count,
-            'gp_pct': round(day_gp_pct, 1),
-            'has_sales': bool(day_sales and day_sales > Decimal('0')),
-        })
+            month_days.append({
+                'day': day_num,
+                'date': day_date,
+                'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
+                'sales': day_sales_val,
+                'gp': day_gp_val,
+                'doc_count': day_doc_count,
+                'gp_pct': round(day_gp_pct, 1),
+                'has_sales': bool(day_sales and day_sales > Decimal('0')),
+            })
 
     # Keep month summary exactly aligned with what is shown in day cards.
     calendar_grid_month_sales = sum((d['sales'] for d in month_days), Decimal('0'))
@@ -1700,6 +1713,7 @@ def home(request):
                 'month_days': month_days,
                 'today': today,
                 'is_admin': is_admin,
+                'cal_months': cal_months,
                 'calendar_grid_month_sales': calendar_grid_month_sales,
                 'calendar_grid_month_gp': calendar_grid_month_gp,
                 'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
@@ -1734,9 +1748,11 @@ def home(request):
         'today': today,
         'cal_year': cal_year,
         'cal_month': cal_month,
+        'cal_months': cal_months,
         'calendar_years': calendar_years,
         'calendar_months': calendar_months,
         'calendar_display': calendar_display,
+        'calendar_period_label': calendar_period_label,
         'calendar_grid_month_sales': calendar_grid_month_sales,
         'calendar_grid_month_gp': calendar_grid_month_gp,
         'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,

@@ -489,6 +489,60 @@
             color: var(--gray-800);
         }
 
+        .home-calendar-month-picker {
+            width: 100%;
+            flex-basis: 100%;
+            margin-top: 0.35rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--gray-200);
+        }
+        .home-calendar-month-picker-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+        .home-calendar-month-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 0.35rem;
+            align-items: center;
+        }
+        .home-cal-month-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+            padding: 0.35rem 0.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
+            background: var(--white);
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--gray-700);
+            user-select: none;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .home-cal-month-chip:hover {
+            border-color: var(--gray-300);
+            background: var(--gray-50);
+        }
+        .home-cal-month-chip:has(input:checked) {
+            background: #eef2ff;
+            border-color: var(--primary-color, #6366f1);
+            color: var(--gray-900);
+            box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15);
+        }
+        .home-cal-month-chip input[type="checkbox"] {
+            width: 0.95rem;
+            height: 0.95rem;
+            margin: 0;
+            accent-color: var(--primary-color, #6366f1);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
         /* Month summary (same idea as quotation calendar) */
         .home-calendar-month-summary {
             display: flex;
@@ -1119,13 +1173,13 @@
             <div style="margin-bottom: 1.25rem;">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--white); padding: 0.75rem 1rem; border-radius: 10px; box-shadow: var(--shadow-sm);">
                     <label style="font-size: 0.75rem; font-weight: 600; color: var(--gray-700); margin-right: 6px;">Store:</label>
-                    <a href="?store=HO&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'HO' or not store_filter %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=HO&amp;cal_year={{ cal_year }}{% for m in cal_months %}&amp;cal_month={{ m }}{% endfor %}" class="store-tile-btn {% if store_filter == 'HO' or not store_filter %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         HO
                     </a>
-                    <a href="?store=Others&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=Others&amp;cal_year={{ cal_year }}{% for m in cal_months %}&amp;cal_month={{ m }}{% endfor %}" class="store-tile-btn {% if store_filter == 'Others' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         Others
                     </a>
-                    <a href="?store=Total&amp;cal_year={{ cal_year }}&amp;cal_month={{ cal_month }}" class="store-tile-btn {% if store_filter == 'Total' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
+                    <a href="?store=Total&amp;cal_year={{ cal_year }}{% for m in cal_months %}&amp;cal_month={{ m }}{% endfor %}" class="store-tile-btn {% if store_filter == 'Total' %}active{% endif %}" style="display: inline-block; padding: 5px 14px; border-radius: 6px; text-decoration: none; font-size: 0.75rem; font-weight: 500; transition: all 0.2s ease; border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);">
                         Total
                     </a>
                 </div>
@@ -1209,7 +1263,7 @@
             <!-- Calendar Widget (year/month selector + daily sales) -->
             <div style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="section-header">
-                    <h2 class="section-title" data-home-calendar-title>{{ calendar_display|date:"F Y" }} Calendar</h2>
+                    <h2 class="section-title" data-home-calendar-title>{{ calendar_period_label }} Calendar</h2>
                 </div>
                 <div class="calendar-widget">
                     <div class="calendar-header">
@@ -1219,16 +1273,21 @@
                             <option value="{{ y }}" {% if cal_year == y %}selected{% endif %}>{{ y }}</option>
                             {% endfor %}
                         </select>
-                        <label for="cal-month" style="margin-left: 4px;">Month</label>
-                        <select id="cal-month" aria-label="Calendar month">
-                            {% for num, name in calendar_months %}
-                            <option value="{{ num }}" {% if cal_month == num %}selected{% endif %}>{{ name }}</option>
-                            {% endfor %}
-                        </select>
                         <span id="calendar-loading" style="font-size: 0.75rem; color: var(--gray-500); display: none;">Loading…</span>
+                        <div class="home-calendar-month-picker" id="cal-month-picker" role="group" aria-label="Months to include in calendar">
+                            <span class="home-calendar-month-picker-label">Months <span style="font-weight: 400; color: var(--gray-500);">(select one or more)</span></span>
+                            <div class="home-calendar-month-checkboxes">
+                                {% for num, name in calendar_months %}
+                                <label class="home-cal-month-chip">
+                                    <input type="checkbox" name="cal_month" value="{{ num }}" {% if num in cal_months %}checked{% endif %}>
+                                    <span>{{ name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     <div id="calendar-grid-container">
-                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
+                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin cal_months=cal_months calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
                     </div>
                 </div>
             </div>
@@ -1401,22 +1460,40 @@
 document.addEventListener("DOMContentLoaded", function () {
     (function () {
         var calYear = document.getElementById('cal-year');
-        var calMonth = document.getElementById('cal-month');
+        var calMonthPicker = document.getElementById('cal-month-picker');
         var gridContainer = document.getElementById('calendar-grid-container');
         var loadingEl = document.getElementById('calendar-loading');
         var calendarTitleEl = document.querySelector('[data-home-calendar-title]');
         var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        if (!calYear || !calMonth || !gridContainer) return;
+        if (!calYear || !calMonthPicker || !gridContainer) return;
+        function selectedCalendarMonths() {
+            return Array.from(calMonthPicker.querySelectorAll('input[name="cal_month"]:checked')).map(function (input) {
+                return parseInt(input.value, 10);
+            }).filter(function (n) { return n >= 1 && n <= 12; }).sort(function (a, b) { return a - b; });
+        }
         function updateCalendarTitle() {
             if (!calendarTitleEl) return;
-            var m = parseInt(calMonth.value, 10);
-            calendarTitleEl.textContent = (MONTH_LONG[m - 1] || '') + ' ' + calYear.value + ' Calendar';
+            var months = selectedCalendarMonths();
+            if (!months.length) {
+                calendarTitleEl.textContent = calYear.value + ' Calendar';
+                return;
+            }
+            var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+            calendarTitleEl.textContent = label + ' ' + calYear.value + ' Calendar';
         }
         function loadCalendar() {
             if (loadingEl) loadingEl.style.display = 'inline';
+            var monthsPick = selectedCalendarMonths();
+            if (!monthsPick.length) {
+                var curM = new Date().getMonth() + 1;
+                var cb = calMonthPicker.querySelector('input[name="cal_month"][value="' + curM + '"]');
+                if (cb) cb.checked = true;
+                monthsPick = selectedCalendarMonths();
+            }
             var url = new URL(window.location.href);
             url.searchParams.set('cal_year', calYear.value);
-            url.searchParams.set('cal_month', calMonth.value);
+            url.searchParams.delete('cal_month');
+            monthsPick.forEach(function (m) { url.searchParams.append('cal_month', String(m)); });
             url.searchParams.set('ajax', 'calendar');
             fetch(url.toString(), {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1430,7 +1507,9 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         }
         calYear.addEventListener('change', loadCalendar);
-        calMonth.addEventListener('change', loadCalendar);
+        calMonthPicker.addEventListener('change', function (e) {
+            if (e.target && e.target.matches && e.target.matches('input[name="cal_month"]')) loadCalendar();
+        });
     })();
 
     // Mobile menu toggle (SAFE)

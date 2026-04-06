@@ -1,7 +1,7 @@
 {% load humanize %}
 <div class="home-calendar-month-summary">
     <div class="home-calendar-month-summary-item">
-        <span class="home-calendar-month-summary-label">Total Sales (selected month)</span>
+        <span class="home-calendar-month-summary-label">Total Sales {% if cal_months|length > 1 %}(combined){% else %}(selected month){% endif %}</span>
         <span class="home-calendar-month-summary-number">{{ calendar_grid_month_sales|default:0|floatformat:0|intcomma }}</span>
     </div>
     <div class="home-calendar-month-summary-item">
