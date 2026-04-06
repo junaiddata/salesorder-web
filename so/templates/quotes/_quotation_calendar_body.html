@@ -1,11 +1,11 @@
 {% load humanize %}
 <div class="qcal-month-summary">
   <div class="qcal-month-summary-item">
-    <span class="qcal-month-summary-label">Month total value</span>
+    <span class="qcal-month-summary-label">Total value {% if qcal_months|length > 1 %}(combined){% else %}(selected month){% endif %}</span>
     <span class="qcal-month-summary-number">{{ quotation_month_total_value|floatformat:2|intcomma }}</span>
   </div>
   <div class="qcal-month-summary-item">
-    <span class="qcal-month-summary-label">Quotations this month</span>
+    <span class="qcal-month-summary-label">Quotations {% if qcal_months|length > 1 %}(combined){% else %}this month{% endif %}</span>
     <span class="qcal-month-summary-number">{{ quotation_month_quotation_count|intcomma }}</span>
   </div>
 </div>

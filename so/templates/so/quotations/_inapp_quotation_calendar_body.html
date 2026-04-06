@@ -1,7 +1,7 @@
 {% load humanize %}
 <div class="ic-month-summary">
     <div class="ic-month-summary-block">
-        <div class="ic-month-summary-title">Junaid (month)</div>
+        <div class="ic-month-summary-title">Junaid {% if qcal_months|length > 1 %}(combined){% else %}(month){% endif %}</div>
         <div class="ic-month-summary-nums">
             <span class="ic-month-summary-val">{{ junaid_month_total|floatformat:2|intcomma }}</span>
             <span class="ic-month-summary-sep">·</span>
@@ -9,7 +9,7 @@
         </div>
     </div>
     <div class="ic-month-summary-block">
-        <div class="ic-month-summary-title">Alabama (month)</div>
+        <div class="ic-month-summary-title">Alabama {% if qcal_months|length > 1 %}(combined){% else %}(month){% endif %}</div>
         <div class="ic-month-summary-nums">
             <span class="ic-month-summary-val">{{ alabama_month_total|floatformat:2|intcomma }}</span>
             <span class="ic-month-summary-sep">·</span>

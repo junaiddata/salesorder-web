@@ -480,6 +480,59 @@
       background: var(--surface);
       color: var(--text);
     }
+    .home-calendar-month-picker {
+      width: 100%;
+      flex-basis: 100%;
+      margin-top: 0.35rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border-light);
+    }
+    .home-calendar-month-picker-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+    .home-calendar-month-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.35rem;
+      align-items: center;
+    }
+    .home-cal-month-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--text);
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .home-cal-month-chip:hover {
+      border-color: var(--primary);
+      background: var(--bg);
+    }
+    .home-cal-month-chip:has(input:checked) {
+      background: var(--primary-light);
+      border-color: var(--primary);
+      color: var(--text);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    }
+    .home-cal-month-chip input[type="checkbox"] {
+      width: 0.95rem;
+      height: 0.95rem;
+      margin: 0;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
     .qcal-month-summary {
       display: flex;
       flex-wrap: wrap;
@@ -710,7 +763,7 @@
 
     <div class="quotation-calendar-section">
       <div class="section-header">
-        <h2 class="section-title" data-quotation-calendar-title>{{ calendar_display|date:"F Y" }} — Quotations by posting date</h2>
+        <h2 class="section-title" data-quotation-calendar-title>{{ calendar_period_label }} — Quotations by posting date</h2>
       </div>
       <div class="quotation-calendar-widget">
         <div class="qcal-calendar-header">
@@ -720,16 +773,21 @@
             <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
-          <label for="qcal-month" style="margin-left: 4px;">Month</label>
-          <select id="qcal-month" aria-label="Quotation calendar month">
-            {% for num, name in calendar_months %}
-            <option value="{{ num }}" {% if qcal_month == num %}selected{% endif %}>{{ name }}</option>
-            {% endfor %}
-          </select>
           <span id="qcal-loading" style="font-size: 0.82rem; color: var(--text-muted); display: none;">Loading…</span>
+          <div class="home-calendar-month-picker" id="qcal-month-picker" role="group" aria-label="Months for quotation calendar">
+            <span class="home-calendar-month-picker-label">Months <span style="font-weight: 400; color: var(--text-muted);">(select one or more)</span></span>
+            <div class="home-calendar-month-checkboxes">
+              {% for num, name in calendar_months %}
+              <label class="home-cal-month-chip">
+                <input type="checkbox" name="qcal_month" value="{{ num }}" {% if num in qcal_months %}checked{% endif %}>
+                <span>{{ name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
         <div id="qcal-grid-container">
-          {% include 'quotes/_quotation_calendar_body.html' with month_days=quotation_month_days today=today quotation_month_total_value=quotation_month_total_value quotation_month_quotation_count=quotation_month_quotation_count %}
+          {% include 'quotes/_quotation_calendar_body.html' with month_days=quotation_month_days today=today qcal_months=qcal_months quotation_month_total_value=quotation_month_total_value quotation_month_quotation_count=quotation_month_quotation_count %}
         </div>
       </div>
     </div>
@@ -903,25 +961,43 @@
       });
     }
 
-    // Quotation calendar: same filters as list (like home calendar keeps store=); year/month swapped via qcal_*
+    // Quotation calendar: multi-month checkboxes; qcal_year / repeated qcal_month
     (function() {
       var calYear = document.getElementById('qcal-year');
-      var calMonth = document.getElementById('qcal-month');
+      var calMonthPicker = document.getElementById('qcal-month-picker');
       var gridContainer = document.getElementById('qcal-grid-container');
       var loadingEl = document.getElementById('qcal-loading');
       var calendarTitleEl = document.querySelector('[data-quotation-calendar-title]');
       var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      if (!calYear || !calMonth || !gridContainer) return;
+      if (!calYear || !calMonthPicker || !gridContainer) return;
+      function selectedQcalMonths() {
+        return Array.from(calMonthPicker.querySelectorAll('input[name="qcal_month"]:checked')).map(function (input) {
+          return parseInt(input.value, 10);
+        }).filter(function (n) { return n >= 1 && n <= 12; }).sort(function (a, b) { return a - b; });
+      }
       function updateCalendarTitle() {
         if (!calendarTitleEl) return;
-        var m = parseInt(calMonth.value, 10);
-        calendarTitleEl.textContent = (MONTH_LONG[m - 1] || '') + ' ' + calYear.value + ' — Quotations by posting date';
+        var months = selectedQcalMonths();
+        if (!months.length) {
+          calendarTitleEl.textContent = calYear.value + ' — Quotations by posting date';
+          return;
+        }
+        var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+        calendarTitleEl.textContent = label + ' ' + calYear.value + ' — Quotations by posting date';
       }
       function loadCalendar() {
         if (loadingEl) loadingEl.style.display = 'inline';
+        var monthsPick = selectedQcalMonths();
+        if (!monthsPick.length) {
+          var curM = new Date().getMonth() + 1;
+          var cb = calMonthPicker.querySelector('input[name="qcal_month"][value="' + curM + '"]');
+          if (cb) cb.checked = true;
+          monthsPick = selectedQcalMonths();
+        }
         var url = new URL(window.location.href);
         url.searchParams.set('qcal_year', calYear.value);
-        url.searchParams.set('qcal_month', calMonth.value);
+        url.searchParams.delete('qcal_month');
+        monthsPick.forEach(function (m) { url.searchParams.append('qcal_month', String(m)); });
         url.searchParams.set('ajax', 'quotation_calendar');
         fetch(url.toString(), {
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -936,7 +1012,9 @@
         });
       }
       calYear.addEventListener('change', loadCalendar);
-      calMonth.addEventListener('change', loadCalendar);
+      calMonthPicker.addEventListener('change', function (e) {
+        if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) loadCalendar();
+      });
     })();
   });
 

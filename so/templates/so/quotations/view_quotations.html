@@ -400,6 +400,59 @@
             border-radius: 8px;
             font-size: 0.92rem;
         }
+        .home-calendar-month-picker {
+            width: 100%;
+            flex-basis: 100%;
+            margin-top: 0.35rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e9ecef;
+        }
+        .home-calendar-month-picker-label {
+            display: block;
+            font-size: 0.87rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+        .home-calendar-month-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 0.35rem;
+            align-items: center;
+        }
+        .home-cal-month-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+            padding: 0.35rem 0.5rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            background: #fff;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #495057;
+            user-select: none;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .home-cal-month-chip:hover {
+            border-color: #4361ee;
+            background: #f8f9fa;
+        }
+        .home-cal-month-chip:has(input:checked) {
+            background: #eef2ff;
+            border-color: #4361ee;
+            color: #212529;
+            box-shadow: 0 0 0 1px rgba(67, 97, 238, 0.2);
+        }
+        .home-cal-month-chip input[type="checkbox"] {
+            width: 0.95rem;
+            height: 0.95rem;
+            margin: 0;
+            accent-color: #4361ee;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
         .ic-month-summary {
             display: flex;
             flex-wrap: wrap;
@@ -579,7 +632,7 @@
         {% if show_inapp_calendar %}
         <!-- Calendar: Admin only; quotation_date totals (Junaid / Alabama); independent of list filters -->
         <div class="inapp-calendar-section">
-            <h2 data-inapp-calendar-title>{{ calendar_display|date:"F Y" }} — In-app quotations</h2>
+            <h2 data-inapp-calendar-title>{{ calendar_period_label }} — In-app quotations</h2>
             <div class="ic-cal-header">
                 <label for="ic-qcal-year">Year</label>
                 <select id="ic-qcal-year" aria-label="Calendar year">
@@ -587,16 +640,21 @@
                     <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
                     {% endfor %}
                 </select>
-                <label for="ic-qcal-month" class="ms-1">Month</label>
-                <select id="ic-qcal-month" aria-label="Calendar month">
-                    {% for num, name in calendar_months %}
-                    <option value="{{ num }}" {% if qcal_month == num %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
                 <span id="ic-qcal-loading" class="text-muted small" style="display:none;">Loading…</span>
+                <div class="home-calendar-month-picker" id="ic-qcal-month-picker" role="group" aria-label="Months for in-app calendar">
+                    <span class="home-calendar-month-picker-label">Months <span style="font-weight: 400; color: #6c757d;">(select one or more)</span></span>
+                    <div class="home-calendar-month-checkboxes">
+                        {% for num, name in calendar_months %}
+                        <label class="home-cal-month-chip">
+                            <input type="checkbox" name="qcal_month" value="{{ num }}" {% if num in qcal_months %}checked{% endif %}>
+                            <span>{{ name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
             <div id="ic-calendar-ajax-root">
-                {% include 'so/quotations/_inapp_quotation_calendar_body.html' with month_days=inapp_month_days today=today junaid_month_total=junaid_month_total junaid_month_count=junaid_month_count alabama_month_total=alabama_month_total alabama_month_count=alabama_month_count %}
+                {% include 'so/quotations/_inapp_quotation_calendar_body.html' with month_days=inapp_month_days today=today junaid_month_total=junaid_month_total junaid_month_count=junaid_month_count alabama_month_total=alabama_month_total alabama_month_count=alabama_month_count qcal_months=qcal_months %}
             </div>
         </div>
         {% endif %}
@@ -732,21 +790,40 @@
     }
 
     const icQcalYear = document.getElementById('ic-qcal-year');
-    const icQcalMonth = document.getElementById('ic-qcal-month');
+    const icQcalMonthPicker = document.getElementById('ic-qcal-month-picker');
     const icQcalLoading = document.getElementById('ic-qcal-loading');
     const icCalTitle = document.querySelector('[data-inapp-calendar-title]');
     const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    function selectedIcQcalMonths() {
+      if (!icQcalMonthPicker) return [];
+      return Array.from(icQcalMonthPicker.querySelectorAll('input[name="qcal_month"]:checked')).map(function (input) {
+        return parseInt(input.value, 10);
+      }).filter(function (n) { return n >= 1 && n <= 12; }).sort(function (a, b) { return a - b; });
+    }
     function updateInappCalTitle() {
-      if (!icCalTitle || !icQcalYear || !icQcalMonth) return;
-      var m = parseInt(icQcalMonth.value, 10);
-      icCalTitle.textContent = (MONTH_LONG[m - 1] || '') + ' ' + icQcalYear.value + ' — In-app quotations';
+      if (!icCalTitle || !icQcalYear) return;
+      var months = selectedIcQcalMonths();
+      if (!months.length) {
+        icCalTitle.textContent = icQcalYear.value + ' — In-app quotations';
+        return;
+      }
+      var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+      icCalTitle.textContent = label + ' ' + icQcalYear.value + ' — In-app quotations';
     }
     function loadInappCalendar() {
-      if (!icQcalYear || !icQcalMonth || !icCalRoot) return;
+      if (!icQcalYear || !icQcalMonthPicker || !icCalRoot) return;
       if (icQcalLoading) icQcalLoading.style.display = 'inline';
+      var monthsPick = selectedIcQcalMonths();
+      if (!monthsPick.length) {
+        var curM = new Date().getMonth() + 1;
+        var cb = icQcalMonthPicker.querySelector('input[name="qcal_month"][value="' + curM + '"]');
+        if (cb) cb.checked = true;
+        monthsPick = selectedIcQcalMonths();
+      }
       var url = new URL('{% url "view_quotations" %}', window.location.origin);
       url.searchParams.set('qcal_year', icQcalYear.value);
-      url.searchParams.set('qcal_month', icQcalMonth.value);
+      url.searchParams.delete('qcal_month');
+      monthsPick.forEach(function (m) { url.searchParams.append('qcal_month', String(m)); });
       url.searchParams.set('ajax', 'inapp_quotation_calendar');
       fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(function (r) { return r.text(); })
@@ -762,9 +839,11 @@
           if (icQcalLoading) icQcalLoading.style.display = 'none';
         });
     }
-    if (icQcalYear && icQcalMonth) {
+    if (icQcalYear && icQcalMonthPicker) {
       icQcalYear.addEventListener('change', loadInappCalendar);
-      icQcalMonth.addEventListener('change', loadInappCalendar);
+      icQcalMonthPicker.addEventListener('change', function (e) {
+        if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) loadInappCalendar();
+      });
     }
 
     syncInappCalendarSelectionHighlight();
