@@ -3586,6 +3586,22 @@ def upload_quotations(request):
 # =====================
 # Quotation: List
 # =====================
+def _sap_quotation_firm_filter_q(firm_filter_list):
+    """
+    OR across selected firm strings: header brand, line description, or line item_no
+    whose Items master row matches item_firm (substring).
+    """
+    if not firm_filter_list:
+        return None
+    q_firm = Q()
+    for f in firm_filter_list:
+        q_firm |= Q(brand__icontains=f) | Q(items__description__icontains=f)
+        q_firm |= Q(
+            items__item_no__in=Items.objects.filter(item_firm__icontains=f).values('item_code')
+        )
+    return q_firm
+
+
 def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting_date_range=False):
     """
     Apply quotation list GET filters (salesman multiselect, total band, remarks, q, status).
@@ -3611,10 +3627,9 @@ def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting
     firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
 
     if firm_filter_list:
-        q_firm = Q()
-        for f in firm_filter_list:
-            q_firm |= Q(brand__icontains=f) | Q(items__description__icontains=f)
-        qs = qs.filter(q_firm).distinct()
+        q_firm = _sap_quotation_firm_filter_q(firm_filter_list)
+        if q_firm is not None:
+            qs = qs.filter(q_firm).distinct()
 
     if total_range:
         if total_range == "0-5000":
@@ -3823,13 +3838,31 @@ def quotation_list(request):
         .order_by('salesman_name')
     )
 
-    firm_brands = (
+    # Header brand is often empty; line item_no → Items.item_firm lists real firms.
+    firm_chunks = []
+    firm_chunks.extend(
         quotation_scope_qs.exclude(brand__isnull=True)
         .exclude(brand='')
         .values_list('brand', flat=True)
+    )
+    line_qs = SAPQuotationItem.objects.filter(quotation__in=quotation_scope_qs)
+    item_codes = (
+        line_qs.exclude(item_no__isnull=True)
+        .exclude(item_no='')
+        .values_list('item_no', flat=True)
         .distinct()
     )
-    firm_choices = sorted({str(b).strip() for b in firm_brands if b and str(b).strip()}, key=str.lower)
+    firm_chunks.extend(
+        Items.objects.filter(item_code__in=item_codes)
+        .exclude(item_firm__isnull=True)
+        .exclude(item_firm='')
+        .values_list('item_firm', flat=True)
+        .distinct()
+    )
+    firm_choices = sorted(
+        {str(x).strip() for x in firm_chunks if x and str(x).strip()},
+        key=str.lower,
+    )
 
     return render(request, 'quotes/quotation_list.html', {
         'page_obj': page_obj,
@@ -3890,10 +3923,9 @@ def export_quotation_list_pdf(request):
     remarks_filter = request.GET.get('remarks', '').strip()
     firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
     if firm_filter_list:
-        q_firm = Q()
-        for f in firm_filter_list:
-            q_firm |= Q(brand__icontains=f) | Q(items__description__icontains=f)
-        qs = qs.filter(q_firm).distinct()
+        q_firm = _sap_quotation_firm_filter_q(firm_filter_list)
+        if q_firm is not None:
+            qs = qs.filter(q_firm).distinct()
 
     # Apply Total Range Filter
     if total_range:
