@@ -518,8 +518,14 @@ def sales_summary_upload(request):
             'document_type': ['document type', 'documenttype', 'doc type'],
             'document_number': ['document number', 'documentnumber', 'doc no'],
             'postingdate': ['postingdate', 'posting date'],
-            'customer_code': ['customer code', 'customercode'],
-            'customer_name': ['customer name', 'customername'],
+            'customer_code': [
+                'customer/supplier no.', 'customer/supplier no', 'customer/supplier number',
+                'customer code', 'customercode', 'customer no', 'customer no.',
+            ],
+            'customer_name': [
+                'customer/supplier name', 'customer/supplier name.',
+                'customer name', 'customername',
+            ],
             'sales_employee': ['sales employee', 'salesemployee', 'salesman'],
             'itemcode': ['itemcode', 'item code'],
             'item_description': ['item description', 'itemdescription'],

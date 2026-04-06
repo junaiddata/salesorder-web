@@ -20,6 +20,40 @@ from .views import alabama_salesman_scope_q, normalize_alabama_salesman
 from .telegram_remarks import can_send_alabama_remarks_telegram, send_alabama_remarks_to_salesman_telegram
 
 
+def _norm_excel_header(s):
+    return str(s).strip().lower().replace('\ufeff', '').replace('\xa0', ' ')
+
+
+def _normalize_salesorder_customer_columns(df):
+    """
+    SAP exports may use Customer Code / Customer Name or Customer/Supplier No. / Name.
+    Ensure standard columns exist by renaming known aliases (case-insensitive).
+    """
+    df = df.copy()
+    df.columns = [str(c).strip().replace('\ufeff', '').replace('\xa0', ' ') for c in df.columns]
+    key_to_col = {_norm_excel_header(c): c for c in df.columns}
+    rename = {}
+    if 'Customer/Supplier No.' not in df.columns:
+        for a in (
+            'customer/supplier no', 'customer/supplier no.', 'customer/supplier number',
+            'customer code', 'customercode', 'customer no', 'customer no.',
+        ):
+            if a in key_to_col:
+                rename[key_to_col[a]] = 'Customer/Supplier No.'
+                break
+    if 'Customer/Supplier Name' not in df.columns:
+        for a in (
+            'customer/supplier name', 'customer/supplier name.',
+            'customer name', 'customername',
+        ):
+            if a in key_to_col:
+                rename[key_to_col[a]] = 'Customer/Supplier Name'
+                break
+    if rename:
+        df = df.rename(columns=rename)
+    return df
+
+
 def _can_edit_alabama_management_remarks(request):
     """Alabama Admin (company), manager username, Django staff/superuser."""
     if request.user.is_superuser or request.user.is_staff:
@@ -287,6 +321,7 @@ def salesorder_upload(request):
                 ]
 
                 df = pd.read_excel(excel_file)
+                df = _normalize_salesorder_customer_columns(df)
 
                 missing = [c for c in required_cols if c not in df.columns]
                 if missing:
