@@ -73,6 +73,88 @@
     .calendar-day-no-sales { background: #f8fafc !important; border-color: var(--border) !important; opacity: 0.7; }
     .calendar-day-no-sales .calendar-day-label, .calendar-day-no-sales .calendar-day-sales { color: var(--text-secondary) !important; }
     .calendar-day-no-sales .calendar-day-gp { color: var(--text-secondary) !important; }
+    .home-calendar-month-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin-bottom: 1rem;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .home-calendar-month-summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 140px;
+    }
+    .home-calendar-month-summary-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .home-calendar-month-summary-number {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .home-calendar-month-picker {
+      width: 100%;
+      flex-basis: 100%;
+      margin-top: 0.35rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    .home-calendar-month-picker-label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .home-calendar-month-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.35rem;
+      align-items: center;
+    }
+    .home-cal-month-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--text);
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .home-cal-month-chip:hover {
+      border-color: var(--primary);
+      background: var(--bg);
+    }
+    .home-cal-month-chip:has(input:checked) {
+      background: #eff6ff;
+      border-color: var(--primary);
+      color: var(--text);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    }
+    .home-cal-month-chip input[type="checkbox"] {
+      width: 0.95rem;
+      height: 0.95rem;
+      margin: 0;
+      accent-color: var(--primary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -187,26 +269,31 @@
       </div>
     </div>
 
-    <!-- Calendar Widget (Year + Month selector, daily Sales/GP/GP%) - AJAX -->
+    <!-- Calendar Widget (Year + month checkboxes, combined totals) - AJAX -->
     <div class="calendar-widget">
-      <h2 style="font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; color: var(--text);">Calendar</h2>
+      <h2 data-historical-calendar-title style="font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; color: var(--text);">{{ calendar_period_label }} Calendar</h2>
       <div class="calendar-header" style="margin-bottom: 1rem;">
-        <label>Year:</label>
-        <select id="cal-year">
+        <label for="cal-year">Year:</label>
+        <select id="cal-year" aria-label="Calendar year">
           {% for y in calendar_years %}
           <option value="{{ y }}" {% if cal_year == y %}selected{% endif %}>{{ y }}</option>
           {% endfor %}
         </select>
-        <label style="margin-left: 8px;">Month:</label>
-        <select id="cal-month">
-          {% for num, name in calendar_months %}
-          <option value="{{ num }}" {% if cal_month == num %}selected{% endif %}>{{ name }}</option>
-          {% endfor %}
-        </select>
         <span id="calendar-loading" style="margin-left: 12px; font-size: 0.8rem; color: var(--text-secondary); display: none;">Loading...</span>
+        <div class="home-calendar-month-picker" id="cal-month-picker" role="group" aria-label="Months to include in calendar">
+          <span class="home-calendar-month-picker-label">Months <span style="font-weight: 400; color: var(--text-secondary);">(select one or more)</span></span>
+          <div class="home-calendar-month-checkboxes">
+            {% for num, name in calendar_months %}
+            <label class="home-cal-month-chip">
+              <input type="checkbox" name="cal_month" value="{{ num }}" {% if num in cal_months %}checked{% endif %}>
+              <span>{{ name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <div id="calendar-grid-container">
-        {% include 'historical_sales/_historical_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin %}
+        {% include 'historical_sales/_historical_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin cal_months=cal_months calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
       </div>
     </div>
 
@@ -262,23 +349,49 @@
     var categoryInputs = document.getElementById('category-inputs');
     var monthInputs = document.getElementById('month-inputs');
 
-    /* Calendar AJAX: no page refresh when changing year/month */
+    /* Calendar AJAX: year + multi-month checkboxes (combined totals) */
     (function() {
       var calYear = document.getElementById('cal-year');
-      var calMonth = document.getElementById('cal-month');
+      var calMonthPicker = document.getElementById('cal-month-picker');
       var gridContainer = document.getElementById('calendar-grid-container');
       var loadingEl = document.getElementById('calendar-loading');
-      if (!calYear || !calMonth || !gridContainer) return;
+      var calendarTitleEl = document.querySelector('[data-historical-calendar-title]');
+      var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      if (!calYear || !calMonthPicker || !gridContainer) return;
+      function selectedCalendarMonths() {
+        return Array.from(calMonthPicker.querySelectorAll('input[name="cal_month"]:checked')).map(function(input) {
+          return parseInt(input.value, 10);
+        }).filter(function(n) { return n >= 1 && n <= 12; }).sort(function(a, b) { return a - b; });
+      }
+      function updateCalendarTitle() {
+        if (!calendarTitleEl) return;
+        var months = selectedCalendarMonths();
+        if (!months.length) {
+          calendarTitleEl.textContent = calYear.value + ' Calendar';
+          return;
+        }
+        var label = months.map(function(m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+        calendarTitleEl.textContent = label + ' ' + calYear.value + ' Calendar';
+      }
       function loadCalendar() {
         loadingEl.style.display = 'inline';
+        var monthsPick = selectedCalendarMonths();
+        if (!monthsPick.length) {
+          var curM = new Date().getMonth() + 1;
+          var cb = calMonthPicker.querySelector('input[name="cal_month"][value="' + curM + '"]');
+          if (cb) cb.checked = true;
+          monthsPick = selectedCalendarMonths();
+        }
         var url = new URL(window.location.href);
         url.searchParams.set('cal_year', calYear.value);
-        url.searchParams.set('cal_month', calMonth.value);
+        url.searchParams.delete('cal_month');
+        monthsPick.forEach(function(m) { url.searchParams.append('cal_month', String(m)); });
         url.searchParams.set('ajax', 'calendar');
         fetch(url.toString(), {
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
         }).then(function(r) { return r.text(); }).then(function(html) {
           gridContainer.innerHTML = html;
+          updateCalendarTitle();
         }).catch(function() {
           gridContainer.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);">Error loading calendar. Try refreshing.</div>';
         }).finally(function() {
@@ -286,7 +399,9 @@
         });
       }
       calYear.addEventListener('change', loadCalendar);
-      calMonth.addEventListener('change', loadCalendar);
+      calMonthPicker.addEventListener('change', function(e) {
+        if (e.target && e.target.matches && e.target.matches('input[name="cal_month"]')) loadCalendar();
+      });
     })();
 
     function syncFormAndSubmit() {

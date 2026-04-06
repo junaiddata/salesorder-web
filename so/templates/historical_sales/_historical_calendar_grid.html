@@ -1,4 +1,20 @@
 {% load humanize %}
+<div class="home-calendar-month-summary">
+    <div class="home-calendar-month-summary-item">
+        <span class="home-calendar-month-summary-label">Total Sales {% if cal_months|length > 1 %}(combined){% else %}(selected month){% endif %}</span>
+        <span class="home-calendar-month-summary-number">{{ calendar_grid_month_sales|default:0|floatformat:0|intcomma }}</span>
+    </div>
+    <div class="home-calendar-month-summary-item">
+        <span class="home-calendar-month-summary-label">Documents</span>
+        <span class="home-calendar-month-summary-number">{{ calendar_grid_month_doc_count|default:0|intcomma }}</span>
+    </div>
+    {% if is_admin %}
+    <div class="home-calendar-month-summary-item">
+        <span class="home-calendar-month-summary-label">Gross Profit</span>
+        <span class="home-calendar-month-summary-number">{{ calendar_grid_month_gp|default:0|floatformat:0|intcomma }} · {{ calendar_grid_month_gp_pct|default:0|floatformat:1 }}%</span>
+    </div>
+    {% endif %}
+</div>
 <div class="calendar-grid">
   {% for day in month_days %}
   <div class="calendar-day {% if day.date == today %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">

@@ -557,38 +557,64 @@ def historical_sales_analysis_dashboard(request):
     else:
         categories_for_tiles = [c[0] for c in SALESMAN_CATEGORIES]
 
-    # Calendar: year/month selector (cal_year, cal_month). Default to last allowed year + current month.
-    cal_year = request.GET.get('cal_year', '').strip()
-    cal_month = request.GET.get('cal_month', '').strip()
+    # Calendar: year + one or more months (repeated cal_month=). Combined totals & grid days.
+    cal_year_raw = request.GET.get('cal_year', '').strip()
     try:
-        cal_year = int(cal_year) if cal_year else ALLOWED_YEARS[-1]
-        cal_month = int(cal_month) if cal_month else today.month
+        cal_year = int(cal_year_raw) if cal_year_raw else ALLOWED_YEARS[-1]
     except (ValueError, TypeError):
         cal_year = ALLOWED_YEARS[-1]
-        cal_month = today.month
     if cal_year not in ALLOWED_YEARS:
         cal_year = ALLOWED_YEARS[-1]
-    if cal_month < 1 or cal_month > 12:
-        cal_month = 1
-    _, last_day = calendar.monthrange(cal_year, cal_month)
+
+    cal_months = []
+    for raw in request.GET.getlist('cal_month'):
+        try:
+            m = int(str(raw).strip())
+            if 1 <= m <= 12:
+                cal_months.append(m)
+        except (ValueError, TypeError):
+            continue
+    cal_months = sorted(set(cal_months))
+    if not cal_months:
+        cal_months = [today.month]
+    cal_month = cal_months[0]
+
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    if len(cal_months) == 1:
+        calendar_period_label = date(cal_year, cal_months[0], 1).strftime('%B %Y')
+    else:
+        calendar_period_label = ', '.join(calendar.month_name[m] for m in cal_months) + ' ' + str(cal_year)
+
     cal_lines = apply_common_filters(lines_qs)
     month_days = []
-    for day_num in range(1, last_day + 1):
-        day_date = date(cal_year, cal_month, day_num)
-        day_qs = cal_lines.filter(posting_date=day_date)
-        day_sales = day_qs.aggregate(s=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
-        day_gp = day_qs.aggregate(s=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
-        day_gp_pct = (float(day_gp) / float(day_sales) * 100) if day_sales else Decimal('0')
-        month_days.append({
-            'day': day_num,
-            'date': day_date,
-            'formatted_date': f'{month_names[cal_month - 1]} {day_num}',
-            'sales': day_sales,
-            'gp': day_gp,
-            'gp_pct': round(float(day_gp_pct), 1),
-            'has_sales': bool(day_sales and day_sales > Decimal('0')),
-        })
+    for grid_month in cal_months:
+        _, last_day = calendar.monthrange(cal_year, grid_month)
+        is_grid_current_month = cal_year == today.year and grid_month == today.month
+        last_calendar_day = min(today.day, last_day) if is_grid_current_month else last_day
+
+        for day_num in range(1, last_calendar_day + 1):
+            day_date = date(cal_year, grid_month, day_num)
+            day_qs = cal_lines.filter(posting_date=day_date)
+            day_sales = day_qs.aggregate(s=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
+            day_gp = day_qs.aggregate(s=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())))['s'] or Decimal('0')
+            day_gp_pct = (float(day_gp) / float(day_sales) * 100) if day_sales else 0.0
+            day_doc_count = day_qs.aggregate(c=Count('document_number', distinct=True))['c'] or 0
+            month_days.append({
+                'day': day_num,
+                'date': day_date,
+                'formatted_date': f'{month_names[grid_month - 1]} {day_num}',
+                'sales': day_sales,
+                'gp': day_gp,
+                'doc_count': day_doc_count,
+                'gp_pct': round(float(day_gp_pct), 1),
+                'has_sales': bool(day_sales and day_sales > Decimal('0')),
+            })
+
+    calendar_grid_month_sales = sum((d['sales'] for d in month_days), Decimal('0'))
+    calendar_grid_month_gp = sum((d['gp'] for d in month_days), Decimal('0'))
+    calendar_grid_month_doc_count = sum((d['doc_count'] for d in month_days))
+    _cms = float(calendar_grid_month_sales)
+    calendar_grid_month_gp_pct = round(float(calendar_grid_month_gp) / _cms * 100, 1) if _cms else 0
 
     context = {
         'total_sales': total_sales,
@@ -615,16 +641,31 @@ def historical_sales_analysis_dashboard(request):
         'month_days': month_days,
         'cal_year': cal_year,
         'cal_month': cal_month,
+        'cal_months': cal_months,
         'calendar_month_name': month_names[cal_month - 1],
+        'calendar_period_label': calendar_period_label,
         'calendar_years': ALLOWED_YEARS,
         'calendar_months': [(i, month_names[i - 1]) for i in range(1, 13)],
+        'calendar_grid_month_sales': calendar_grid_month_sales,
+        'calendar_grid_month_gp': calendar_grid_month_gp,
+        'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+        'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
     }
 
     # AJAX: return only calendar grid HTML (no full page)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
         calendar_html = render_to_string(
             'historical_sales/_historical_calendar_grid.html',
-            {'month_days': month_days, 'today': today, 'is_admin': is_admin},
+            {
+                'month_days': month_days,
+                'today': today,
+                'is_admin': is_admin,
+                'cal_months': cal_months,
+                'calendar_grid_month_sales': calendar_grid_month_sales,
+                'calendar_grid_month_gp': calendar_grid_month_gp,
+                'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+                'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
+            },
             request=request
         )
         return HttpResponse(calendar_html, content_type='text/html')
