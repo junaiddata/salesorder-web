@@ -20,8 +20,16 @@ def _col_map(df):
     aliases = {
         'do': ['do', 'do number', 'donumber'],
         'date': ['date'],
-        'customer_code': ['customer code', 'customercode'],
-        'customer': ['customer', 'customer name', 'customername'],
+        'customer_code': [
+            'customer code', 'customercode',
+            'customer/supplier no.', 'customer/supplier no', 'customer/supplier number',
+            'customer/vendor code', 'customer vendor code',
+        ],
+        'customer': [
+            'customer', 'customer name', 'customername',
+            'customer/supplier name', 'customer/supplier name.',
+            'customer/vendor name', 'customer vendor name',
+        ],
         'sales_person': ['sales person', 'salesperson', 'sales man', 'salesman'],
         'city': ['city'],
         'area': ['area'],

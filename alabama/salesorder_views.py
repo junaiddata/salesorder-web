@@ -26,7 +26,7 @@ def _norm_excel_header(s):
 
 def _normalize_salesorder_customer_columns(df):
     """
-    SAP exports may use Customer Code / Customer Name or Customer/Supplier No. / Name.
+    SAP exports may use Customer Code / Name, Customer/Supplier No., or Customer/Vendor Code / Name.
     Ensure standard columns exist by renaming known aliases (case-insensitive).
     """
     df = df.copy()
@@ -36,6 +36,7 @@ def _normalize_salesorder_customer_columns(df):
     if 'Customer/Supplier No.' not in df.columns:
         for a in (
             'customer/supplier no', 'customer/supplier no.', 'customer/supplier number',
+            'customer/vendor code', 'customer vendor code',
             'customer code', 'customercode', 'customer no', 'customer no.',
         ):
             if a in key_to_col:
@@ -44,6 +45,7 @@ def _normalize_salesorder_customer_columns(df):
     if 'Customer/Supplier Name' not in df.columns:
         for a in (
             'customer/supplier name', 'customer/supplier name.',
+            'customer/vendor name', 'customer vendor name',
             'customer name', 'customername',
         ):
             if a in key_to_col:

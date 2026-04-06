@@ -520,10 +520,12 @@ def sales_summary_upload(request):
             'postingdate': ['postingdate', 'posting date'],
             'customer_code': [
                 'customer/supplier no.', 'customer/supplier no', 'customer/supplier number',
+                'customer/vendor code', 'customer vendor code',
                 'customer code', 'customercode', 'customer no', 'customer no.',
             ],
             'customer_name': [
                 'customer/supplier name', 'customer/supplier name.',
+                'customer/vendor name', 'customer vendor name',
                 'customer name', 'customername',
             ],
             'sales_employee': ['sales employee', 'salesemployee', 'salesman'],
