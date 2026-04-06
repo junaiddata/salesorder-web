@@ -3608,6 +3608,13 @@ def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting
     total_range = request.GET.get('total', '').strip()
     remarks_filter = request.GET.get('remarks', '').strip()
     q = request.GET.get('q', '').strip()
+    firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
+
+    if firm_filter_list:
+        q_firm = Q()
+        for f in firm_filter_list:
+            q_firm |= Q(brand__icontains=f) | Q(items__description__icontains=f)
+        qs = qs.filter(q_firm).distinct()
 
     if total_range:
         if total_range == "0-5000":
@@ -3816,6 +3823,14 @@ def quotation_list(request):
         .order_by('salesman_name')
     )
 
+    firm_brands = (
+        quotation_scope_qs.exclude(brand__isnull=True)
+        .exclude(brand='')
+        .values_list('brand', flat=True)
+        .distinct()
+    )
+    firm_choices = sorted({str(b).strip() for b in firm_brands if b and str(b).strip()}, key=str.lower)
+
     return render(request, 'quotes/quotation_list.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
@@ -3834,6 +3849,7 @@ def quotation_list(request):
         'quotation_month_total_value': quotation_month_total_value,
         'quotation_month_quotation_count': quotation_month_quotation_count,
         'today': today,
+        'firm_choices': firm_choices,
         'filters': {
             'q': q,
             'salesmen_filter': salesmen_filter,  # ✅ for multi-select
@@ -3843,6 +3859,7 @@ def quotation_list(request):
             'page_size': page_size,
             'total': total_range,      # ✅ for keeping dropdown selected
             'remarks': remarks_filter, # ✅ for keeping dropdown selected
+            'firm_selected': request.GET.getlist('firm'),
         }
     })
 
@@ -3871,6 +3888,12 @@ def export_quotation_list_pdf(request):
     status = request.GET.get('status', '').strip()
     total_range = request.GET.get('total', '').strip()
     remarks_filter = request.GET.get('remarks', '').strip()
+    firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
+    if firm_filter_list:
+        q_firm = Q()
+        for f in firm_filter_list:
+            q_firm |= Q(brand__icontains=f) | Q(items__description__icontains=f)
+        qs = qs.filter(q_firm).distinct()
 
     # Apply Total Range Filter
     if total_range:
@@ -4133,93 +4156,8 @@ def quotation_detail(request, q_number):
 # =====================
 @login_required
 def quotation_search(request):
-    # Scope by logged-in user
     qs = SAPQuotation.objects.all().filter(salesman_scope_q(request.user))
-
-    q = request.GET.get('q', '').strip()
-
-    # In quotation_list and quotation_search views:
-    salesmen_filter = request.GET.getlist('salesman') # Gets ['Name1', 'Name2']
-
-    # 2. Logic
-    if salesmen_filter:
-         clean_salesmen = [s for s in salesmen_filter if s.strip()]
-         if clean_salesmen:
-             qs = qs.filter(salesman_name__in=clean_salesmen)
-
-    start = request.GET.get('start', '').strip()
-    end = request.GET.get('end', '').strip()
-    status = request.GET.get('status', '').strip()
-    total_range = request.GET.get('total', '').strip()   # ✅ NEW
-    remarks_filter = request.GET.get('remarks', '').strip()
-
-    # --- Existing filters ---
-    if q:
-        if q.isdigit():
-            qs = qs.filter(q_number__istartswith=q)
-        elif len(q) < 3:
-            qs = qs.filter(
-                Q(customer_name__istartswith=q) |
-                Q(salesman_name__istartswith=q)
-            )
-        else:
-            qs = qs.filter(
-                Q(q_number__icontains=q) |
-                Q(customer_name__icontains=q) |
-                Q(salesman_name__icontains=q)
-            )
-
-
-
-    if status:
-        # Normalize status values for filtering
-        status_normalized = status.upper()
-        if status_normalized in ['O', 'OPEN']:
-            qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
-        elif status_normalized in ['C', 'CLOSED']:
-            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
-        else:
-            qs = qs.filter(status__iexact=status)
-
-    # --- ✅ REMARKS FILTER ---
-    if remarks_filter == "YES":
-        qs = qs.filter(remarks__isnull=False).exclude(remarks__exact="")
-    elif remarks_filter == "NO":
-        qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
-
-    # --- DATE FILTER ---
-    def parse_date(s):
-        if not s:
-            return None
-        try:
-            if len(s) == 7:
-                return datetime.strptime(s + '-01', '%Y-%m-%d').date()
-            return datetime.strptime(s, '%Y-%m-%d').date()
-        except ValueError:
-            return None
-
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
-
-    # --- ✅ DOCUMENT TOTAL FILTER ---
-    if total_range:
-        if total_range == "0-5000":
-            qs = qs.filter(document_total__gte=0, document_total__lte=5000)
-        elif total_range == "5001-10000":
-            qs = qs.filter(document_total__gte=5001, document_total__lte=10000)
-        elif total_range == "10001-25000":
-            qs = qs.filter(document_total__gte=10001, document_total__lte=25000)
-        elif total_range == "25001-50000":
-            qs = qs.filter(document_total__gte=25001, document_total__lte=50000)
-        elif total_range == "50001-100000":
-            qs = qs.filter(document_total__gte=50001, document_total__lte=100000)
-        elif total_range == "100000+":
-            qs = qs.filter(document_total__gt=100000)
+    qs = _sap_quotation_list_apply_request_filters(qs, request, apply_posting_date_range=True)
 
     # --- ✅ TOTAL VALUE (sum of document_total on FILTERED qs) ---
     total_value = qs.aggregate(

@@ -33,6 +33,12 @@
       --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
       --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
       --transition: 150ms ease;
+      --text-placeholder: #a0aec0;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --primary-ghost: #eff6ff;
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.04);
+      --radius-xs: 6px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -288,9 +294,333 @@
       accent-color: var(--primary);
     }
 
+    /* Firm filter: same multi-select pattern as Purchase Stock Requirement */
+    .multi-select.firm-ms {
+      position: relative;
+      width: 100%;
+      min-width: 220px;
+      max-width: 360px;
+    }
+
+    .multi-select.firm-ms .select-box {
+      padding: 9px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      transition: all var(--transition);
+      min-height: 42px;
+    }
+
+    .multi-select.firm-ms .select-box::after {
+      display: none;
+      content: none;
+    }
+
+    .multi-select.firm-ms .select-box:hover {
+      border-color: #94a3b8;
+    }
+
+    .multi-select.firm-ms .select-box.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .multi-select.firm-ms .select-box-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .multi-select.firm-ms .select-box-text.placeholder {
+      color: var(--text-placeholder);
+    }
+
+    .multi-select.firm-ms .select-box-badges {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .multi-select.firm-ms .select-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .multi-select.firm-ms .select-badge-count {
+      background: var(--primary);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .multi-select.firm-ms .select-box-chevron {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      transition: transform var(--transition);
+      flex-shrink: 0;
+    }
+
+    .multi-select.firm-ms .select-box.active .select-box-chevron {
+      transform: rotate(180deg);
+    }
+
+    .multi-select.firm-ms .select-box-clear {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      flex-shrink: 0;
+      transition: all var(--transition);
+    }
+
+    .multi-select.firm-ms .select-box-clear:hover {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    .multi-select.firm-ms .select-box-clear.visible {
+      display: inline-flex;
+    }
+
+    .multi-select.firm-ms .options-container {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      display: none;
+      overflow: hidden;
+      animation: firmDropdownIn 0.15s ease;
+    }
+
+    @keyframes firmDropdownIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .multi-select.firm-ms .options-container.active {
+      display: block;
+    }
+
+    .multi-select.firm-ms .options-header {
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .multi-select.firm-ms .options-search {
+      width: 100%;
+      padding: 8px 10px 8px 32px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-xs);
+      font-size: 0.8125rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color var(--transition);
+    }
+
+    .multi-select.firm-ms .options-search:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .multi-select.firm-ms .options-search-wrap {
+      position: relative;
+    }
+
+    .multi-select.firm-ms .options-search-wrap i {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .multi-select.firm-ms .options-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .multi-select.firm-ms .options-action-btn {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      transition: all var(--transition);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .multi-select.firm-ms .options-action-btn:hover {
+      background: var(--primary-ghost);
+    }
+
+    .multi-select.firm-ms .options-action-btn.danger {
+      color: var(--danger);
+    }
+
+    .multi-select.firm-ms .options-action-btn.danger:hover {
+      background: var(--danger-light);
+    }
+
+    .multi-select.firm-ms .options-list {
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .multi-select.firm-ms .option-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      transition: background var(--transition);
+      color: var(--text);
+      user-select: none;
+    }
+
+    .multi-select.firm-ms .option-label:hover {
+      background: var(--bg);
+    }
+
+    .multi-select.firm-ms .option-label.option-hidden {
+      display: none;
+    }
+
+    .multi-select.firm-ms .option-label input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      transition: all var(--transition);
+    }
+
+    .multi-select.firm-ms .option-label input[type="checkbox"]:checked {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .multi-select.firm-ms .option-label input[type="checkbox"]:checked::after {
+      content: '\f00c';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      font-size: 0.55rem;
+      color: white;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .multi-select.firm-ms .option-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .multi-select.firm-ms .options-empty {
+      padding: 20px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
+
     /* Table */
     .table-card {
       overflow: hidden;
+      position: relative;
+    }
+
+    .filter-loading-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(3px);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+    .filter-loading-overlay[hidden] {
+      display: none !important;
+    }
+    .filter-loading-spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: filterLoadingSpin 0.65s linear infinite;
+    }
+    @keyframes filterLoadingSpin {
+      to { transform: rotate(360deg); }
+    }
+    .filter-loading-text {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
     }
 
     .table-wrap {
@@ -690,7 +1020,7 @@
               {% for s in salesmen %}
                 <label class="option-label">
                   <input type="checkbox" name="salesman" value="{{ s }}" 
-                    {% if s in filters.salesman %}checked{% endif %}>
+                    {% if s in filters.salesmen_filter %}checked{% endif %}>
                   {{ s }}
                 </label>
               {% endfor %}
@@ -737,6 +1067,40 @@
             <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
             <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
           </select>
+        </div>
+
+        <div class="field">
+          <label>Firm / manufacturer</label>
+          <div class="multi-select firm-ms" id="q-firm-wrapper">
+            <div class="select-box" id="q-firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="q-firm-display">Select firm(s)…</span>
+              <button type="button" class="select-box-clear" id="q-firm-clear" title="Clear all" aria-label="Clear selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="q-firm-options" role="listbox" aria-label="Select firms">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="q-firm-search" class="options-search" placeholder="Search firms…" autocomplete="off" aria-label="Search firms">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="q-firm-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="q-firm-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="q-firm-options-list" role="group">
+                {% for f in firm_choices %}
+                <label class="option-label" data-value="{{ f }}" role="option">
+                  <input type="checkbox" name="firm" value="{{ f }}" {% if f in filters.firm_selected %}checked{% endif %}>
+                  <span class="option-text">{{ f }}</span>
+                </label>
+                {% endfor %}
+              </div>
+              <div class="options-empty" id="q-firm-no-results" style="display:none;">No firms found</div>
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -793,6 +1157,10 @@
     </div>
 
     <div class="card table-card">
+      <div id="sap-q-filter-loading" class="filter-loading-overlay" hidden aria-hidden="true">
+        <div class="filter-loading-spinner" role="status" aria-label="Loading"></div>
+        <span class="filter-loading-text">Loading…</span>
+      </div>
       <div class="table-wrap">
         <table aria-label="Quotations">
           <thead>
@@ -826,6 +1194,12 @@
     const form = document.getElementById('filters');
     const body = document.getElementById('quotations-body');
     const pagination = document.getElementById('pagination');
+    const filterLoadingEl = document.getElementById('sap-q-filter-loading');
+    function setFilterLoading(on) {
+      if (!filterLoadingEl) return;
+      filterLoadingEl.hidden = !on;
+      filterLoadingEl.setAttribute('aria-hidden', on ? 'false' : 'true');
+    }
 
     let timer = null;
     function debounce(fn, delay) {
@@ -867,6 +1241,7 @@
 
     function load(params) {
       const url = '{% url "quotation_search" %}?'+qs(params);
+      setFilterLoading(true);
       return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
         .then(data => {
@@ -885,7 +1260,8 @@
           }
           syncCalendarSelectionHighlight();
         })
-        .catch(console.error);
+        .catch(console.error)
+        .finally(function() { setFilterLoading(false); });
     }
 
     window.syncQuotationCalendarSelectionHighlight = syncCalendarSelectionHighlight;
@@ -1067,6 +1443,214 @@
         options.classList.remove('active');
       }
     });
+  });
+
+  /* Firm multi-select (same behavior as Purchase Stock Requirement page) */
+  document.addEventListener('DOMContentLoaded', function() {
+    (function() {
+      var firmWrapper = document.getElementById('q-firm-wrapper');
+      var firmTrigger = document.getElementById('q-firm-trigger');
+      var firmOptions = document.getElementById('q-firm-options');
+      var firmList = document.getElementById('q-firm-options-list');
+      var firmDisplay = document.getElementById('q-firm-display');
+      var firmSearch = document.getElementById('q-firm-search');
+      var firmClearBtn = document.getElementById('q-firm-clear');
+      var firmSelectAll = document.getElementById('q-firm-select-all');
+      var firmClearAll = document.getElementById('q-firm-clear-all');
+      var firmNoResults = document.getElementById('q-firm-no-results');
+      if (!firmWrapper || !firmTrigger || !firmOptions || !firmList) return;
+
+      var filtersForm = document.getElementById('filters');
+
+      function getCheckboxes() {
+        return firmList.querySelectorAll('input[type="checkbox"]');
+      }
+
+      function getLabels() {
+        return Array.from(firmList.querySelectorAll('.option-label'));
+      }
+
+      function getVisibleLabels() {
+        return getLabels().filter(function(l) { return !l.classList.contains('option-hidden'); });
+      }
+
+      function sortLabels() {
+        var labels = getLabels();
+        var checked = [];
+        var unchecked = [];
+        labels.forEach(function(l) {
+          var cb = l.querySelector('input[type="checkbox"]');
+          if (cb && cb.checked) checked.push(l);
+          else unchecked.push(l);
+        });
+        var frag = document.createDocumentFragment();
+        checked.forEach(function(l) { frag.appendChild(l); });
+        unchecked.forEach(function(l) { frag.appendChild(l); });
+        firmList.appendChild(frag);
+      }
+
+      function updateDisplay() {
+        var boxes = Array.from(getCheckboxes());
+        var checked = boxes.filter(function(c) { return c.checked; });
+        var count = checked.length;
+
+        if (firmClearBtn) {
+          firmClearBtn.classList.toggle('visible', count > 0);
+        }
+
+        if (count === 0) {
+          firmDisplay.className = 'select-box-text placeholder';
+          firmDisplay.textContent = 'Select firm(s)…';
+        } else if (count === 1) {
+          firmDisplay.className = 'select-box-text';
+          firmDisplay.innerHTML = '';
+          var badge = document.createElement('span');
+          badge.className = 'select-badge';
+          badge.textContent = checked[0].value;
+          firmDisplay.appendChild(badge);
+        } else if (count <= 2) {
+          firmDisplay.className = 'select-box-text';
+          firmDisplay.innerHTML = '';
+          var container = document.createElement('span');
+          container.className = 'select-box-badges';
+          checked.forEach(function(cb) {
+            var b = document.createElement('span');
+            b.className = 'select-badge';
+            b.textContent = cb.value;
+            container.appendChild(b);
+          });
+          firmDisplay.appendChild(container);
+        } else {
+          firmDisplay.className = 'select-box-text';
+          firmDisplay.innerHTML = '';
+          var container = document.createElement('span');
+          container.className = 'select-box-badges';
+          var badge = document.createElement('span');
+          badge.className = 'select-badge';
+          badge.textContent = checked[0].value;
+          container.appendChild(badge);
+          var more = document.createElement('span');
+          more.className = 'select-badge-count';
+          more.textContent = '+' + (count - 1) + ' more';
+          container.appendChild(more);
+          firmDisplay.appendChild(container);
+        }
+      }
+
+      function triggerFilterReload() {
+        if (filtersForm) {
+          filtersForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+
+      function openDropdown() {
+        firmOptions.classList.add('active');
+        firmTrigger.classList.add('active');
+        firmTrigger.setAttribute('aria-expanded', 'true');
+        sortLabels();
+        setTimeout(function() { if (firmSearch) firmSearch.focus(); }, 50);
+      }
+
+      function closeDropdown() {
+        firmOptions.classList.remove('active');
+        firmTrigger.classList.remove('active');
+        firmTrigger.setAttribute('aria-expanded', 'false');
+        if (firmSearch) firmSearch.value = '';
+        getLabels().forEach(function(l) { l.classList.remove('option-hidden'); });
+        if (firmNoResults) firmNoResults.style.display = 'none';
+      }
+
+      function toggleDropdown() {
+        if (firmOptions.classList.contains('active')) closeDropdown();
+        else openDropdown();
+      }
+
+      firmTrigger.addEventListener('click', function(e) {
+        if (e.target.closest('.select-box-clear')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleDropdown();
+      });
+
+      firmTrigger.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleDropdown();
+        }
+      });
+
+      firmOptions.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+
+      if (firmClearBtn) {
+        firmClearBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+          triggerFilterReload();
+        });
+      }
+
+      if (firmSelectAll) {
+        firmSelectAll.addEventListener('click', function() {
+          getVisibleLabels().forEach(function(l) {
+            var cb = l.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = true;
+          });
+          updateDisplay();
+          sortLabels();
+          triggerFilterReload();
+        });
+      }
+
+      if (firmClearAll) {
+        firmClearAll.addEventListener('click', function() {
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+          sortLabels();
+          triggerFilterReload();
+        });
+      }
+
+      firmList.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+          updateDisplay();
+          triggerFilterReload();
+        }
+      });
+
+      if (firmSearch) {
+        firmSearch.addEventListener('input', function() {
+          var term = this.value.toLowerCase().trim();
+          var labels = getLabels();
+          var visibleCount = 0;
+          labels.forEach(function(label) {
+            var dv = label.getAttribute('data-value') || '';
+            var text = dv.toLowerCase();
+            var optText = (label.querySelector('.option-text') || {}).textContent || '';
+            var match = term === '' || text.includes(term) || optText.toLowerCase().includes(term);
+            label.classList.toggle('option-hidden', !match);
+            if (match) visibleCount++;
+          });
+          if (firmNoResults) {
+            firmNoResults.style.display = visibleCount === 0 ? 'block' : 'none';
+          }
+        });
+        firmSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+      }
+
+      document.addEventListener('click', function(e) {
+        if (!firmWrapper.contains(e.target)) closeDropdown();
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeDropdown();
+      });
+
+      updateDisplay();
+    })();
   });
 </script>
 </body>

@@ -379,6 +379,16 @@ def inapp_quotations_filtered_qs(request):
             | Q(customer_display_name__icontains=q)
         )
 
+    firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
+    if firm_filter_list:
+        q_firm = Q()
+        for f in firm_filter_list:
+            q_firm |= (
+                Q(items__item__item_firm__icontains=f)
+                | Q(items__item__item_description__icontains=f)
+            )
+        quotations = quotations.filter(q_firm).distinct()
+
     return quotations.order_by('-created_at')
 
 
@@ -628,7 +638,22 @@ def view_quotations(request):
         query_params.append(f"division={division}")
     if q:
         query_params.append(f"q={q}")
+    for f in request.GET.getlist('firm'):
+        if (f or '').strip():
+            query_params.append('firm=' + quote(f.strip()))
     query_string = "&".join(query_params)
+
+    firm_raw = (
+        Items.objects.exclude(item_firm__isnull=True)
+        .exclude(item_firm='')
+        .values_list('item_firm', flat=True)
+        .distinct()
+    )
+    firm_choices = sorted(
+        {str(x).strip() for x in firm_raw if x and str(x).strip()},
+        key=str.lower,
+    )
+    firm_selected = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
 
     context = {
         'quotations': quotations_page,
@@ -641,6 +666,8 @@ def view_quotations(request):
         'search_query': q,
         'query_string': query_string,
         'show_inapp_calendar': show_inapp_calendar,
+        'firm_choices': firm_choices,
+        'firm_selected': firm_selected,
     }
     if show_inapp_calendar:
         context.update({
@@ -704,6 +731,9 @@ def view_quotations_ajax(request):
         query_params.append(f"division={division}")
     if q:
         query_params.append(f"q={q}")
+    for f in request.GET.getlist('firm'):
+        if (f or '').strip():
+            query_params.append('firm=' + quote(f.strip()))
     query_string = "&".join(query_params)
 
     html = render_to_string(

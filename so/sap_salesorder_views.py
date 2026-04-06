@@ -1160,6 +1160,17 @@ def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
     elif remarks_filter == "NO":
         qs = qs.filter(Q(remarks__isnull=True) | Q(remarks__exact=""))
 
+    firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
+    if firm_filter_list:
+        q_firm = Q()
+        for f in firm_filter_list:
+            q_firm |= (
+                Q(brand__icontains=f)
+                | Q(items__description__icontains=f)
+                | Q(items__manufacture__icontains=f)
+            )
+        qs = qs.filter(q_firm).distinct()
+
     if q:
         if q.isdigit():
             qs = qs.filter(so_number__istartswith=q)
@@ -1204,6 +1215,7 @@ def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
         'remarks_filter': remarks_filter,
         'approval_status_filter': approval_status_filter,
         'is_admin': is_admin,
+        'firm_selected': request.GET.getlist('firm'),
     }
     return qs, qs_for_years, meta
 
@@ -1252,10 +1264,44 @@ def salesorder_list(request):
         .order_by('salesman_name')
     )
 
+    so_scope = SAPSalesorder.objects.filter(salesman_scope_q_salesorder(request.user))
+    # Header `brand` is often empty; line `manufacture` and Items.item_firm (via item_no) carry firms.
+    firm_chunks = []
+    firm_chunks.extend(
+        so_scope.exclude(brand__isnull=True)
+        .exclude(brand='')
+        .values_list('brand', flat=True)
+    )
+    line_qs = SAPSalesorderItem.objects.filter(salesorder__in=so_scope)
+    firm_chunks.extend(
+        line_qs.exclude(manufacture__isnull=True)
+        .exclude(manufacture='')
+        .values_list('manufacture', flat=True)
+        .distinct()
+    )
+    item_codes = (
+        line_qs.exclude(item_no__isnull=True)
+        .exclude(item_no='')
+        .values_list('item_no', flat=True)
+        .distinct()
+    )
+    firm_chunks.extend(
+        Items.objects.filter(item_code__in=item_codes)
+        .exclude(item_firm__isnull=True)
+        .exclude(item_firm='')
+        .values_list('item_firm', flat=True)
+        .distinct()
+    )
+    firm_choices = sorted(
+        {str(x).strip() for x in firm_chunks if x and str(x).strip()},
+        key=str.lower,
+    )
+
     return render(request, 'salesorders/salesorder_list.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
         'salesmen': salesmen,
+        'firm_choices': firm_choices,
         'filters': {
             'q': meta['q'],
             'salesmen_filter': meta['salesmen_filter'],
@@ -1266,6 +1312,7 @@ def salesorder_list(request):
             'total': meta['total_range'],
             'remarks': meta['remarks_filter'],
             'approval_status': meta['approval_status_filter'],
+            'firm_selected': meta['firm_selected'],
         },
         'is_admin': meta['is_admin'],
     })
