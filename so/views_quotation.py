@@ -973,6 +973,7 @@ def export_combined_quotations_items_excel(request):
                 'Date': date_str,
                 'Customer Code': q.customer_code or '',
                 'Customer Name': q.customer_name or '',
+                'Salesman': q.salesman_name or '',
                 'Item No': li.item_no or '',
                 'Item Name': li.description or '',
                 'Quantity': qty,
@@ -983,7 +984,7 @@ def export_combined_quotations_items_excel(request):
         app_base = inapp_quotations_filtered_qs(request)
         app_items = (
             QuotationItem.objects.filter(quotation__in=app_base)
-            .select_related('quotation', 'quotation__customer', 'item')
+            .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item')
             .order_by('quotation_id', 'id')
         )
         for li in app_items.iterator(chunk_size=1000):
@@ -1003,6 +1004,7 @@ def export_combined_quotations_items_excel(request):
                 'Date': date_str,
                 'Customer Code': cust.customer_code if cust else '',
                 'Customer Name': name,
+                'Salesman': qo.salesman.salesman_name if qo.salesman_id else '',
                 'Item No': item_no,
                 'Item Name': item_name,
                 'Quantity': qty,
@@ -1020,7 +1022,7 @@ def export_combined_quotations_items_excel(request):
     )
     cols = [
         'Source', 'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
-        'Item No', 'Item Name', 'Quantity', 'Price', 'Total Value',
+        'Salesman', 'Item No', 'Item Name', 'Quantity', 'Price', 'Total Value',
     ]
     df = pd.DataFrame(rows, columns=cols)
     if df.empty:
