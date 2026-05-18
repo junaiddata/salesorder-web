@@ -286,8 +286,6 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
             all_orders = client.sync_all_salesorders(days_back=days_back)
             sync_stats['api_calls'] = 1 + days_back
 
-        all_orders = client._filter_ho_customers(all_orders)
-
         if not all_orders:
             return sync_stats
 

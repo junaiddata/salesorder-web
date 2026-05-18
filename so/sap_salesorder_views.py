@@ -412,10 +412,9 @@ def upload_salesorders(request):
 
                 # Filter to only process HO and SD customers (customer code starts with "HO" or "SD")
                 if 'Customer/Supplier No.' in df.columns:
-                    # Normalize customer code for filtering
                     df['Customer/Supplier No.'] = df['Customer/Supplier No.'].astype(str).str.strip().str.upper()
                     df = df[df['Customer/Supplier No.'].str.startswith(('HO', 'SD'), na=False)].reset_index(drop=True)
-                    
+
                     if len(df) == 0:
                         messages_list.append("No sales orders found with customer codes starting with 'HO' or 'SD'.")
                         return render(request, 'salesorders/upload_salesorders.html', {
@@ -655,7 +654,7 @@ def sync_salesorders_from_api(request):
         if sync_stats['errors']:
             messages.error(request, f"Error syncing from API: {sync_stats['errors'][-1]}")
         elif sync_stats['total_orders'] == 0:
-            messages.warning(request, "No sales orders found (after filtering by HO and SD customers).")
+            messages.warning(request, "No sales orders found.")
         else:
             messages.success(
                 request,
