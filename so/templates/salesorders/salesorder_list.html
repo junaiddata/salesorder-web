@@ -789,6 +789,29 @@
     #remarkPopup.visible {
       display: block;
     }
+
+    .store-tile {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all var(--transition);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .store-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .store-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -830,10 +853,21 @@
       </div>
     </header>
 
+    <!-- Store filter tiles -->
+    <div class="card" style="margin-bottom: 16px; padding: 14px 18px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">Store:</span>
+        <button type="button" class="store-tile {% if not filters.store %}active{% endif %}" data-store="">All</button>
+        <button type="button" class="store-tile {% if filters.store == 'HO' %}active{% endif %}" data-store="HO">HO</button>
+        <button type="button" class="store-tile {% if filters.store == 'Others' %}active{% endif %}" data-store="Others">Others</button>
+      </div>
+    </div>
+
     <!-- Filters -->
     <div class="card filters-card">
       <form id="filters" class="filters-grid" method="get">
         <input type="hidden" name="approval_status" value="{{ filters.approval_status }}">
+        <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
         <div class="field">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="SO No, Customer, Salesman, LPO Ref...">
@@ -1147,6 +1181,20 @@
         });
         this.classList.remove('btn-secondary');
         this.classList.add('btn-primary');
+        load(collectParams({ page: 1 }));
+      });
+    });
+
+    // Store filter tiles
+    const storeTiles = document.querySelectorAll('.store-tile[data-store]');
+    const storeInput = document.getElementById('store-input');
+    storeTiles.forEach(function(tile) {
+      tile.addEventListener('click', function() {
+        storeTiles.forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+        if (storeInput) {
+          storeInput.value = this.getAttribute('data-store') || '';
+        }
         load(collectParams({ page: 1 }));
       });
     });

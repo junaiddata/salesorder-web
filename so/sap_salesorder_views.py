@@ -1098,13 +1098,29 @@ def _salesorder_list_parse_date(s):
         return None
 
 
+def _salesorder_store_others_q() -> Q:
+    """Retail/export salesmen → Others store (same rule as SAP AR invoices)."""
+    return Q(salesman_name__istartswith='R.') | Q(salesman_name__istartswith='E.')
+
+
+def _apply_salesorder_store_filter(qs, store_filter: str):
+    sf = (store_filter or '').strip()
+    if sf == 'Others':
+        return qs.filter(_salesorder_store_others_q())
+    if sf == 'HO':
+        return qs.exclude(_salesorder_store_others_q())
+    return qs
+
+
 def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
     """
     Shared filters for sales order list + AJAX search + deferred stats.
     When include_pending_annotation is False (stats endpoint), skip per-row Sum(items)
     so global aggregates stay a single clean Sum join.
     """
+    store_filter = request.GET.get('store', '').strip()
     qs = SAPSalesorder.objects.all().filter(salesman_scope_q_salesorder(request.user))
+    qs = _apply_salesorder_store_filter(qs, store_filter)
     open_items_sq = SAPSalesorderItem.objects.filter(salesorder=OuterRef("pk")).filter(_open_row_status_q())
     ann = dict(
         has_open=Exists(open_items_sq),
@@ -1213,6 +1229,7 @@ def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
         'total_range': total_range,
         'remarks_filter': remarks_filter,
         'approval_status_filter': approval_status_filter,
+        'store_filter': store_filter,
         'is_admin': is_admin,
         'firm_selected': request.GET.getlist('firm'),
     }
@@ -1312,6 +1329,7 @@ def salesorder_list(request):
             'remarks': meta['remarks_filter'],
             'approval_status': meta['approval_status_filter'],
             'firm_selected': meta['firm_selected'],
+            'store': meta['store_filter'],
         },
         'is_admin': meta['is_admin'],
     })
