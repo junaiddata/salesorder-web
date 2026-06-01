@@ -3743,31 +3743,130 @@ def quotation_list(request):
         calendar_period_label = ', '.join(calendar.month_name[m] for m in qcal_months) + ' ' + str(qcal_year)
 
     quotation_month_days = []
-    for grid_month in qcal_months:
-        _, last_day_in_month = calendar.monthrange(qcal_year, grid_month)
-        is_calendar_current_month = qcal_year == current_year and grid_month == current_month
-        last_calendar_day = min(today.day, last_day_in_month) if is_calendar_current_month else last_day_in_month
 
-        for day_num in range(1, last_calendar_day + 1):
-            day_date = date(qcal_year, grid_month, day_num)
-            day_qs = quotation_calendar_qs.filter(posting_date=day_date)
-            agg = day_qs.aggregate(
-                total=Coalesce(Sum('document_total'), Value(0, output_field=DecimalField())),
-                cnt=Count('id'),
+    # Load quotations with items
+    calendar_quotes = quotation_calendar_qs.prefetch_related('items')
+
+    # Get all item codes
+    all_item_codes = set()
+
+    for q in calendar_quotes:
+        for item in q.items.all():
+            if item.item_no:
+                all_item_codes.add(
+                    str(item.item_no).strip()
+                )
+
+    # Build cost lookup
+    cost_map = dict(
+        Items.objects.filter(
+            item_code__in=all_item_codes
+        ).values_list(
+            'item_code',
+            'item_cost'
+        )
+    )
+
+    # GP lookup
+    gp_lookup = {}
+
+    for q in calendar_quotes:
+
+        estimated_cost = 0
+
+        for item in q.items.all():
+
+            code = str(item.item_no).strip() if item.item_no else ''
+
+            cost = float(
+                cost_map.get(code, 0) or 0
             )
-            total_val = agg['total'] if agg['total'] is not None else Decimal('0')
-            cnt = agg['cnt'] or 0
+
+            qty = float(item.quantity or 0)
+
+            estimated_cost += (cost * qty)
+
+        gp_lookup[q.id] = (
+            float(q.document_total or 0)
+            - estimated_cost
+        )
+
+    for grid_month in qcal_months:
+
+        _, last_day_in_month = calendar.monthrange(
+            qcal_year,
+            grid_month
+        )
+
+        is_calendar_current_month = (
+            qcal_year == current_year
+            and grid_month == current_month
+        )
+
+        last_calendar_day = (
+            min(today.day, last_day_in_month)
+            if is_calendar_current_month
+            else last_day_in_month
+        )
+
+        for day_num in range(
+            1,
+            last_calendar_day + 1
+        ):
+
+            day_date = date(
+                qcal_year,
+                grid_month,
+                day_num
+            )
+
+            day_qs = calendar_quotes.filter(
+                posting_date=day_date
+            )
+
+            agg = day_qs.aggregate(
+                total=Coalesce(
+                    Sum('document_total'),
+                    Value(
+                        0,
+                        output_field=DecimalField()
+                    )
+                ),
+                cnt=Count('id')
+            )
+
+            total_gp = 0
+
+            for q in day_qs:
+                total_gp += gp_lookup.get(
+                    q.id,
+                    0
+                )
+
             quotation_month_days.append({
                 'date': day_date,
-                'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
-                'total_value': total_val,
-                'quotation_count': cnt,
-                'has_quotations': cnt > 0,
+                'formatted_date': f"{month_names_short[grid_month-1]} {day_num}",
+                'total_value': agg['total'] or Decimal('0'),
+                'quotation_count': agg['cnt'] or 0,
+                'gp': total_gp,
+                'has_quotations': (agg['cnt'] or 0) > 0,
             })
 
-    # Combined totals aligned with displayed day cells
-    quotation_month_total_value = sum((d['total_value'] for d in quotation_month_days), Decimal('0'))
-    quotation_month_quotation_count = sum(d['quotation_count'] for d in quotation_month_days)
+
+    quotation_month_total_value = sum(
+        d['total_value']
+        for d in quotation_month_days
+    )
+
+    quotation_month_quotation_count = sum(
+        d['quotation_count']
+        for d in quotation_month_days
+    )
+
+    quotation_month_total_gp = sum(
+        d['gp']
+        for d in quotation_month_days
+    )
 
     if request.GET.get('ajax') == 'quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         calendar_html = render_to_string(
@@ -3778,6 +3877,7 @@ def quotation_list(request):
                 'qcal_months': qcal_months,
                 'quotation_month_total_value': quotation_month_total_value,
                 'quotation_month_quotation_count': quotation_month_quotation_count,
+                'quotation_month_total_gp': quotation_month_total_gp,
             },
             request=request,
         )
@@ -3881,6 +3981,7 @@ def quotation_list(request):
         'quotation_month_days': quotation_month_days,
         'quotation_month_total_value': quotation_month_total_value,
         'quotation_month_quotation_count': quotation_month_quotation_count,
+        'quotation_month_total_gp': quotation_month_total_gp,
         'today': today,
         'firm_choices': firm_choices,
         'filters': {
