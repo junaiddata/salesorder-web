@@ -404,6 +404,15 @@ class SAPQuotation(models.Model):
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
+    salesman_remarks = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    sales_director_remarks = models.TextField(
+        blank=True,
+        null=True
+    )
     bill_to = models.TextField(blank=True, null=True)  # 👈 added field
 
     def __str__(self):

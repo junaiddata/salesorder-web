@@ -480,13 +480,70 @@
       <div class="card-body">
         <form method="post" action="{% url 'quotation_update_remarks' quotation.q_number %}">
           {% csrf_token %}
-          {% if not quotation.remarks %}
-            <div class="empty-remarks">No remarks yet — add yours below.</div>
-          {% endif %}
-          <textarea name="remarks" class="remarks-textarea" rows="3" placeholder="Add internal remarks…">{{ quotation.remarks|default_if_none:"" }}</textarea>
+    
+          <!-- General Remarks -->
+          <div style="margin-bottom:12px;">
+            <div class="info-label" style="margin-bottom:4px;">
+              General Remarks
+            </div>
+    
+            {% if not quotation.remarks %}
+              <div class="empty-remarks">No remarks yet.</div>
+            {% endif %}
+    
+            <textarea
+              name="remarks"
+              class="remarks-textarea"
+              rows="3"
+              placeholder="Add general remarks..."
+            >{{ quotation.remarks|default_if_none:"" }}</textarea>
+          </div>
+    
+          <!-- Salesman Remarks -->
+          <div style="margin-bottom:12px;">
+            <div class="info-label" style="margin-bottom:4px;">
+              Salesman Remarks
+            </div>
+    
+            {% if not quotation.salesman_remarks %}
+              <div class="empty-remarks">No salesman remarks yet.</div>
+            {% endif %}
+    
+            <textarea
+              name="salesman_remarks"
+              class="remarks-textarea"
+              rows="3"
+              placeholder="Add salesman remarks..."
+            >{{ quotation.salesman_remarks|default_if_none:"" }}</textarea>
+          </div>
+    
+          <!-- Sales Director Remarks -->
+          <div style="margin-bottom:12px;">
+            <div class="info-label" style="margin-bottom:4px;">
+              Sales Director Remarks
+            </div>
+    
+            {% if not quotation.sales_director_remarks %}
+              <div class="empty-remarks">No sales director remarks yet.</div>
+            {% endif %}
+    
+            <textarea
+              name="sales_director_remarks"
+              class="remarks-textarea"
+              rows="3"
+              placeholder="Add sales director remarks..."
+            >{{ quotation.sales_director_remarks|default_if_none:"" }}</textarea>
+          </div>
+    
           <div style="margin-top:6px; display:flex; gap:6px;">
-            <button class="btn btn-success btn-sm" type="submit">Save</button>
-            <a class="btn btn-secondary btn-sm" href="{% url 'quotation_detail' quotation.q_number %}">Cancel</a>
+            <button class="btn btn-success btn-sm" type="submit">
+              Save
+            </button>
+    
+            <a class="btn btn-secondary btn-sm"
+               href="{% url 'quotation_detail' quotation.q_number %}">
+              Cancel
+            </a>
           </div>
         </form>
       </div>

@@ -4583,23 +4583,52 @@ from django.db.models import Q
 @login_required
 @require_POST
 def quotation_update_remarks(request, q_number):
-    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+    quotation = get_object_or_404(
+        SAPQuotation,
+        q_number=q_number
+    )
 
-    # Enforce the same scope rules as detail view
+    # Enforce same scope rules as detail view
     if not (request.user.is_superuser or request.user.is_staff):
+
         allowed = SAPQuotation.objects.filter(
-            Q(pk=quotation.pk) & salesman_scope_q(request.user)
+            Q(pk=quotation.pk)
+            & salesman_scope_q(request.user)
         ).exists()
+
         if not allowed:
             raise Http404("Quotation not found")
 
-    # Update remarks
-    new_remarks = (request.POST.get("remarks") or "").strip()
-    quotation.remarks = new_remarks
-    quotation.save(update_fields=["remarks"])
+    # Update all remarks fields
+    quotation.remarks = (
+        request.POST.get("remarks") or ""
+    ).strip()
 
-    messages.success(request, "Remarks updated.")
-    return redirect("quotation_detail", q_number=quotation.q_number)
+    quotation.salesman_remarks = (
+        request.POST.get("salesman_remarks") or ""
+    ).strip()
+
+    quotation.sales_director_remarks = (
+        request.POST.get("sales_director_remarks") or ""
+    ).strip()
+
+    quotation.save(
+        update_fields=[
+            "remarks",
+            "salesman_remarks",
+            "sales_director_remarks",
+        ]
+    )
+
+    messages.success(
+        request,
+        "Remarks updated."
+    )
+
+    return redirect(
+        "quotation_detail",
+        q_number=quotation.q_number
+    )
 
 
 @login_required
