@@ -341,7 +341,7 @@
             Back
           </a>
         {% else %}
-          <a class="btn btn-secondary" href="{% url 'quotation_list' %}">
+          <a class="btn btn-secondary back-to-list" href="{% url 'quotation_list' %}">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
             Back
           </a>
@@ -602,7 +602,7 @@
           Back to Old PIs
         </a>
       {% else %}
-        <a class="btn btn-secondary" href="{% url 'quotation_list' %}">
+        <a class="btn btn-secondary back-to-list" href="{% url 'quotation_list' %}">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           Back to Quotations
         </a>
@@ -613,5 +613,14 @@
       </a>
     </div>
   </div>
+  <script>
+    (function() {
+      var saved = sessionStorage.getItem('quotation_list_filters');
+      if (saved) {
+        var url = '{% url "quotation_list" %}' + '?' + saved;
+        document.querySelectorAll('a.back-to-list').forEach(function(a) { a.href = url; });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -156,7 +156,7 @@
 
     @media (min-width: 1024px) {
       .filters-grid {
-        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
       }
     }
 
@@ -294,7 +294,7 @@
       accent-color: var(--primary);
     }
 
-    /* Firm filter: same multi-select pattern as Purchase Stock Requirement */
+    /* Searchable multi-select filter: same pattern as Purchase Stock Requirement */
     .multi-select.firm-ms {
       position: relative;
       width: 100%;
@@ -1012,18 +1012,68 @@
 
         <div class="field">
           <label>Salesman</label>
-          <div class="multi-select" id="salesman-wrapper">
-            <div class="select-box" id="salesman-trigger">
-              <span id="salesman-text">Select Salesman...</span>
+          <div class="multi-select firm-ms salesman-ms" id="q-salesman-wrapper">
+            <div class="select-box" id="q-salesman-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="q-salesman-display">Select salesman...</span>
+              <button type="button" class="select-box-clear" id="q-salesman-clear" title="Clear all" aria-label="Clear selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
             </div>
-            <div class="options-container" id="salesman-options">
-              {% for s in salesmen %}
-                <label class="option-label">
-                  <input type="checkbox" name="salesman" value="{{ s }}" 
-                    {% if s in filters.salesmen_filter %}checked{% endif %}>
-                  {{ s }}
+            <div class="options-container" id="q-salesman-options" role="listbox" aria-label="Select salesmen">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="q-salesman-search" class="options-search" placeholder="Search salesmen..." autocomplete="off" aria-label="Search salesmen">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="q-salesman-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="q-salesman-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="q-salesman-options-list" role="group">
+                {% for s in salesmen %}
+                <label class="option-label" data-value="{{ s }}" role="option">
+                  <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
+                  <span class="option-text">{{ s }}</span>
                 </label>
-              {% endfor %}
+                {% endfor %}
+              </div>
+              <div class="options-empty" id="q-salesman-no-results" style="display:none;">No salesmen found</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Firm / manufacturer</label>
+          <div class="multi-select firm-ms" id="q-firm-wrapper">
+            <div class="select-box" id="q-firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="q-firm-display">Select firm(s)...</span>
+              <button type="button" class="select-box-clear" id="q-firm-clear" title="Clear all" aria-label="Clear selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="q-firm-options" role="listbox" aria-label="Select firms">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="q-firm-search" class="options-search" placeholder="Search firms..." autocomplete="off" aria-label="Search firms">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="q-firm-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="q-firm-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="q-firm-options-list" role="group">
+                {% for f in firm_choices %}
+                <label class="option-label" data-value="{{ f }}" role="option">
+                  <input type="checkbox" name="firm" value="{{ f }}" {% if f in filters.firm_selected %}checked{% endif %}>
+                  <span class="option-text">{{ f }}</span>
+                </label>
+                {% endfor %}
+              </div>
+              <div class="options-empty" id="q-firm-no-results" style="display:none;">No firms found</div>
             </div>
           </div>
         </div>
@@ -1067,40 +1117,6 @@
             <option value="YES" {% if filters.remarks == 'YES' %}selected{% endif %}>Yes</option>
             <option value="NO" {% if filters.remarks == 'NO' %}selected{% endif %}>No</option>
           </select>
-        </div>
-
-        <div class="field">
-          <label>Firm / manufacturer</label>
-          <div class="multi-select firm-ms" id="q-firm-wrapper">
-            <div class="select-box" id="q-firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
-              <span class="select-box-text placeholder" id="q-firm-display">Select firm(s)…</span>
-              <button type="button" class="select-box-clear" id="q-firm-clear" title="Clear all" aria-label="Clear selection">
-                <i class="fas fa-times"></i>
-              </button>
-              <i class="fas fa-chevron-down select-box-chevron"></i>
-            </div>
-            <div class="options-container" id="q-firm-options" role="listbox" aria-label="Select firms">
-              <div class="options-header">
-                <div class="options-search-wrap">
-                  <i class="fas fa-search"></i>
-                  <input type="text" id="q-firm-search" class="options-search" placeholder="Search firms…" autocomplete="off" aria-label="Search firms">
-                </div>
-                <div class="options-actions">
-                  <button type="button" class="options-action-btn" id="q-firm-select-all">Select All</button>
-                  <button type="button" class="options-action-btn danger" id="q-firm-clear-all">Clear All</button>
-                </div>
-              </div>
-              <div class="options-list" id="q-firm-options-list" role="group">
-                {% for f in firm_choices %}
-                <label class="option-label" data-value="{{ f }}" role="option">
-                  <input type="checkbox" name="firm" value="{{ f }}" {% if f in filters.firm_selected %}checked{% endif %}>
-                  <span class="option-text">{{ f }}</span>
-                </label>
-                {% endfor %}
-              </div>
-              <div class="options-empty" id="q-firm-no-results" style="display:none;">No firms found</div>
-            </div>
-          </div>
         </div>
 
         <div class="field">
@@ -1189,6 +1205,20 @@
   </div>
 
 <script>
+  // Restore saved filters if page loaded with no params (e.g. Back link)
+  (function() {
+    var hasParams = window.location.search && window.location.search.length > 1;
+    if (!hasParams) {
+      var saved = sessionStorage.getItem('quotation_list_filters');
+      if (saved) {
+        window.location.replace(window.location.pathname + '?' + saved);
+        return;
+      }
+    } else {
+      sessionStorage.setItem('quotation_list_filters', window.location.search.slice(1));
+    }
+  })();
+
   // AJAX Search Logic
   (function() {
     const form = document.getElementById('filters');
@@ -1241,6 +1271,9 @@
 
     function load(params) {
       const url = '{% url "quotation_search" %}?'+qs(params);
+      const currentQs = params.toString();
+      history.replaceState(null, '', '?' + currentQs);
+      sessionStorage.setItem('quotation_list_filters', currentQs);
       setFilterLoading(true);
       return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(r => r.json())
@@ -1394,55 +1427,207 @@
     })();
   });
 
-  // Multi-Select Logic
-  document.addEventListener("DOMContentLoaded", function() {
-    const wrapper = document.getElementById('salesman-wrapper');
-    const trigger = document.getElementById('salesman-trigger');
-    const options = document.getElementById('salesman-options');
-    const textSpan = document.getElementById('salesman-text');
-    
-    const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
+  document.addEventListener('DOMContentLoaded', function() {
+    (function() {
+      var wrapper = document.getElementById('q-salesman-wrapper');
+      var trigger = document.getElementById('q-salesman-trigger');
+      var options = document.getElementById('q-salesman-options');
+      var list = document.getElementById('q-salesman-options-list');
+      var display = document.getElementById('q-salesman-display');
+      var search = document.getElementById('q-salesman-search');
+      var clearBtn = document.getElementById('q-salesman-clear');
+      var selectAll = document.getElementById('q-salesman-select-all');
+      var clearAll = document.getElementById('q-salesman-clear-all');
+      var noResults = document.getElementById('q-salesman-no-results');
+      if (!wrapper || !trigger || !options || !list) return;
 
-    trigger.addEventListener('click', function(e) {
-      e.stopPropagation(); 
-      options.classList.toggle('active');
-    });
+      var filtersForm = document.getElementById('filters');
 
-    options.addEventListener('click', function(e) {
-      e.stopPropagation();
-    });
-
-    function updateLabel() {
-      const checkboxes = getCheckboxes();
-      const checked = Array.from(checkboxes).filter(c => c.checked);
-      
-      if (checked.length === 0) {
-        textSpan.textContent = "All Salesmen";
-        textSpan.style.opacity = "0.7";
-      } else if (checked.length === 1) {
-        textSpan.textContent = checked[0].value;
-        textSpan.style.opacity = "1";
-      } else {
-        textSpan.textContent = `${checked.length} Selected`;
-        textSpan.style.opacity = "1";
+      function getCheckboxes() {
+        return list.querySelectorAll('input[type="checkbox"]');
       }
-    }
 
-    updateLabel();
+      function getLabels() {
+        return Array.from(list.querySelectorAll('.option-label'));
+      }
 
-    getCheckboxes().forEach(box => {
-      box.addEventListener('change', function() {
-        updateLabel();
-        const form = document.getElementById('filters');
-        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); 
-      });
-    });
+      function getVisibleLabels() {
+        return getLabels().filter(function(l) { return !l.classList.contains('option-hidden'); });
+      }
 
-    document.addEventListener('click', function(e) {
-      if (!wrapper.contains(e.target)) {
+      function sortLabels() {
+        var checked = [];
+        var unchecked = [];
+        getLabels().forEach(function(l) {
+          var cb = l.querySelector('input[type="checkbox"]');
+          if (cb && cb.checked) checked.push(l);
+          else unchecked.push(l);
+        });
+        var frag = document.createDocumentFragment();
+        checked.forEach(function(l) { frag.appendChild(l); });
+        unchecked.forEach(function(l) { frag.appendChild(l); });
+        list.appendChild(frag);
+      }
+
+      function updateDisplay() {
+        var checked = Array.from(getCheckboxes()).filter(function(c) { return c.checked; });
+        var count = checked.length;
+
+        if (clearBtn) {
+          clearBtn.classList.toggle('visible', count > 0);
+        }
+
+        if (count === 0) {
+          display.className = 'select-box-text placeholder';
+          display.textContent = 'Select salesman...';
+        } else if (count === 1) {
+          display.className = 'select-box-text';
+          display.innerHTML = '';
+          var badge = document.createElement('span');
+          badge.className = 'select-badge';
+          badge.textContent = checked[0].value;
+          display.appendChild(badge);
+        } else if (count <= 2) {
+          display.className = 'select-box-text';
+          display.innerHTML = '';
+          var container = document.createElement('span');
+          container.className = 'select-box-badges';
+          checked.forEach(function(cb) {
+            var b = document.createElement('span');
+            b.className = 'select-badge';
+            b.textContent = cb.value;
+            container.appendChild(b);
+          });
+          display.appendChild(container);
+        } else {
+          display.className = 'select-box-text';
+          display.innerHTML = '';
+          var badges = document.createElement('span');
+          badges.className = 'select-box-badges';
+          var first = document.createElement('span');
+          first.className = 'select-badge';
+          first.textContent = checked[0].value;
+          badges.appendChild(first);
+          var more = document.createElement('span');
+          more.className = 'select-badge-count';
+          more.textContent = '+' + (count - 1) + ' more';
+          badges.appendChild(more);
+          display.appendChild(badges);
+        }
+      }
+
+      function triggerFilterReload() {
+        if (filtersForm) {
+          filtersForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+
+      function openDropdown() {
+        options.classList.add('active');
+        trigger.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
+        sortLabels();
+        setTimeout(function() { if (search) search.focus(); }, 50);
+      }
+
+      function closeDropdown() {
         options.classList.remove('active');
+        trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (search) search.value = '';
+        getLabels().forEach(function(l) { l.classList.remove('option-hidden'); });
+        if (noResults) noResults.style.display = 'none';
       }
-    });
+
+      function toggleDropdown() {
+        if (options.classList.contains('active')) closeDropdown();
+        else openDropdown();
+      }
+
+      trigger.addEventListener('click', function(e) {
+        if (e.target.closest('.select-box-clear')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleDropdown();
+      });
+
+      trigger.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleDropdown();
+        }
+      });
+
+      options.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+          triggerFilterReload();
+        });
+      }
+
+      if (selectAll) {
+        selectAll.addEventListener('click', function() {
+          getVisibleLabels().forEach(function(l) {
+            var cb = l.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = true;
+          });
+          updateDisplay();
+          sortLabels();
+          triggerFilterReload();
+        });
+      }
+
+      if (clearAll) {
+        clearAll.addEventListener('click', function() {
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+          sortLabels();
+          triggerFilterReload();
+        });
+      }
+
+      list.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+          updateDisplay();
+          triggerFilterReload();
+        }
+      });
+
+      if (search) {
+        search.addEventListener('input', function() {
+          var term = this.value.toLowerCase().trim();
+          var visibleCount = 0;
+          getLabels().forEach(function(label) {
+            var value = (label.getAttribute('data-value') || '').toLowerCase();
+            var optText = (label.querySelector('.option-text') || {}).textContent || '';
+            var match = term === '' || value.includes(term) || optText.toLowerCase().includes(term);
+            label.classList.toggle('option-hidden', !match);
+            if (match) visibleCount++;
+          });
+          if (noResults) {
+            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+          }
+        });
+        search.addEventListener('click', function(e) { e.stopPropagation(); });
+      }
+
+      document.addEventListener('click', function(e) {
+        if (!wrapper.contains(e.target)) closeDropdown();
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeDropdown();
+      });
+
+      updateDisplay();
+    })();
   });
 
   /* Firm multi-select (same behavior as Purchase Stock Requirement page) */
