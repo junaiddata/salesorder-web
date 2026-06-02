@@ -195,6 +195,7 @@ urlpatterns += [
     path('saparinvoices/customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
     path('saparinvoices/credit-memo-analysis/', credit_memo_analysis_views.itemwise_credit_memo_analysis, name='credit_memo_analysis'),
     path('saparinvoices/item-quoted-analysis/', quotation_item_analysis_views.item_quoted_analysis, name='item_quoted_analysis'),
+    path('saparinvoices/brandwise-quotation-analysis/', views.brandwise_quotation_analysis, name='brandwise_quotation_analysis'),
     path('saparinvoices/item-quoted-analysis/export-pdf/', item_quoted_analysis_pdf_export.export_item_quoted_analysis_pdf, name='export_item_quoted_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/save-proposed-qty/', quotation_item_analysis_views.save_proposed_quantity, name='save_proposed_quantity'),
     path('saparinvoices/item-quoted-analysis/reset-proposed-qty/', quotation_item_analysis_views.reset_proposed_quantities, name='reset_proposed_quantities'),
@@ -264,4 +265,3 @@ urlpatterns += [
     path('device-pending/', views.device_pending, name='device_pending'),
     
 ]
-

@@ -1,0 +1,65 @@
+{% load humanize %}
+
+<div class="qcal-month-summary">
+  <div class="qcal-month-summary-item">
+    <span class="qcal-month-summary-label">Total Value</span>
+    <span class="qcal-month-summary-number">{{ month_total_value|floatformat:2|intcomma }}</span>
+  </div>
+  <div class="qcal-month-summary-item">
+    <span class="qcal-month-summary-label">GP</span>
+    <span class="qcal-month-summary-number">{{ month_total_gp|floatformat:2|intcomma }}</span>
+  </div>
+  <div class="qcal-month-summary-item">
+    <span class="qcal-month-summary-label">Quotations</span>
+    <span class="qcal-month-summary-number">{{ month_quotation_count|intcomma }}</span>
+  </div>
+</div>
+
+<div class="analysis-layout">
+  <div class="qcal-calendar-grid">
+    <div class="qcal-calendar-weekhead">Mon</div>
+    <div class="qcal-calendar-weekhead">Tue</div>
+    <div class="qcal-calendar-weekhead">Wed</div>
+    <div class="qcal-calendar-weekhead">Thu</div>
+    <div class="qcal-calendar-weekhead">Fri</div>
+    <div class="qcal-calendar-weekhead">Sat</div>
+    <div class="qcal-calendar-weekhead">Sun</div>
+    {% for day in month_days %}
+    {% if day.is_empty_cell %}
+    <div class="qcal-calendar-spacer" aria-hidden="true"></div>
+    {% else %}
+    <div class="qcal-calendar-day {% if day.date == today %}qcal-calendar-day-today{% endif %} {% if not day.has_quotations %}qcal-calendar-day-empty{% endif %} {% if day.is_selected %}qcal-calendar-day-selected{% endif %}" data-selected-date="{{ day.iso_date }}" role="button" tabindex="0" title="Toggle item details for {{ day.formatted_date }}">
+      <div>
+        <div class="qcal-calendar-day-label">{{ day.formatted_date }}</div>
+      </div>
+      <div class="qcal-calendar-day-value">{{ day.total_value|floatformat:0|intcomma }}</div>
+      <div class="qcal-calendar-day-gp">GP: {{ day.gp|floatformat:0|intcomma }}</div>
+      <div class="qcal-calendar-day-count">{{ day.quotation_count }} quotation{{ day.quotation_count|pluralize }}</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <aside class="weekly-panel">
+    <div class="weekly-panel-header">Weekly totals (Mon-Sat)</div>
+    {% for week in weekly_totals %}
+    <div class="week-row">
+      <div class="week-label">{{ week.label }}</div>
+      <div class="week-metrics">
+        <div class="week-metric">
+          <span>Value</span>
+          <strong>{{ week.total_value|floatformat:0|intcomma }}</strong>
+        </div>
+        <div class="week-metric">
+          <span>GP</span>
+          <strong>{{ week.gp|floatformat:0|intcomma }}</strong>
+        </div>
+        <div class="week-metric">
+          <span>Count</span>
+          <strong>{{ week.quotation_count|intcomma }}</strong>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </aside>
+</div>

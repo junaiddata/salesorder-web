@@ -1,0 +1,966 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brandwise Quotation Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 60px; }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: 0; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 2px; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--primary); background: var(--primary-light); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .filters-card { padding: 18px; margin-bottom: 20px; }
+    .filters-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 130px 130px auto;
+      gap: 14px;
+      align-items: end;
+    }
+    .field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0 10px;
+      color: var(--text);
+      background: var(--surface);
+      font: inherit;
+      font-size: 0.875rem;
+    }
+    .multi-select { position: relative; }
+    .select-box {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--text);
+      min-height: 42px;
+      transition: all var(--transition);
+    }
+    .select-box:hover { border-color: #94a3b8; }
+    .select-box.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
+    .select-box-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .placeholder { color: var(--text-muted); }
+    .select-box-badges {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      overflow: hidden;
+    }
+    .select-badge {
+      display: inline-flex;
+      align-items: center;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .select-badge-count {
+      background: var(--primary);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .select-box-clear {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      flex-shrink: 0;
+      transition: all var(--transition);
+    }
+    .select-box-clear:hover { background: #fee2e2; color: #dc2626; }
+    .select-box-clear.visible { display: inline-flex; }
+    .select-box-chevron {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      transition: transform var(--transition);
+      flex-shrink: 0;
+    }
+    .select-box.active .select-box-chevron { transform: rotate(180deg); }
+    .options-container {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      display: none;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      box-shadow: var(--shadow-md);
+    }
+    .options-container.active { display: block; }
+    .options-header {
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .options-search-wrap { position: relative; }
+    .options-search-wrap i {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .options-search {
+      width: 100%;
+      padding: 8px 10px 8px 30px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .options-search:focus { outline: none; border-color: var(--primary); }
+    .options-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+    .options-action-btn {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .options-action-btn:hover { background: var(--primary-light); }
+    .options-action-btn.danger { color: #dc2626; }
+    .options-action-btn.danger:hover { background: #fee2e2; }
+    .options-list {
+      max-height: 260px;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 6px;
+      font-size: 0.86rem;
+      cursor: pointer;
+    }
+    .option-label:hover { background: var(--bg); }
+    .option-label input { accent-color: var(--primary); }
+    .option-label.option-hidden { display: none; }
+    .options-empty {
+      padding: 12px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
+    .qcal-month-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin-bottom: 1rem;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+    }
+    .qcal-month-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 140px; }
+    .qcal-month-summary-label {
+      font-size: 0.77rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .qcal-month-summary-number {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .analysis-widget { padding: 1rem; }
+    .analysis-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 16px;
+      align-items: start;
+    }
+    .qcal-calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(96px, 1fr));
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .qcal-calendar-weekhead {
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      padding: 0.45rem 0.25rem;
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .qcal-calendar-spacer {
+      min-height: 84px;
+      border: 1px dashed var(--border-light);
+      border-radius: 6px;
+      background: rgba(248, 250, 252, 0.55);
+    }
+    .qcal-calendar-day {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.3rem;
+      text-align: center;
+      min-height: 84px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .qcal-calendar-day:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .qcal-calendar-day:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .qcal-calendar-day-selected {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+    .qcal-calendar-day-today {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+    }
+    .qcal-calendar-day-empty {
+      background: var(--bg);
+      border-color: var(--border-light);
+      opacity: 0.75;
+    }
+    .qcal-calendar-day-label {
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .qcal-calendar-day-value {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+    }
+    .qcal-calendar-day-gp {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #059669;
+      line-height: 1.15;
+    }
+    .qcal-calendar-day-count {
+      font-size: 0.63rem;
+      color: var(--text-secondary);
+      line-height: 1.1;
+    }
+    .weekly-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .weekly-panel-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--bg);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .week-row {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .week-row:last-child { border-bottom: 0; }
+    .week-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .week-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .week-metric span { display: block; font-size: 0.63rem; color: var(--text-muted); text-transform: uppercase; }
+    .week-metric strong { display: block; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+    .table-card { margin-top: 20px; overflow: hidden; }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--surface);
+    }
+    .table-title { font-size: 1rem; font-weight: 700; margin: 0; }
+    .table-subtitle { font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px; }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+    }
+    th {
+      background: var(--bg);
+      color: var(--text-secondary);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.86rem;
+      vertical-align: top;
+    }
+    tbody tr:hover { background: var(--bg); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--text-muted); }
+    .empty-state {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+    @media (max-width: 1100px) {
+      .filters-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+      .analysis-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .filters-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .container { padding: 18px 12px 48px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Brandwise Quotation Analysis</h1>
+        <p>{{ calendar_period_label }} daily quotation value, GP and count</p>
+      </div>
+      <div class="header-actions">
+        <a href="{% url 'quotation_list' %}" class="btn btn-secondary"><i class="fas fa-list"></i> SAP Quotations</a>
+        <a href="{% url 'home' %}" class="btn btn-secondary"><i class="fas fa-home"></i> Home</a>
+      </div>
+    </div>
+
+    <div class="card filters-card">
+      <form class="filters-grid" method="get" id="analysis-filter-form">
+        <div id="selected-date-inputs" hidden>
+          {% for selected_day in selected_dates %}
+          <input type="hidden" name="selected_date" value="{{ selected_day|date:'Y-m-d' }}">
+          {% endfor %}
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <div class="multi-select" id="brand-wrapper">
+            <div class="select-box" id="brand-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="brand-display">Select brand(s)...</span>
+              <button type="button" class="select-box-clear" id="brand-clear" title="Clear all" aria-label="Clear brand selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="brand-options" role="listbox" aria-label="Select brands">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="brand-search" class="options-search" placeholder="Search brands..." autocomplete="off" aria-label="Search brands">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="brand-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="brand-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="brand-options-list" role="group">
+              {% for brand in brand_choices %}
+              <label class="option-label" data-value="{{ brand }}" role="option">
+                <input type="checkbox" name="brand" value="{{ brand }}" {% if brand in filters.brand_selected %}checked{% endif %}>
+                <span class="option-text">{{ brand }}</span>
+              </label>
+              {% endfor %}
+              </div>
+              <div class="options-empty" id="brand-no-results" style="display:none;">No brands found</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Salesman</label>
+          <div class="multi-select" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="salesman-display">Select salesman...</span>
+              <button type="button" class="select-box-clear" id="salesman-clear" title="Clear all" aria-label="Clear salesman selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="salesman-options" role="listbox" aria-label="Select salesmen">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="salesman-search" class="options-search" placeholder="Search salesmen..." autocomplete="off" aria-label="Search salesmen">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="salesman-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="salesman-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="salesman-options-list" role="group">
+              {% for salesman in salesmen %}
+              <label class="option-label" data-value="{{ salesman }}" role="option">
+                <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesmen_selected %}checked{% endif %}>
+                <span class="option-text">{{ salesman }}</span>
+              </label>
+              {% endfor %}
+              </div>
+              <div class="options-empty" id="salesman-no-results" style="display:none;">No salesmen found</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Month</label>
+          <div class="multi-select" id="month-wrapper">
+            <div class="select-box" id="month-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="month-display">Select month...</span>
+              <button type="button" class="select-box-clear" id="month-clear" title="Clear all" aria-label="Clear month selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="month-options" role="listbox" aria-label="Select months">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="month-search" class="options-search" placeholder="Search months..." autocomplete="off" aria-label="Search months">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="month-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="month-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="month-options-list" role="group">
+              {% for num, name in calendar_months %}
+              <label class="option-label" data-value="{{ name }}" role="option">
+                <input type="checkbox" name="month" value="{{ num }}" {% if num in selected_months %}checked{% endif %}>
+                <span class="option-text">{{ name }}</span>
+              </label>
+              {% endfor %}
+              </div>
+              <div class="options-empty" id="month-no-results" style="display:none;">No months found</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Year</label>
+          <select class="select" name="year">
+            {% for year in calendar_years %}
+            <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" type="submit"><i class="fas fa-filter"></i> Apply</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card analysis-widget" id="analysis-widget">
+      {% include 'salesorders/_brandwise_quotation_analysis_calendar.html' %}
+    </div>
+
+    <div class="card table-card" id="quoted-items-card">
+      {% include 'salesorders/_brandwise_quotation_analysis_table.html' %}
+    </div>
+  </div>
+
+  <script>
+    var filterForm = document.getElementById('analysis-filter-form');
+    var selectedDateInputs = document.getElementById('selected-date-inputs');
+    var analysisWidget = document.getElementById('analysis-widget');
+    var quotedItemsCard = document.getElementById('quoted-items-card');
+    var headerSubtitle = document.querySelector('.header-left p');
+    var ajaxController = null;
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    function getSelectedDates() {
+      if (!selectedDateInputs) return [];
+      return Array.from(selectedDateInputs.querySelectorAll('input[name="selected_date"]'))
+        .map(function(input) { return input.value; })
+        .filter(Boolean);
+    }
+
+    function setSelectedDates(dates) {
+      if (!selectedDateInputs) return;
+      selectedDateInputs.innerHTML = '';
+      dates.forEach(function(dateValue) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_date';
+        input.value = dateValue;
+        selectedDateInputs.appendChild(input);
+      });
+    }
+
+    function toggleSelectedDate(dateValue) {
+      var dates = getSelectedDates();
+      var index = dates.indexOf(dateValue);
+      if (index >= 0) {
+        dates.splice(index, 1);
+      } else {
+        dates.push(dateValue);
+      }
+      setSelectedDates(dates);
+    }
+
+    function buildAjaxUrl() {
+      var params = new URLSearchParams(new FormData(filterForm));
+      params.set('ajax', '1');
+      var baseUrl = filterForm.getAttribute('action') || window.location.pathname;
+      return baseUrl + '?' + params.toString();
+    }
+
+    function updateBrowserUrl() {
+      var params = new URLSearchParams(new FormData(filterForm));
+      params.delete('ajax');
+      var query = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (query ? '?' + query : ''));
+    }
+
+    function refreshAnalysis() {
+      if (!filterForm || !analysisWidget || !quotedItemsCard) return;
+      if (ajaxController) ajaxController.abort();
+      ajaxController = new AbortController();
+      var currentController = ajaxController;
+      analysisWidget.style.opacity = '0.6';
+      quotedItemsCard.style.opacity = '0.6';
+
+      fetch(buildAjaxUrl(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: currentController.signal
+      })
+        .then(function(response) {
+          if (!response.ok) throw new Error('Request failed');
+          return response.json();
+        })
+        .then(function(data) {
+          analysisWidget.innerHTML = data.analysis_html || '';
+          quotedItemsCard.innerHTML = data.table_html || '';
+          setSelectedDates(data.selected_dates || []);
+          if (headerSubtitle && data.calendar_period_label) {
+            headerSubtitle.textContent = data.calendar_period_label + ' daily quotation value, GP and count';
+          }
+          updateBrowserUrl();
+          bindCalendarActions();
+        })
+        .catch(function(error) {
+          if (error.name !== 'AbortError') filterForm.submit();
+        })
+        .finally(function() {
+          if (ajaxController === currentController) {
+            analysisWidget.style.opacity = '';
+            quotedItemsCard.style.opacity = '';
+            ajaxController = null;
+          }
+        });
+    }
+
+    function setupAdvancedMultiSelect(config) {
+      var wrapper = document.getElementById(config.wrapperId);
+      var trigger = document.getElementById(config.triggerId);
+      var options = document.getElementById(config.optionsId);
+      var list = document.getElementById(config.listId);
+      var display = document.getElementById(config.displayId);
+      var search = document.getElementById(config.searchId);
+      var clearBtn = document.getElementById(config.clearId);
+      var selectAllBtn = document.getElementById(config.selectAllId);
+      var clearAllBtn = document.getElementById(config.clearAllId);
+      var noResults = document.getElementById(config.noResultsId);
+      var placeholder = config.placeholder || 'Select...';
+
+      if (!wrapper || !trigger || !options || !list || !display) return;
+
+      function getCheckboxes() {
+        return list.querySelectorAll('input[type="checkbox"]');
+      }
+
+      function getLabels() {
+        return Array.from(list.querySelectorAll('.option-label'));
+      }
+
+      function getVisibleLabels() {
+        return getLabels().filter(function(label) {
+          return !label.classList.contains('option-hidden');
+        });
+      }
+
+      function sortLabels() {
+        var checked = [];
+        var unchecked = [];
+        getLabels().forEach(function(label) {
+          var cb = label.querySelector('input[type="checkbox"]');
+          (cb && cb.checked ? checked : unchecked).push(label);
+        });
+        var frag = document.createDocumentFragment();
+        checked.forEach(function(label) { frag.appendChild(label); });
+        unchecked.forEach(function(label) { frag.appendChild(label); });
+        list.appendChild(frag);
+      }
+
+      function updateDisplay() {
+        var boxes = Array.from(getCheckboxes());
+        var checked = boxes.filter(function(cb) { return cb.checked; });
+        var count = checked.length;
+
+        if (clearBtn) clearBtn.classList.toggle('visible', count > 0);
+
+        if (count === 0) {
+          display.className = 'select-box-text placeholder';
+          display.textContent = placeholder;
+        } else if (count === 1) {
+          display.className = 'select-box-text';
+          display.innerHTML = '<span class="select-badge">' + escapeHtml(checked[0].nextElementSibling.textContent || checked[0].value) + '</span>';
+        } else if (count <= 2) {
+          display.className = 'select-box-text';
+          var inner = '<span class="select-box-badges">';
+          checked.forEach(function(cb) {
+            inner += '<span class="select-badge">' + escapeHtml(cb.nextElementSibling.textContent || cb.value) + '</span>';
+          });
+          inner += '</span>';
+          display.innerHTML = inner;
+        } else {
+          display.className = 'select-box-text';
+          display.innerHTML = '<span class="select-box-badges">' +
+            '<span class="select-badge">' + escapeHtml(checked[0].nextElementSibling.textContent || checked[0].value) + '</span>' +
+            '<span class="select-badge-count">+' + (count - 1) + ' more</span>' +
+            '</span>';
+        }
+      }
+
+      function closeDropdown() {
+        options.classList.remove('active');
+        trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (search) search.value = '';
+        getLabels().forEach(function(label) { label.classList.remove('option-hidden'); });
+        if (noResults) noResults.style.display = 'none';
+      }
+
+      function openDropdown() {
+        document.querySelectorAll('.options-container.active').forEach(function(openOptions) {
+          if (openOptions !== options) openOptions.classList.remove('active');
+        });
+        document.querySelectorAll('.select-box.active').forEach(function(openTrigger) {
+          if (openTrigger !== trigger) {
+            openTrigger.classList.remove('active');
+            openTrigger.setAttribute('aria-expanded', 'false');
+          }
+        });
+        options.classList.add('active');
+        trigger.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
+        sortLabels();
+        setTimeout(function() { if (search) search.focus(); }, 50);
+      }
+
+      function toggleDropdown() {
+        options.classList.contains('active') ? closeDropdown() : openDropdown();
+      }
+
+      trigger.addEventListener('click', function(event) {
+        if (event.target.closest('.select-box-clear')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleDropdown();
+      });
+
+      trigger.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleDropdown();
+        }
+      });
+
+      options.addEventListener('click', function(event) { event.stopPropagation(); });
+      options.addEventListener('mousedown', function(event) { event.stopPropagation(); });
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+        });
+      }
+
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+          getVisibleLabels().forEach(function(label) {
+            var cb = label.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = true;
+          });
+          updateDisplay();
+          sortLabels();
+        });
+      }
+
+      if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', function() {
+          getCheckboxes().forEach(function(cb) { cb.checked = false; });
+          updateDisplay();
+          sortLabels();
+        });
+      }
+
+      list.addEventListener('change', function(event) {
+        if (event.target.type === 'checkbox') updateDisplay();
+      });
+
+      if (search) {
+        search.addEventListener('input', function() {
+          var term = this.value.toLowerCase().trim();
+          var visibleCount = 0;
+          getLabels().forEach(function(label) {
+            var val = (label.getAttribute('data-value') || '').toLowerCase();
+            var text = (label.querySelector('.option-text') || {}).textContent || '';
+            var match = !term || val.includes(term) || text.toLowerCase().includes(term);
+            label.classList.toggle('option-hidden', !match);
+            if (match) visibleCount++;
+          });
+          if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        });
+        search.addEventListener('click', function(event) { event.stopPropagation(); });
+      }
+
+      document.addEventListener('click', function(event) {
+        if (!wrapper.contains(event.target)) closeDropdown();
+      });
+
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') closeDropdown();
+      });
+
+      updateDisplay();
+    }
+
+    setupAdvancedMultiSelect({
+      wrapperId: 'brand-wrapper',
+      triggerId: 'brand-trigger',
+      optionsId: 'brand-options',
+      listId: 'brand-options-list',
+      displayId: 'brand-display',
+      searchId: 'brand-search',
+      clearId: 'brand-clear',
+      selectAllId: 'brand-select-all',
+      clearAllId: 'brand-clear-all',
+      noResultsId: 'brand-no-results',
+      placeholder: 'Select brand(s)...'
+    });
+
+    setupAdvancedMultiSelect({
+      wrapperId: 'salesman-wrapper',
+      triggerId: 'salesman-trigger',
+      optionsId: 'salesman-options',
+      listId: 'salesman-options-list',
+      displayId: 'salesman-display',
+      searchId: 'salesman-search',
+      clearId: 'salesman-clear',
+      selectAllId: 'salesman-select-all',
+      clearAllId: 'salesman-clear-all',
+      noResultsId: 'salesman-no-results',
+      placeholder: 'Select salesman...'
+    });
+
+    setupAdvancedMultiSelect({
+      wrapperId: 'month-wrapper',
+      triggerId: 'month-trigger',
+      optionsId: 'month-options',
+      listId: 'month-options-list',
+      displayId: 'month-display',
+      searchId: 'month-search',
+      clearId: 'month-clear',
+      selectAllId: 'month-select-all',
+      clearAllId: 'month-clear-all',
+      noResultsId: 'month-no-results',
+      placeholder: 'Select month...'
+    });
+
+    function bindCalendarActions() {
+      document.querySelectorAll('[data-selected-date]').forEach(function(dayEl) {
+        function selectDate() {
+          var clickedDate = dayEl.getAttribute('data-selected-date') || '';
+          if (!clickedDate) return;
+          toggleSelectedDate(clickedDate);
+          refreshAnalysis();
+        }
+        dayEl.addEventListener('click', selectDate);
+        dayEl.addEventListener('keydown', function(event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectDate();
+          }
+        });
+      });
+
+      var clearSelectedDate = document.getElementById('clear-selected-date');
+      if (clearSelectedDate) {
+        clearSelectedDate.addEventListener('click', function() {
+          setSelectedDates([]);
+          refreshAnalysis();
+        });
+      }
+    }
+
+    if (filterForm) {
+      filterForm.addEventListener('submit', function(event) {
+        event.preventDefault();
+        refreshAnalysis();
+      });
+    }
+
+    bindCalendarActions();
+
+  </script>
+</body>
+</html>

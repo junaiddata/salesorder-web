@@ -3997,6 +3997,290 @@ def quotation_list(request):
         }
     })
 
+
+@login_required
+def brandwise_quotation_analysis(request):
+    import calendar
+    from collections import defaultdict
+    from decimal import Decimal
+
+    today = date.today()
+    current_year = today.year
+    current_month = today.month
+
+    year_raw = request.GET.get('year', '').strip()
+    try:
+        selected_year = int(year_raw) if year_raw else current_year
+    except (ValueError, TypeError):
+        selected_year = current_year
+
+    calendar_years = list(range(2024, current_year + 2))
+    if selected_year not in calendar_years:
+        selected_year = current_year
+
+    selected_months = []
+    for raw in request.GET.getlist('month'):
+        try:
+            month_num = int(str(raw).strip())
+            if 1 <= month_num <= 12:
+                selected_months.append(month_num)
+        except (ValueError, TypeError):
+            continue
+    selected_months = sorted(set(selected_months))
+    if not selected_months:
+        selected_months = [current_month]
+
+    selected_brands = [b.strip() for b in request.GET.getlist('brand') if b.strip()]
+    selected_salesmen = [s.strip() for s in request.GET.getlist('salesman') if s.strip()]
+    selected_dates = []
+    selected_date_values = request.GET.getlist('selected_date')
+    if len(selected_date_values) == 1 and ',' in selected_date_values[0]:
+        selected_date_values = selected_date_values[0].split(',')
+    for raw in selected_date_values:
+        raw = str(raw).strip()
+        if not raw:
+            continue
+        try:
+            parsed_date = datetime.strptime(raw, '%Y-%m-%d').date()
+            if parsed_date.year == selected_year and parsed_date.month in selected_months:
+                selected_dates.append(parsed_date)
+        except (ValueError, TypeError):
+            continue
+    selected_dates = sorted(set(selected_dates))
+    selected_date_set = set(selected_dates)
+    selected_date = selected_dates[0] if len(selected_dates) == 1 else None
+    selected_date_raw = ','.join(d.isoformat() for d in selected_dates)
+
+    scope_qs = SAPQuotation.objects.filter(salesman_scope_q(request.user))
+    qs = scope_qs.filter(posting_date__year=selected_year, posting_date__month__in=selected_months)
+    if selected_salesmen:
+        qs = qs.filter(salesman_name__in=selected_salesmen)
+    if selected_brands:
+        q_brand = _sap_quotation_firm_filter_q(selected_brands)
+        if q_brand is not None:
+            qs = qs.filter(q_brand).distinct()
+
+    calendar_quotes = qs.prefetch_related('items')
+    all_item_codes = {
+        str(item.item_no).strip()
+        for quote in calendar_quotes
+        for item in quote.items.all()
+        if item.item_no and str(item.item_no).strip()
+    }
+    item_lookup = {
+        row['item_code']: row
+        for row in Items.objects.filter(item_code__in=all_item_codes).values('item_code', 'item_cost', 'item_firm')
+    }
+
+    selected_brand_set = {b.lower() for b in selected_brands}
+    daily = defaultdict(lambda: {'total_value': Decimal('0'), 'quotation_count': 0, 'gp': Decimal('0')})
+    for quote in calendar_quotes:
+        if not quote.posting_date:
+            continue
+        quote_line_value = Decimal('0')
+        quote_line_gp = Decimal('0')
+
+        for item in quote.items.all():
+            code = str(item.item_no).strip() if item.item_no else ''
+            item_master = item_lookup.get(code) or {}
+            item_brand = str(item_master.get('item_firm') or quote.brand or '').strip()
+            if selected_brand_set and item_brand.lower() not in selected_brand_set:
+                continue
+
+            qty = Decimal(str(item.quantity or 0))
+            row_total = item.row_total if item.row_total is not None else (qty * Decimal(str(item.price or 0)))
+            item_cost = Decimal(str(item_master.get('item_cost') or 0))
+            quote_line_value += row_total
+            quote_line_gp += row_total - (item_cost * qty)
+
+        if quote_line_value:
+            daily[quote.posting_date]['total_value'] += quote_line_value
+            daily[quote.posting_date]['quotation_count'] += 1
+            daily[quote.posting_date]['gp'] += quote_line_gp
+
+    month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    month_days = []
+    weekly_totals = []
+
+    for selected_month in selected_months:
+        _, last_day = calendar.monthrange(selected_year, selected_month)
+        last_calendar_day = (
+            min(today.day, last_day)
+            if selected_year == current_year and selected_month == current_month
+            else last_day
+        )
+        week_acc = None
+
+        for _ in range(date(selected_year, selected_month, 1).weekday()):
+            month_days.append({
+                'is_empty_cell': True,
+            })
+
+        for day_num in range(1, last_calendar_day + 1):
+            day_date = date(selected_year, selected_month, day_num)
+            day_stats = daily[day_date]
+            if day_date.weekday() == 0 or week_acc is None:
+                week_acc = {
+                    'label': f"Week of {day_date.strftime('%d %b')}",
+                    'total_value': Decimal('0'),
+                    'quotation_count': 0,
+                    'gp': Decimal('0'),
+                }
+                weekly_totals.append(week_acc)
+            if day_date.weekday() <= 5:
+                week_acc['total_value'] += day_stats['total_value']
+                week_acc['quotation_count'] += day_stats['quotation_count']
+                week_acc['gp'] += day_stats['gp']
+
+            month_days.append({
+                'date': day_date,
+                'iso_date': day_date.isoformat(),
+                'formatted_date': f"{month_names_short[selected_month - 1]} {day_num}",
+                'weekday': day_date.strftime('%a'),
+                'total_value': day_stats['total_value'],
+                'quotation_count': day_stats['quotation_count'],
+                'gp': day_stats['gp'],
+                'has_quotations': day_stats['quotation_count'] > 0,
+                'is_selected': day_date in selected_date_set,
+            })
+
+        trailing_empty_cells = (7 - (len(month_days) % 7)) % 7
+        for _ in range(trailing_empty_cells):
+            month_days.append({
+                'is_empty_cell': True,
+            })
+
+    calendar_day_rows = [d for d in month_days if not d.get('is_empty_cell')]
+    month_total_value = sum((d['total_value'] for d in calendar_day_rows), Decimal('0'))
+    month_quotation_count = sum(d['quotation_count'] for d in calendar_day_rows)
+    month_total_gp = sum((d['gp'] for d in calendar_day_rows), Decimal('0'))
+
+    if selected_dates:
+        month_total_value = sum((daily[d]['total_value'] for d in selected_dates), Decimal('0'))
+        month_quotation_count = sum(daily[d]['quotation_count'] for d in selected_dates)
+        month_total_gp = sum((daily[d]['gp'] for d in selected_dates), Decimal('0'))
+
+    item_quote_qs = calendar_quotes
+    if selected_dates:
+        item_quote_qs = [quote for quote in calendar_quotes if quote.posting_date in selected_date_set]
+
+    item_rows_map = {}
+    for quote in item_quote_qs:
+        for item in quote.items.all():
+            code = str(item.item_no).strip() if item.item_no else ''
+            item_master = item_lookup.get(code) or {}
+            item_brand = str(item_master.get('item_firm') or quote.brand or '').strip()
+            if selected_brand_set and item_brand.lower() not in selected_brand_set:
+                continue
+
+            qty = Decimal(str(item.quantity or 0))
+            row_total = item.row_total if item.row_total is not None else (qty * Decimal(str(item.price or 0)))
+            item_cost = Decimal(str(item_master.get('item_cost') or 0))
+            item_gp = row_total - (item_cost * qty)
+            key = (code, item.description or '', item_brand)
+            if key not in item_rows_map:
+                item_rows_map[key] = {
+                    'item_no': code,
+                    'description': item.description or '',
+                    'brand': item_brand,
+                    'quantity': Decimal('0'),
+                    'quoted_value': Decimal('0'),
+                    'gp': Decimal('0'),
+                    'quotation_numbers': set(),
+                }
+            row = item_rows_map[key]
+            row['quantity'] += qty
+            row['quoted_value'] += row_total
+            row['gp'] += item_gp
+            row['quotation_numbers'].add(quote.q_number)
+
+    item_rows = sorted(
+        item_rows_map.values(),
+        key=lambda row: (row['brand'].lower(), -row['quoted_value'], row['item_no'])
+    )
+    for row in item_rows:
+        row['quotation_count'] = len(row['quotation_numbers'])
+
+    salesmen = (
+        SAPQuotation.objects.filter(salesman_scope_q(request.user))
+        .exclude(salesman_name__isnull=True)
+        .exclude(salesman_name='')
+        .values_list('salesman_name', flat=True)
+        .distinct()
+        .order_by('salesman_name')
+    )
+
+    brand_chunks = []
+    brand_chunks.extend(
+        scope_qs.exclude(brand__isnull=True).exclude(brand='').values_list('brand', flat=True)
+    )
+    item_codes = (
+        SAPQuotationItem.objects.filter(quotation__in=scope_qs)
+        .exclude(item_no__isnull=True)
+        .exclude(item_no='')
+        .values_list('item_no', flat=True)
+        .distinct()
+    )
+    brand_chunks.extend(
+        Items.objects.filter(item_code__in=item_codes)
+        .exclude(item_firm__isnull=True)
+        .exclude(item_firm='')
+        .values_list('item_firm', flat=True)
+        .distinct()
+    )
+    brand_choices = sorted(
+        {str(x).strip() for x in brand_chunks if x and str(x).strip()},
+        key=str.lower,
+    )
+    calendar_period_label = (
+        date(selected_year, selected_months[0], 1).strftime('%B %Y')
+        if len(selected_months) == 1
+        else ', '.join(calendar.month_name[m] for m in selected_months) + f' {selected_year}'
+    )
+
+    context = {
+        'month_days': month_days,
+        'weekly_totals': weekly_totals,
+        'item_rows': item_rows,
+        'month_total_value': month_total_value,
+        'month_quotation_count': month_quotation_count,
+        'month_total_gp': month_total_gp,
+        'today': today,
+        'selected_year': selected_year,
+        'selected_months': selected_months,
+        'selected_date': selected_date,
+        'selected_dates': selected_dates,
+        'selected_date_raw': selected_date_raw,
+        'calendar_years': calendar_years,
+        'calendar_months': [(i, month_names_short[i - 1]) for i in range(1, 13)],
+        'calendar_period_label': calendar_period_label,
+        'brand_choices': brand_choices,
+        'salesmen': salesmen,
+        'filters': {
+            'brand_selected': selected_brands,
+            'salesmen_selected': selected_salesmen,
+        },
+    }
+
+    if request.GET.get('ajax') == '1' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'analysis_html': render_to_string(
+                'salesorders/_brandwise_quotation_analysis_calendar.html',
+                context,
+                request=request,
+            ),
+            'table_html': render_to_string(
+                'salesorders/_brandwise_quotation_analysis_table.html',
+                context,
+                request=request,
+            ),
+            'calendar_period_label': calendar_period_label,
+            'selected_dates': [d.isoformat() for d in selected_dates],
+        })
+
+    return render(request, 'salesorders/brandwise_quotation_analysis.html', context)
+
 from django.db.models import Sum, Value, Q, DecimalField
 from django.db.models.functions import Coalesce
 from datetime import datetime

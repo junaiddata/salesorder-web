@@ -1188,7 +1188,10 @@ def _salesorder_list_filtered_qs(request, *, include_pending_annotation=True):
 
     if q:
         if q.isdigit():
-            qs = qs.filter(so_number__istartswith=q)
+            qs = qs.filter(
+                Q(so_number__istartswith=q) |
+                Q(bp_reference_no__icontains=q)
+            )
         elif len(q) < 3:
             qs = qs.filter(
                 Q(customer_name__istartswith=q) |

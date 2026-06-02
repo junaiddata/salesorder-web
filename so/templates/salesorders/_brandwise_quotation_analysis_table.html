@@ -1,0 +1,57 @@
+{% load humanize %}
+
+<div class="table-header">
+  <div>
+    <h2 class="table-title">Quoted Items</h2>
+    <div class="table-subtitle">
+      {% if selected_dates %}
+        {% if selected_dates|length == 1 %}
+          {{ selected_dates.0|date:"d M Y" }} item totals
+        {% else %}
+          {{ selected_dates|length }} selected dates item totals
+        {% endif %}
+      {% else %}
+        {{ calendar_period_label }} item totals
+      {% endif %}
+    </div>
+  </div>
+  {% if selected_dates %}
+  <button type="button" class="btn btn-secondary" id="clear-selected-date">
+    <i class="fas fa-calendar-xmark"></i> Show selected months
+  </button>
+  {% endif %}
+</div>
+{% if item_rows %}
+<div class="table-wrap">
+  <table aria-label="Brandwise quoted item totals">
+    <thead>
+      <tr>
+        <th>Brand</th>
+        <th>Item No</th>
+        <th>Description</th>
+        <th class="num">Qty Quoted</th>
+        <th class="num">Quoted Value</th>
+        <th class="num">GP</th>
+        <th class="num">Quotations</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in item_rows %}
+      <tr>
+        <td>{{ item.brand|default:"-" }}</td>
+        <td>{{ item.item_no|default:"-" }}</td>
+        <td>{{ item.description }}</td>
+        <td class="num">{{ item.quantity|floatformat:2|intcomma }}</td>
+        <td class="num">{{ item.quoted_value|floatformat:2|intcomma }}</td>
+        <td class="num">{{ item.gp|floatformat:2|intcomma }}</td>
+        <td class="num">{{ item.quotation_count|intcomma }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  No quoted items found for the selected filters.
+</div>
+{% endif %}

@@ -182,7 +182,6 @@ VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  
 VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')  # Must match between PC script and VPS
 
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
