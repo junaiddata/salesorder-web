@@ -117,6 +117,7 @@ class CustomerPendingInvoice(models.Model):
 
 class Salesman(models.Model):
     salesman_name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         return self.salesman_name
@@ -329,14 +330,20 @@ class Quotation(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     salesman = models.ForeignKey(Salesman, on_delete=models.SET_NULL, null=True, blank=True)
 
+    LICENSE_CHOICES = (
+        ('JUNAID_SME', 'JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH'),
+        ('JUNAID_MAT', 'JUNAID SANITARY & ELECTRICAL MATERIALS TRADING (LLC.) (DUBAI BR)'),
+    )
+
     division = models.CharField(max_length=20, choices=DIVISIONS, default='JUNAID')
+    license_name = models.CharField(max_length=20, choices=LICENSE_CHOICES, default='JUNAID_SME', blank=True, null=True)
     quotation_date = models.DateField(auto_now_add=True)
     total_amount = models.FloatField(default=0.0)
     grand_total = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='Pending')
     remarks = models.TextField(blank=True, null=True)
-    customer_display_name = models.CharField(max_length=255, blank=True, null=True, 
+    customer_display_name = models.CharField(max_length=255, blank=True, null=True,
         help_text="Optional display name for walk-in/CASH customers")
     converted_to_sales_order = models.ForeignKey('SalesOrder', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='source_quotation', help_text="Sales order created from this quotation")

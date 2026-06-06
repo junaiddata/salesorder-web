@@ -37,6 +37,7 @@ def create_quotation(request):
                 division = 'ALABAMA'
             
             remarks = request.POST.get('remarks', '').strip()
+            license_name = request.POST.get('license_name', 'JUNAID_MAIN').strip()
 
             # -------------------------
             # 1. Customer handling
@@ -82,6 +83,7 @@ def create_quotation(request):
                 salesman=salesman,
                 division=division,
                 remarks=remarks,
+                license_name=license_name,
                 customer_display_name=customer_display_name if customer_display_name else None
             )
 
@@ -1227,6 +1229,17 @@ def view_quotation_details(request, quotation_id):
             messages.warning(request, 'Quotation put on hold.')
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
+        elif action == 'update_license_name':
+            valid_keys = {k for k, _ in Quotation.LICENSE_CHOICES}
+            new_license = (request.POST.get('license_name') or '').strip()
+            if new_license not in valid_keys:
+                messages.error(request, 'Invalid license selection.')
+            else:
+                quotation.license_name = new_license
+                quotation.save(update_fields=['license_name'])
+                messages.success(request, 'License name updated. The new name will appear on the next PDF export.')
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
         elif action == 'manager_change_division' and _is_manager_account(request.user):
             new_div = (request.POST.get('division') or '').strip().upper()
             if new_div not in ('JUNAID', 'ALABAMA'):
@@ -1871,12 +1884,22 @@ def export_quotation_to_excel(request, quotation_id):
 # ==========================================
 # 2. JUNAID GENERATOR (Green/White Theme)
 # ==========================================
+LICENSE_NAME_MAP = {
+    'JUNAID_SME': "JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH",
+    'JUNAID_MAT': "JUNAID SANITARY & ELECTRICAL MATERIALS TRADING (LLC.) (DUBAI BR)",
+}
+
 def generate_junaid_quotation(buffer, quotation):
     quotation_items = quotation.items.all()
-    
+
+    company_display_name = LICENSE_NAME_MAP.get(
+        quotation.license_name or 'JUNAID_SME',
+        "JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH"
+    )
+
     # --- CONFIGURATION ---
     company_config = {
-        'name': "JUNAID SANITARY & ELECTRICAL REQUISITES TRADING LLC",
+        'name': company_display_name,
         'address': "Dubai Investment Parks 2, Dubai, UAE",
         'contact': "Email: sales@junaid.ae | Phone: +97142367723",
         'logo_url': "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp",
@@ -1943,7 +1966,11 @@ def generate_junaid_quotation(buffer, quotation):
     ]
 
     if quotation.salesman:
-        customer_data.append([Paragraph(f'<b>Salesman:</b> {quotation.salesman.salesman_name}', styles['Normal'])])
+        sm = quotation.salesman
+        sm_line = f'<b>Salesman:</b> {sm.salesman_name}'
+        if sm.phone:
+            sm_line += f'&nbsp;&nbsp;<b>Contact:</b> {sm.phone}'
+        customer_data.append([Paragraph(sm_line, styles['Normal'])])
     else:
         customer_data.append([Paragraph('', styles['Normal'])])
 
@@ -2153,7 +2180,11 @@ def generate_alabama_quotation(buffer, quotation):
     ]
 
     if quotation.salesman:
-        customer_data.append([Paragraph(f'<b>Salesman:</b> {quotation.salesman.salesman_name}', styles['Normal'])])
+        sm = quotation.salesman
+        sm_line = f'<b>Salesman:</b> {sm.salesman_name}'
+        if sm.phone:
+            sm_line += f'&nbsp;&nbsp;<b>Contact:</b> {sm.phone}'
+        customer_data.append([Paragraph(sm_line, styles['Normal'])])
     else:
         customer_data.append([Paragraph('', styles['Normal'])])
 

@@ -588,6 +588,10 @@
                         <span class="info-value">{{ quotation.get_division_display }}</span>
                     </div>
                     <div class="info-item">
+                        <span class="info-label">Our License (PDF)</span>
+                        <span class="info-value">{{ quotation.get_license_name_display|default:"JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH" }}</span>
+                    </div>
+                    <div class="info-item">
                         <span class="info-label">Valid Until</span>
                         <span class="info-value">{{ quotation.valid_until|date:"F j, Y"|default:"Not specified" }}</span>
                     </div>
@@ -638,6 +642,28 @@
             </div>
         </div>
         {% endif %}
+
+        <!-- License Name Edit (all users) -->
+        <div class="sap-card" style="margin-bottom: 24px; border: 1px solid #0d6efd33;">
+            <div class="sap-card-header" style="background: #f0f4ff;">
+                <h5 style="margin:0;"><i class="fas fa-id-card"></i> Our License Name (PDF)</h5>
+            </div>
+            <div class="sap-card-body">
+                <p class="text-muted small mb-3" style="margin:0 0 12px 0;">The selected license name will appear as the company name in the quotation PDF header and footer.</p>
+                <form method="post" class="d-flex flex-wrap align-items-end gap-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update_license_name">
+                    <div>
+                        <label for="id_license_name" class="form-label small mb-1">License</label>
+                        <select name="license_name" id="id_license_name" class="form-select form-select-sm" style="min-width: 380px;">
+                            <option value="JUNAID_SME" {% if quotation.license_name == 'JUNAID_SME' or not quotation.license_name %}selected{% endif %}>JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH</option>
+                            <option value="JUNAID_MAT" {% if quotation.license_name == 'JUNAID_MAT' %}selected{% endif %}>JUNAID SANITARY &amp; ELECTRICAL MATERIALS TRADING (LLC.) (DUBAI BR)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Update License</button>
+                </form>
+            </div>
+        </div>
 
         <!-- Margin Summary (Admin Only) -->
         {% if is_admin %}
