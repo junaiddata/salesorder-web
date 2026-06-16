@@ -186,15 +186,28 @@ def create_sales_order(request):
 
             # Handle customer creation/selection
             if new_customer_name:
-                # Find the last NEWCUSTOMER code
-                last_customer = Customer.objects.filter(customer_code__startswith='NEWCUSTOMER') \
-                                                .order_by('-id').first()
-                if last_customer and last_customer.customer_code[11:].isdigit():
-                    last_number = int(last_customer.customer_code[11:])
-                else:
-                    last_number = 0
+                # Find the highest numeric suffix across all NEWCUSTOMER codes.
+                # Ordering by id is unreliable because some codes have non-numeric
+                # suffixes (e.g. NEWCUSTOMERSI132) that would reset the counter and
+                # collide with an existing NEWCUSTOMER<n>.
+                existing_codes = Customer.objects.filter(
+                    customer_code__startswith='NEWCUSTOMER'
+                ).values_list('customer_code', flat=True)
 
-                new_code = f'NEWCUSTOMER{last_number + 1}'
+                last_number = 0
+                for code in existing_codes:
+                    suffix = code[11:]
+                    if suffix.isdigit():
+                        last_number = max(last_number, int(suffix))
+
+                # Guard against any remaining collision (e.g. concurrent creation)
+                new_number = last_number + 1
+                while Customer.objects.filter(
+                    customer_code=f'NEWCUSTOMER{new_number}'
+                ).exists():
+                    new_number += 1
+
+                new_code = f'NEWCUSTOMER{new_number}'
 
                 # Assign the selected salesman to the new customer
                 salesman_id = request.POST.get('salesman')
