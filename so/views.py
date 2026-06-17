@@ -344,7 +344,8 @@ def create_sales_order(request):
         user_salesman_map = {
             'alabamakadhar': ['KADER','A.KADER'],
             'alabamamusharaf': ['MUSHARAF','A.MUSHARAF'],   # Multiple allowed
-            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
+            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],
+            'alabamaaijaz': ['AIJAZ'],               # Single allowed
             
         }
 
@@ -3476,6 +3477,7 @@ SALES_USER_MAP = {
     "retaildeira2": ["R.DEIRA 2"],
     "retailnah": ["R.NAH"],
     "alabamaadmin": ["KADER","MUSHARAF","AIJAZ","CASH"],
+    "alabamaaijaz": ["AIJAZ"],
     "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
     "alabamakadar": ["KADER", "A.KADER", "A. KADER"],
     "alabamamusharaf": ["MUSHARAF", "A.MUSHARAF", "A. MUSHARAF"],

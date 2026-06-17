@@ -214,7 +214,8 @@ def create_quotation(request):
             user_salesman_map = {
                 'alabamakadhar': ['KADER'],
                 'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
-                'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
+                'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],   
+                'alabamaaijaz': ['AIJAZ'],               # Single allowed
                 
             }
 
@@ -1500,7 +1501,8 @@ def edit_quotation(request, quotation_id):
         user_salesman_map = {
             'alabamakadhar': ['KADER'],
             'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
-            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
+            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],
+            'alabamaaijaz': ['AIJAZ'],               # Single allowed
             
         }
 
