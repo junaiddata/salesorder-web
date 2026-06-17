@@ -1670,10 +1670,16 @@ def home(request):
     
     # Calendar days: for each selected month, same rules (current month → 1..today only)
     month_days = []
+    weekly_totals = []
     for grid_month in cal_months:
         _, last_day_in_month = calendar.monthrange(cal_year, grid_month)
         is_grid_current_month = cal_year == current_year and grid_month == current_month
         last_calendar_day = min(today.day, last_day_in_month) if is_grid_current_month else last_day_in_month
+        week_acc = None
+
+        # Leading empty cells so the first day lines up under its weekday (Mon-start).
+        for _ in range(date(cal_year, grid_month, 1).weekday()):
+            month_days.append({'is_empty_cell': True})
 
         for day_num in range(1, last_calendar_day + 1):
             day_date = date(cal_year, grid_month, day_num)
@@ -1701,6 +1707,20 @@ def home(request):
             day_gp_pct = (float(day_gp_val) / float(day_sales_val) * 100) if day_sales_val else 0
             day_doc_count = day_invoices.count() + day_creditmemos.count()
 
+            # Weekly totals (Mon-Sat), mirroring the brandwise quotation calendar.
+            if day_date.weekday() == 0 or week_acc is None:
+                week_acc = {
+                    'label': f"Week of {day_date.strftime('%d %b')}",
+                    'sales': Decimal('0'),
+                    'gp': Decimal('0'),
+                    'doc_count': 0,
+                }
+                weekly_totals.append(week_acc)
+            if day_date.weekday() <= 5:
+                week_acc['sales'] += day_sales_val
+                week_acc['gp'] += day_gp_val
+                week_acc['doc_count'] += day_doc_count
+
             month_days.append({
                 'day': day_num,
                 'date': day_date,
@@ -1712,12 +1732,22 @@ def home(request):
                 'has_sales': bool(day_sales and day_sales > Decimal('0')),
             })
 
+        # Trailing empty cells so each month ends on a complete week row.
+        trailing_empty_cells = (7 - (len(month_days) % 7)) % 7
+        for _ in range(trailing_empty_cells):
+            month_days.append({'is_empty_cell': True})
+
     # Keep month summary exactly aligned with what is shown in day cards.
-    calendar_grid_month_sales = sum((d['sales'] for d in month_days), Decimal('0'))
-    calendar_grid_month_gp = sum((d['gp'] for d in month_days), Decimal('0'))
-    calendar_grid_month_doc_count = sum((d['doc_count'] for d in month_days))
+    day_cells = [d for d in month_days if not d.get('is_empty_cell')]
+    calendar_grid_month_sales = sum((d['sales'] for d in day_cells), Decimal('0'))
+    calendar_grid_month_gp = sum((d['gp'] for d in day_cells), Decimal('0'))
+    calendar_grid_month_doc_count = sum((d['doc_count'] for d in day_cells))
     _cms = float(calendar_grid_month_sales)
     calendar_grid_month_gp_pct = round(float(calendar_grid_month_gp) / _cms * 100, 1) if _cms else 0
+
+    for week in weekly_totals:
+        _ws = float(week['sales'])
+        week['gp_pct'] = round(float(week['gp']) / _ws * 100, 1) if _ws else 0
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
         calendar_html = render_to_string(
@@ -1727,6 +1757,7 @@ def home(request):
                 'today': today,
                 'is_admin': is_admin,
                 'cal_months': cal_months,
+                'weekly_totals': weekly_totals,
                 'calendar_grid_month_sales': calendar_grid_month_sales,
                 'calendar_grid_month_gp': calendar_grid_month_gp,
                 'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
@@ -1756,6 +1787,7 @@ def home(request):
         'is_admin': is_admin,
         'store_filter': store_filter,
         'month_days': month_days,
+        'weekly_totals': weekly_totals,
         'current_month': current_month,
         'current_year': current_year,
         'today': today,

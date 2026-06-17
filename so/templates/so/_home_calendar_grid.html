@@ -15,14 +15,54 @@
     </div>
     {% endif %}
 </div>
-<div class="calendar-grid">
-    {% for day in month_days %}
-    <div class="calendar-day {% if day.date == today %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
-        <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{ day.formatted_date }}</div>
-        <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{ day.sales|floatformat:0|intcomma }}</div>
-        {% if is_admin %}
-        <div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }} | {{ day.gp_pct|floatformat:1 }}%</div>
+<div class="home-calendar-layout">
+    <div class="calendar-grid">
+        <div class="calendar-weekhead">Mon</div>
+        <div class="calendar-weekhead">Tue</div>
+        <div class="calendar-weekhead">Wed</div>
+        <div class="calendar-weekhead">Thu</div>
+        <div class="calendar-weekhead">Fri</div>
+        <div class="calendar-weekhead">Sat</div>
+        <div class="calendar-weekhead">Sun</div>
+        {% for day in month_days %}
+        {% if day.is_empty_cell %}
+        <div class="calendar-spacer" aria-hidden="true"></div>
+        {% else %}
+        <div class="calendar-day {% if day.date == today %}calendar-day-today{% endif %} {% if not day.has_sales %}calendar-day-no-sales{% endif %}">
+            <div class="calendar-day-label" style="font-size: 0.65rem; font-weight: 600; color: var(--gray-600); margin-bottom: 0.25rem;">{{ day.formatted_date }}</div>
+            <div class="calendar-day-sales" style="font-size: 0.7rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.15rem; line-height: 1.2; flex-grow: 1; display: flex; align-items: center; justify-content: center;">{{ day.sales|floatformat:0|intcomma }}</div>
+            {% if is_admin %}
+            <div class="calendar-day-gp" style="font-size: 0.55rem; color: var(--gray-500); line-height: 1.1;">GP: {{ day.gp|floatformat:0|intcomma }} | {{ day.gp_pct|floatformat:1 }}%</div>
+            {% endif %}
+        </div>
         {% endif %}
+        {% endfor %}
     </div>
-    {% endfor %}
+
+    <aside class="home-weekly-panel">
+        <div class="home-weekly-panel-header">Weekly totals (Mon-Sat)</div>
+        {% for week in weekly_totals %}
+        <div class="home-week-row">
+            <div class="home-week-label">{{ week.label }}</div>
+            <div class="home-week-metrics">
+                <div class="home-week-metric">
+                    <span>Sales</span>
+                    <strong>{{ week.sales|floatformat:0|intcomma }}</strong>
+                </div>
+                {% if is_admin %}
+                <div class="home-week-metric">
+                    <span>GP</span>
+                    <strong>{{ week.gp|floatformat:0|intcomma }} · {{ week.gp_pct|floatformat:1 }}%</strong>
+                </div>
+                {% endif %}
+                <div class="home-week-metric">
+                    <span>Docs</span>
+                    <strong>{{ week.doc_count|intcomma }}</strong>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="home-week-row" style="color: var(--gray-500); font-size: 0.78rem;">No data</div>
+        {% endfor %}
+    </aside>
 </div>

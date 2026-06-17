@@ -574,27 +574,91 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .home-calendar-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 280px;
+            gap: 1rem;
+            align-items: start;
+        }
+
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(7, minmax(72px, 1fr));
             gap: 0.5rem;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+
+        .calendar-weekhead {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-100);
+            border-radius: 6px;
+            padding: 0.4rem 0.25rem;
+            text-align: center;
+            font-size: 0.62rem;
+            font-weight: 800;
+            color: var(--gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .calendar-spacer {
+            min-height: 60px;
+            border: 1px dashed var(--gray-200);
+            border-radius: 6px;
+            background: rgba(241, 245, 249, 0.55);
+        }
+
+        /* Weekly totals panel (same idea as brandwise quotation calendar) */
+        .home-weekly-panel {
+            border: 1px solid var(--gray-200);
+            border-radius: 10px;
+            background: var(--white);
+            overflow: hidden;
+        }
+        .home-weekly-panel-header {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--gray-100);
+            background: var(--gray-50);
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--gray-800);
+        }
+        .home-week-row {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .home-week-row:last-child {
+            border-bottom: 0;
+        }
+        .home-week-label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--gray-600);
+            margin-bottom: 6px;
+        }
+        .home-week-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .home-week-metric span {
+            display: block;
+            font-size: 0.62rem;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .home-week-metric strong {
+            display: block;
+            font-size: 0.82rem;
+            color: var(--gray-900);
+            font-variant-numeric: tabular-nums;
         }
 
         @media (max-width: 1200px) {
-            .calendar-grid {
-                grid-template-columns: repeat(5, 1fr);
-            }
-        }
-
-        @media (max-width: 768px) {
-            .calendar-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .calendar-grid {
-                grid-template-columns: repeat(3, 1fr);
+            .home-calendar-layout {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1293,7 +1357,7 @@
                         </div>
                     </div>
                     <div id="calendar-grid-container">
-                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin cal_months=cal_months calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
+                        {% include 'so/_home_calendar_grid.html' with month_days=month_days today=today is_admin=is_admin cal_months=cal_months weekly_totals=weekly_totals calendar_grid_month_sales=calendar_grid_month_sales calendar_grid_month_gp=calendar_grid_month_gp calendar_grid_month_gp_pct=calendar_grid_month_gp_pct calendar_grid_month_doc_count=calendar_grid_month_doc_count %}
                     </div>
                 </div>
             </div>
