@@ -1,0 +1,12 @@
+# Standalone demo deps — install in a throwaway venv, not your Django env.
+#   python -m venv .venv && .venv\Scripts\activate   (Windows)
+#   pip install -r requirements.txt
+
+# --- Prefect path (lightweight, run the flow directly) ---
+prefect>=2.16
+requests>=2.31
+
+# --- Airflow path (heavier; only needed if you actually run Airflow) ---
+# Airflow is normally installed with a constraints file, not a bare pip install.
+# See README section "Running the Airflow version". Uncomment to try locally:
+# apache-airflow>=2.9

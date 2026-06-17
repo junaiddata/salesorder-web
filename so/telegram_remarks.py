@@ -42,6 +42,10 @@ SALESMAN_TELEGRAM_GROUPS = {
     "A.DIP MUZAMMIL": "-5020536884",
 
 
+    #alabama
+    "D. ALABAMA": "-5449493100",
+
+
 }
 
 

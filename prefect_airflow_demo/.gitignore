@@ -1,0 +1,5 @@
+# Generated output and throwaway env for this demo folder
+powerbi_inbox/
+.venv/
+__pycache__/
+*.pyc
