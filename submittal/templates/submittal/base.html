@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Material Submittals{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- ── Unified top navigation ── -->
+    <nav class="app-nav" id="appNav">
+        <div class="app-nav-inner">
+            <a class="app-brand" href="{% url 'submittal:list' %}">
+                <span class="logo"><i class="fas fa-file-pdf"></i></span>
+                <span>
+                    <span class="name">Submittals</span><br>
+                    <span class="sub">Material Submittal System</span>
+                </span>
+            </a>
+
+            <button class="app-nav-toggle" id="navToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+
+            {% with url_name=request.resolver_match.url_name %}
+            <div class="app-nav-links">
+                <a href="{% url 'submittal:list' %}" class="app-nav-link {% if url_name == 'list' %}active{% endif %}">
+                    <i class="fas fa-table-columns"></i> Dashboard
+                </a>
+                <a href="{% url 'submittal:wizard' %}" class="app-nav-link {% if url_name == 'wizard' or url_name == 'edit' %}active{% endif %}">
+                    <i class="fas fa-plus-circle"></i> New Submittal
+                </a>
+                <a href="{% url 'submittal:items' %}" class="app-nav-link {% if 'items' in url_name %}active{% endif %}">
+                    <i class="fas fa-boxes-stacked"></i> Materials
+                </a>
+                <a href="{% url 'submittal:settings' %}" class="app-nav-link {% if url_name == 'settings' %}active{% endif %}">
+                    <i class="fas fa-check-double"></i> Compliance
+                </a>
+                <a href="{% url 'submittal:admin_index' %}" class="app-nav-link {% if 'admin' in url_name %}active{% endif %}">
+                    <i class="fas fa-sliders"></i> Admin
+                </a>
+            </div>
+            <div class="app-nav-right">
+                <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>
+            </div>
+            {% endwith %}
+        </div>
+    </nav>
+
+    <!-- ── Breadcrumbs (optional) ── -->
+    {% block breadcrumbs %}{% endblock %}
+
+    <!-- ── Flash messages ── -->
+    {% if messages %}
+    <div class="flash-stack" id="flashStack">
+        {% for msg in messages %}
+        <div class="flash {{ msg.tags }}">
+            <span class="fic"><i class="fas fa-{% if 'success' in msg.tags %}circle-check{% elif 'error' in msg.tags or 'danger' in msg.tags %}circle-exclamation{% elif 'warning' in msg.tags %}triangle-exclamation{% else %}circle-info{% endif %}"></i></span>
+            <span>{{ msg }}</span>
+            <button class="close" onclick="this.parentElement.remove()" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Mobile nav toggle
+        document.getElementById('navToggle')?.addEventListener('click', function () {
+            document.getElementById('appNav').classList.toggle('open');
+        });
+        // Auto-dismiss flash messages
+        setTimeout(function () {
+            document.querySelectorAll('#flashStack .flash').forEach(function (f, i) {
+                setTimeout(function () { f.style.transition = 'opacity .4s'; f.style.opacity = '0'; setTimeout(function(){ f.remove(); }, 400); }, i * 120);
+            });
+        }, 5000);
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

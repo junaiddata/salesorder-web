@@ -195,3 +195,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# ── Supabase S3 (generated submittal PDFs) ──────────────────────────────
+# Only the final generated PDF is stored here; all other media stays local.
+AWS_ACCESS_KEY_ID = os.getenv('S3_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('S3_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.getenv('S3_REGION')
+AWS_S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')

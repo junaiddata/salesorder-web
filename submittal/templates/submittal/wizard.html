@@ -11,11 +11,11 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
     <style>
         :root {
-            --primary: #1a56db;
-            --primary-dark: #1e3a8a;
-            --primary-light: #3b82f6;
-            --primary-subtle: #dbeafe;
-            --primary-ghost: #eff6ff;
+            --primary: #003399;
+            --primary-dark: #002a85;
+            --primary-light: #1a44b8;
+            --primary-subtle: #dbe4ff;
+            --primary-ghost: #eef3ff;
             --accent: #dc2626;
             --accent-light: #fef2f2;
             --success: #059669;
@@ -721,6 +721,19 @@
             font-size: 0.7rem;
         }
 
+        .index-rename-input {
+            flex: 1;
+            font-size: 0.85rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            padding: 0.3rem 0.55rem;
+            border: 2px solid var(--primary-light);
+            border-radius: 7px;
+            outline: none;
+            color: var(--text);
+            box-shadow: 0 0 0 3px var(--primary-subtle);
+        }
+
         .index-item-check {
             width: 18px;
             height: 18px;
@@ -1020,7 +1033,7 @@
         <div class="top-bar-left">
             <a href="{% url 'submittal:list' %}" class="top-bar-back">
                 <i class="fas fa-arrow-left"></i>
-                <span>Submittals</span>
+                <span>Dashboard</span>
             </a>
         </div>
         <div class="top-bar-title">
@@ -1327,14 +1340,37 @@
                 btn.addEventListener('click', () => {
                     const idx = parseInt(btn.dataset.idx);
                     const item = indexItems[idx];
+                    const row = btn.closest('.index-item-row');
+                    const labelSpan = row.querySelector('.index-item-label');
+                    if (!labelSpan || row.querySelector('.index-rename-input')) return;
+
                     const current = item.display_label || item.label;
-                    const newName = prompt('Rename for this submittal (leave empty to use original):', current);
-                    if (newName !== null) {
-                        item.display_label = newName.trim();
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'index-rename-input';
+                    input.value = current;
+                    labelSpan.style.display = 'none';
+                    labelSpan.insertAdjacentElement('afterend', input);
+                    input.focus();
+                    input.select();
+
+                    let done = false;
+                    const commit = (save) => {
+                        if (done) return; done = true;
+                        if (save) {
+                            const val = input.value.trim();
+                            // Reset to original when cleared or equal to the canonical label
+                            item.display_label = (!val || val === item.label) ? '' : val;
+                        }
                         renderIndexList();
                         initSortable();
                         serializeIndexItems();
-                    }
+                    };
+                    input.addEventListener('keydown', e => {
+                        if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+                        else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+                    });
+                    input.addEventListener('blur', () => commit(true));
                 });
             });
 

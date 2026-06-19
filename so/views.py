@@ -3461,7 +3461,7 @@ SALES_USER_MAP = {
     "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID", "RAFIQ"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
     "alabama": ["D. ALABAMA", "ALABAMA"],     # both entries for Meraj
-    "anish": ["ANISH DIP","ANISH", "B.ANISH DIP"],
+    "anish": ["ANISH DIP","ANISH", "B.ANISH DIP","A.ANISH - ABUBACKER"],
     "musharaf": ["A.MUSHARAF", "MUSHARAF"],
     "ibrahim": ["A.IBRAHIM"],
     "adil": ["A.DIP ADIL", "ADIL"],

@@ -1,398 +1,160 @@
+{% extends 'submittal/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Material Submittals</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #003399;
-            --primary-light: #335cbf;
-            --primary-dark: #002277;
-            --accent: #CC0000;
-            --bg: #f0f4f8;
-            --card-bg: #ffffff;
-            --border: #e2e8f0;
-            --text: #1e293b;
-            --text-muted: #64748b;
-            --success: #10b981;
-            --warning: #f59e0b;
-        }
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; min-height: 100vh; }
 
-        /* ── Top Navigation ── */
-        .topnav {
-            background: var(--primary-dark);
-            padding: 0.6rem 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .topnav-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            text-decoration: none;
-        }
-        .topnav-brand .brand-icon {
-            width: 34px; height: 34px;
-            background: var(--accent);
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-size: 1rem;
-        }
-        .topnav-brand .brand-text { color: #fff; font-size: 1rem; font-weight: 600; }
-        .topnav-brand .brand-sub { color: rgba(255,255,255,0.55); font-size: 0.72rem; }
-        .topnav-right { display: flex; align-items: center; gap: 0.5rem; }
-        .topnav-link {
-            color: rgba(255,255,255,0.75);
-            text-decoration: none;
-            font-size: 0.82rem;
-            padding: 0.4rem 0.75rem;
-            border-radius: 6px;
-            transition: all 0.15s;
-            display: flex; align-items: center; gap: 0.4rem;
-        }
-        .topnav-link:hover { background: rgba(255,255,255,0.12); color: #fff; }
-        .topnav-link.active { background: rgba(255,255,255,0.2); color: #fff; }
-        .topnav-link.btn-so {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.25);
-        }
-        .topnav-link.btn-so:hover { background: rgba(255,255,255,0.2); }
-        .topnav-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 0.25rem; }
+{% block title %}Dashboard | Material Submittals{% endblock %}
 
-        /* ── Hero ── */
-        .hero {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-            color: #fff;
-            padding: 2.5rem 2rem 3.5rem;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero::after {
-            content: '';
-            position: absolute;
-            right: -80px; bottom: -80px;
-            width: 300px; height: 300px;
-            background: rgba(255,255,255,0.04);
-            border-radius: 50%;
-        }
-        .hero::before {
-            content: '';
-            position: absolute;
-            right: 60px; bottom: 30px;
-            width: 160px; height: 160px;
-            background: rgba(255,255,255,0.04);
-            border-radius: 50%;
-        }
-        .hero-inner { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
-        .hero h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.35rem; }
-        .hero p { font-size: 0.9rem; color: rgba(255,255,255,0.75); margin: 0; }
-        .hero-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap; }
-        .btn-hero-primary {
-            background: #fff;
-            color: var(--primary);
-            padding: 0.65rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            text-decoration: none;
-            font-size: 0.9rem;
-            display: flex; align-items: center; gap: 0.5rem;
-            transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        .btn-hero-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.2); color: var(--primary); }
-        .btn-hero-outline {
-            background: transparent;
-            color: rgba(255,255,255,0.9);
-            padding: 0.65rem 1.25rem;
-            border-radius: 8px;
-            font-weight: 500;
-            text-decoration: none;
-            font-size: 0.875rem;
-            display: flex; align-items: center; gap: 0.5rem;
-            border: 1px solid rgba(255,255,255,0.35);
-            transition: all 0.2s;
-        }
-        .btn-hero-outline:hover { background: rgba(255,255,255,0.12); color: #fff; }
-
-        /* ── Stats strip ── */
-        .stats-strip {
-            background: var(--primary-dark);
-            padding: 0.6rem 2rem;
-        }
-        .stats-strip-inner { max-width: 1100px; margin: 0 auto; display: flex; gap: 2rem; }
-        .stat-pill { display: flex; align-items: center; gap: 0.5rem; color: rgba(255,255,255,0.8); font-size: 0.8rem; }
-        .stat-pill strong { color: #fff; font-size: 0.9rem; }
-
-        /* ── Main content ── */
-        .page-body { max-width: 1100px; margin: 0 auto; padding: 1.75rem 2rem 4rem; }
-
-        /* ── Toolbar ── */
-        .toolbar {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-        .search-wrap {
-            position: relative;
-            flex: 1;
-            min-width: 240px;
-            max-width: 400px;
-        }
-        .search-wrap i { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.875rem; }
-        .search-wrap input {
-            width: 100%;
-            padding: 0.55rem 0.75rem 0.55rem 2.25rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.875rem;
-            background: #fff;
-            transition: border-color 0.2s;
-        }
-        .search-wrap input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,51,153,0.1); }
-        .btn-toolbar {
-            padding: 0.55rem 1rem;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            font-weight: 500;
-            text-decoration: none;
-            display: flex; align-items: center; gap: 0.4rem;
-            border: 1px solid var(--border);
-            background: #fff;
-            color: var(--text);
-            white-space: nowrap;
-            transition: all 0.15s;
-        }
-        .btn-toolbar:hover { border-color: var(--primary); color: var(--primary); background: #f0f4ff; }
-        .btn-toolbar.danger:hover { border-color: var(--accent); color: var(--accent); background: #fff5f5; }
-
-        /* ── Submittal cards ── */
-        .submittals-grid { display: flex; flex-direction: column; gap: 0.75rem; }
-
-        .submittal-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 1.1rem 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            display: flex;
-            align-items: center;
-            gap: 1.25rem;
-            border: 1px solid var(--border);
-            transition: all 0.2s;
-            text-decoration: none;
-            color: inherit;
-        }
-        .submittal-card:hover {
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-            border-color: rgba(0,51,153,0.25);
-            transform: translateY(-1px);
-        }
-        .card-icon {
-            width: 42px; height: 42px; flex-shrink: 0;
-            background: #eff4ff;
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            color: var(--primary);
-            font-size: 1.1rem;
-        }
-        .card-body { flex: 1; min-width: 0; }
-        .card-title {
-            font-size: 0.95rem;
-            font-weight: 600;
-            margin: 0 0 0.3rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .card-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            flex-wrap: wrap;
-        }
-        .card-meta span { display: flex; align-items: center; gap: 0.3rem; }
-        .card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
-        .btn-card {
-            padding: 0.4rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.78rem;
-            font-weight: 500;
-            text-decoration: none;
-            display: flex; align-items: center; gap: 0.35rem;
-            border: 1px solid var(--border);
-            background: #f8fafc;
-            color: var(--text);
-            transition: all 0.15s;
-            white-space: nowrap;
-        }
-        .btn-card:hover { background: #f1f5f9; }
-        .btn-card.view { background: #eff6ff; color: var(--primary); border-color: #bfdbfe; }
-        .btn-card.view:hover { background: #dbeafe; }
-        .btn-card.edit { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-        .btn-card.edit:hover { background: #fef3c7; }
-        .btn-card.pdf { background: #f0fdf4; color: #065f46; border-color: #bbf7d0; }
-        .btn-card.pdf:hover { background: #dcfce7; }
-        .btn-card.del { background: #fff5f5; color: #b91c1c; border-color: #fecaca; }
-        .btn-card.del:hover { background: #fee2e2; }
-
-        /* ── Empty state ── */
-        .empty-state {
-            text-align: center;
-            padding: 5rem 1rem;
-            color: var(--text-muted);
-        }
-        .empty-state .empty-icon {
-            width: 72px; height: 72px;
-            background: #f1f5f9;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.75rem;
-            color: #94a3b8;
-            margin: 0 auto 1.25rem;
-        }
-        .empty-state h3 { font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 0.35rem; }
-        .empty-state p { font-size: 0.875rem; margin-bottom: 1.5rem; }
-
-        /* ── Section heading ── */
-        .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-        .section-head h2 { font-size: 1rem; font-weight: 600; margin: 0; }
-        .count-badge { font-size: 0.78rem; color: var(--text-muted); font-weight: 400; margin-left: 0.5rem; }
-
-        @media (max-width: 640px) {
-            .hero { padding: 1.75rem 1.25rem 2.5rem; }
-            .page-body { padding: 1.25rem 1rem 3rem; }
-            .card-actions { flex-direction: column; }
-            .stats-strip-inner { gap: 1rem; flex-wrap: wrap; }
-            .topnav { padding: 0.6rem 1rem; }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Top navigation -->
-    <nav class="topnav">
-        <a class="topnav-brand" href="{% url 'submittal:list' %}">
-            <div class="brand-icon"><i class="fas fa-file-pdf"></i></div>
-            <div>
-                <div class="brand-text">Submittals</div>
-                <div class="brand-sub">Material Submittal System</div>
-            </div>
-        </a>
-        <div class="topnav-right">
-            <a href="{% url 'submittal:items' %}" class="topnav-link"><i class="fas fa-boxes-stacked"></i> Items</a>
-            <a href="{% url 'submittal:settings' %}" class="topnav-link"><i class="fas fa-check-double"></i> Compliance</a>
-            <a href="{% url 'submittal:admin_index' %}" class="topnav-link"><i class="fas fa-cog"></i> Admin</a>
-            <div class="topnav-sep"></div>
-            <a href="{% url 'home' %}" class="topnav-link btn-so"><i class="fas fa-arrow-left"></i> SO Home</a>
-        </div>
-    </nav>
-
-    <!-- Hero -->
-    <div class="hero">
-        <div class="hero-inner">
-            <h1><i class="fas fa-file-alt me-2" style="opacity:0.85"></i>Material Submittals</h1>
-            <p>Create, manage and generate professional material submittal packages as PDF.</p>
-            <div class="hero-actions">
-                <a href="{% url 'submittal:wizard' %}" class="btn-hero-primary">
-                    <i class="fas fa-plus"></i> New Submittal
-                </a>
-                <a href="{% url 'submittal:admin_index' %}" class="btn-hero-outline">
-                    <i class="fas fa-cog"></i> Admin Panel
-                </a>
-                <a href="{% url 'submittal:admin_items' %}" class="btn-hero-outline">
-                    <i class="fas fa-boxes-stacked"></i> Manage Materials
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Stats strip -->
-    <div class="stats-strip">
-        <div class="stats-strip-inner">
-            <div class="stat-pill"><i class="fas fa-file-pdf"></i><span><strong>{{ submittals|length }}</strong> Submittal{{ submittals|length|pluralize }}</span></div>
-        </div>
-    </div>
-
-    <div class="page-body">
-
-        <!-- Toolbar -->
-        <div class="toolbar">
-            <div class="search-wrap">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Search by project, client or product…" oninput="filterCards(this.value)">
-            </div>
-            <div style="flex:1"></div>
-            <a href="{% url 'submittal:wizard' %}" class="btn-toolbar" style="background:var(--primary);color:#fff;border-color:var(--primary);">
-                <i class="fas fa-plus"></i> New Submittal
-            </a>
-        </div>
-
-        <!-- Submittals list -->
-        {% if submittals %}
-        <div class="section-head">
-            <h2>All Submittals <span class="count-badge" id="visibleCount">({{ submittals|length }})</span></h2>
-        </div>
-        <div class="submittals-grid" id="submittalGrid">
-            {% for s in submittals %}
-            <div class="submittal-card" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
-                <div class="card-icon"><i class="fas fa-file-pdf"></i></div>
-                <div class="card-body">
-                    <div class="card-title">{{ s.project|truncatewords:12 }}</div>
-                    <div class="card-meta">
-                        {% if s.client %}<span><i class="fas fa-building"></i>{{ s.client }}</span>{% endif %}
-                        {% if s.product %}<span><i class="fas fa-box"></i>{{ s.product }}</span>{% endif %}
-                        <span><i class="fas fa-calendar-alt"></i>{{ s.created_at|date:"d M Y" }}</span>
-                        {% if s.pdf_generated_at %}<span style="color:#059669;"><i class="fas fa-check-circle"></i>PDF ready</span>{% endif %}
-                    </div>
-                </div>
-                <div class="card-actions">
-                    <a href="{% url 'submittal:detail' s.pk %}" class="btn-card view"><i class="fas fa-eye"></i> View</a>
-                    <a href="{% url 'submittal:edit' s.pk %}" class="btn-card edit"><i class="fas fa-edit"></i> Edit</a>
-                    <a href="{% url 'submittal:generate_pdf' s.pk %}" class="btn-card pdf"><i class="fas fa-download"></i> PDF</a>
-                    <form method="post" action="{% url 'submittal:delete' s.pk %}" class="d-inline" onsubmit="return confirm('Delete this submittal?');">
-                        {% csrf_token %}
-                        <button type="submit" class="btn-card del" style="cursor:pointer;border:none;"><i class="fas fa-trash"></i></button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
-            <h3>No submittals yet</h3>
-            <p>Create your first material submittal to get started.</p>
-            <a href="{% url 'submittal:wizard' %}" class="btn-hero-primary" style="display:inline-flex;background:var(--primary);color:#fff;">
-                <i class="fas fa-plus"></i> New Submittal
-            </a>
-        </div>
-        {% endif %}
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-    function filterCards(q) {
-        const term = q.toLowerCase();
-        const cards = document.querySelectorAll('#submittalGrid .submittal-card');
-        let visible = 0;
-        cards.forEach(c => {
-            const match = !term || c.dataset.search.includes(term);
-            c.style.display = match ? '' : 'none';
-            if (match) visible++;
-        });
-        const badge = document.getElementById('visibleCount');
-        if (badge) badge.textContent = `(${visible})`;
+{% block extra_css %}
+<style>
+    .dash-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 1rem; }
+    .quick-card {
+        display: flex; align-items: center; gap: .9rem;
+        padding: 1.1rem 1.25rem; text-decoration: none;
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--r-lg); box-shadow: var(--sh); transition: all var(--ease);
     }
-    </script>
-</body>
-</html>
+    .quick-card:hover { transform: translateY(-2px); box-shadow: var(--sh-md); border-color: var(--primary-300); }
+    .quick-card .qic { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0; }
+    .quick-card .qic.blue  { background: var(--primary-50); color: var(--primary); }
+    .quick-card .qic.green { background: var(--success-50); color: var(--success); }
+    .quick-card .qic.amber { background: var(--warn-50); color: var(--warn-700); }
+    .quick-card .qt { font-weight: 700; color: var(--ink); font-size: .92rem; }
+    .quick-card .qs { font-size: .78rem; color: var(--muted); }
+    .quick-card .qarrow { margin-left: auto; color: var(--faint); transition: transform var(--ease); }
+    .quick-card:hover .qarrow { transform: translateX(3px); color: var(--primary); }
+
+    .sub-card {
+        display: flex; align-items: center; gap: 1.1rem;
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--r-lg); padding: 1rem 1.35rem; box-shadow: var(--sh);
+        transition: all var(--ease); margin-bottom: .75rem;
+    }
+    .sub-card:hover { box-shadow: var(--sh-md); border-color: var(--primary-300); transform: translateY(-1px); }
+    .sub-card .sic { width: 44px; height: 44px; flex-shrink: 0; background: var(--primary-50); color: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .sub-card .meta { flex: 1; min-width: 0; }
+    .sub-card .stitle { font-weight: 700; color: var(--ink); font-size: .95rem; margin-bottom: .3rem; text-decoration: none; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub-card .stitle:hover { color: var(--primary); }
+    .sub-card .smeta { display: flex; gap: 1rem; font-size: .78rem; color: var(--muted); flex-wrap: wrap; }
+    .sub-card .smeta span { display: flex; align-items: center; gap: .35rem; }
+    .sub-card .sactions { display: flex; gap: .4rem; flex-shrink: 0; }
+    .icon-btn {
+        width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line);
+        background: var(--surface); display: flex; align-items: center; justify-content: center;
+        color: var(--muted); cursor: pointer; transition: all var(--ease); text-decoration: none; font-size: .82rem;
+    }
+    .icon-btn:hover { transform: translateY(-1px); }
+    .icon-btn.view:hover  { background: var(--primary-50); color: var(--primary); border-color: var(--primary-100); }
+    .icon-btn.edit:hover  { background: var(--warn-50); color: var(--warn-700); border-color: #fde68a; }
+    .icon-btn.pdf:hover   { background: var(--success-50); color: var(--success-700); border-color:#bbf7d0; }
+    .icon-btn.del:hover   { background: var(--danger-50); color: var(--danger); border-color:#fecaca; }
+    @media (max-width:600px){ .sub-card .sactions { flex-wrap: wrap; } }
+</style>
+{% endblock %}
+
+{% block body %}
+<!-- Hero -->
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-alt" style="opacity:.85"></i> Material Submittals</h1>
+            <p>Create, manage and generate professional material submittal packages — ready as a single, polished PDF.</p>
+            <div class="hero-actions">
+                <a href="{% url 'submittal:wizard' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> New Submittal</a>
+                <a href="{% url 'submittal:admin_items' %}" class="btn-x btn-ghost-x"><i class="fas fa-boxes-stacked"></i> Manage Materials</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+
+    <!-- Quick actions -->
+    <div class="dash-actions mb-3">
+        <a href="{% url 'submittal:wizard' %}" class="quick-card">
+            <span class="qic blue"><i class="fas fa-wand-magic-sparkles"></i></span>
+            <span><span class="qt">New Submittal</span><br><span class="qs">Start the guided builder</span></span>
+            <i class="fas fa-arrow-right qarrow"></i>
+        </a>
+        <a href="{% url 'submittal:admin_items' %}" class="quick-card">
+            <span class="qic green"><i class="fas fa-boxes-stacked"></i></span>
+            <span><span class="qt">Materials Library</span><br><span class="qs">Items, brands & PDFs</span></span>
+            <i class="fas fa-arrow-right qarrow"></i>
+        </a>
+        <a href="{% url 'submittal:admin_company_docs' %}" class="quick-card">
+            <span class="qic amber"><i class="fas fa-building"></i></span>
+            <span><span class="qt">Company Documents</span><br><span class="qs">Profile & trade license</span></span>
+            <i class="fas fa-arrow-right qarrow"></i>
+        </a>
+    </div>
+
+    <!-- Submittals -->
+    {% if submittals %}
+    <div class="sec-head">
+        <h2>All Submittals <span class="count" id="visibleCount">({{ submittals|length }})</span></h2>
+        <div class="search-x" style="min-width:260px;">
+            <i class="fas fa-search"></i>
+            <input type="text" class="input-x" id="searchInput" placeholder="Search project, client or product…" oninput="filterCards(this.value)">
+        </div>
+    </div>
+
+    <div id="submittalGrid">
+        {% for s in submittals %}
+        <div class="sub-card" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
+            <span class="sic"><i class="fas fa-file-pdf"></i></span>
+            <div class="meta">
+                <a href="{% url 'submittal:detail' s.pk %}" class="stitle">{{ s.project|truncatewords:14 }}</a>
+                <div class="smeta">
+                    {% if s.client %}<span><i class="fas fa-building"></i>{{ s.client }}</span>{% endif %}
+                    {% if s.product %}<span><i class="fas fa-box"></i>{{ s.product }}</span>{% endif %}
+                    <span><i class="fas fa-calendar-alt"></i>{{ s.created_at|date:"d M Y" }}</span>
+                    {% if s.pdf_generated_at %}<span class="chip-x green"><i class="fas fa-circle-check"></i> PDF ready</span>{% endif %}
+                </div>
+            </div>
+            <div class="sactions">
+                <a href="{% url 'submittal:detail' s.pk %}" class="icon-btn view" title="View"><i class="fas fa-eye"></i></a>
+                <a href="{% url 'submittal:edit' s.pk %}" class="icon-btn edit" title="Edit"><i class="fas fa-pen"></i></a>
+                <a href="{% url 'submittal:generate_pdf' s.pk %}" class="icon-btn pdf" title="Download PDF"><i class="fas fa-download"></i></a>
+                <form method="post" action="{% url 'submittal:delete' s.pk %}" onsubmit="return confirm('Delete this submittal? This cannot be undone.');" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="icon-btn del" title="Delete"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="empty-x" id="noResults" style="display:none;">
+        <div class="ic"><i class="fas fa-magnifying-glass"></i></div>
+        <h3>No matches</h3>
+        <p>No submittals match your search. Try a different term.</p>
+    </div>
+
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-folder-open"></i></div>
+            <h3>No submittals yet</h3>
+            <p>Create your first material submittal to get started. The guided builder walks you through title, index, documents and materials.</p>
+            <a href="{% url 'submittal:wizard' %}" class="btn-x btn-primary-x lg"><i class="fas fa-plus"></i> Create your first submittal</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterCards(q) {
+    const term = (q || '').toLowerCase();
+    const cards = document.querySelectorAll('#submittalGrid .sub-card');
+    let visible = 0;
+    cards.forEach(c => {
+        const match = !term || c.dataset.search.includes(term);
+        c.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+    const badge = document.getElementById('visibleCount');
+    if (badge) badge.textContent = `(${visible})`;
+    const none = document.getElementById('noResults');
+    if (none) none.style.display = visible === 0 ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -7,145 +7,123 @@
     <title>{% block title %}Admin{% endblock %} | Submittal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
     <style>
+        /* ── Back-compat aliases so existing admin child templates keep working ── */
         :root {
-            --primary: #003399;
-            --primary-light: #335cbf;
-            --primary-dark: #002277;
-            --accent: #CC0000;
+            --primary-light: var(--primary-600);
+            --primary-dark: var(--primary-700);
+            --accent: #dc2626;
+            --text: var(--ink);
+            --text-muted: var(--muted);
+            --border: var(--line);
+            --card-bg: var(--surface);
+            --content-bg: var(--canvas);
             --sidebar-bg: #0f172a;
             --sidebar-hover: #1e293b;
-            --sidebar-active: #003399;
-            --sidebar-section: rgba(255,255,255,0.35);
-            --content-bg: #f0f4f8;
-            --card-bg: #fff;
-            --border: #e2e8f0;
-            --text: #1e293b;
-            --text-muted: #64748b;
         }
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh; background: var(--content-bg); color: var(--text); }
+        body { background: var(--canvas); }
         .admin-layout { display: flex; min-height: 100vh; }
 
         /* ── Sidebar ── */
         .admin-sidebar {
-            width: 230px; flex-shrink: 0;
-            background: var(--sidebar-bg);
-            color: #fff;
+            width: 240px; flex-shrink: 0;
+            background: var(--sidebar-bg); color: #fff;
             display: flex; flex-direction: column;
-            position: sticky; top: 0; height: 100vh;
-            overflow-y: auto;
+            position: sticky; top: 0; height: 100vh; overflow-y: auto;
         }
-        .sidebar-brand {
-            padding: 1.25rem 1.25rem 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-        .sidebar-brand a {
-            display: flex; align-items: center; gap: 0.6rem;
-            text-decoration: none; color: #fff;
-        }
+        .sidebar-brand { padding: 1.25rem 1.25rem 1rem; border-bottom: 1px solid rgba(255,255,255,.08); }
+        .sidebar-brand a { display: flex; align-items: center; gap: .65rem; text-decoration: none; color: #fff; }
         .sidebar-brand .brand-icon {
-            width: 32px; height: 32px;
-            background: var(--accent);
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.9rem; flex-shrink: 0;
+            width: 36px; height: 36px; background: var(--accent); border-radius: 10px;
+            display: flex; align-items: center; justify-content: center; font-size: .95rem; flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(220,38,38,.35);
         }
-        .sidebar-brand .brand-label { font-size: 0.9rem; font-weight: 700; line-height: 1.2; }
-        .sidebar-brand .brand-sub { font-size: 0.68rem; color: rgba(255,255,255,0.45); }
+        .sidebar-brand .brand-label { font-size: .95rem; font-weight: 700; line-height: 1.15; }
+        .sidebar-brand .brand-sub { font-size: .68rem; color: rgba(255,255,255,.45); }
 
-        .nav-section { padding: 1rem 0 0.25rem; }
-        .nav-section-title {
-            padding: 0 1.25rem 0.35rem;
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(255,255,255,0.35);
-            font-weight: 600;
-        }
+        .nav-section { padding: 1rem 0 .25rem; }
+        .nav-section-title { padding: 0 1.25rem .4rem; font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.38); font-weight: 700; }
         .nav-link {
-            display: flex; align-items: center; gap: 0.65rem;
-            padding: 0.55rem 1.25rem;
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            font-size: 0.875rem;
-            transition: all 0.15s;
-            border-left: 3px solid transparent;
+            display: flex; align-items: center; gap: .7rem;
+            padding: .6rem 1.25rem; color: rgba(255,255,255,.72);
+            text-decoration: none; font-size: .875rem; font-weight: 500;
+            transition: all var(--ease); border-left: 3px solid transparent;
         }
-        .nav-link i { width: 16px; text-align: center; opacity: 0.8; flex-shrink: 0; }
-        .nav-link:hover { background: var(--sidebar-hover); color: #fff; border-left-color: rgba(255,255,255,0.2); }
-        .nav-link.active { background: rgba(0,51,153,0.6); color: #fff; border-left-color: #4d7fff; }
-        .nav-link .nav-badge { margin-left: auto; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); font-size: 0.65rem; padding: 0.1rem 0.45rem; border-radius: 20px; }
-
-        .sidebar-footer {
-            margin-top: auto;
-            padding: 0.75rem 0 0.5rem;
-            border-top: 1px solid rgba(255,255,255,0.08);
-        }
+        .nav-link i { width: 17px; text-align: center; opacity: .85; flex-shrink: 0; }
+        .nav-link:hover { background: var(--sidebar-hover); color: #fff; border-left-color: rgba(255,255,255,.25); }
+        .nav-link.active { background: rgba(0,51,153,.55); color: #fff; border-left-color: var(--primary-300); }
+        .sidebar-footer { margin-top: auto; padding: .75rem 0 .5rem; border-top: 1px solid rgba(255,255,255,.08); }
 
         /* ── Content ── */
-        .admin-content { flex: 1; display: flex; flex-direction: column; overflow-x: hidden; }
+        .admin-content { flex: 1; display: flex; flex-direction: column; overflow-x: hidden; min-width: 0; }
         .admin-topbar {
-            background: #fff;
-            border-bottom: 1px solid var(--border);
-            padding: 0.75rem 2rem;
-            display: flex; align-items: center; justify-content: space-between;
+            background: var(--surface); border-bottom: 1px solid var(--line);
+            padding: .8rem 2rem; display: flex; align-items: center; justify-content: space-between;
             position: sticky; top: 0; z-index: 10;
         }
-        .admin-topbar .breadcrumb-nav { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
-        .admin-topbar .breadcrumb-nav a { color: var(--primary); text-decoration: none; }
+        .admin-topbar .breadcrumb-nav { font-size: .82rem; color: var(--muted); display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+        .admin-topbar .breadcrumb-nav a { color: var(--primary-600); text-decoration: none; }
         .admin-topbar .breadcrumb-nav a:hover { text-decoration: underline; }
         .admin-topbar .breadcrumb-nav .sep { color: #cbd5e1; }
-        .admin-topbar .topbar-right { display: flex; gap: 0.5rem; }
-        .admin-topbar .btn-topbar {
-            padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 500;
-            text-decoration: none; display: flex; align-items: center; gap: 0.35rem;
-            border: 1px solid var(--border); background: #fff; color: var(--text); transition: all 0.15s;
+        .admin-topbar .topbar-right { display: flex; gap: .5rem; }
+        .btn-topbar {
+            padding: .45rem .9rem; border-radius: var(--r-sm); font-size: .8rem; font-weight: 600;
+            text-decoration: none; display: flex; align-items: center; gap: .4rem;
+            border: 1px solid var(--line); background: var(--surface); color: var(--body); transition: all var(--ease);
         }
-        .admin-topbar .btn-topbar:hover { background: #f1f5f9; border-color: #cbd5e1; }
-        .admin-topbar .btn-topbar.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .admin-topbar .btn-topbar.primary:hover { background: var(--primary-light); }
+        .btn-topbar:hover { background: var(--surface-alt); border-color: #cbd5e1; }
+        .btn-topbar.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .btn-topbar.primary:hover { background: var(--primary-700); color: #fff; }
 
         .admin-main { flex: 1; padding: 1.75rem 2rem; overflow-x: auto; }
 
         .page-header { margin-bottom: 1.5rem; }
-        .page-header h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.2rem; }
-        .page-header .page-sub { font-size: 0.82rem; color: var(--text-muted); }
+        .page-header h1 { font-size: 1.3rem; font-weight: 800; margin: 0 0 .25rem; color: var(--ink); letter-spacing: -.01em; }
+        .page-header .page-sub { font-size: .85rem; color: var(--muted); }
 
         /* Cards */
-        .admin-card { background: var(--card-bg); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--border); }
+        .admin-card { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--sh); padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--line); }
 
-        /* Tables */
-        .admin-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        .admin-table th { background: var(--sidebar-bg); color: rgba(255,255,255,0.9); padding: 0.65rem 0.85rem; text-align: left; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        /* Tables — reuse shared look */
+        .admin-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+        .admin-table th { background: var(--primary-700); color: rgba(255,255,255,.92); padding: .7rem .9rem; text-align: left; font-weight: 600; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
         .admin-table th:first-child { border-radius: 8px 0 0 0; }
         .admin-table th:last-child { border-radius: 0 8px 0 0; }
-        .admin-table td { padding: 0.65rem 0.85rem; border-bottom: 1px solid #f1f5f9; }
+        .admin-table td { padding: .7rem .9rem; border-bottom: 1px solid var(--line-soft); color: var(--body); }
         .admin-table tr:last-child td { border-bottom: none; }
-        .admin-table tr:hover td { background: #f8fafc; }
+        .admin-table tr:hover td { background: var(--primary-50); }
         .admin-table .actions { white-space: nowrap; }
-        .admin-table .actions a, .admin-table .actions button { margin-right: 0.3rem; }
+        .admin-table .actions a, .admin-table .actions button { margin-right: .3rem; }
 
         /* Buttons */
-        .btn-admin { padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; transition: all 0.15s; cursor: pointer; }
-        .btn-admin-primary { background: var(--primary); color: #fff; border: none; }
-        .btn-admin-primary:hover { background: var(--primary-light); color: #fff; }
-        .btn-admin-danger { background: #dc2626; color: #fff; border: none; }
+        .btn-admin { padding: .5rem 1rem; font-size: .85rem; font-weight: 600; border-radius: var(--r); display: inline-flex; align-items: center; gap: .4rem; text-decoration: none; transition: all var(--ease); cursor: pointer; border: 1px solid transparent; }
+        .btn-admin:hover { transform: translateY(-1px); box-shadow: var(--sh-md); }
+        .btn-admin-primary { background: var(--primary); color: #fff; }
+        .btn-admin-primary:hover { background: var(--primary-700); color: #fff; }
+        .btn-admin-danger { background: var(--danger); color: #fff; }
         .btn-admin-danger:hover { background: #b91c1c; color: #fff; }
-        .btn-admin-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-        .btn-admin-outline:hover { background: #f1f5f9; }
-        .btn-admin-success { background: #10b981; color: #fff; border: none; }
-        .btn-admin-success:hover { background: #059669; color: #fff; }
+        .btn-admin-outline { background: var(--surface); border-color: var(--line); color: var(--body); }
+        .btn-admin-outline:hover { background: var(--surface-alt); }
+        .btn-admin-success { background: var(--success); color: #fff; }
+        .btn-admin-success:hover { background: var(--success-700); color: #fff; }
 
         /* Misc */
         .search-bar { max-width: 320px; }
-        .empty-state { text-align: center; padding: 3.5rem 1rem; color: var(--text-muted); }
-        .empty-state .empty-icon { width: 64px; height: 64px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #94a3b8; margin: 0 auto 1rem; }
-        .stat-card { background: var(--card-bg); border-radius: 12px; padding: 1.25rem 1.5rem; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .stat-card .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); line-height: 1; }
-        .stat-card .stat-label { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
-        .stat-card .stat-icon { font-size: 1.5rem; color: var(--primary); opacity: 0.2; }
+        .empty-state { text-align: center; padding: 3.5rem 1rem; color: var(--muted); }
+        .empty-state .empty-icon { width: 66px; height: 66px; background: var(--surface-alt); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: var(--faint); margin: 0 auto 1rem; }
+        .stat-card { background: var(--surface); border-radius: var(--r-lg); padding: 1.3rem 1.5rem; border: 1px solid var(--line); box-shadow: var(--sh); transition: all var(--ease); }
+        .stat-card:hover { box-shadow: var(--sh-md); transform: translateY(-2px); }
+        .stat-card .stat-value { font-size: 2rem; font-weight: 800; color: var(--primary); line-height: 1; }
+        .stat-card .stat-label { font-size: .82rem; color: var(--muted); margin-top: .3rem; }
+        .stat-card .stat-icon { font-size: 1.5rem; color: var(--primary); opacity: .2; }
+
+        @media (max-width: 768px) {
+            .admin-sidebar { width: 64px; }
+            .sidebar-brand .brand-label, .sidebar-brand .brand-sub, .nav-section-title, .nav-link span:not(.nav-badge) { display: none; }
+            .admin-main, .admin-topbar { padding-left: 1rem; padding-right: 1rem; }
+        }
 
         {% block extra_css %}{% endblock %}
     </style>
@@ -166,44 +144,51 @@
             </div>
 
             <div class="nav-section">
+                <div class="nav-section-title">Overview</div>
+                <a href="{% url 'submittal:admin_index' %}" class="nav-link {% if request.resolver_match.url_name == 'admin_index' %}active{% endif %}">
+                    <i class="fas fa-gauge-high"></i> <span>Dashboard</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
                 <div class="nav-section-title">Submittals</div>
                 <a href="{% url 'submittal:admin_submittals' %}" class="nav-link {% if request.resolver_match.url_name == 'admin_submittals' %}active{% endif %}">
-                    <i class="fas fa-file-pdf"></i> All Submittals
+                    <i class="fas fa-file-pdf"></i> <span>All Submittals</span>
                 </a>
                 <a href="{% url 'submittal:wizard' %}" class="nav-link">
-                    <i class="fas fa-plus-circle"></i> New Submittal
+                    <i class="fas fa-plus-circle"></i> <span>New Submittal</span>
                 </a>
             </div>
 
             <div class="nav-section">
                 <div class="nav-section-title">Materials</div>
                 <a href="{% url 'submittal:admin_items' %}" class="nav-link {% if request.resolver_match.url_name == 'admin_items' or request.resolver_match.url_name == 'admin_item_detail' %}active{% endif %}">
-                    <i class="fas fa-boxes-stacked"></i> Materials
+                    <i class="fas fa-boxes-stacked"></i> <span>Materials</span>
                 </a>
                 <a href="{% url 'submittal:bulk_import_pdfs' %}" class="nav-link {% if request.resolver_match.url_name == 'bulk_import_pdfs' %}active{% endif %}">
-                    <i class="fas fa-file-archive"></i> Bulk Import PDFs
+                    <i class="fas fa-file-archive"></i> <span>Bulk Import PDFs</span>
                 </a>
                 <a href="{% url 'submittal:admin_brands' %}" class="nav-link {% if 'admin_brand' in request.resolver_match.url_name or request.resolver_match.url_name == 'admin_brands' %}active{% endif %}">
-                    <i class="fas fa-tags"></i> Brands
+                    <i class="fas fa-tags"></i> <span>Brands</span>
                 </a>
             </div>
 
             <div class="nav-section">
                 <div class="nav-section-title">Settings</div>
                 <a href="{% url 'submittal:admin_company_docs' %}" class="nav-link {% if request.resolver_match.url_name == 'admin_company_docs' %}active{% endif %}">
-                    <i class="fas fa-building"></i> Company Docs
+                    <i class="fas fa-building"></i> <span>Company Docs</span>
                 </a>
                 <a href="{% url 'submittal:settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <i class="fas fa-check-double"></i> Compliance
+                    <i class="fas fa-check-double"></i> <span>Compliance</span>
                 </a>
             </div>
 
             <div class="sidebar-footer">
                 <a href="{% url 'submittal:list' %}" class="nav-link">
-                    <i class="fas fa-arrow-left"></i> Back to App
+                    <i class="fas fa-arrow-left"></i> <span>Back to App</span>
                 </a>
                 <a href="{% url 'home' %}" class="nav-link">
-                    <i class="fas fa-home"></i> SO Home
+                    <i class="fas fa-home"></i> <span>SO Home</span>
                 </a>
             </div>
         </aside>
@@ -212,10 +197,11 @@
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="breadcrumb-nav">
-                    <a href="{% url 'submittal:admin_index' %}"><i class="fas fa-home me-1"></i>Admin</a>
+                    <a href="{% url 'submittal:admin_index' %}"><i class="fas fa-gauge-high me-1"></i>Admin</a>
                     {% block breadcrumb %}{% endblock %}
                 </div>
                 <div class="topbar-right">
+                    <a href="{% url 'submittal:list' %}" class="btn-topbar"><i class="fas fa-table-columns"></i> Dashboard</a>
                     <a href="{% url 'submittal:wizard' %}" class="btn-topbar primary"><i class="fas fa-plus"></i> New Submittal</a>
                 </div>
             </div>
@@ -224,8 +210,8 @@
                 {% if messages %}
                 <div class="mb-3">
                     {% for msg in messages %}
-                    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert" style="font-size:0.875rem;">
-                        <i class="fas fa-{% if 'success' in msg.tags %}check-circle{% elif 'error' in msg.tags or 'danger' in msg.tags %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert" style="font-size:.875rem;border-radius:var(--r);">
+                        <i class="fas fa-{% if 'success' in msg.tags %}circle-check{% elif 'error' in msg.tags or 'danger' in msg.tags %}circle-exclamation{% else %}circle-info{% endif %} me-2"></i>
                         {{ msg }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>

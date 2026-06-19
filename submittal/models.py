@@ -2,6 +2,8 @@ from django.db import models
 from django.conf import settings
 import os
 
+from .storage_backends import generated_pdf_storage
+
 
 def company_doc_path(instance, filename):
     return f'submittal/company_docs/{filename}'
@@ -286,7 +288,8 @@ class Submittal(models.Model):
     # Stored output PDF — generated once, temp uploads deleted after
     generated_pdf = models.FileField(
         upload_to=generated_pdf_path, blank=True, null=True,
-        help_text="Final merged PDF; temp uploads are deleted after generation"
+        storage=generated_pdf_storage,
+        help_text="Final merged PDF; stored in Supabase S3. Temp uploads are deleted after generation"
     )
     pdf_generated_at = models.DateTimeField(blank=True, null=True, help_text="When the PDF was last generated")
 

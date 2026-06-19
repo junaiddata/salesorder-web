@@ -1,258 +1,112 @@
+{% extends 'submittal/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ submittal.project|truncatewords:6 }} – Submittal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #003399; --primary-light: #335cbf; --primary-dark: #002277;
-            --accent: #CC0000; --bg: #f0f4f8;
-            --card-bg: #fff; --border: #e2e8f0;
-            --text: #1e293b; --text-muted: #64748b; --success: #10b981;
-        }
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; }
 
-        /* Nav */
-        .topnav { background: var(--primary-dark); padding: 0.6rem 2rem; display: flex; align-items: center; justify-content: space-between; }
-        .topnav-left { display: flex; align-items: center; gap: 0.75rem; }
-        .topnav-link { color: rgba(255,255,255,0.75); text-decoration: none; font-size: 0.82rem; padding: 0.4rem 0.75rem; border-radius: 6px; transition: all 0.15s; display: flex; align-items: center; gap: 0.4rem; }
-        .topnav-link:hover { background: rgba(255,255,255,0.12); color: #fff; }
-        .topnav-sep { width: 1px; height: 18px; background: rgba(255,255,255,0.2); }
+{% block title %}{{ submittal.project|truncatewords:6 }} | Submittal{% endblock %}
 
-        /* Page header */
-        .page-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-            color: #fff;
-            padding: 1.75rem 2rem;
-        }
-        .page-header-inner { max-width: 960px; margin: 0 auto; }
-        .page-header h1 { font-size: 1.35rem; font-weight: 700; margin: 0 0 0.25rem; }
-        .page-header .meta { font-size: 0.82rem; color: rgba(255,255,255,0.7); display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.5rem; }
-        .page-header .meta span { display: flex; align-items: center; gap: 0.35rem; }
+{% block breadcrumbs %}
+<div class="crumbs"><div class="crumbs-inner">
+    <a href="{% url 'submittal:list' %}"><i class="fas fa-table-columns"></i> Dashboard</a>
+    <span class="sep"><i class="fas fa-chevron-right"></i></span>
+    <span class="here">{{ submittal.project|truncatewords:8 }}</span>
+</div></div>
+{% endblock %}
 
-        /* Actions bar */
-        .actions-bar { background: var(--primary-dark); padding: 0.65rem 2rem; }
-        .actions-bar-inner { max-width: 960px; margin: 0 auto; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-        .btn-act {
-            padding: 0.45rem 1rem; border-radius: 7px; font-size: 0.82rem; font-weight: 500;
-            text-decoration: none; display: flex; align-items: center; gap: 0.4rem;
-            border: none; cursor: pointer; transition: all 0.15s;
-        }
-        .btn-act.primary { background: #fff; color: var(--primary); }
-        .btn-act.primary:hover { background: #e8f0ff; }
-        .btn-act.success { background: #10b981; color: #fff; }
-        .btn-act.success:hover { background: #059669; }
-        .btn-act.edit { background: #fbbf24; color: #78350f; }
-        .btn-act.edit:hover { background: #f59e0b; }
-        .btn-act.outline { background: transparent; color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.3); }
-        .btn-act.outline:hover { background: rgba(255,255,255,0.1); color: #fff; }
+{% block extra_css %}
+<style>
+    .detail-row { display: flex; align-items: flex-start; padding: .7rem 0; border-bottom: 1px solid var(--line-soft); font-size: .88rem; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { width: 180px; font-weight: 600; color: var(--muted); flex-shrink: 0; }
+    .detail-value { flex: 1; color: var(--ink); }
+    .sections-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: .6rem; }
+    .section-item { display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem; background: var(--surface-alt); border: 1px solid var(--line-soft); border-radius: var(--r); font-size: .82rem; color: var(--body); }
+    .section-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .section-item .dot.green { background: var(--success); }
+    .section-item .dot.blue  { background: var(--primary); }
+    .section-item .dot.gray  { background: #cbd5e1; }
+</style>
+{% endblock %}
 
-        /* Main layout */
-        .page-body { max-width: 960px; margin: 2rem auto; padding: 0 2rem 4rem; }
-
-        /* Section card */
-        .section-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-            border: 1px solid var(--border);
-            margin-bottom: 1.25rem;
-            overflow: hidden;
-        }
-        .section-card-header {
-            padding: 0.9rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex; align-items: center; gap: 0.6rem;
-            background: #fafbfc;
-        }
-        .section-card-header h2 { font-size: 0.95rem; font-weight: 600; margin: 0; color: var(--primary); }
-        .section-card-header .icon { color: var(--primary); opacity: 0.8; }
-        .section-card-body { padding: 0 1.5rem; }
-
-        /* Detail rows */
-        .detail-row {
-            display: flex; align-items: flex-start;
-            padding: 0.7rem 0;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 0.875rem;
-        }
-        .detail-row:last-child { border-bottom: none; }
-        .detail-label { width: 170px; font-weight: 500; color: var(--text-muted); flex-shrink: 0; padding-top: 1px; }
-        .detail-value { flex: 1; }
-
-        /* Status chips */
-        .chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 500; }
-        .chip.ok { background: #dcfce7; color: #166534; }
-        .chip.skip { background: #f1f5f9; color: #64748b; }
-        .chip.auto { background: #dbeafe; color: #1e40af; }
-
-        /* Sections grid */
-        .sections-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 0.6rem;
-            padding: 1rem 0;
-        }
-        .section-item {
-            display: flex; align-items: center; gap: 0.6rem;
-            padding: 0.6rem 0.75rem;
-            background: #f8fafc;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            border: 1px solid #f1f5f9;
-        }
-        .section-item .si-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .section-item .si-dot.green { background: var(--success); }
-        .section-item .si-dot.blue { background: var(--primary); }
-        .section-item .si-dot.gray { background: #cbd5e1; }
-
-        /* Materials table */
-        .mat-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-        .mat-table th { background: var(--primary); color: #fff; padding: 0.55rem 0.7rem; text-align: left; font-weight: 500; white-space: nowrap; }
-        .mat-table td { padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
-        .mat-table tr:nth-child(even) td { background: #f8fafc; }
-        .mat-table tr:hover td { background: #eff6ff; }
-        .mat-table-wrap { overflow-x: auto; padding-bottom: 0.25rem; margin: 0 -1.5rem; padding: 0 1.5rem 1rem; }
-
-        @media (max-width: 600px) {
-            .page-body { padding: 0 1rem 3rem; }
-            .page-header { padding: 1.25rem 1rem; }
-            .topnav { padding: 0.5rem 1rem; }
-            .actions-bar { padding: 0.5rem 1rem; }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Navigation -->
-    <nav class="topnav">
-        <div class="topnav-left">
-            <a href="{% url 'submittal:list' %}" class="topnav-link"><i class="fas fa-arrow-left"></i> Submittals</a>
-            <div class="topnav-sep"></div>
-            <span style="color:rgba(255,255,255,0.5);font-size:0.8rem;">{{ submittal.project|truncatewords:6 }}</span>
+{% block body %}
+<!-- Hero -->
+<div class="hero">
+    <div class="hero-inner">
+        <h1 style="font-size:1.45rem;">{{ submittal.project }}</h1>
+        <div class="smeta" style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-top:.6rem;font-size:.82rem;color:rgba(255,255,255,.82);">
+            {% if submittal.client %}<span><i class="fas fa-building"></i> {{ submittal.client }}</span>{% endif %}
+            {% if submittal.product %}<span><i class="fas fa-box"></i> {{ submittal.product }}</span>{% endif %}
+            <span><i class="fas fa-calendar-alt"></i> Created {{ submittal.created_at|date:"d M Y" }}</span>
+            {% if submittal.pdf_generated_at %}<span style="color:#a7f3d0;"><i class="fas fa-circle-check"></i> PDF generated {{ submittal.pdf_generated_at|date:"d M Y" }}</span>{% endif %}
         </div>
-        <a href="{% url 'home' %}" class="topnav-link" style="border:1px solid rgba(255,255,255,0.25);"><i class="fas fa-home"></i> SO Home</a>
-    </nav>
-
-    <!-- Page header -->
-    <div class="page-header">
-        <div class="page-header-inner">
-            <h1>{{ submittal.project }}</h1>
-            <div class="meta">
-                {% if submittal.client %}<span><i class="fas fa-building"></i>{{ submittal.client }}</span>{% endif %}
-                {% if submittal.product %}<span><i class="fas fa-box"></i>{{ submittal.product }}</span>{% endif %}
-                <span><i class="fas fa-calendar-alt"></i>Created {{ submittal.created_at|date:"d M Y" }}</span>
-                {% if submittal.pdf_generated_at %}<span style="color:#6ee7b7;"><i class="fas fa-check-circle"></i>PDF generated {{ submittal.pdf_generated_at|date:"d M Y" }}</span>{% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Actions bar -->
-    <div class="actions-bar">
-        <div class="actions-bar-inner">
-            <a href="{% url 'submittal:generate_pdf' submittal.pk %}" class="btn-act success">
-                <i class="fas fa-download"></i> Download PDF
-            </a>
-            <a href="{% url 'submittal:edit' submittal.pk %}" class="btn-act edit">
-                <i class="fas fa-edit"></i> Edit
-            </a>
+        <div class="hero-actions">
+            <a href="{% url 'submittal:generate_pdf' submittal.pk %}" class="btn-x btn-light-x"><i class="fas fa-download"></i> Download PDF</a>
+            <a href="{% url 'submittal:edit' submittal.pk %}" class="btn-x btn-ghost-x"><i class="fas fa-pen"></i> Edit</a>
             {% if submittal.pdf_generated_at %}
-            <a href="{% url 'submittal:generate_pdf' submittal.pk %}?regenerate=1" class="btn-act outline">
-                <i class="fas fa-sync-alt"></i> Regenerate
-            </a>
+            <a href="{% url 'submittal:generate_pdf' submittal.pk %}?regenerate=1" class="btn-x btn-ghost-x"><i class="fas fa-rotate"></i> Regenerate</a>
             {% endif %}
         </div>
     </div>
+</div>
 
-    <div class="page-body">
+<div class="u-wrap-narrow u-page">
 
-        <!-- Title Page info -->
-        <div class="section-card">
-            <div class="section-card-header">
-                <i class="fas fa-heading icon"></i>
-                <h2>Title Page</h2>
-            </div>
-            <div class="section-card-body">
-                {% for label, value in title_fields %}
-                <div class="detail-row">
-                    <span class="detail-label">{{ label }}</span>
-                    <span class="detail-value">{{ value|default:"—" }}</span>
-                </div>
-                {% empty %}
-                <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">{{ submittal.project }}</span></div>
-                <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value">{{ submittal.client|default:"—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Consultant</span><span class="detail-value">{{ submittal.consultant|default:"—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Main Contractor</span><span class="detail-value">{{ submittal.main_contractor|default:"—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">MEP Contractor</span><span class="detail-value">{{ submittal.mep_contractor|default:"—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{{ submittal.product|default:"—" }}</span></div>
-                {% endfor %}
-            </div>
+    <!-- Title page -->
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-heading ic"></i><h2>Title Page</h2></div>
+        <div class="card-x-body" style="padding-top:.25rem;padding-bottom:.25rem;">
+            <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">{{ submittal.project|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Client / Employer</span><span class="detail-value">{{ submittal.client|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Consultant</span><span class="detail-value">{{ submittal.consultant|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Main Contractor</span><span class="detail-value">{{ submittal.main_contractor|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">MEP Contractor</span><span class="detail-value">{{ submittal.mep_contractor|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{{ submittal.product|default:"—" }}</span></div>
         </div>
-
-        <!-- Sections -->
-        <div class="section-card">
-            <div class="section-card-header">
-                <i class="fas fa-list-ol icon"></i>
-                <h2>Included Sections</h2>
-            </div>
-            <div class="section-card-body">
-                <div class="sections-grid">
-                    <div class="section-item"><span class="si-dot blue"></span>Title Page <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Index <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Company Profile <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Trade License <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot {% if submittal.section_uploads.all or submittal.vendor_list_pdf %}green{% else %}gray{% endif %}"></span>Vendor List {% if submittal.vendor_list_pdf %}<span class="chip ok ms-auto">uploaded</span>{% else %}<span class="chip skip ms-auto">optional</span>{% endif %}</div>
-                    <div class="section-item"><span class="si-dot blue"></span>Materials Table <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Product Catalogue <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Technical Details <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Test Certificates <span class="chip auto ms-auto">auto</span></div>
-                    <div class="section-item"><span class="si-dot blue"></span>Country of Origin <span class="chip auto ms-auto">auto</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Proposed Materials -->
-        {% if materials %}
-        <div class="section-card">
-            <div class="section-card-header">
-                <i class="fas fa-boxes-stacked icon"></i>
-                <h2>Proposed Materials <span style="font-weight:400;color:var(--text-muted);font-size:0.82rem;">({{ materials|length }})</span></h2>
-            </div>
-            <div class="section-card-body">
-                <div class="mat-table-wrap">
-                    <table class="mat-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                {% for key, label in materials_columns %}
-                                <th>{{ label }}</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in materials_rows %}
-                            <tr>
-                                <td>{{ forloop.counter }}</td>
-                                {% for val in row %}
-                                <td>{{ val|default:"" }}</td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <!-- Sections -->
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-list-ol ic"></i><h2>Included Sections</h2></div>
+        <div class="card-x-body">
+            <div class="sections-grid">
+                <div class="section-item"><span class="dot blue"></span>Title Page <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Index <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Company Profile <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Trade License <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot {% if submittal.section_uploads.all or submittal.vendor_list_pdf %}green{% else %}gray{% endif %}"></span>Vendor List {% if submittal.vendor_list_pdf %}<span class="chip-x green ms-auto">uploaded</span>{% else %}<span class="chip-x gray ms-auto">optional</span>{% endif %}</div>
+                <div class="section-item"><span class="dot blue"></span>Materials Table <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Product Catalogue <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Technical Details <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Test Certificates <span class="chip-x blue ms-auto">auto</span></div>
+                <div class="section-item"><span class="dot blue"></span>Country of Origin <span class="chip-x blue ms-auto">auto</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Materials -->
+    {% if materials %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-boxes-stacked ic"></i><h2>Proposed Materials <span class="count">({{ materials|length }})</span></h2></div>
+        <div class="card-x-body" style="padding:1rem;">
+            <div class="tbl-x-wrap" style="border:none;">
+                <table class="tbl-x">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            {% for key, label in materials_columns %}<th>{{ label }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in materials_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            {% for val in row %}<td>{{ val|default:"" }}</td>{% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
