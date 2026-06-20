@@ -2720,8 +2720,9 @@ def create_pi(request, so_number):
             'allocated_qty': allocated_qty,
             'remaining_qty': remaining_qty,
             'unit_price': unit_price,
+            'is_closed': item.row_status == 'C',
         })
-    
+
     if request.method == 'POST':
         # Validate and create PI (use line_no instead of item.id so form survives API sync during edit)
         selected_lines = request.POST.getlist('line_ids')
@@ -2762,6 +2763,9 @@ def create_pi(request, so_number):
                 if not item:
                     errors.append(f"Line {line_no} not found")
                     continue
+                if item.row_status == 'C':
+                    errors.append(f"Line {item.line_no} is closed and cannot be added to a Proforma Invoice")
+                    continue
                 allocated_qty = allocated.get(item.id, Decimal("0"))
                 remaining_qty = max(Decimal("0"), item.quantity - allocated_qty)
                 if qty > remaining_qty:
@@ -2782,6 +2786,7 @@ def create_pi(request, so_number):
                         'allocated_qty': allocated_qty,
                         'remaining_qty': remaining_qty,
                         'unit_price': unit_price,
+                        'is_closed': item.row_status == 'C',
                     })
                 messages.error(request, "; ".join(errors))
                 return render(request, 'salesorders/pi_create.html', {

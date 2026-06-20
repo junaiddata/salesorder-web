@@ -209,6 +209,56 @@
       color: var(--text-muted);
     }
 
+    .badge-closed {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 8px;
+      font-size: 0.688rem;
+      font-weight: 600;
+      color: #991b1b;
+      background: var(--error-light);
+      border-radius: 999px;
+      vertical-align: middle;
+    }
+
+    tfoot .grand-total-row td {
+      padding: 14px 12px;
+      font-size: 0.938rem;
+      font-weight: 700;
+      color: var(--text);
+      background: var(--surface-alt);
+      border-top: 2px solid var(--border);
+      border-bottom: none;
+    }
+
+    tfoot .grand-total-row:hover {
+      background: var(--surface-alt);
+    }
+
+    .total-summary {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+      margin-top: 24px;
+      padding: 16px 20px;
+      background: var(--primary-light);
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-sm);
+    }
+
+    .total-summary-label {
+      font-size: 0.938rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .total-summary-value {
+      font-size: 1.375rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+
     .alert {
       padding: 12px 16px;
       border-radius: var(--radius-sm);
@@ -287,19 +337,22 @@
                 </thead>
                 <tbody>
                   {% for item_data in items_with_remaining %}
-                    {% with item=item_data.item allocated_qty=item_data.allocated_qty remaining_qty=item_data.remaining_qty unit_price=item_data.unit_price %}
-                      <tr class="item-row {% if remaining_qty == 0 %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-remaining="{{ remaining_qty }}">
+                    {% with item=item_data.item allocated_qty=item_data.allocated_qty remaining_qty=item_data.remaining_qty unit_price=item_data.unit_price is_closed=item_data.is_closed %}
+                      <tr class="item-row {% if remaining_qty == 0 or is_closed %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-remaining="{{ remaining_qty }}">
                         <td>
-                          <input 
-                            type="checkbox" 
-                            name="line_ids" 
-                            value="{{ item.line_no }}" 
+                          <input
+                            type="checkbox"
+                            name="line_ids"
+                            value="{{ item.line_no }}"
                             class="line-checkbox"
-                            {% if remaining_qty == 0 %}disabled{% endif %}
+                            {% if remaining_qty == 0 or is_closed %}disabled{% endif %}
                             onchange="toggleQuantityInput(this)"
                           >
                         </td>
-                        <td><strong>{{ item.item_no|default:"—" }}</strong></td>
+                        <td>
+                          <strong>{{ item.item_no|default:"—" }}</strong>
+                          {% if is_closed %}<span class="badge-closed">Closed</span>{% endif %}
+                        </td>
                         <td>{{ item.description }}</td>
                         <td>{{ item.manufacture|default:"—" }}</td>
                         <td class="num">{{ item.quantity|floatformat:2 }}</td>
@@ -327,6 +380,12 @@
                     {% endwith %}
                   {% endfor %}
                 </tbody>
+                <tfoot>
+                  <tr class="grand-total-row">
+                    <td colspan="9" class="num">Grand Total</td>
+                    <td class="num" id="grandTotal">0.00</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
@@ -369,6 +428,11 @@ Tax Registration Number 100225006400003
             <p style="margin-top: 6px; font-size: 0.813rem; color: var(--text-muted);">
               You can edit this default message as needed.
             </p>
+          </div>
+
+          <div class="total-summary">
+            <span class="total-summary-label">PI Total</span>
+            <span class="total-summary-value" id="grandTotalSummary">0.00</span>
           </div>
 
           <div class="form-actions">
@@ -426,6 +490,32 @@ Tax Registration Number 100225006400003
           maximumFractionDigits: 2
         });
       }
+
+      updateGrandTotal();
+    }
+
+    function updateGrandTotal() {
+      let grandTotal = 0;
+      document.querySelectorAll('.line-checkbox:checked').forEach(cb => {
+        const row = cb.closest('tr');
+        const qtyInput = row.querySelector('.qty-input');
+        const qty = parseFloat(qtyInput.value || 0);
+        const unitPrice = parseFloat(qtyInput.dataset.unitPrice || 0);
+        if (qty > 0) {
+          grandTotal += qty * unitPrice;
+        }
+      });
+
+      const formatted = grandTotal.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+
+      const grandTotalCell = document.getElementById('grandTotal');
+      if (grandTotalCell) grandTotalCell.textContent = formatted;
+
+      const grandTotalSummary = document.getElementById('grandTotalSummary');
+      if (grandTotalSummary) grandTotalSummary.textContent = formatted;
     }
 
     document.getElementById('piForm').addEventListener('submit', function(e) {
