@@ -2715,10 +2715,12 @@ def create_pi(request, so_number):
         row_total = item.row_total or Decimal("0")
         unit_price = (row_total / qty).quantize(Decimal("0.01")) if qty and qty != 0 else Decimal("0.00")
         
+        open_qty = item.remaining_open_quantity or Decimal("0")
         items_with_remaining.append({
             'item': item,
             'allocated_qty': allocated_qty,
             'remaining_qty': remaining_qty,
+            'open_qty': open_qty,
             'unit_price': unit_price,
             'is_closed': item.row_status == 'C',
         })
@@ -2781,10 +2783,12 @@ def create_pi(request, so_number):
                     qty = item.quantity or Decimal("0")
                     row_total = item.row_total or Decimal("0")
                     unit_price = (row_total / qty).quantize(Decimal("0.01")) if qty and qty != 0 else Decimal("0.00")
+                    open_qty = item.remaining_open_quantity or Decimal("0")
                     items_with_remaining.append({
                         'item': item,
                         'allocated_qty': allocated_qty,
                         'remaining_qty': remaining_qty,
+                        'open_qty': open_qty,
                         'unit_price': unit_price,
                         'is_closed': item.row_status == 'C',
                     })

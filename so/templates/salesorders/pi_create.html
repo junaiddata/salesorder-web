@@ -330,6 +330,7 @@
                     <th class="num">SO Qty</th>
                     <th class="num">Allocated</th>
                     <th class="num">Remaining</th>
+                    <th class="num">Open Qty</th>
                     <th class="num">Unit Price</th>
                     <th class="num" style="width: 120px;">PI Qty</th>
                     <th class="num">Line Total</th>
@@ -337,15 +338,15 @@
                 </thead>
                 <tbody>
                   {% for item_data in items_with_remaining %}
-                    {% with item=item_data.item allocated_qty=item_data.allocated_qty remaining_qty=item_data.remaining_qty unit_price=item_data.unit_price is_closed=item_data.is_closed %}
-                      <tr class="item-row {% if remaining_qty == 0 or is_closed %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-remaining="{{ remaining_qty }}">
+                    {% with item=item_data.item allocated_qty=item_data.allocated_qty remaining_qty=item_data.remaining_qty open_qty=item_data.open_qty unit_price=item_data.unit_price is_closed=item_data.is_closed %}
+                      <tr class="item-row {% if open_qty == 0 or is_closed %}disabled{% endif %}" data-line-id="{{ item.line_no }}" data-remaining="{{ open_qty }}">
                         <td>
                           <input
                             type="checkbox"
                             name="line_ids"
                             value="{{ item.line_no }}"
                             class="line-checkbox"
-                            {% if remaining_qty == 0 or is_closed %}disabled{% endif %}
+                            {% if open_qty == 0 or is_closed %}disabled{% endif %}
                             onchange="toggleQuantityInput(this)"
                           >
                         </td>
@@ -360,15 +361,18 @@
                         <td class="num">
                           <strong>{{ remaining_qty|floatformat:2 }}</strong>
                         </td>
+                        <td class="num">
+                          <strong>{{ open_qty|floatformat:2 }}</strong>
+                        </td>
                         <td class="num">{{ unit_price|floatformat:2 }}</td>
                         <td class="num">
-                          <input 
-                            type="number" 
-                            name="qty_{{ item.line_no }}" 
+                          <input
+                            type="number"
+                            name="qty_{{ item.line_no }}"
                             class="qty-input"
                             step="0.01"
                             min="0"
-                            max="{{ remaining_qty }}"
+                            max="{{ open_qty }}"
                             value=""
                             disabled
                             onchange="updateLineTotal(this)"
@@ -382,7 +386,7 @@
                 </tbody>
                 <tfoot>
                   <tr class="grand-total-row">
-                    <td colspan="9" class="num">Grand Total</td>
+                    <td colspan="10" class="num">Grand Total</td>
                     <td class="num" id="grandTotal">0.00</td>
                   </tr>
                 </tfoot>
