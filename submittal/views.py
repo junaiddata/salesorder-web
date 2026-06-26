@@ -313,7 +313,7 @@ def submittal_generate_pdf(request, pk):
                 as_attachment=True,
                 filename=filename_dl,
             )
-        except (ValueError, FileNotFoundError, OSError):
+        except Exception:
             pass
 
     pdf_buf = build_submittal_pdf(submittal.pk)

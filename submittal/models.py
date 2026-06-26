@@ -289,7 +289,7 @@ class Submittal(models.Model):
     generated_pdf = models.FileField(
         upload_to=generated_pdf_path, blank=True, null=True,
         storage=generated_pdf_storage,
-        help_text="Final merged PDF; stored in Supabase S3. Temp uploads are deleted after generation"
+        help_text="Final merged PDF; temp uploads are deleted after generation"
     )
     pdf_generated_at = models.DateTimeField(blank=True, null=True, help_text="When the PDF was last generated")
 

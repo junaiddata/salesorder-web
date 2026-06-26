@@ -6658,9 +6658,12 @@ def export_arinvoice_list_excel(request):
             'VAT Number': invoice.vat_number or '',
             'Due Date': invoice.doc_due_date.strftime('%Y-%m-%d') if invoice.doc_due_date else '',
         }
-        # Only include Total GP for admin users
+        # Only include Total GP and GP% for admin users
         if request.user.is_superuser or request.user.is_staff or (hasattr(request.user, 'role') and request.user.role.role == 'Admin'):
-            row_data['Total GP'] = float(invoice.total_gross_profit) if invoice.total_gross_profit else 0.0
+            total_gp = float(invoice.total_gross_profit) if invoice.total_gross_profit else 0.0
+            total_without_vat = float(invoice.doc_total_without_vat) if invoice.doc_total_without_vat else 0.0
+            row_data['Total GP'] = total_gp
+            row_data['GP%'] = round((total_gp / total_without_vat * 100), 2) if total_without_vat else 0.0
         data.append(row_data)
     
     # 3. CREATE EXCEL FILE
