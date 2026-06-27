@@ -645,16 +645,6 @@ def sync_quotations_core(days_back=3, specific_date=None, from_date=None, to_dat
 
             sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_quotations)
 
-            previously_open = SAPQuotation.objects.filter(
-                status__in=['O', 'OPEN', 'Open', 'open'],
-                q_number__isnull=False
-            ).exclude(q_number__in=api_q_numbers)
-            closed_count = 0
-            for quotation in previously_open:
-                quotation.status = 'CLOSED'
-                quotation.save(update_fields=['status'])
-                closed_count += 1
-            sync_stats['closed'] = closed_count
 
         duration = (datetime.now() - sync_start).total_seconds()
         log.info('SYNC SUMMARY')

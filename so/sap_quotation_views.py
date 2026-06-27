@@ -109,7 +109,6 @@ def sync_quotations_api_receive(request):
         }
         
         q_numbers = [m['q_number'] for m in quotations if m.get('q_number')]
-        api_q_numbers_set = set(api_q_numbers)
         
         with transaction.atomic():
             # Fetch existing quotations
@@ -232,20 +231,6 @@ def sync_quotations_api_receive(request):
                 SAPQuotationItem.objects.bulk_create(items_to_create, batch_size=20000)
             
             stats['total_items'] = sum(len(m.get('items', [])) for m in quotations)
-            
-            # Close missing quotations
-            previously_open_quotations = SAPQuotation.objects.filter(
-                status__in=['O', 'OPEN', 'Open', 'open'],
-                q_number__isnull=False
-            ).exclude(q_number__in=api_q_numbers_set)
-            
-            closed_count = 0
-            for quotation in previously_open_quotations:
-                quotation.status = 'CLOSED'
-                quotation.save(update_fields=['status'])
-                closed_count += 1
-            
-            stats['closed'] = closed_count
             
             return JsonResponse({
                 'success': True,
