@@ -115,7 +115,7 @@ def home(request):
     current_year = today.year
     current_month = today.month
 
-    qs = AlabamaSalesLine.objects.all()
+    qs = AlabamaSalesLine.objects.exclude(sales_employee__iexact='Z.DUTY')
 
     def _gp_pct(gp, sales):
         s = float(sales or 0)
@@ -198,7 +198,7 @@ def alabama_sales_home(request):
     current_month = today.month
 
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
-    qs = AlabamaSalesLine.objects.filter(scope_q)
+    qs = AlabamaSalesLine.objects.filter(scope_q).exclude(sales_employee__iexact='Z.DUTY')
 
     today_qs = qs.filter(posting_date=today)
     today_sales = today_qs.aggregate(s=Sum('net_sales'))['s'] or 0

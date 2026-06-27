@@ -1589,9 +1589,9 @@ def home(request):
     else:
         calendar_period_label = ', '.join(calendar.month_name[m] for m in cal_months) + ' ' + str(cal_year)
     
-    # Get base querysets with salesman scope
-    invoice_qs_base = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
-    creditmemo_qs_base = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+    # Get base querysets with salesman scope (exclude Z.DUTY — duty entries with zero cost that distort GP)
+    invoice_qs_base = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user)).exclude(salesman_name__iexact='Z.DUTY')
+    creditmemo_qs_base = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user)).exclude(salesman_name__iexact='Z.DUTY')
     
     # Apply store filter (if not "Total", filter by store; if "Total", show all)
     if store_filter and store_filter != 'Total':
@@ -1817,9 +1817,9 @@ def sales_home(request):
         current_year = today.year
         current_month = today.month
         
-        # Get base querysets with salesman scope
-        invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
-        creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
+        # Get base querysets with salesman scope (exclude Z.DUTY — duty entries with zero cost that distort GP)
+        invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user)).exclude(salesman_name__iexact='Z.DUTY')
+        creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user)).exclude(salesman_name__iexact='Z.DUTY')
         
         # Calculate Today's Sales
         today_invoices = invoice_qs.filter(posting_date=today)
