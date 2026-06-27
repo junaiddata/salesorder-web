@@ -164,34 +164,6 @@
             margin-bottom: 30px;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1976d2;
-            margin-bottom: 8px;
-        }
-
-        .stat-label {
-            font-size: 14px;
-            color: #666;
-            font-weight: 500;
-        }
-
         .stats-button {
             width: 100%;
             background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
@@ -220,12 +192,6 @@
 
         .stats-button i {
             font-size: 18px;
-        }
-
-        @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
         }
 
         @media (min-width: 768px) {
@@ -273,22 +239,8 @@
             <h1 class="dashboard-title">Sales Dashboard</h1>
         </div>
 
-        <!-- Sales Stats -->
+        <!-- Stats & Analysis -->
         <div class="stats-section">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">AED {{today_sales|floatformat:2|intcomma}}</div>
-                    <div class="stat-label">Today's Sales</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">AED {{month_sales|floatformat:2|intcomma}}</div>
-                    <div class="stat-label">This Month Sales</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">AED {{year_sales|floatformat:2|intcomma}}</div>
-                    <div class="stat-label">This Year Sales</div>
-                </div>
-            </div>
             <a href="{% url 'sales_analysis_dashboard' %}" class="stats-button">
                 <i class="fas fa-chart-pie"></i>
                 <span>View Stats & Analysis</span>
