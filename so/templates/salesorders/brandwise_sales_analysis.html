@@ -1,0 +1,427 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brandwise Sales Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --text: #1e293b; --text-secondary: #64748b;
+      --text-muted: #94a3b8; --text-placeholder: #94a3b8; --border: #e2e8f0; --border-light: #f1f5f9;
+      --primary: #3b82f6; --primary-dark: #2563eb; --primary-light: #eff6ff; --primary-ghost: #eff6ff;
+      --danger: #ef4444; --danger-light: #fef2f2;
+      --success: #10b981; --radius: 12px; --radius-sm: 8px; --radius-xs: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08);
+      --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    .container { max-width: 1500px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 2px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.875rem; font-weight: 600; text-decoration: none; cursor: pointer; transition: var(--transition); }
+    .btn:hover { background: var(--border-light); }
+    .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-excel { background: #107c41; border-color: #107c41; color: #fff; }
+    .btn-excel:hover { background: #0b5c30; }
+    .btn-pdf { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+    .btn-pdf:hover { background: #991717; }
+
+    /* Filters */
+    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 20px; }
+    .filters-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+    .field select { height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 0.875rem; font-family: inherit; }
+
+    .store-group { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .store-group a { padding: 0 16px; height: 38px; display: inline-flex; align-items: center; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); text-decoration: none; border-right: 1px solid var(--border); transition: var(--transition); }
+    .store-group a:last-child { border-right: 0; }
+    .store-group a:hover { background: var(--border-light); }
+    .store-group a.active { background: var(--primary); color: #fff; }
+
+    .salesman-box { position: relative; }
+    .salesman-toggle { min-width: 200px; justify-content: space-between; }
+    .salesman-dropdown { display: none; position: absolute; z-index: 30; top: 44px; left: 0; width: 280px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 8px; }
+    .salesman-dropdown.open { display: block; }
+    .salesman-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; cursor: pointer; }
+    .salesman-dropdown label:hover { background: var(--border-light); }
+    .salesman-dropdown input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+    /* Multi-select (brand) — same design as Item Quoted Analysis */
+    .multi-select { position: relative; width: 320px; min-width: 220px; }
+    .select-box { padding: 0 14px; min-height: 38px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8125rem; font-family: var(--font); transition: all var(--transition); }
+    .select-box:hover { border-color: #94a3b8; }
+    .select-box.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+    .select-box-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .select-box-text.placeholder { color: var(--text-placeholder); }
+    .select-box-badges { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
+    .select-badge { display: inline-flex; align-items: center; background: var(--primary-light); color: var(--primary-dark); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+    .select-badge-count { background: var(--primary); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; white-space: nowrap; }
+    .select-box-chevron { color: var(--text-muted); font-size: 0.65rem; transition: transform var(--transition); flex-shrink: 0; }
+    .select-box.active .select-box-chevron { transform: rotate(180deg); }
+    .select-box-clear { display: none; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: transparent; color: var(--text-muted); font-size: 0.6rem; cursor: pointer; border: none; padding: 0; flex-shrink: 0; transition: all var(--transition); }
+    .select-box-clear:hover { background: var(--danger-light); color: var(--danger); }
+    .select-box-clear.visible { display: inline-flex; }
+    .options-container { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); z-index: 1000; display: none; overflow: hidden; animation: dropIn 0.15s ease; }
+    @keyframes dropIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .options-container.active { display: block; }
+    .options-header { padding: 10px 12px 8px; border-bottom: 1px solid var(--border-light); background: var(--surface); position: sticky; top: 0; z-index: 10; }
+    .options-search-wrap { position: relative; }
+    .options-search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: var(--text-muted); pointer-events: none; }
+    .options-search { width: 100%; padding: 8px 10px 8px 30px; border: 1.5px solid var(--border); border-radius: var(--radius-xs); font-size: 0.8125rem; font-family: var(--font); background: var(--bg); color: var(--text); transition: border-color var(--transition); }
+    .options-search:focus { outline: none; border-color: var(--primary); }
+    .options-actions { display: flex; justify-content: space-between; margin-top: 8px; }
+    .options-action-btn { font-size: 0.65rem; font-weight: 700; font-family: var(--font); color: var(--primary); background: none; border: none; cursor: pointer; padding: 3px 6px; border-radius: 3px; transition: all var(--transition); text-transform: uppercase; letter-spacing: 0.04em; }
+    .options-action-btn:hover { background: var(--primary-ghost); }
+    .options-action-btn.danger { color: var(--danger); }
+    .options-action-btn.danger:hover { background: var(--danger-light); }
+    .options-list { max-height: 260px; overflow-y: auto; padding: 4px 0; }
+    .option-label { display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer; font-size: 0.8125rem; transition: background var(--transition); color: var(--text); user-select: none; }
+    .option-label:hover { background: var(--bg); }
+    .option-label.option-hidden { display: none; }
+    .option-label input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; border: 1.5px solid #cbd5e1; border-radius: 4px; background: var(--surface); cursor: pointer; flex-shrink: 0; position: relative; transition: all var(--transition); }
+    .option-label input[type="checkbox"]:checked { background: var(--primary); border-color: var(--primary); }
+    .option-label input[type="checkbox"]:checked::after { content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.5rem; color: white; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    .options-empty { padding: 14px; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+
+    /* Summary */
+    .summary { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 18px; min-width: 190px; }
+    .stat .label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+    .stat .value { font-size: 1.4rem; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    /* Table */
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .table-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; white-space: nowrap; }
+    thead th { background: var(--border-light); color: var(--text-secondary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 11px 12px; text-align: right; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; }
+    thead th.col-brand { text-align: left; }
+    tbody td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
+    tbody td.col-brand { text-align: left; font-weight: 600; }
+    .cell-sales { display: block; font-variant-numeric: tabular-nums; }
+    .cell-gp { display: block; font-size: 0.66rem; color: var(--success); font-weight: 600; margin-top: 1px; font-variant-numeric: tabular-nums; }
+    .zero .cell-gp { color: var(--text-muted); }
+    .th-sub { display: block; font-size: 0.58rem; font-weight: 600; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+    tbody tr:hover td { background: #fafcff; }
+    .col-brand { position: sticky; left: 0; background: var(--surface); z-index: 1; border-right: 1px solid var(--border); }
+    thead th.col-brand { z-index: 3; background: var(--border-light); }
+    .col-total { font-weight: 700; background: #fbfdff; border-left: 1px solid var(--border); }
+    thead th.col-total { border-left: 1px solid var(--border); }
+    .zero { color: var(--text-muted); }
+    tfoot td { padding: 12px; text-align: right; font-weight: 700; background: var(--border-light); border-top: 2px solid var(--border); font-variant-numeric: tabular-nums; position: sticky; bottom: 0; }
+    tfoot td.col-brand { text-align: left; position: sticky; left: 0; z-index: 1; }
+    .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Brandwise Sales Analysis</h1>
+        <p>Net sales per brand by month &mdash; AR Invoices &amp; Credit Memos</p>
+      </div>
+      <div class="header-actions">
+        <a href="{% url 'export_brandwise_sales_analysis_excel' %}" data-export="excel" id="export-excel-btn" class="btn btn-excel"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{% url 'export_brandwise_sales_analysis_pdf' %}" data-export="pdf" id="export-pdf-btn" class="btn btn-pdf"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{% url 'home' %}" class="btn"><i class="fas fa-arrow-left"></i> Back to Home</a>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" id="filter-form" class="filters">
+      <div class="filters-row">
+        <div class="field">
+          <label for="year">Year</label>
+          <select name="year" id="year" onchange="document.getElementById('filter-form').submit()">
+            {% for y in calendar_years %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Store</label>
+          <div class="store-group">
+            <a href="?year={{ selected_year }}&amp;store=HO{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'HO' %}active{% endif %}">HO</a>
+            <a href="?year={{ selected_year }}&amp;store=Others{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Others' %}active{% endif %}">Others</a>
+            <a href="?year={{ selected_year }}&amp;store=Total{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Total' %}active{% endif %}">Total</a>
+          </div>
+        </div>
+
+        <!-- keep store in the form submit (year change) -->
+        <input type="hidden" name="store" value="{{ store_filter }}">
+
+        <div class="field salesman-box">
+          <label>Salesman</label>
+          <button type="button" class="btn salesman-toggle" id="salesman-toggle">
+            <span>
+              {% if selected_salesmen %}{{ selected_salesmen|length }} selected{% else %}All salesmen{% endif %}
+            </span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="salesman-dropdown" id="salesman-dropdown">
+            {% for sm in salesmen %}
+            <label>
+              <input type="checkbox" name="salesman" value="{{ sm }}" {% if sm in selected_salesmen %}checked{% endif %}>
+              <span>{{ sm }}</span>
+            </label>
+            {% empty %}
+            <div style="padding:8px;color:var(--text-muted);font-size:0.85rem;">No salesmen</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Brand</label>
+          <div class="multi-select" id="brand-wrapper">
+            <div class="select-box" id="brand-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="brand-display">All brands</span>
+              <button type="button" class="select-box-clear" id="brand-clear" title="Clear all" aria-label="Clear selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
+            </div>
+            <div class="options-container" id="brand-options" role="listbox" aria-label="Select brands">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="brand-search" class="options-search" placeholder="Search brands…" autocomplete="off" aria-label="Search brands">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="brand-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="brand-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="brand-options-list" role="group">
+                {% for b in brands %}
+                <label class="option-label" data-value="{{ b }}" role="option">
+                  <input type="checkbox" name="brand" value="{{ b }}" {% if b in selected_brands %}checked{% endif %}>
+                  <span class="option-text">{{ b }}</span>
+                </label>
+                {% endfor %}
+              </div>
+              <div class="options-empty" id="brand-no-results" style="display:none;">No brands found</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Summary -->
+    <div class="summary">
+      <div class="stat">
+        <div class="label">Total Net Sales</div>
+        <div class="value">{{ grand_total|floatformat:0|intcomma }}</div>
+      </div>
+      {% if is_admin %}
+      <div class="stat">
+        <div class="label">Total Gross Profit</div>
+        <div class="value">{{ gp_grand_total|floatformat:0|intcomma }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">GP %</div>
+        <div class="value">{{ grand_gp_pct|floatformat:1 }}%</div>
+      </div>
+      {% endif %}
+      <div class="stat">
+        <div class="label">Brands</div>
+        <div class="value">{{ brand_count|intcomma }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Year</div>
+        <div class="value">{{ selected_year }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Store</div>
+        <div class="value">{{ store_filter }}</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      {% if brand_rows %}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-brand">Brand</th>
+              {% for mh in month_headers %}
+              <th>{{ mh.name }}{% if is_admin %} <span class="th-sub">Sales / GP</span>{% endif %}</th>
+              {% endfor %}
+              <th class="col-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in brand_rows %}
+            <tr>
+              <td class="col-brand">{{ row.brand }}</td>
+              {% for c in row.cells %}
+              <td {% if not c.sales %}class="zero"{% endif %}>
+                <span class="cell-sales">{% if c.sales %}{{ c.sales|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</span>
+                {% if is_admin %}<span class="cell-gp">GP {{ c.gp|floatformat:0|intcomma }} · {{ c.gp_pct|floatformat:1 }}%</span>{% endif %}
+              </td>
+              {% endfor %}
+              <td class="col-total">
+                <span class="cell-sales">{{ row.total|floatformat:0|intcomma }}</span>
+                {% if is_admin %}<span class="cell-gp">GP {{ row.gp_total|floatformat:0|intcomma }} · {{ row.gp_pct|floatformat:1 }}%</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="col-brand">Total</td>
+              {% for mh in month_headers %}
+              <td>
+                <span class="cell-sales">{{ mh.sales|floatformat:0|intcomma }}</span>
+                {% if is_admin %}<span class="cell-gp">GP {{ mh.gp|floatformat:0|intcomma }} · {{ mh.gp_pct|floatformat:1 }}%</span>{% endif %}
+              </td>
+              {% endfor %}
+              <td class="col-total">
+                <span class="cell-sales">{{ grand_total|floatformat:0|intcomma }}</span>
+                {% if is_admin %}<span class="cell-gp">GP {{ gp_grand_total|floatformat:0|intcomma }} · {{ grand_gp_pct|floatformat:1 }}%</span>{% endif %}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">
+        <i class="fas fa-inbox" style="font-size:2rem;opacity:0.4;"></i>
+        <p style="margin-top:10px;">No sales found for the selected filters.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    // Export buttons carry the current filters (query string) to the export endpoints
+    (function () {
+      function syncExportLinks() {
+        var qs = window.location.search; // includes leading "?"
+        document.querySelectorAll('[data-export]').forEach(function (a) {
+          a.href = a.pathname + qs;
+        });
+      }
+      syncExportLinks();
+    })();
+
+    // Salesman multi-select dropdown open/close
+    (function () {
+      var toggle = document.getElementById('salesman-toggle');
+      var dropdown = document.getElementById('salesman-dropdown');
+      if (!toggle || !dropdown) return;
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { dropdown.classList.remove('open'); });
+    })();
+
+    // Brand multi-select (same behaviour as Item Quoted Analysis)
+    (function () {
+      var wrapper   = document.getElementById('brand-wrapper');
+      var trigger   = document.getElementById('brand-trigger');
+      var options   = document.getElementById('brand-options');
+      var list      = document.getElementById('brand-options-list');
+      var display   = document.getElementById('brand-display');
+      var search    = document.getElementById('brand-search');
+      var clearBtn  = document.getElementById('brand-clear');
+      var selectAll = document.getElementById('brand-select-all');
+      var clearAll  = document.getElementById('brand-clear-all');
+      var noResults = document.getElementById('brand-no-results');
+      if (!wrapper || !trigger || !options || !list) return;
+
+      function getCheckboxes() { return list.querySelectorAll('input[type="checkbox"]'); }
+      function getLabels() { return Array.from(list.querySelectorAll('.option-label')); }
+      function getVisibleLabels() { return getLabels().filter(function (l) { return !l.classList.contains('option-hidden'); }); }
+
+      function sortLabels() {
+        var checked = [], unchecked = [];
+        getLabels().forEach(function (l) {
+          var cb = l.querySelector('input[type="checkbox"]');
+          (cb && cb.checked ? checked : unchecked).push(l);
+        });
+        var frag = document.createDocumentFragment();
+        checked.forEach(function (l) { frag.appendChild(l); });
+        unchecked.forEach(function (l) { frag.appendChild(l); });
+        list.appendChild(frag);
+      }
+
+      function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+
+      function updateDisplay() {
+        var checked = Array.from(getCheckboxes()).filter(function (c) { return c.checked; });
+        var count = checked.length;
+        if (clearBtn) clearBtn.classList.toggle('visible', count > 0);
+        if (count === 0) {
+          display.className = 'select-box-text placeholder';
+          display.textContent = 'All brands';
+        } else if (count === 1) {
+          display.className = 'select-box-text';
+          display.innerHTML = '<span class="select-badge">' + escapeHtml(checked[0].value) + '</span>';
+        } else {
+          display.className = 'select-box-text';
+          display.innerHTML = '<span class="select-box-badges">' +
+            '<span class="select-badge">' + escapeHtml(checked[0].value) + '</span>' +
+            '<span class="select-badge-count">+' + (count - 1) + ' more</span></span>';
+        }
+      }
+
+      function open()  { options.classList.add('active'); trigger.classList.add('active'); trigger.setAttribute('aria-expanded', 'true'); sortLabels(); setTimeout(function () { if (search) search.focus(); }, 50); }
+      function close() { options.classList.remove('active'); trigger.classList.remove('active'); trigger.setAttribute('aria-expanded', 'false'); if (search) search.value = ''; getLabels().forEach(function (l) { l.classList.remove('option-hidden'); }); if (noResults) noResults.style.display = 'none'; }
+      function toggle() { options.classList.contains('active') ? close() : open(); }
+
+      trigger.addEventListener('click', function (e) { if (e.target.closest('.select-box-clear')) return; e.preventDefault(); e.stopPropagation(); toggle(); });
+      trigger.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      options.addEventListener('click', function (e) { e.stopPropagation(); });
+      options.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+
+      if (clearBtn) clearBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); getCheckboxes().forEach(function (cb) { cb.checked = false; }); updateDisplay(); });
+      if (selectAll) selectAll.addEventListener('click', function () { getVisibleLabels().forEach(function (l) { var cb = l.querySelector('input[type="checkbox"]'); if (cb) cb.checked = true; }); updateDisplay(); sortLabels(); });
+      if (clearAll) clearAll.addEventListener('click', function () { getCheckboxes().forEach(function (cb) { cb.checked = false; }); updateDisplay(); sortLabels(); });
+      list.addEventListener('change', function (e) { if (e.target.type === 'checkbox') updateDisplay(); });
+
+      if (search) {
+        search.addEventListener('input', function () {
+          var term = this.value.toLowerCase().trim();
+          var visible = 0;
+          getLabels().forEach(function (label) {
+            var val = (label.getAttribute('data-value') || '').toLowerCase();
+            var match = !term || val.includes(term);
+            label.classList.toggle('option-hidden', !match);
+            if (match) visible++;
+          });
+          if (noResults) noResults.style.display = visible === 0 ? 'block' : 'none';
+        });
+        search.addEventListener('click', function (e) { e.stopPropagation(); });
+      }
+
+      document.addEventListener('click', function (e) { if (!wrapper.contains(e.target)) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+      updateDisplay();
+    })();
+  </script>
+</body>
+</html>
