@@ -108,8 +108,12 @@ def alabama_salesman_scope_q(user, field='sales_employee'):
 
 @login_required
 def home(request):
-    """Alabama homepage with stats, calendar widget, and sidebar."""
+    """Alabama homepage with stats and a full calendar widget (year + multi-month selectors,
+    weekly totals, month summary, and AJAX reload) mirroring the main sales home page."""
+    import calendar as _cal
     from datetime import timedelta
+    from django.template.loader import render_to_string
+    from django.http import HttpResponse
 
     today = date.today()
     current_year = today.year
@@ -121,11 +125,53 @@ def home(request):
         s = float(sales or 0)
         return round((float(gp or 0) / s * 100), 1) if s else 0
 
+    def _doc_count(day_qs):
+        return day_qs.values('document_type', 'document_number').distinct().count()
+
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        request.user.username or ''
+    ).strip().lower() == 'manager' or (
+        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
+    )
+
+    # Calendar year selector (Alabama data available from 2024 onward)
+    cal_year_raw = request.GET.get('cal_year', '').strip()
+    calendar_year_min = 2024
+    calendar_year_max = current_year + 1
+    calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
+    try:
+        cal_year = int(cal_year_raw) if cal_year_raw else current_year
+    except (ValueError, TypeError):
+        cal_year = current_year
+    if cal_year not in calendar_years:
+        cal_year = current_year
+
+    # Calendar month selector: one or more months via repeated cal_month= (combined totals & grid)
+    cal_months = []
+    for raw in request.GET.getlist('cal_month'):
+        try:
+            m = int(str(raw).strip())
+            if 1 <= m <= 12:
+                cal_months.append(m)
+        except (ValueError, TypeError):
+            continue
+    cal_months = sorted(set(cal_months))
+    if not cal_months:
+        cal_months = [current_month]
+    cal_month = cal_months[0]
+    month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
+    calendar_display = date(cal_year, cal_months[0], 1)
+    if len(cal_months) == 1:
+        calendar_period_label = calendar_display.strftime('%B %Y')
+    else:
+        calendar_period_label = ', '.join(_cal.month_name[m] for m in cal_months) + ' ' + str(cal_year)
+
     # Today
     today_qs = qs.filter(posting_date=today)
     today_sales = today_qs.aggregate(s=Sum('net_sales'))['s'] or 0
     today_gp = today_qs.aggregate(s=Sum('gross_profit'))['s'] or 0
-    today_docs = today_qs.values('document_type', 'document_number').distinct().count()
+    today_docs = _doc_count(today_qs)
 
     # This Week (Monday to today)
     today_weekday = today.weekday()  # Monday=0, Sunday=6
@@ -144,29 +190,84 @@ def home(request):
     year_sales = year_qs.aggregate(s=Sum('net_sales'))['s'] or 0
     year_gp = year_qs.aggregate(s=Sum('gross_profit'))['s'] or 0
 
-    # Calendar: days 1 to today with sales per day
-    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    # Calendar days: for each selected month (current month → 1..today only), plus weekly totals
     month_days = []
-    for day_num in range(1, today.day + 1):
-        day_date = date(current_year, current_month, day_num)
-        day_qs = qs.filter(posting_date=day_date)
-        day_sales = day_qs.aggregate(s=Sum('net_sales'))['s'] or Decimal('0')
-        day_gp = day_qs.aggregate(s=Sum('gross_profit'))['s'] or Decimal('0')
-        month_days.append({
-            'day': day_num,
-            'date': day_date,
-            'formatted_date': f"{month_names[current_month - 1]} {day_num}",
-            'sales': day_sales,
-            'gp': day_gp,
-            'gp_pct': _gp_pct(day_gp, day_sales),
-            'has_sales': bool(day_sales and day_sales > 0),
-        })
+    weekly_totals = []
+    for grid_month in cal_months:
+        _, last_day_in_month = _cal.monthrange(cal_year, grid_month)
+        is_grid_current_month = cal_year == current_year and grid_month == current_month
+        last_calendar_day = min(today.day, last_day_in_month) if is_grid_current_month else last_day_in_month
+        week_acc = None
 
-    is_admin = request.user.is_superuser or request.user.is_staff or (
-        request.user.username or ''
-    ).strip().lower() == 'manager' or (
-        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
-    )
+        # Leading empty cells so the first day lines up under its weekday (Mon-start).
+        for _ in range(date(cal_year, grid_month, 1).weekday()):
+            month_days.append({'is_empty_cell': True})
+
+        for day_num in range(1, last_calendar_day + 1):
+            day_date = date(cal_year, grid_month, day_num)
+            day_qs = qs.filter(posting_date=day_date)
+            day_sales = day_qs.aggregate(s=Sum('net_sales'))['s'] or Decimal('0')
+            day_gp = day_qs.aggregate(s=Sum('gross_profit'))['s'] or Decimal('0')
+            day_doc_count = _doc_count(day_qs)
+
+            # Weekly totals (Mon-Sat), mirroring the main home calendar.
+            if day_date.weekday() == 0 or week_acc is None:
+                week_acc = {
+                    'label': f"Week of {day_date.strftime('%d %b')}",
+                    'sales': Decimal('0'),
+                    'gp': Decimal('0'),
+                    'doc_count': 0,
+                }
+                weekly_totals.append(week_acc)
+            if day_date.weekday() <= 5:
+                week_acc['sales'] += day_sales
+                week_acc['gp'] += day_gp
+                week_acc['doc_count'] += day_doc_count
+
+            month_days.append({
+                'day': day_num,
+                'date': day_date,
+                'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
+                'sales': day_sales,
+                'gp': day_gp,
+                'doc_count': day_doc_count,
+                'gp_pct': _gp_pct(day_gp, day_sales),
+                'has_sales': bool(day_sales and day_sales > 0),
+            })
+
+        # Trailing empty cells so each month ends on a complete week row.
+        trailing_empty_cells = (7 - (len(month_days) % 7)) % 7
+        for _ in range(trailing_empty_cells):
+            month_days.append({'is_empty_cell': True})
+
+    # Keep month summary exactly aligned with what is shown in day cards.
+    day_cells = [d for d in month_days if not d.get('is_empty_cell')]
+    calendar_grid_month_sales = sum((d['sales'] for d in day_cells), Decimal('0'))
+    calendar_grid_month_gp = sum((d['gp'] for d in day_cells), Decimal('0'))
+    calendar_grid_month_doc_count = sum((d['doc_count'] for d in day_cells))
+    _cms = float(calendar_grid_month_sales)
+    calendar_grid_month_gp_pct = round(float(calendar_grid_month_gp) / _cms * 100, 1) if _cms else 0
+
+    for week in weekly_totals:
+        week['gp_pct'] = _gp_pct(week['gp'], week['sales'])
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == 'calendar':
+        calendar_html = render_to_string(
+            'alabama/_home_calendar_grid.html',
+            {
+                'month_days': month_days,
+                'today': today,
+                'is_admin': is_admin,
+                'cal_months': cal_months,
+                'weekly_totals': weekly_totals,
+                'calendar_grid_month_sales': calendar_grid_month_sales,
+                'calendar_grid_month_gp': calendar_grid_month_gp,
+                'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+                'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
+            },
+            request=request,
+        )
+        return HttpResponse(calendar_html, content_type='text/html')
 
     context = {
         'today_sales': today_sales,
@@ -183,9 +284,23 @@ def home(request):
         'year_gp': year_gp,
         'year_gp_pct': _gp_pct(year_gp, year_sales),
         'month_days': month_days,
+        'weekly_totals': weekly_totals,
         'is_admin': is_admin,
         'today': today,
         'active_page': 'dashboard',
+        'current_month': current_month,
+        'current_year': current_year,
+        'cal_year': cal_year,
+        'cal_month': cal_month,
+        'cal_months': cal_months,
+        'calendar_years': calendar_years,
+        'calendar_months': calendar_months,
+        'calendar_display': calendar_display,
+        'calendar_period_label': calendar_period_label,
+        'calendar_grid_month_sales': calendar_grid_month_sales,
+        'calendar_grid_month_gp': calendar_grid_month_gp,
+        'calendar_grid_month_gp_pct': calendar_grid_month_gp_pct,
+        'calendar_grid_month_doc_count': calendar_grid_month_doc_count,
     }
     return render(request, 'alabama/home.html', context)
 
