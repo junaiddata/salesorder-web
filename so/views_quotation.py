@@ -899,7 +899,8 @@ def export_combined_quotations_consolidated_excel(request):
                 'Salesman': s.salesman_name or '',
             })
     if source in ('all', 'app'):
-        app_qs = inapp_quotations_filtered_qs(request).order_by('-quotation_date', '-id')
+        # Only Junaid in-app quotations are merged into the combined list.
+        app_qs = inapp_quotations_filtered_qs(request).filter(division='JUNAID').order_by('-quotation_date', '-id')
         for a in app_qs.iterator(chunk_size=500):
             cust = a.customer
             d = a.quotation_date
@@ -984,7 +985,8 @@ def export_combined_quotations_items_excel(request):
                 'Total Value': line_total,
             })
     if source in ('all', 'app'):
-        app_base = inapp_quotations_filtered_qs(request)
+        # Only Junaid in-app quotations are merged into the combined list.
+        app_base = inapp_quotations_filtered_qs(request).filter(division='JUNAID')
         app_items = (
             QuotationItem.objects.filter(quotation__in=app_base)
             .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item')
@@ -1044,6 +1046,149 @@ def export_combined_quotations_items_excel(request):
     return response
 
 
+def _combined_quotation_calendar_context(request):
+    """
+    Build the month-calendar data for the combined quotations page.
+
+    Merges SAP (posting_date) and Junaid in-app (quotation_date) quotations, aggregated per day
+    into total value / GP / count. Respects the combined list filters (source, salesman, division,
+    status, search) but ignores the list start/end date range so the calendar is driven purely by
+    its own year + month(s) picker (same behaviour as /sapquotations/).
+    """
+    import calendar as _calendar
+    import copy
+    from datetime import date as date_cls
+    from decimal import Decimal
+
+    today = date_cls.today()
+    current_year = today.year
+    current_month = today.month
+
+    calendar_year_min = 2024
+    calendar_year_max = current_year + 1
+    calendar_years = list(range(calendar_year_min, calendar_year_max + 1))
+    try:
+        qcal_year = int((request.GET.get('qcal_year') or '').strip())
+    except (ValueError, TypeError):
+        qcal_year = current_year
+    if qcal_year not in calendar_years:
+        qcal_year = current_year
+
+    qcal_months = []
+    for raw in request.GET.getlist('qcal_month'):
+        try:
+            m = int(str(raw).strip())
+            if 1 <= m <= 12:
+                qcal_months.append(m)
+        except (ValueError, TypeError):
+            continue
+    qcal_months = sorted(set(qcal_months))
+    if not qcal_months:
+        qcal_months = [current_month]
+
+    month_names_short = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    calendar_months = [(i, month_names_short[i - 1]) for i in range(1, 13)]
+    if len(qcal_months) == 1:
+        calendar_period_label = date_cls(qcal_year, qcal_months[0], 1).strftime('%B %Y')
+    else:
+        calendar_period_label = ', '.join(_calendar.month_name[m] for m in qcal_months) + ' ' + str(qcal_year)
+
+    source = (request.GET.get('source') or 'all').strip().lower()
+    if source not in ('all', 'sap', 'app'):
+        source = 'all'
+
+    # Reuse the combined filters, but drop the list date range for the calendar.
+    cal_request = copy.copy(request)
+    qd = request.GET.copy()
+    qd.pop('start_date', None)
+    qd.pop('end_date', None)
+    cal_request.GET = qd
+
+    # Per-day accumulator: date -> {'total_value', 'gp', 'count'}
+    day_data = {}
+
+    def _bump(d, value, gp):
+        if not d:
+            return
+        cell = day_data.get(d)
+        if cell is None:
+            cell = {'total_value': Decimal('0'), 'gp': Decimal('0'), 'count': 0}
+            day_data[d] = cell
+        cell['total_value'] += value
+        cell['gp'] += gp
+        cell['count'] += 1
+
+    # --- SAP quotations (posting_date) ---
+    if source in ('all', 'sap'):
+        sap_list = list(
+            sap_quotations_filtered_qs_combined(cal_request)
+            .filter(posting_date__year=qcal_year, posting_date__month__in=qcal_months)
+            .prefetch_related('items')
+        )
+        sap_codes = {
+            str(it.item_no).strip()
+            for q in sap_list for it in q.items.all()
+            if it.item_no and str(it.item_no).strip()
+        }
+        cost_map = dict(
+            Items.objects.filter(item_code__in=sap_codes).values_list('item_code', 'item_cost')
+        )
+        for q in sap_list:
+            total = Decimal(str(q.document_total or 0))
+            cost = Decimal('0')
+            for it in q.items.all():
+                code = str(it.item_no).strip() if it.item_no else ''
+                cost += Decimal(str(cost_map.get(code) or 0)) * Decimal(str(it.quantity or 0))
+            _bump(q.posting_date, total, total - cost)
+
+    # --- Junaid in-app quotations (quotation_date) ---
+    if source in ('all', 'app'):
+        app_list = list(
+            inapp_quotations_filtered_qs(cal_request)
+            .filter(division='JUNAID')
+            .filter(quotation_date__year=qcal_year, quotation_date__month__in=qcal_months)
+            .prefetch_related('items__item')
+        )
+        for q in app_list:
+            total = Decimal(str(q.grand_total or 0))
+            cost = Decimal('0')
+            for it in q.items.all():
+                if it.item_id and it.item.item_cost is not None:
+                    cost += Decimal(str(it.item.item_cost)) * Decimal(str(it.quantity or 0))
+            _bump(q.quotation_date, total, total - cost)
+
+    # --- Build the day grid for the selected months ---
+    month_days = []
+    for grid_month in qcal_months:
+        _, last_day_in_month = _calendar.monthrange(qcal_year, grid_month)
+        is_current_month = (qcal_year == current_year and grid_month == current_month)
+        last_day = min(today.day, last_day_in_month) if is_current_month else last_day_in_month
+        for day_num in range(1, last_day + 1):
+            day_date = date_cls(qcal_year, grid_month, day_num)
+            cell = day_data.get(day_date)
+            month_days.append({
+                'date': day_date,
+                'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
+                'total_value': cell['total_value'] if cell else Decimal('0'),
+                'gp': cell['gp'] if cell else Decimal('0'),
+                'quotation_count': cell['count'] if cell else 0,
+                'has_quotations': bool(cell and cell['count'] > 0),
+            })
+
+    return {
+        'today': today,
+        'qcal_year': qcal_year,
+        'qcal_months': qcal_months,
+        'calendar_years': calendar_years,
+        'calendar_months': calendar_months,
+        'calendar_period_label': calendar_period_label,
+        'combined_month_days': month_days,
+        'combined_month_total_value': sum((d['total_value'] for d in month_days), Decimal('0')),
+        'combined_month_total_gp': sum((d['gp'] for d in month_days), Decimal('0')),
+        'combined_month_quotation_count': sum(d['quotation_count'] for d in month_days),
+    }
+
+
 @login_required
 def combined_quotations_list(request):
     """
@@ -1052,6 +1197,23 @@ def combined_quotations_list(request):
     """
     from datetime import date as date_cls
     from django.urls import reverse
+
+    # AJAX: month-calendar refresh (multi-month picker), same pattern as /sapquotations/.
+    if request.GET.get('ajax') == 'combined_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        cal_ctx = _combined_quotation_calendar_context(request)
+        calendar_html = render_to_string(
+            'so/quotations/_combined_calendar_body.html',
+            {
+                'month_days': cal_ctx['combined_month_days'],
+                'today': cal_ctx['today'],
+                'qcal_months': cal_ctx['qcal_months'],
+                'combined_month_total_value': cal_ctx['combined_month_total_value'],
+                'combined_month_total_gp': cal_ctx['combined_month_total_gp'],
+                'combined_month_quotation_count': cal_ctx['combined_month_quotation_count'],
+            },
+            request=request,
+        )
+        return HttpResponse(calendar_html, content_type='text/html')
 
     source = (request.GET.get('source') or 'all').strip().lower()
     if source not in ('all', 'sap', 'app'):
@@ -1075,7 +1237,8 @@ def combined_quotations_list(request):
                 'detail_url': reverse('quotation_detail', args=[s.q_number]),
             })
     if source in ('all', 'app'):
-        app_qs = inapp_quotations_filtered_qs(request).order_by('-quotation_date', '-id')
+        # Only Junaid in-app quotations are merged into the combined list.
+        app_qs = inapp_quotations_filtered_qs(request).filter(division='JUNAID').order_by('-quotation_date', '-id')
         for a in app_qs.iterator(chunk_size=500):
             cust = a.customer
             d = a.quotation_date
@@ -1099,6 +1262,20 @@ def combined_quotations_list(request):
         reverse=True,
     )
 
+    # Summary totals across all matching rows (respects current filters), like /sapquotations/.
+    total_value = 0.0
+    total_2025 = 0.0
+    total_2026 = 0.0
+    for r in rows:
+        amt = r['total'] or 0.0
+        total_value += amt
+        d = r['display_date']
+        if d:
+            if d.year == 2025:
+                total_2025 += amt
+            elif d.year == 2026:
+                total_2026 += amt
+
     page = request.GET.get('page', 1)
     try:
         page_size = int(request.GET.get('page_size', 50))
@@ -1120,11 +1297,17 @@ def combined_quotations_list(request):
 
     salesman_canonical_choices = get_quotation_salesman_canonical_choices_sorted()
 
+    calendar_ctx = _combined_quotation_calendar_context(request)
+
     return render(request, 'so/quotations/combined_quotations.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
+        'total_value': total_value,
+        'total_2025': total_2025,
+        'total_2026': total_2026,
         'query_string': query_string,
         'salesman_canonical_choices': salesman_canonical_choices,
+        **calendar_ctx,
         'selected_salesmen': normalize_quotation_salesman_picks_to_canonicals(
             _quotation_salesman_pick_list(request)
         ),

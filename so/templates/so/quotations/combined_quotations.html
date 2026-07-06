@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,6 +53,72 @@
         .table-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.06); }
         .table thead th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; background: #f8fafc; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* Summary stats (same idea as SAP quotations page) */
+        .combo-stats { display: flex; flex-wrap: wrap; gap: 10px; }
+        .combo-stat {
+            display: flex; flex-direction: column; gap: 2px; padding: 8px 14px;
+            background: #f8fafc; border: 1px solid var(--combo-border); border-radius: var(--combo-radius-sm);
+            min-width: 130px;
+        }
+        .combo-stat-label {
+            font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--combo-text-muted);
+        }
+        .combo-stat-value { font-size: 1.05rem; font-weight: 700; color: var(--combo-text); font-variant-numeric: tabular-nums; }
+        .combo-stat-value.highlight { color: var(--combo-primary); }
+
+        /* Calendar (mirrors the SAP quotations calendar) */
+        .qcal-widget {
+            background: white; border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.06);
+        }
+        .qcal-title { font-size: 1.05rem; font-weight: 700; color: var(--combo-text); margin-bottom: 0.75rem; }
+        .qcal-header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 1rem; }
+        .qcal-header label { font-size: 0.82rem; font-weight: 600; color: var(--combo-text-secondary); margin-right: 4px; }
+        .qcal-header select {
+            padding: 6px 10px; border: 1px solid var(--combo-border); border-radius: var(--combo-radius-sm);
+            font-size: 0.87rem; background: white; color: var(--combo-text);
+        }
+        .qcal-month-picker { width: 100%; flex-basis: 100%; margin-top: 0.35rem; padding-top: 0.75rem; border-top: 1px solid var(--combo-border-light); }
+        .qcal-month-picker-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--combo-text-secondary); margin-bottom: 0.5rem; }
+        .qcal-month-checkboxes { display: flex; flex-wrap: wrap; gap: 0.4rem 0.35rem; align-items: center; }
+        .qcal-month-chip {
+            display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; padding: 0.35rem 0.5rem;
+            border-radius: 8px; border: 1px solid var(--combo-border); background: white; font-size: 0.72rem;
+            font-weight: 500; color: var(--combo-text); user-select: none;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .qcal-month-chip:hover { border-color: var(--combo-primary); background: var(--combo-bg); }
+        .qcal-month-chip:has(input:checked) {
+            background: var(--combo-primary-light); border-color: var(--combo-primary);
+            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+        }
+        .qcal-month-chip input[type="checkbox"] { width: 0.95rem; height: 0.95rem; margin: 0; accent-color: var(--combo-primary); cursor: pointer; flex-shrink: 0; }
+        .qcal-month-summary {
+            display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 1rem; padding: 12px 14px;
+            background: var(--combo-bg); border: 1px solid var(--combo-border-light); border-radius: var(--combo-radius-sm);
+        }
+        .qcal-month-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 140px; }
+        .qcal-month-summary-label { font-size: 0.77rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--combo-text-secondary); }
+        .qcal-month-summary-number { font-size: 1.12rem; font-weight: 700; color: var(--combo-text); font-variant-numeric: tabular-nums; }
+        .qcal-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
+        @media (max-width: 1200px) { .qcal-calendar-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (max-width: 768px) { .qcal-calendar-grid { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 480px) { .qcal-calendar-grid { grid-template-columns: repeat(3, 1fr); } }
+        .qcal-calendar-day {
+            background: white; border: 1px solid var(--combo-border); border-radius: 6px; padding: 0.5rem 0.3rem;
+            text-align: center; transition: all 0.2s ease; min-height: 72px; display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .qcal-calendar-day:hover { transform: translateY(-2px); box-shadow: var(--combo-shadow-lg); }
+        .qcal-calendar-day-today { border-color: var(--combo-primary) !important; background: var(--combo-primary-ghost) !important; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important; }
+        .qcal-calendar-day-empty { background: var(--combo-bg) !important; border-color: var(--combo-border-light) !important; opacity: 0.75; }
+        .qcal-calendar-day-empty .qcal-calendar-day-label,
+        .qcal-calendar-day-empty .qcal-calendar-day-value,
+        .qcal-calendar-day-empty .qcal-calendar-day-count { color: var(--combo-text-muted); }
+        .qcal-calendar-day-label { font-size: 0.73rem; font-weight: 600; color: var(--combo-text-secondary); margin-bottom: 0.25rem; }
+        .qcal-calendar-day-value { font-size: 0.78rem; font-weight: 700; color: var(--combo-text); line-height: 1.15; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .qcal-calendar-day-count { font-size: 0.63rem; color: var(--combo-text-secondary); line-height: 1.1; }
 
         /* Multi-select (same pattern as Purchase Stock Requirement) */
         .filter-card .field-ms { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -262,9 +329,50 @@
         <p class="small text-muted mb-0 mt-2">Dates: SAP uses <strong>posting date</strong>, app uses <strong>quotation date</strong>. Division follows the same rules for both (SAP uses hints: salesman/customer/bill-to containing Alabama). Status <strong>Pending</strong> or <strong>On Hold</strong> limits SAP to open documents; <strong>Approved</strong> filters the app list only. Salesman choices group SAP spellings (e.g. MUZAIN includes B.MR.MUZAIN) via <code>so/salesman_mapping.py</code> and <code>SALES_USER_MAP</code>.</p>
     </div>
 
+    <div class="qcal-widget">
+        <h2 class="qcal-title" data-combined-calendar-title>{{ calendar_period_label }} — Combined quotations by date</h2>
+        <div class="qcal-header">
+            <label for="qcal-year">Year</label>
+            <select id="qcal-year" aria-label="Calendar year">
+                {% for y in calendar_years %}
+                <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <span id="qcal-loading" style="font-size: 0.82rem; color: var(--combo-text-muted); display: none;">Loading…</span>
+            <div class="qcal-month-picker" id="qcal-month-picker" role="group" aria-label="Months for calendar">
+                <span class="qcal-month-picker-label">Months <span style="font-weight: 400; color: var(--combo-text-muted);">(select one or more)</span></span>
+                <div class="qcal-month-checkboxes">
+                    {% for num, name in calendar_months %}
+                    <label class="qcal-month-chip">
+                        <input type="checkbox" name="qcal_month" value="{{ num }}" {% if num in qcal_months %}checked{% endif %}>
+                        <span>{{ name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div id="qcal-grid-container">
+            {% include 'so/quotations/_combined_calendar_body.html' with month_days=combined_month_days today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_quotation_count=combined_month_quotation_count %}
+        </div>
+    </div>
+
     <div class="table-card">
-        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-bottom bg-light">
             <span class="small text-muted">Total rows: <strong>{{ total_count }}</strong></span>
+            <div class="combo-stats">
+                <div class="combo-stat">
+                    <span class="combo-stat-label">Total Value</span>
+                    <span class="combo-stat-value highlight">{{ total_value|default:0|floatformat:2|intcomma }}</span>
+                </div>
+                <div class="combo-stat">
+                    <span class="combo-stat-label">2025</span>
+                    <span class="combo-stat-value">{{ total_2025|default:0|floatformat:2|intcomma }}</span>
+                </div>
+                <div class="combo-stat">
+                    <span class="combo-stat-label">2026</span>
+                    <span class="combo-stat-value highlight">{{ total_2026|default:0|floatformat:2|intcomma }}</span>
+                </div>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0">
@@ -295,7 +403,7 @@
                         <td><code>{{ row.number }}</code></td>
                         <td>{{ row.customer_code }}</td>
                         <td>{{ row.customer_name }}</td>
-                        <td class="num">{{ row.total|floatformat:2 }}</td>
+                        <td class="num">{{ row.total|floatformat:2|intcomma }}</td>
                         <td><small>{{ row.status }}</small></td>
                         <td><small>{{ row.salesman }}</small></td>
                         <td><a href="{{ row.detail_url }}" class="btn btn-outline-primary btn-sm py-0">Open</a></td>
@@ -511,6 +619,61 @@
     if (e.key === 'Escape') closeDropdown();
   });
   updateDisplay();
+})();
+
+// Combined quotations calendar: multi-month checkboxes; qcal_year / repeated qcal_month via AJAX
+(function () {
+  'use strict';
+  var calYear = document.getElementById('qcal-year');
+  var calMonthPicker = document.getElementById('qcal-month-picker');
+  var gridContainer = document.getElementById('qcal-grid-container');
+  var loadingEl = document.getElementById('qcal-loading');
+  var titleEl = document.querySelector('[data-combined-calendar-title]');
+  var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  if (!calYear || !calMonthPicker || !gridContainer) return;
+
+  function selectedMonths() {
+    return Array.from(calMonthPicker.querySelectorAll('input[name="qcal_month"]:checked'))
+      .map(function (i) { return parseInt(i.value, 10); })
+      .filter(function (n) { return n >= 1 && n <= 12; })
+      .sort(function (a, b) { return a - b; });
+  }
+  function updateTitle() {
+    if (!titleEl) return;
+    var months = selectedMonths();
+    if (!months.length) {
+      titleEl.textContent = calYear.value + ' — Combined quotations by date';
+      return;
+    }
+    var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+    titleEl.textContent = label + ' ' + calYear.value + ' — Combined quotations by date';
+  }
+  function loadCalendar() {
+    if (loadingEl) loadingEl.style.display = 'inline';
+    var months = selectedMonths();
+    if (!months.length) {
+      var curM = new Date().getMonth() + 1;
+      var cb = calMonthPicker.querySelector('input[name="qcal_month"][value="' + curM + '"]');
+      if (cb) cb.checked = true;
+      months = selectedMonths();
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('qcal_year', calYear.value);
+    url.searchParams.delete('qcal_month');
+    months.forEach(function (m) { url.searchParams.append('qcal_month', String(m)); });
+    url.searchParams.set('ajax', 'combined_calendar');
+    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { gridContainer.innerHTML = html; updateTitle(); })
+      .catch(function () {
+        gridContainer.innerHTML = '<div style="padding:1rem;color:var(--combo-text-muted);">Could not load calendar.</div>';
+      })
+      .finally(function () { if (loadingEl) loadingEl.style.display = 'none'; });
+  }
+  calYear.addEventListener('change', loadCalendar);
+  calMonthPicker.addEventListener('change', function (e) {
+    if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) loadCalendar();
+  });
 })();
 </script>
 </body>
