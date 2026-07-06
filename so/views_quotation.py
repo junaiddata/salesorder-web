@@ -1262,20 +1262,6 @@ def combined_quotations_list(request):
         reverse=True,
     )
 
-    # Summary totals across all matching rows (respects current filters), like /sapquotations/.
-    total_value = 0.0
-    total_2025 = 0.0
-    total_2026 = 0.0
-    for r in rows:
-        amt = r['total'] or 0.0
-        total_value += amt
-        d = r['display_date']
-        if d:
-            if d.year == 2025:
-                total_2025 += amt
-            elif d.year == 2026:
-                total_2026 += amt
-
     page = request.GET.get('page', 1)
     try:
         page_size = int(request.GET.get('page_size', 50))
@@ -1302,9 +1288,6 @@ def combined_quotations_list(request):
     return render(request, 'so/quotations/combined_quotations.html', {
         'page_obj': page_obj,
         'total_count': paginator.count,
-        'total_value': total_value,
-        'total_2025': total_2025,
-        'total_2026': total_2026,
         'query_string': query_string,
         'salesman_canonical_choices': salesman_canonical_choices,
         **calendar_ctx,

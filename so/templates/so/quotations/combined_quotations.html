@@ -54,20 +54,6 @@
         .table thead th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; background: #f8fafc; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
 
-        /* Summary stats (same idea as SAP quotations page) */
-        .combo-stats { display: flex; flex-wrap: wrap; gap: 10px; }
-        .combo-stat {
-            display: flex; flex-direction: column; gap: 2px; padding: 8px 14px;
-            background: #f8fafc; border: 1px solid var(--combo-border); border-radius: var(--combo-radius-sm);
-            min-width: 130px;
-        }
-        .combo-stat-label {
-            font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-            color: var(--combo-text-muted);
-        }
-        .combo-stat-value { font-size: 1.05rem; font-weight: 700; color: var(--combo-text); font-variant-numeric: tabular-nums; }
-        .combo-stat-value.highlight { color: var(--combo-primary); }
-
         /* Calendar (mirrors the SAP quotations calendar) */
         .qcal-widget {
             background: white; border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem;
@@ -359,20 +345,6 @@
     <div class="table-card">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-bottom bg-light">
             <span class="small text-muted">Total rows: <strong>{{ total_count }}</strong></span>
-            <div class="combo-stats">
-                <div class="combo-stat">
-                    <span class="combo-stat-label">Total Value</span>
-                    <span class="combo-stat-value highlight">{{ total_value|default:0|floatformat:2|intcomma }}</span>
-                </div>
-                <div class="combo-stat">
-                    <span class="combo-stat-label">2025</span>
-                    <span class="combo-stat-value">{{ total_2025|default:0|floatformat:2|intcomma }}</span>
-                </div>
-                <div class="combo-stat">
-                    <span class="combo-stat-label">2026</span>
-                    <span class="combo-stat-value highlight">{{ total_2026|default:0|floatformat:2|intcomma }}</span>
-                </div>
-            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0">
