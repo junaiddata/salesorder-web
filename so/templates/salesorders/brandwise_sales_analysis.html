@@ -153,14 +153,32 @@
         <div class="field">
           <label>Store</label>
           <div class="store-group">
-            <a href="?year={{ selected_year }}&amp;store=HO{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'HO' %}active{% endif %}">HO</a>
-            <a href="?year={{ selected_year }}&amp;store=Others{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Others' %}active{% endif %}">Others</a>
-            <a href="?year={{ selected_year }}&amp;store=Total{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Total' %}active{% endif %}">Total</a>
+            <a href="?year={{ selected_year }}&amp;store=HO&amp;from_month={{ from_month }}&amp;to_month={{ to_month }}{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'HO' %}active{% endif %}">HO</a>
+            <a href="?year={{ selected_year }}&amp;store=Others&amp;from_month={{ from_month }}&amp;to_month={{ to_month }}{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Others' %}active{% endif %}">Others</a>
+            <a href="?year={{ selected_year }}&amp;store=Total&amp;from_month={{ from_month }}&amp;to_month={{ to_month }}{% for sm in selected_salesmen %}&amp;salesman={{ sm|urlencode }}{% endfor %}{% for b in selected_brands %}&amp;brand={{ b|urlencode }}{% endfor %}" class="{% if store_filter == 'Total' %}active{% endif %}">Total</a>
           </div>
         </div>
 
         <!-- keep store in the form submit (year change) -->
         <input type="hidden" name="store" value="{{ store_filter }}">
+
+        <div class="field">
+          <label for="from_month">From Month</label>
+          <select name="from_month" id="from_month" onchange="document.getElementById('filter-form').submit()">
+            {% for m in all_months %}
+            <option value="{{ m.num }}" {% if m.num == from_month %}selected{% endif %}>{{ m.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="to_month">To Month</label>
+          <select name="to_month" id="to_month" onchange="document.getElementById('filter-form').submit()">
+            {% for m in all_months %}
+            <option value="{{ m.num }}" {% if m.num == to_month %}selected{% endif %}>{{ m.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
         <div class="field salesman-box">
           <label>Salesman</label>
@@ -246,6 +264,10 @@
       <div class="stat">
         <div class="label">Year</div>
         <div class="value">{{ selected_year }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Period</div>
+        <div class="value">{{ period_label }}</div>
       </div>
       <div class="stat">
         <div class="label">Store</div>

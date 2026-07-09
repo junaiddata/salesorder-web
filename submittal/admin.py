@@ -2,15 +2,28 @@ from django.contrib import admin
 from .models import (
     CompanyDocuments, SubmittalBrand, SubmittalMaterial,
     MaterialCertification, ProjectContractorHistory, Submittal,
-    SubmittalSectionUpload, ComplianceOption, RemarkOption,
+    SubmittalSectionUpload, ComplianceOption, RemarkOption, BrandDocument,
 )
+
+
+class BrandDocumentInline(admin.TabularInline):
+    model = BrandDocument
+    extra = 1
 
 
 @admin.register(SubmittalBrand)
 class SubmittalBrandAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'use_generated_warranty', 'display_order')
+    list_display = ('name', 'use_generated_warranty', 'display_order')
     list_editable = ('use_generated_warranty',)
     ordering = ('display_order', 'name')
+    inlines = [BrandDocumentInline]
+
+
+@admin.register(BrandDocument)
+class BrandDocumentAdmin(admin.ModelAdmin):
+    list_display = ('brand', 'doc_type', 'description', 'uploaded_at')
+    list_filter = ('doc_type', 'brand')
+    search_fields = ('brand__name', 'description')
 
 
 @admin.register(CompanyDocuments)
@@ -79,9 +92,9 @@ class ComplianceOptionAdmin(admin.ModelAdmin):
 
 @admin.register(RemarkOption)
 class RemarkOptionAdmin(admin.ModelAdmin):
-    list_display = ('brand', 'label_short', 'display_order')
-    list_filter = ('brand',)
-    ordering = ('brand', 'display_order')
+    list_display = ('material', 'label_short', 'display_order')
+    list_filter = ('material__brand',)
+    ordering = ('material', 'display_order')
 
     def label_short(self, obj):
         return obj.label[:80]

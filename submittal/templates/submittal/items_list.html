@@ -18,7 +18,7 @@
     <div class="sec-head">
         <h2><i class="fas fa-boxes-stacked" style="color:var(--primary);margin-right:.5rem;"></i>{% if brand %}{{ brand.name }} Materials{% else %}All Materials{% endif %} <span class="count">({{ materials_with_rows|length }})</span></h2>
         {% if brand %}
-        <a href="{% url 'submittal:items_import' brand.code %}" class="btn-x btn-success-x"><i class="fas fa-file-excel"></i> Import from Excel</a>
+        <a href="{% url 'submittal:items_import' brand.pk %}" class="btn-x btn-success-x"><i class="fas fa-file-excel"></i> Import from Excel</a>
         {% endif %}
     </div>
 
@@ -26,7 +26,7 @@
     <div class="pill-row mb-3">
         <a href="{% url 'submittal:items' %}" class="pill {% if not brand %}active{% endif %}">All Brands</a>
         {% for b in brands %}
-        <a href="{% url 'submittal:items_by_brand' b.code %}" class="pill {% if brand and brand.code == b.code %}active{% endif %}">{{ b.name }}</a>
+        <a href="{% url 'submittal:items_by_brand' b.pk %}" class="pill {% if brand and brand.pk == b.pk %}active{% endif %}">{{ b.name }}</a>
         {% endfor %}
     </div>
 
@@ -59,7 +59,7 @@
             <div class="ic"><i class="fas fa-box-open"></i></div>
             <h3>No materials yet</h3>
             <p>{% if brand %}Import {{ brand.name }} materials from an Excel sheet to get started.{% else %}Add a brand and import materials to populate the library.{% endif %}</p>
-            {% if brand %}<a href="{% url 'submittal:items_import' brand.code %}" class="btn-x btn-primary-x"><i class="fas fa-file-excel"></i> Import from Excel</a>
+            {% if brand %}<a href="{% url 'submittal:items_import' brand.pk %}" class="btn-x btn-primary-x"><i class="fas fa-file-excel"></i> Import from Excel</a>
             {% else %}<a href="{% url 'submittal:admin_brands' %}" class="btn-x btn-primary-x"><i class="fas fa-tags"></i> Manage Brands</a>{% endif %}
         </div>
     </div>

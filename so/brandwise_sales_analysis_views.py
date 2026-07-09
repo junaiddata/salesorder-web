@@ -108,6 +108,20 @@ def _compute_brandwise_sales(request):
     if store_filter not in ('HO', 'Others', 'Total'):
         store_filter = 'HO'
 
+    # ── Month range filter (From / To) — default Jan..Dec (whole year) ──
+    def _parse_month(val, default):
+        try:
+            m = int(str(val).strip())
+        except (ValueError, TypeError):
+            return default
+        return m if 1 <= m <= 12 else default
+
+    from_month = _parse_month(request.GET.get('from_month'), 1)
+    to_month = _parse_month(request.GET.get('to_month'), 12)
+    if from_month > to_month:                       # swap if entered backwards
+        from_month, to_month = to_month, from_month
+    month_range = list(range(from_month - 1, to_month))   # 0-based indices in range
+
     # ── Salesman filter (multi-select) ───────────────────────────
     selected_salesmen = [s.strip() for s in request.GET.getlist('salesman') if s.strip()]
 
@@ -171,23 +185,25 @@ def _compute_brandwise_sales(request):
     _accumulate(cm_rows, 'item__item_firm', 'credit_memo__posting_date__month')
 
     # ── Build table rows (highest sales first) ───────────────────
+    # Row/column/grand totals are summed over the selected month range only,
+    # and only the in-range month cells are shown.
     brand_rows = []
     for brand, d in grid.items():
         sales_months = d['sales']
         gp_months = d['gp']
-        row_total = sum(sales_months, Decimal('0'))
-        gp_total = sum(gp_months, Decimal('0'))
+        row_total = sum((sales_months[i] for i in month_range), Decimal('0'))
+        gp_total = sum((gp_months[i] for i in month_range), Decimal('0'))
         cells = [
             {
                 'sales': sales_months[i],
                 'gp': gp_months[i],
                 'gp_pct': _pct(gp_months[i], sales_months[i]),
             }
-            for i in range(12)
+            for i in month_range
         ]
         brand_rows.append({
             'brand': brand,
-            'months': sales_months,      # kept for convenience
+            'months': sales_months,      # full 12 (kept for totals/exports)
             'gp_months': gp_months,
             'cells': cells,
             'total': row_total,
@@ -196,18 +212,19 @@ def _compute_brandwise_sales(request):
         })
     brand_rows.sort(key=lambda r: r['total'], reverse=True)
 
-    # ── Column (month) totals + grand totals ─────────────────────
+    # ── Column (month) totals + grand totals (range-aware) ───────
     month_totals = [sum((r['months'][i] for r in brand_rows), Decimal('0')) for i in range(12)]
     gp_month_totals = [sum((r['gp_months'][i] for r in brand_rows), Decimal('0')) for i in range(12)]
-    grand_total = sum(month_totals, Decimal('0'))
-    gp_grand_total = sum(gp_month_totals, Decimal('0'))
+    grand_total = sum((month_totals[i] for i in month_range), Decimal('0'))
+    gp_grand_total = sum((gp_month_totals[i] for i in month_range), Decimal('0'))
     grand_gp_pct = _pct(gp_grand_total, grand_total)
 
     # Zip month name + sales total + gp total + gp% for the header/footer row
+    # (only the in-range months)
     month_headers = [
         {'name': MONTH_NAMES_SHORT[i], 'sales': month_totals[i],
          'gp': gp_month_totals[i], 'gp_pct': _pct(gp_month_totals[i], month_totals[i])}
-        for i in range(12)
+        for i in month_range
     ]
 
     # ── Salesman list for the filter dropdown (scoped) ───────────
@@ -230,9 +247,18 @@ def _compute_brandwise_sales(request):
         .order_by('item_firm')
     )
 
+    all_months = [{'num': i + 1, 'name': MONTH_NAMES_SHORT[i]} for i in range(12)]
+    period_label = MONTH_NAMES_SHORT[from_month - 1] if from_month == to_month else \
+        f"{MONTH_NAMES_SHORT[from_month - 1]} – {MONTH_NAMES_SHORT[to_month - 1]}"
+
     context = {
         'month_names': MONTH_NAMES_SHORT,
         'month_headers': month_headers,
+        'all_months': all_months,
+        'from_month': from_month,
+        'to_month': to_month,
+        'month_range': month_range,
+        'period_label': period_label,
         'brand_rows': brand_rows,
         'month_totals': month_totals,
         'gp_month_totals': gp_month_totals,
@@ -265,6 +291,11 @@ def brandwise_sales_analysis(request):
 def _filter_label(ctx):
     """Human-readable one-line summary of the active filters (for file names / subtitles)."""
     parts = [str(ctx['selected_year']), ctx['store_filter']]
+    fm, tm = ctx['from_month'], ctx['to_month']
+    if not (fm == 1 and tm == 12):                  # only note a partial range
+        rng = MONTH_NAMES_SHORT[fm - 1] if fm == tm else \
+            f"{MONTH_NAMES_SHORT[fm - 1]}–{MONTH_NAMES_SHORT[tm - 1]}"
+        parts.append(rng)
     if ctx['selected_salesmen']:
         parts.append(f"{len(ctx['selected_salesmen'])} salesman" if len(ctx['selected_salesmen']) == 1
                      else f"{len(ctx['selected_salesmen'])} salesmen")
@@ -288,6 +319,7 @@ def export_brandwise_sales_analysis_excel(request):
 
     ctx = _compute_brandwise_sales(request)
     month_names = ctx['month_names']
+    month_range = ctx['month_range']
     brand_rows = ctx['brand_rows']
     month_totals = ctx['month_totals']
     gp_month_totals = ctx['gp_month_totals']
@@ -307,10 +339,11 @@ def export_brandwise_sales_analysis_excel(request):
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     num_fmt = '#,##0'
 
-    # Column layout: Brand [| Metric] Jan..Dec Total  (Metric column only for admins)
+    # Column layout: Brand [| Metric] <range months> Total  (Metric column only for admins)
+    n_months = len(month_range)
     metric_col = 1 if is_admin else 0
     month_start = 2 + metric_col          # first month column index
-    total_col = month_start + 12          # Total column index
+    total_col = month_start + n_months    # Total column index
     n_cols = total_col
 
     # Title + filter summary
@@ -323,7 +356,8 @@ def export_brandwise_sales_analysis_excel(request):
 
     # Header row
     header_row = 4
-    headers = ['Brand'] + (['Metric'] if is_admin else []) + month_names + ['Total']
+    month_names_range = [month_names[i] for i in month_range]
+    headers = ['Brand'] + (['Metric'] if is_admin else []) + month_names_range + ['Total']
     for c, h in enumerate(headers, start=1):
         cell = ws.cell(row=header_row, column=c, value=h)
         cell.fill = navy
@@ -332,15 +366,16 @@ def export_brandwise_sales_analysis_excel(request):
         cell.border = border
 
     def _write_line(r, brand_label, metric_label, values, total_value, is_gp=False, fill=None):
-        """Write one data line across the row. `values` = list of 12 monthly numbers."""
+        """Write one data line across the row. `values` = full list of 12 monthly
+        numbers; only the in-range months are written."""
         ws.cell(row=r, column=1, value=brand_label).border = border
         if is_admin:
             mcell = ws.cell(row=r, column=2, value=metric_label)
             mcell.border = border
             mcell.font = gp_font if is_gp else Font(size=9, color='6B7280')
-        for m in range(12):
+        for pos, m in enumerate(month_range):
             v = float(values[m])
-            cell = ws.cell(row=r, column=month_start + m, value=v if v else None)
+            cell = ws.cell(row=r, column=month_start + pos, value=v if v else None)
             cell.number_format = num_fmt
             cell.border = border
             if is_gp:
@@ -419,6 +454,7 @@ def export_brandwise_sales_analysis_pdf(request):
 
     ctx = _compute_brandwise_sales(request)
     month_names = ctx['month_names']
+    month_range = ctx['month_range']
     brand_rows = ctx['brand_rows']
     month_totals = ctx['month_totals']
     gp_month_totals = ctx['gp_month_totals']
@@ -460,7 +496,7 @@ def export_brandwise_sales_analysis_pdf(request):
     # Build table header
     def _hdr(label):
         return f"{label}{'<br/><font size=5>Sales / GP</font>' if is_admin else ''}"
-    header = [Paragraph('Brand', th_l)] + [Paragraph(_hdr(m), th) for m in month_names] + [Paragraph(_hdr('Total'), th)]
+    header = [Paragraph('Brand', th_l)] + [Paragraph(_hdr(month_names[i]), th) for i in month_range] + [Paragraph(_hdr('Total'), th)]
     data = [header]
     for row in brand_rows:
         line = [Paragraph(str(row['brand']), td_l)]
@@ -469,7 +505,7 @@ def export_brandwise_sales_analysis_pdf(request):
         data.append(line)
     # Totals row
     totals_line = [Paragraph('TOTAL', td_tot_l)]
-    for m in range(12):
+    for m in month_range:
         pct = _pct(gp_month_totals[m], month_totals[m])
         totals_line.append(cell(month_totals[m], gp_month_totals[m], pct, total=True))
     totals_line.append(cell(ctx['grand_total'], ctx['gp_grand_total'], ctx['grand_gp_pct'], total=True))
@@ -478,10 +514,11 @@ def export_brandwise_sales_analysis_pdf(request):
     # Column widths (landscape A4 usable ≈ 10.7in)
     page_size = landscape(A4)
     usable_w = page_size[0] - 0.8 * inch  # left+right margins 0.4 each
+    n_months = len(month_range)
     brand_w = 1.5 * inch
     total_w = 0.95 * inch
-    month_w = (usable_w - brand_w - total_w) / 12.0
-    col_widths = [brand_w] + [month_w] * 12 + [total_w]
+    month_w = (usable_w - brand_w - total_w) / max(n_months, 1)
+    col_widths = [brand_w] + [month_w] * n_months + [total_w]
 
     n_rows = len(data)
     tstyle = [
@@ -510,9 +547,13 @@ def export_brandwise_sales_analysis_pdf(request):
     if is_admin:
         kpi_items.append(('Gross Profit', _fmt(ctx['gp_grand_total'])))
         kpi_items.append(('GP %', f"{ctx['grand_gp_pct']:.1f}%"))
+    fm, tm = ctx['from_month'], ctx['to_month']
+    period = MONTH_NAMES_SHORT[fm - 1] if fm == tm else \
+        f"{MONTH_NAMES_SHORT[fm - 1]}–{MONTH_NAMES_SHORT[tm - 1]}"
     kpi_items += [
         ('Brands', str(ctx['brand_count'])),
         ('Year', str(ctx['selected_year'])),
+        ('Period', period),
         ('Store', ctx['store_filter']),
     ]
 

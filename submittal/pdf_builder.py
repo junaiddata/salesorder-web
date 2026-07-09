@@ -41,7 +41,7 @@ AUTO_CONTENT_LABELS = {
     "list of proposed material",
     "product catalogue", "technical details",
     "test certificates", "country of origin certificate",
-    "previous approvals",
+    "authorization letter", "previous approvals", "previous projects",
 }
 
 # Sections that need per-submittal upload (unless user removed them from index)
@@ -64,8 +64,10 @@ DEFAULT_INDEX_ITEMS = [
     "Technical Details",
     "Test Certificates",
     "Country of Origin Certificate",
+    "Authorization Letter",
     "Warranty Draft Letter",
     "Previous Approvals",
+    "Previous Projects",
 ]
 
 INDEX_LABEL_TO_SECTION = {
@@ -84,6 +86,16 @@ INDEX_LABEL_TO_SECTION = {
     "country of origin certificate": 12,
     "warranty draft letter": 13,
     "previous approvals": 14,
+    "authorization letter": 15,
+    "previous projects": 16,
+}
+
+# Brand-level document sections → BrandDocument.doc_type
+BRAND_DOC_SECTIONS = {
+    12: 'country_of_origin',
+    14: 'previous_approval',
+    15: 'authorization_letter',
+    16: 'previous_project',
 }
 
 
@@ -379,7 +391,7 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
         ('Consultant',     submittal.consultant),
         ('Contractor',     submittal.main_contractor),
         ('MEP Contractor', submittal.mep_contractor),
-        ('Product',        submittal.product),
+        ('Brand',          submittal.title_brand.name if submittal.title_brand else submittal.product),
         ('Manufacturer',   getattr(submittal, 'manufacturer', '')),
     ]
 
@@ -972,7 +984,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
             ('Consultant', submittal.consultant),
             ('Main Contractor', submittal.main_contractor),
             ('MEP Contractor', submittal.mep_contractor),
-            ('Product', submittal.product),
+            ('Brand', submittal.title_brand.name if submittal.title_brand else submittal.product),
         ]
         field_y = title_y - 30
         label_x, colon_x, value_x = 55, 170, 180
@@ -1380,7 +1392,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     auto-generated divider page (except Title Page) then its content.
     Custom sections use SubmittalSectionUpload for content.
     """
-    submittal = Submittal.objects.select_related('warranty_brand').prefetch_related('materials').get(pk=submittal_id)
+    submittal = Submittal.objects.select_related('warranty_brand', 'title_brand').prefetch_related('materials').get(pk=submittal_id)
     company_docs = services.get_company_documents()
     merger = PdfMerger()
 
@@ -1467,8 +1479,8 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                 merger.append(compliance_pdf)
             continue
 
-        # ── Multi-material sections (9-12, 14) ──
-        if section in (9, 10, 11, 12, 14):
+        # ── Material-level multi sections (9, 10, 11) ──
+        if section in (9, 10, 11):
             # Always add divider; content optional
             merger.append(_build_divider_page(visible_num, display))
             for mat in materials:
@@ -1483,13 +1495,19 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                         paths = [p]
                 elif section == 11:
                     paths = services.get_certifications(mat, 'test_certificate')
-                elif section == 12:
-                    paths = services.get_certifications(mat, 'country_of_origin')
-                elif section == 14:
-                    paths = services.get_certifications(mat, 'previous_approval')
                 for path in paths:
                     if path and os.path.exists(path):
                         merger.append(path)
+            continue
+
+        # ── Brand-level document sections (12, 14, 15, 16) ──
+        # Pulled once from the brand chosen on the title page.
+        if section in BRAND_DOC_SECTIONS:
+            merger.append(_build_divider_page(visible_num, display))
+            brand = getattr(submittal, 'title_brand', None)
+            for path in services.get_brand_documents(brand, BRAND_DOC_SECTIONS[section]):
+                if path and os.path.exists(path):
+                    merger.append(path)
 
     output = BytesIO()
     merger.write(output)

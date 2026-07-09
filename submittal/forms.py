@@ -1,5 +1,7 @@
 from django import forms
 
+from .models import SubmittalBrand
+
 
 class TitlePageForm(forms.Form):
     """Step 1: Title page details."""
@@ -37,12 +39,17 @@ class TitlePageForm(forms.Form):
             'placeholder': 'e.g. M/s. HEAT AND POWER TECHNICAL SERVICES LLC'
         })
     )
-    product = forms.CharField(
-        max_length=255,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'e.g. COSMOPLAST – UPVC PIPES AND FITTINGS'
-        })
+    brand = forms.ModelChoiceField(
+        queryset=SubmittalBrand.objects.all(),
+        required=False,
+        empty_label='— Select Brand —',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label='Brand',
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Keep brand list fresh (ordered) on every render.
+        self.fields['brand'].queryset = SubmittalBrand.objects.order_by('display_order', 'name')
 
 

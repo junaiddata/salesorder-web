@@ -17,7 +17,6 @@ urlpatterns = [
     path('admin/submittals/', views.admin_submittals, name='admin_submittals'),
     path('admin/items/', views.admin_items, name='admin_items'),
     path('admin/items/<int:pk>/', views.admin_item_detail, name='admin_item_detail'),
-    path('admin/bulk-import-pdfs/', views.bulk_import_pdfs, name='bulk_import_pdfs'),
     path('admin/brands/', views.admin_brands, name='admin_brands'),
     path('admin/brands/add/', views.admin_brand_add, name='admin_brand_add'),
     path('admin/brands/<int:pk>/edit/', views.admin_brand_edit, name='admin_brand_edit'),
@@ -25,8 +24,8 @@ urlpatterns = [
     path('admin/company-docs/', views.admin_company_docs, name='admin_company_docs'),
 
     path('items/', views.submittal_items_list, name='items'),
-    path('items/<slug:brand_code>/', views.submittal_items_list, name='items_by_brand'),
-    path('items/<slug:brand_code>/import/', views.submittal_items_import, name='items_import'),
+    path('items/<int:brand_id>/', views.submittal_items_list, name='items_by_brand'),
+    path('items/<int:brand_id>/import/', views.submittal_items_import, name='items_import'),
 
     # Settings
     path('settings/', views.submittal_settings, name='settings'),

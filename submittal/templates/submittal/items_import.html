@@ -9,7 +9,7 @@
     <span class="sep"><i class="fas fa-chevron-right"></i></span>
     <a href="{% url 'submittal:items' %}">Materials</a>
     <span class="sep"><i class="fas fa-chevron-right"></i></span>
-    <a href="{% url 'submittal:items_by_brand' brand.code %}">{{ brand.name }}</a>
+    <a href="{% url 'submittal:items_by_brand' brand.pk %}">{{ brand.name }}</a>
     <span class="sep"><i class="fas fa-chevron-right"></i></span>
     <span class="here">Import</span>
 </div></div>
@@ -48,7 +48,7 @@
                 </div>
                 <div class="u-row mt-2">
                     <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-upload"></i> Import</button>
-                    <a href="{% url 'submittal:items_by_brand' brand.code %}" class="btn-x">Cancel</a>
+                    <a href="{% url 'submittal:items_by_brand' brand.pk %}" class="btn-x">Cancel</a>
                 </div>
             </form>
         </div>

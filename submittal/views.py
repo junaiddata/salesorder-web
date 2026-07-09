@@ -1,6 +1,5 @@
 import json
 import os
-import zipfile
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -13,6 +12,7 @@ from django.utils import timezone
 from .models import (
     Submittal, SubmittalMaterial, SubmittalBrand, ProjectContractorHistory,
     SubmittalSectionUpload, ComplianceOption, RemarkOption, MaterialCertification,
+    BrandDocument,
 )
 from .forms import TitlePageForm
 from .services import get_history_values
@@ -45,7 +45,7 @@ def submittal_wizard(request, pk=None):
             'consultant': submittal.consultant,
             'main_contractor': submittal.main_contractor,
             'mep_contractor': submittal.mep_contractor,
-            'product': submittal.product,
+            'brand': submittal.title_brand_id,
         }
         selected_material_ids = list(submittal.materials.values_list('pk', flat=True))
         existing_index_items = submittal.index_items or []
@@ -62,7 +62,6 @@ def submittal_wizard(request, pk=None):
         'consultant': get_history_values('consultant'),
         'main_contractor': get_history_values('main_contractor'),
         'mep_contractor': get_history_values('mep_contractor'),
-        'product': get_history_values('product'),
     }
 
     existing_materials_columns = submittal.materials_columns if submittal else []
@@ -81,11 +80,16 @@ def submittal_wizard(request, pk=None):
                 all_columns.append({'key': k, 'label': col.get('label', k)})
 
     compliance_options = list(ComplianceOption.objects.values('pk', 'label'))
-    brands = SubmittalBrand.objects.order_by('display_order', 'name')
-    remark_options_by_brand = {
-        b.pk: list(b.remark_options.values('pk', 'label'))
-        for b in brands
-    }
+    brands = SubmittalBrand.objects.prefetch_related('materials__remark_options').order_by('display_order', 'name')
+    # Remarks are per material (item). The compliance-statement Remarks dropdown is
+    # built from the items actually selected in the Materials step, so provide a
+    # simple map of material_id -> its remark options.
+    remark_options_by_material = {}
+    for b in brands:
+        for m in b.materials.all():
+            opts = [{'label': r.label} for r in m.remark_options.all()]
+            if opts:
+                remark_options_by_material[m.pk] = opts
     warranty_brands_with_format = [b.pk for b in brands if getattr(b, 'use_generated_warranty', False)]
 
     # Single JSON payload for wizard script (avoids Django {{ }} in JS, fixes linter errors)
@@ -97,7 +101,7 @@ def submittal_wizard(request, pk=None):
         'existing_materials_columns': existing_materials_columns,
         'brands_json': [{'pk': b.pk, 'name': b.name} for b in brands],
         'compliance_options_json': compliance_options,
-        'remark_options_by_brand_json': remark_options_by_brand,
+        'remark_options_by_material_json': remark_options_by_material,
         'existing_compliance_rows_json': existing_compliance_rows,
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'default_index_items': list(DEFAULT_INDEX_ITEMS),
@@ -122,7 +126,7 @@ def submittal_wizard(request, pk=None):
         'all_column_definitions': json.dumps(all_columns),
         'brands_json': json.dumps([{'pk': b.pk, 'name': b.name} for b in brands]),
         'compliance_options_json': json.dumps(compliance_options),
-        'remark_options_by_brand_json': json.dumps(remark_options_by_brand),
+        'remark_options_by_material_json': json.dumps(remark_options_by_material),
         'existing_compliance_rows_json': json.dumps(existing_compliance_rows),
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'existing_warranty_brand_id': existing_warranty_brand_id or '',
@@ -150,7 +154,11 @@ def submittal_save(request):
     submittal.consultant = title_form.cleaned_data['consultant']
     submittal.main_contractor = title_form.cleaned_data['main_contractor']
     submittal.mep_contractor = title_form.cleaned_data['mep_contractor']
-    submittal.product = title_form.cleaned_data['product']
+    brand = title_form.cleaned_data.get('brand')
+    submittal.title_brand = brand
+    # Keep the legacy `product` field populated with the brand name so existing
+    # history, search and compliance-statement rendering keep working.
+    submittal.product = brand.name if brand else ''
 
     index_items_json = request.POST.get('index_items_json', '')
     if index_items_json:
@@ -339,6 +347,7 @@ def submittal_generate_pdf(request, pk):
 def api_materials_search(request):
     q = request.GET.get('q', '').strip()
     ids_param = request.GET.get('ids', '').strip()
+    brand_param = request.GET.get('brand', '').strip()
 
     if ids_param:
         ids = [x.strip() for x in ids_param.split(',') if x.strip().isdigit()]
@@ -352,9 +361,12 @@ def api_materials_search(request):
         from django.db.models import Q
         qs = SubmittalMaterial.objects.select_related('brand').filter(
             Q(model_no__icontains=q) |
-            Q(brand__name__icontains=q) |
-            Q(brand__code__icontains=q)
-        ).order_by('display_order', 'model_no')[:20]
+            Q(brand__name__icontains=q)
+        )
+        # Restrict to the brand chosen on the title page, when provided.
+        if brand_param.isdigit():
+            qs = qs.filter(brand_id=brand_param)
+        qs = qs.order_by('display_order', 'model_no')[:20]
 
     def mat_data(m):
         d = m.data or {}
@@ -375,13 +387,13 @@ def api_materials_search(request):
 
 
 @login_required
-def submittal_items_list(request, brand_code=None):
+def submittal_items_list(request, brand_id=None):
     """List submittal materials, optionally filtered by brand."""
     from .models import SubmittalBrand
     brands = SubmittalBrand.objects.order_by('display_order', 'name')
     brand = None
-    if brand_code:
-        brand = get_object_or_404(SubmittalBrand, code=brand_code)
+    if brand_id:
+        brand = get_object_or_404(SubmittalBrand, pk=brand_id)
         materials = SubmittalMaterial.objects.filter(brand=brand).order_by('display_order', 'model_no')
     else:
         materials = SubmittalMaterial.objects.select_related('brand').all().order_by('display_order', 'model_no')
@@ -408,12 +420,12 @@ def submittal_items_list(request, brand_code=None):
 
 
 @login_required
-def submittal_items_import(request, brand_code):
+def submittal_items_import(request, brand_id):
     """Import materials from Excel for a brand. GET: show form. POST: process upload."""
     from .models import SubmittalBrand
     import pandas as pd
 
-    brand = get_object_or_404(SubmittalBrand, code=brand_code)
+    brand = get_object_or_404(SubmittalBrand, pk=brand_id)
     if not brand.column_definitions:
         return render(request, 'submittal/items_import.html', {
             'brand': brand,
@@ -489,7 +501,7 @@ def submittal_items_import(request, brand_code):
             updated += 1
 
     messages.success(request, f'Import complete: {created} created, {updated} updated.')
-    return redirect('submittal:items_by_brand', brand_code=brand_code)
+    return redirect('submittal:items_by_brand', brand_id=brand_id)
 
 
 @require_GET
@@ -534,19 +546,38 @@ def submittal_settings(request):
                 ComplianceOption.objects.filter(pk=pk).update(display_order=i)
             return JsonResponse({'ok': True})
 
-        # ── Remark Options ──
+        # ── Remark Options (per material / item) ──
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
         if action == 'add_remark':
-            brand_id = request.POST.get('brand_id')
+            material_id = request.POST.get('material_id')
             label = request.POST.get('label', '').strip()
-            if brand_id and label:
-                order = RemarkOption.objects.filter(brand_id=brand_id).count()
-                RemarkOption.objects.create(brand_id=brand_id, label=label, display_order=order)
+            if material_id and material_id.isdigit() and label:
+                order = RemarkOption.objects.filter(material_id=material_id).count()
+                opt = RemarkOption.objects.create(material_id=material_id, label=label, display_order=order)
+                if is_ajax:
+                    return JsonResponse({'ok': True, 'option': {'pk': opt.pk, 'label': opt.label}})
+            elif is_ajax:
+                return JsonResponse({'ok': False, 'error': 'Select an item and enter a remark.'}, status=400)
+            return redirect('submittal:settings')
+
+        if action == 'edit_remark':
+            pk = request.POST.get('pk')
+            label = request.POST.get('label', '').strip()
+            if pk and label:
+                RemarkOption.objects.filter(pk=pk).update(label=label)
+                if is_ajax:
+                    return JsonResponse({'ok': True})
+            elif is_ajax:
+                return JsonResponse({'ok': False, 'error': 'Remark cannot be empty.'}, status=400)
             return redirect('submittal:settings')
 
         if action == 'delete_remark':
             pk = request.POST.get('pk')
             if pk:
                 RemarkOption.objects.filter(pk=pk).delete()
+            if is_ajax:
+                return JsonResponse({'ok': True})
             return redirect('submittal:settings')
 
         if action == 'reorder_remark':
@@ -555,29 +586,32 @@ def submittal_settings(request):
                 RemarkOption.objects.filter(pk=pk).update(display_order=i)
             return JsonResponse({'ok': True})
 
-    brands = SubmittalBrand.objects.order_by('display_order', 'name')
+    brands = (
+        SubmittalBrand.objects
+        .prefetch_related('materials__remark_options')
+        .order_by('display_order', 'name')
+    )
     compliance_options = ComplianceOption.objects.all()
-    remark_options_by_brand = {
-        b.pk: list(b.remark_options.values('pk', 'label', 'display_order'))
-        for b in brands
-    }
 
     return render(request, 'submittal/settings.html', {
         'brands': brands,
         'compliance_options': compliance_options,
-        'remark_options_by_brand': json.dumps(remark_options_by_brand),
     })
 
 
 @require_GET
 @login_required
 def api_remark_options(request):
-    """Return remark options for a given brand_id."""
+    """Return remark options for a given material_id (item)."""
     from .models import RemarkOption
-    brand_id = request.GET.get('brand_id')
-    if not brand_id:
+    material_id = request.GET.get('material_id')
+    if not material_id or not material_id.isdigit():
         return JsonResponse({'options': []})
-    opts = list(RemarkOption.objects.filter(brand_id=brand_id).values('pk', 'label'))
+    opts = list(
+        RemarkOption.objects.filter(material_id=material_id)
+        .order_by('display_order', 'pk')
+        .values('pk', 'label')
+    )
     return JsonResponse({'options': opts})
 
 
@@ -635,9 +669,9 @@ def submittal_delete(request, pk):
 def admin_items(request):
     """Admin materials list - redirect to items with brand filter or show all."""
     brands = SubmittalBrand.objects.order_by('display_order', 'name')
-    brand_code = request.GET.get('brand', '')
-    if brand_code:
-        brand = get_object_or_404(SubmittalBrand, code=brand_code)
+    brand_id = request.GET.get('brand', '')
+    if brand_id:
+        brand = get_object_or_404(SubmittalBrand, pk=brand_id)
         materials = SubmittalMaterial.objects.filter(brand=brand).order_by('display_order', 'model_no')
     else:
         brand = None
@@ -690,7 +724,8 @@ def admin_item_detail(request, pk):
 
         elif action == 'cert' and f:
             cert_type = request.POST.get('cert_type', '')
-            if cert_type in ['test_certificate', 'country_of_origin', 'previous_approval']:
+            # Only Test Certificates remain material-level; the rest are brand-level now.
+            if cert_type in ['test_certificate']:
                 MaterialCertification.objects.create(
                     material=material,
                     cert_type=cert_type,
@@ -729,144 +764,6 @@ def admin_item_detail(request, pk):
     })
 
 
-# ── Folder name in ZIP → app field mapping ──────────────────────────────────
-# datasheet/datasheets → technical_pdf; catalogue → catalogue_pdf; others → MaterialCertification
-BULK_IMPORT_FOLDER_MAP = {
-    'datasheet': ('technical', None),
-    'datasheets': ('technical', None),
-    'catalogue': ('catalogue', None),
-    'country_of_origin': ('cert', 'country_of_origin'),
-    'previous approvals': ('cert', 'previous_approval'),
-    'test certificates': ('cert', 'test_certificate'),
-}
-
-
-def _normalize_folder(name):
-    return (name or '').strip().lower()
-
-
-def _match_folder(folder_name):
-    """Return (field_type, cert_type) or None if unknown folder."""
-    norm = _normalize_folder(folder_name)
-    for key, val in BULK_IMPORT_FOLDER_MAP.items():
-        if _normalize_folder(key) == norm:
-            return val
-    return None
-
-
-def _safe_filename(filename, max_len=120):
-    """Sanitize filename: remove path separators, truncate if needed."""
-    base = os.path.basename(filename.replace('\\', '/').strip())
-    # Remove any remaining path chars
-    base = base.replace('\\', '_').replace('/', '_')
-    if len(base) > max_len:
-        stem, ext = os.path.splitext(base)
-        base = stem[: max_len - len(ext)] + ext
-    return base or 'document.pdf'
-
-
-@login_required
-def bulk_import_pdfs(request):
-    """Upload a ZIP file to bulk-import PDFs into materials. Structure: BRAND_CODE/model_no/folder/file.pdf"""
-    if request.method != 'POST':
-        brands = SubmittalBrand.objects.order_by('display_order', 'name')
-        return render(request, 'submittal/admin_bulk_import.html', {'brands': brands})
-
-    zip_file = request.FILES.get('zip_file')
-    if not zip_file or not zip_file.name.lower().endswith('.zip'):
-        messages.error(request, 'Please upload a .zip file.')
-        return redirect('submittal:bulk_import_pdfs')
-
-    imported = 0
-    skipped = []
-    errors = []
-    cleared_cert_keys = set()  # (material.pk, cert_type) – avoid deleting again mid-import
-
-    try:
-        with zipfile.ZipFile(zip_file, 'r') as zf:
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
-                name = info.filename.replace('\\', '/').strip('/')
-                parts = name.split('/')
-                if len(parts) < 4:
-                    continue
-                brand_code_raw, model_no, folder_name, filename = parts[0], parts[1], parts[2], '/'.join(parts[3:])
-                if not filename or not filename.lower().endswith('.pdf'):
-                    continue
-
-                brand_code = brand_code_raw.strip()
-                model_no = model_no.strip()
-                if not brand_code or not model_no:
-                    continue
-
-                mapping = _match_folder(folder_name)
-                if not mapping:
-                    skipped.append(f'{brand_code}/{model_no}/{folder_name}/ (unknown folder)')
-                    continue
-
-                field_type, cert_type = mapping
-                brand = SubmittalBrand.objects.filter(code__iexact=brand_code).first()
-                if not brand:
-                    errors.append(f'Brand "{brand_code}" not found')
-                    continue
-                material = SubmittalMaterial.objects.filter(brand=brand, model_no__iexact=model_no).first()
-                if not material:
-                    skipped.append(f'{brand_code}/{model_no} (material not found)')
-                    continue
-
-                try:
-                    content = zf.read(info)
-                except Exception as e:
-                    errors.append(f'{name}: {e}')
-                    continue
-
-                safe_name = _safe_filename(filename)
-                if field_type == 'technical':
-                    if material.technical_pdf and material.technical_pdf.name:
-                        material.technical_pdf.delete(save=False)
-                    material.technical_pdf.save(safe_name, ContentFile(content), save=True)
-                    imported += 1
-                elif field_type == 'catalogue':
-                    if material.catalogue_pdf and material.catalogue_pdf.name:
-                        material.catalogue_pdf.delete(save=False)
-                    material.catalogue_pdf.save(safe_name, ContentFile(content), save=True)
-                    imported += 1
-                elif field_type == 'cert' and cert_type:
-                    key = (material.pk, cert_type)
-                    if key not in cleared_cert_keys:
-                        # Replace: delete existing certs of this type for this material
-                        for old in MaterialCertification.objects.filter(material=material, cert_type=cert_type):
-                            if old.file and old.file.name:
-                                old.file.delete(save=False)
-                            old.delete()
-                        cleared_cert_keys.add(key)
-                    MaterialCertification.objects.create(
-                        material=material,
-                        cert_type=cert_type,
-                        file=ContentFile(content, name=safe_name),
-                        description='',
-                    )
-                    imported += 1
-
-    except zipfile.BadZipFile:
-        messages.error(request, 'Invalid or corrupted ZIP file.')
-        return redirect('submittal:bulk_import_pdfs')
-    except Exception as e:
-        messages.error(request, f'Import failed: {e}')
-        return redirect('submittal:bulk_import_pdfs')
-
-    if imported:
-        messages.success(request, f'Imported {imported} file(s).')
-    if skipped:
-        messages.warning(request, f'Skipped {len(skipped)}: {", ".join(skipped[:5])}{"…" if len(skipped) > 5 else ""}')
-    if errors:
-        for err in errors[:5]:
-            messages.error(request, err)
-
-    return redirect('submittal:bulk_import_pdfs')
-
-
 @login_required
 def admin_brands(request):
     """Admin brands list and CRUD."""
@@ -879,40 +776,77 @@ def admin_brand_add(request):
     """Add new brand."""
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
-        code = request.POST.get('code', '').strip().upper().replace(' ', '_')
-        if name and code:
-            if SubmittalBrand.objects.filter(code=code).exists():
-                messages.error(request, f'Brand with code "{code}" already exists.')
-            else:
-                use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
-                SubmittalBrand.objects.create(name=name, code=code, use_generated_warranty=use_generated_warranty)
-                messages.success(request, f'Brand "{name}" added.')
-                return redirect('submittal:admin_brands')
+        if name:
+            use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
+            SubmittalBrand.objects.create(name=name, use_generated_warranty=use_generated_warranty)
+            messages.success(request, f'Brand "{name}" added.')
+            return redirect('submittal:admin_brands')
         else:
-            messages.error(request, 'Name and code are required.')
+            messages.error(request, 'Name is required.')
     return render(request, 'submittal/admin_brand_form.html', {'brand': None})
 
 
 @login_required
 def admin_brand_edit(request, pk):
-    """Edit brand."""
+    """Edit brand and manage its brand-level documents."""
     brand = get_object_or_404(SubmittalBrand, pk=pk)
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        code = request.POST.get('code', '').strip().upper().replace(' ', '_')
-        if name and code:
-            if SubmittalBrand.objects.filter(code=code).exclude(pk=pk).exists():
-                messages.error(request, f'Brand with code "{code}" already exists.')
+        action = request.POST.get('action', 'save_brand')
+
+        # ── Add a brand-level document ──
+        if action == 'add_doc':
+            doc_type = request.POST.get('doc_type', '')
+            f = request.FILES.get('file')
+            valid_types = [c[0] for c in BrandDocument.DOC_TYPE_CHOICES]
+            if doc_type in valid_types and f:
+                BrandDocument.objects.create(
+                    brand=brand,
+                    doc_type=doc_type,
+                    file=f,
+                    description=request.POST.get('description', '')[:255],
+                )
+                messages.success(request, f'{dict(BrandDocument.DOC_TYPE_CHOICES).get(doc_type)} added.')
             else:
-                brand.name = name
-                brand.code = code
-                brand.use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
-                brand.save()
-                messages.success(request, f'Brand "{name}" updated.')
-                return redirect('submittal:admin_brands')
+                messages.error(request, 'Select a document type and a file.')
+            return redirect('submittal:admin_brand_edit', pk=pk)
+
+        # ── Delete a brand-level document ──
+        if action == 'delete_doc':
+            doc_id = request.POST.get('doc_id')
+            if doc_id:
+                doc = BrandDocument.objects.filter(pk=doc_id, brand=brand).first()
+                if doc:
+                    if doc.file and doc.file.name:
+                        doc.file.delete(save=False)
+                    doc.delete()
+                    messages.success(request, 'Document removed.')
+            return redirect('submittal:admin_brand_edit', pk=pk)
+
+        # ── Save brand details ──
+        name = request.POST.get('name', '').strip()
+        if name:
+            brand.name = name
+            brand.use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
+            brand.save()
+            messages.success(request, f'Brand "{name}" updated.')
+            return redirect('submittal:admin_brands')
         else:
-            messages.error(request, 'Name and code are required.')
-    return render(request, 'submittal/admin_brand_form.html', {'brand': brand})
+            messages.error(request, 'Name is required.')
+
+    # Group documents by type for display
+    documents_by_type = []
+    for value, label in BrandDocument.DOC_TYPE_CHOICES:
+        documents_by_type.append({
+            'value': value,
+            'label': label,
+            'docs': list(brand.documents.filter(doc_type=value).order_by('uploaded_at')),
+        })
+
+    return render(request, 'submittal/admin_brand_form.html', {
+        'brand': brand,
+        'documents_by_type': documents_by_type,
+        'doc_type_choices': BrandDocument.DOC_TYPE_CHOICES,
+    })
 
 
 @login_required

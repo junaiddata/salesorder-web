@@ -1,4 +1,4 @@
-from .models import CompanyDocuments, SubmittalMaterial, MaterialCertification
+from .models import CompanyDocuments, SubmittalMaterial, MaterialCertification, BrandDocument
 
 
 def get_company_documents():
@@ -26,6 +26,14 @@ def get_certifications(material, cert_type):
         material=material, cert_type=cert_type
     )
     return [c.file.path for c in certs if c.file]
+
+
+def get_brand_documents(brand, doc_type):
+    """Return list of file paths for a given brand and brand-level doc_type."""
+    if not brand:
+        return []
+    docs = BrandDocument.objects.filter(brand=brand, doc_type=doc_type)
+    return [d.file.path for d in docs if d.file]
 
 
 def get_history_values(field_name):

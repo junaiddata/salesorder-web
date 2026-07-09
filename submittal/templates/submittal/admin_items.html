@@ -10,7 +10,7 @@
     </div>
     <div class="d-flex gap-2 flex-wrap align-items-center">
         {% if brand %}
-        <a href="{% url 'submittal:items_import' brand.code %}" class="btn btn-admin btn-admin-success">
+        <a href="{% url 'submittal:items_import' brand.pk %}" class="btn btn-admin btn-admin-success">
             <i class="fas fa-file-excel"></i> Import Excel
         </a>
         {% endif %}
@@ -23,7 +23,7 @@
         <span style="font-size:0.78rem;color:var(--text-muted);margin-right:0.25rem;">Filter:</span>
         <a href="{% url 'submittal:admin_items' %}" class="btn btn-sm {% if not brand %}btn-primary{% else %}btn-outline-secondary{% endif %}" style="font-size:0.78rem;padding:0.25rem 0.65rem;">All</a>
         {% for b in brands %}
-        <a href="{% url 'submittal:admin_items' %}?brand={{ b.code }}" class="btn btn-sm {% if brand and brand.code == b.code %}btn-primary{% else %}btn-outline-secondary{% endif %}" style="font-size:0.78rem;padding:0.25rem 0.65rem;">{{ b.name }}</a>
+        <a href="{% url 'submittal:admin_items' %}?brand={{ b.pk }}" class="btn btn-sm {% if brand and brand.pk == b.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}" style="font-size:0.78rem;padding:0.25rem 0.65rem;">{{ b.name }}</a>
         {% endfor %}
     </div>
 </div>
@@ -50,7 +50,7 @@
                     {% endfor %}
                     <td class="actions">
                         <a href="{% url 'submittal:admin_item_detail' mat.pk %}" class="btn btn-sm btn-outline-primary" title="View / Edit"><i class="fas fa-eye"></i></a>
-                        <a href="{% url 'submittal:items_import' mat.brand.code %}" class="btn btn-sm btn-outline-secondary" title="Import More"><i class="fas fa-file-excel"></i></a>
+                        <a href="{% url 'submittal:items_import' mat.brand.pk %}" class="btn btn-sm btn-outline-secondary" title="Import More"><i class="fas fa-file-excel"></i></a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -62,7 +62,7 @@
         <div class="empty-icon"><i class="fas fa-box-open"></i></div>
         <p class="mb-2">No materials yet{% if brand %} for {{ brand.name }}{% endif %}.</p>
         {% if brand %}
-        <a href="{% url 'submittal:items_import' brand.code %}" class="btn btn-admin btn-admin-primary"><i class="fas fa-file-excel"></i> Import from Excel</a>
+        <a href="{% url 'submittal:items_import' brand.pk %}" class="btn btn-admin btn-admin-primary"><i class="fas fa-file-excel"></i> Import from Excel</a>
         {% else %}
         <a href="{% url 'submittal:admin_brands' %}" class="btn btn-admin btn-admin-outline">Add brands first</a>
         {% endif %}

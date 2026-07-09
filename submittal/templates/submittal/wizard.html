@@ -1057,17 +1057,17 @@
             <div class="step-line"></div>
             <div class="step-item" data-step="1">
                 <div class="step-circle">2</div>
-                <div class="step-label">Index</div>
+                <div class="step-label">Materials</div>
             </div>
             <div class="step-line"></div>
             <div class="step-item" data-step="2">
                 <div class="step-circle">3</div>
-                <div class="step-label">Documents</div>
+                <div class="step-label">Index</div>
             </div>
             <div class="step-line"></div>
             <div class="step-item" data-step="3">
                 <div class="step-circle">4</div>
-                <div class="step-label">Materials</div>
+                <div class="step-label">Documents</div>
             </div>
             <div class="step-line"></div>
             <div class="step-item" data-step="4">
@@ -1091,6 +1091,16 @@
                 </div>
 
                 {% for field in title_form %}
+                {% if field.name == 'brand' %}
+                <div class="form-field" data-field="brand">
+                    <label class="field-label">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="helper-note">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Shown on the title page. Its brand-level documents (Country of Origin, Authorization Letter, Previous Approvals, Previous Projects) are pulled into the PDF automatically. Manage them under Admin → Brands.</span>
+                    </div>
+                </div>
+                {% else %}
                 <div class="form-field form-group-hist" data-field="{{ field.name }}">
                     <label class="field-label">{{ field.label }}</label>
                     <div class="mode-toggle mb-2">
@@ -1114,64 +1124,12 @@
                         <div class="existing-list-items" id="list_{{ field.name }}"></div>
                     </div>
                 </div>
+                {% endif %}
                 {% endfor %}
             </div>
 
-            <!-- ═══ STEP 1: Index Builder ═══ -->
+            <!-- ═══ STEP 1: Materials ═══ -->
             <div class="step-card" data-step="1">
-                <div class="step-header">
-                    <div class="step-icon green"><i class="fas fa-list-ol"></i></div>
-                    <div class="step-header-text">
-                        <h2>Index / Table of Contents</h2>
-                        <p class="step-subtitle">Drag to reorder, uncheck to exclude, add custom entries, or rename sections. The index PDF and divider pages are generated automatically.</p>
-                    </div>
-                </div>
-
-                <div class="index-builder" id="indexBuilder">
-                    <div class="index-builder-header">
-                        <span><i class="fas fa-grip-lines me-1"></i> Drag to reorder sections</span>
-                        <span id="indexCountBadge" class="auto-badge green">14 sections</span>
-                    </div>
-                    <div id="indexItemList"></div>
-                </div>
-
-                <div class="add-custom-bar">
-                    <input type="text" id="customIndexInput" placeholder="Type a custom section name…">
-                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex">
-                        <i class="fas fa-plus"></i> Add Section
-                    </button>
-                </div>
-
-                <div class="helper-note">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Only checked items appear in the generated PDF. Custom sections and upload-based sections will prompt for a file in the next step.</span>
-                </div>
-
-                <input type="hidden" name="index_items_json" id="indexItemsJson">
-            </div>
-
-            <!-- ═══ STEP 2: Documents ═══ -->
-            <div class="step-card" data-step="2">
-                <div class="step-header">
-                    <div class="step-icon amber"><i class="fas fa-file-upload"></i></div>
-                    <div class="step-header-text">
-                        <h2>Section Documents</h2>
-                        <p class="step-subtitle">Upload PDF files for sections that require them. Auto-included sections are handled for you.</p>
-                    </div>
-                </div>
-
-                <div class="info-banner green">
-                    <i class="fas fa-check-circle"></i>
-                    <div>
-                        <strong>Auto-included sections:</strong> Title Page, Index, Company Profile, Trade License, Materials Table, Product Catalogue, Technical Details, Test Certificates, Country of Origin, and Previous Approvals are generated or pulled from the database automatically.
-                    </div>
-                </div>
-
-                <div id="dynamicUploads"></div>
-            </div>
-
-            <!-- ═══ STEP 3: Materials ═══ -->
-            <div class="step-card" data-step="3">
                 <div class="step-header">
                     <div class="step-icon blue"><i class="fas fa-boxes-stacked"></i></div>
                     <div class="step-header-text">
@@ -1180,9 +1138,11 @@
                     </div>
                 </div>
 
+                <div class="helper-note" id="materialBrandHint" style="margin-bottom:1rem;"></div>
+
                 <div class="material-search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="materialSearchInput" placeholder="Search by model no., description, material, or brand…">
+                    <input type="text" id="materialSearchInput" placeholder="Search by model no. or description…">
                 </div>
                 <div class="material-results" id="materialResults"></div>
 
@@ -1217,12 +1177,65 @@
                         <strong>Auto-linked for selected materials:</strong><br>
                         <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Product Catalogue</span>
                         <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Technical Details</span>
-                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Test Certificates</span>
-                        <span class="auto-badge green mt-1 me-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Country of Origin</span>
-                        <span class="auto-badge green mt-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Previous Approvals</span>
+                        <span class="auto-badge green mt-1"><i class="fas fa-check" style="font-size:0.6rem;"></i> Test Certificates</span>
+                        <br>
+                        <span class="mt-1 d-inline-block" style="font-size:0.78rem;">Country of Origin, Authorization Letter, Previous Approvals &amp; Previous Projects are linked from the <strong>brand</strong> selected on the title page.</span>
                     </div>
                 </div>
                 <div id="materialHiddenInputs"></div>
+            </div>
+
+            <!-- ═══ STEP 2: Index Builder ═══ -->
+            <div class="step-card" data-step="2">
+                <div class="step-header">
+                    <div class="step-icon green"><i class="fas fa-list-ol"></i></div>
+                    <div class="step-header-text">
+                        <h2>Index / Table of Contents</h2>
+                        <p class="step-subtitle">Drag to reorder, uncheck to exclude, add custom entries, or rename sections. The index PDF and divider pages are generated automatically.</p>
+                    </div>
+                </div>
+
+                <div class="index-builder" id="indexBuilder">
+                    <div class="index-builder-header">
+                        <span><i class="fas fa-grip-lines me-1"></i> Drag to reorder sections</span>
+                        <span id="indexCountBadge" class="auto-badge green">14 sections</span>
+                    </div>
+                    <div id="indexItemList"></div>
+                </div>
+
+                <div class="add-custom-bar">
+                    <input type="text" id="customIndexInput" placeholder="Type a custom section name…">
+                    <button type="button" class="btn-add-custom" id="btnAddCustomIndex">
+                        <i class="fas fa-plus"></i> Add Section
+                    </button>
+                </div>
+
+                <div class="helper-note">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Only checked items appear in the generated PDF. Custom sections and upload-based sections will prompt for a file in the next step.</span>
+                </div>
+
+                <input type="hidden" name="index_items_json" id="indexItemsJson">
+            </div>
+
+            <!-- ═══ STEP 3: Documents ═══ -->
+            <div class="step-card" data-step="3">
+                <div class="step-header">
+                    <div class="step-icon amber"><i class="fas fa-file-upload"></i></div>
+                    <div class="step-header-text">
+                        <h2>Section Documents</h2>
+                        <p class="step-subtitle">Upload PDF files for sections that require them. Auto-included sections are handled for you.</p>
+                    </div>
+                </div>
+
+                <div class="info-banner green">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <strong>Auto-included sections:</strong> Title Page, Index, Company Profile, Trade License, Materials Table, Product Catalogue, Technical Details and Test Certificates are generated or pulled from the database automatically. Country of Origin, Authorization Letter, Previous Approvals and Previous Projects come from the brand chosen on the title page.
+                    </div>
+                </div>
+
+                <div id="dynamicUploads"></div>
             </div>
 
             <!-- ═══ STEP 4: Review & Generate ═══ -->
@@ -1279,7 +1292,7 @@
 
         const BRANDS_LIST = DATA.brands_json || [];
         const COMPLIANCE_OPTIONS = DATA.compliance_options_json || [];
-        const REMARK_OPTIONS_BY_BRAND = DATA.remark_options_by_brand_json || {};
+        const REMARK_OPTIONS_BY_MATERIAL = DATA.remark_options_by_material_json || {};
         let complianceRows = DATA.existing_compliance_rows_json || [];
         let complianceBrandId = DATA.existing_compliance_brand_id || '';
 
@@ -1291,7 +1304,8 @@
         const AUTO_LABELS = new Set([
             'title page', 'index', 'company profile', 'trade license',
             'list of proposed material', 'product catalogue', 'technical details',
-            'test certificates', 'country of origin certificate', 'previous approvals',
+            'test certificates', 'country of origin certificate',
+            'authorization letter', 'previous approvals', 'previous projects',
         ]);
 
         function labelNeedsUpload(label) {
@@ -1508,9 +1522,18 @@
 
         function isWarrantyDraftLetter(label) { return (label || '').trim().toLowerCase() === 'warranty draft letter'; }
 
-        function getRemarkOptions(brandId) {
-            if (!brandId) return [];
-            return REMARK_OPTIONS_BY_BRAND[parseInt(brandId, 10)] || [];
+        // Remark options come from the items selected in the Materials step only,
+        // grouped by item: [{ item, options: [{label}] }, ...]
+        function getRemarkGroupsForSelected() {
+            const groups = [];
+            selectedMaterials.forEach(m => {
+                const opts = REMARK_OPTIONS_BY_MATERIAL[m.id] || [];
+                if (opts.length) {
+                    const desc = (m.item_description || '').trim();
+                    groups.push({ item: desc ? `${m.model_no} — ${desc}` : m.model_no, options: opts });
+                }
+            });
+            return groups;
         }
 
         function remarkPreview(text, maxLen) {
@@ -1523,7 +1546,7 @@
             const tbody = document.getElementById('complianceTbody');
             if (!tbody) return;
             tbody.innerHTML = complianceRows.map((row, i) => {
-                const remarkOpts = getRemarkOptions(complianceBrandId);
+                const remarkGroups = getRemarkGroupsForSelected();
                 const complianceSelect = `
                     <select class="form-select form-select-sm cs-compliance" data-idx="${i}">
                         <option value="">— Leave Blank —</option>
@@ -1531,13 +1554,22 @@
                             `<option value="${escapeHtml(o.label)}" ${row.compliance === o.label ? 'selected' : ''}>${escapeHtml(o.label)}</option>`
                         ).join('')}
                     </select>`;
-                const remarkSelect = `
-                    <select class="form-select form-select-sm cs-remark" data-idx="${i}">
-                        <option value="">— Leave Blank —</option>
-                        ${remarkOpts.map(o =>
-                            `<option value="${escapeHtml(o.label)}" ${row.remarks === o.label ? 'selected' : ''} title="${escapeHtml(o.label)}">${escapeHtml(remarkPreview(o.label, 45))}</option>`
+                // Remarks: pick a preset from the selected items to insert into the
+                // editable textarea below, then edit freely. The textarea is the source of truth.
+                const remarkPicker = remarkGroups.length ? `
+                    <select class="form-select form-select-sm cs-remark-pick mb-1" data-idx="${i}">
+                        <option value="">＋ Insert remark…</option>
+                        ${remarkGroups.map(g =>
+                            `<optgroup label="${escapeHtml(g.item)}">
+                                ${g.options.map(o =>
+                                    `<option value="${escapeHtml(o.label)}" title="${escapeHtml(o.label)}">${escapeHtml(remarkPreview(o.label, 45))}</option>`
+                                ).join('')}
+                            </optgroup>`
                         ).join('')}
-                    </select>`;
+                    </select>` : '';
+                const remarkField = `
+                    ${remarkPicker}
+                    <textarea class="form-control form-control-sm cs-remark-text" data-idx="${i}" rows="3" placeholder="Remark…" style="resize:vertical;font-size:0.82rem;">${escapeHtml(row.remarks || '')}</textarea>`;
                 return `
                     <tr>
                         <td style="width:36px;text-align:center;vertical-align:top;padding-top:10px;font-weight:600;color:var(--text-muted);">${i + 1}</td>
@@ -1550,7 +1582,7 @@
                             <textarea class="form-control form-control-sm cs-spec" data-idx="${i}" rows="3" style="resize:vertical;font-size:0.82rem;">${escapeHtml(row.specification || '')}</textarea>
                         </td>
                         <td style="width:150px;vertical-align:top;">${complianceSelect}</td>
-                        <td style="width:220px;vertical-align:top;">${remarkSelect}</td>
+                        <td style="width:240px;vertical-align:top;">${remarkField}</td>
                         <td style="width:36px;text-align:center;vertical-align:top;padding-top:6px;">
                             <button type="button" class="btn-remove-material cs-remove-row" data-idx="${i}" title="Remove row"><i class="fas fa-times"></i></button>
                         </td>
@@ -1573,9 +1605,25 @@
                 });
             });
 
-            // Bind remark dropdowns
-            tbody.querySelectorAll('.cs-remark').forEach(el => {
+            // Bind remark picker: insert the chosen preset into the editable textarea.
+            tbody.querySelectorAll('.cs-remark-pick').forEach(el => {
                 el.addEventListener('change', () => {
+                    if (!el.value) return;
+                    const idx = parseInt(el.dataset.idx);
+                    const ta = tbody.querySelector(`.cs-remark-text[data-idx="${idx}"]`);
+                    if (ta) {
+                        ta.value = el.value;
+                        complianceRows[idx].remarks = el.value;
+                        serializeComplianceRows();
+                        ta.focus();
+                    }
+                    el.value = '';  // reset picker so it acts as an inserter
+                });
+            });
+
+            // Bind editable remark textarea (source of truth for the saved remark).
+            tbody.querySelectorAll('.cs-remark-text').forEach(el => {
+                el.addEventListener('input', () => {
                     complianceRows[parseInt(el.dataset.idx)].remarks = el.value;
                     serializeComplianceRows();
                 });
@@ -1621,16 +1669,6 @@
         }
 
         function initComplianceForm() {
-            const brandSel = document.getElementById('complianceBrandSelect');
-            if (brandSel) {
-                brandSel.value = complianceBrandId || '';
-                brandSel.addEventListener('change', () => {
-                    complianceBrandId = brandSel.value;
-                    const hidBrand = document.getElementById('complianceBrandId');
-                    if (hidBrand) hidBrand.value = complianceBrandId;
-                    renderComplianceTable();
-                });
-            }
             document.getElementById('btnAddComplianceRow')?.addEventListener('click', () => {
                 complianceRows.push({ specification: '', compliance: '', remarks: '' });
                 renderComplianceTable();
@@ -1721,10 +1759,6 @@
 
                 // ── Compliance Statement section ──
                 if (isComplyStatement(it.label)) {
-                    const brandOptions = BRANDS_LIST.map(b =>
-                        `<option value="${b.pk}" ${String(b.pk) === String(complianceBrandId) ? 'selected' : ''}>${escapeHtml(b.name)}</option>`
-                    ).join('');
-
                     return `
                         <div class="upload-row comply-section">
                             <label><i class="fas fa-file-contract"></i> ${escapeHtml(it.label)}</label>
@@ -1744,12 +1778,8 @@
                                     <span class="field-label" style="margin-bottom:0;">Compliance Form <span style="font-weight:400;color:var(--text-muted);">(optional — generated table appended after PDF)</span></span>
                                 </div>
 
-                                <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
-                                    <label class="field-label" style="margin:0;white-space:nowrap;">Brand (for Remarks):</label>
-                                    <select id="complianceBrandSelect" class="form-select form-select-sm" style="max-width:240px;">
-                                        <option value="">— Select Brand —</option>
-                                        ${brandOptions}
-                                    </select>
+                                <div class="mb-3">
+                                    <div class="helper-note"><i class="fas fa-info-circle"></i><span>Remarks come from the items selected in the Materials step. Choose a preset in a row's Remarks box, then edit the text as needed.</span></div>
                                     <input type="hidden" id="complianceBrandId" name="compliance_brand_id" value="${escapeHtml(String(complianceBrandId || ''))}">
                                     <input type="hidden" id="complianceRowsJson" name="compliance_rows_json" value="">
                                 </div>
@@ -1856,8 +1886,8 @@
             if (stepCounter) stepCounter.textContent = `Step ${step + 1} of ${TOTAL_STEPS}`;
 
             // Step-specific init
-            if (step === 2) buildDynamicUploads();
-            if (step === 3) buildColumnSelector();
+            if (step === 1) { buildColumnSelector(); updateMaterialBrandHint(); }
+            if (step === 3) buildDynamicUploads();
             if (step === TOTAL_STEPS - 1) buildReview();
 
             // Scroll to top of card
@@ -1878,7 +1908,7 @@
         });
 
         // ── Title page: Existing / New + list panel ──
-        const TITLE_FIELDS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor', 'product'];
+        const TITLE_FIELDS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor'];
 
         TITLE_FIELDS.forEach(fieldName => {
             const input = document.querySelector(`input[name="${fieldName}"], textarea[name="${fieldName}"]`);
@@ -1946,14 +1976,51 @@
         // ── Material search ──
         const searchInput = document.getElementById('materialSearchInput');
         const resultsDiv = document.getElementById('materialResults');
+        const brandSelect = document.getElementById('id_brand');
+        const materialBrandHint = document.getElementById('materialBrandHint');
         let searchTimeout;
+
+        function getSelectedBrand() {
+            if (!brandSelect || !brandSelect.value) return null;
+            const opt = brandSelect.options[brandSelect.selectedIndex];
+            return { id: brandSelect.value, name: opt ? opt.text.trim() : '' };
+        }
+
+        // Reflect the title-page brand on the Materials step and gate the search.
+        function updateMaterialBrandHint() {
+            const brand = getSelectedBrand();
+            if (brand) {
+                if (materialBrandHint) {
+                    materialBrandHint.innerHTML = `<i class="fas fa-tag"></i><span>Showing materials for <strong>${escapeHtml(brand.name)}</strong>. Change the <strong>Brand</strong> on the Title page to switch.</span>`;
+                }
+                searchInput.disabled = false;
+                searchInput.placeholder = 'Search by model no. or description…';
+            } else {
+                if (materialBrandHint) {
+                    materialBrandHint.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>Select a <strong>Brand</strong> on the Title page first — materials are chosen from that brand.</span>`;
+                }
+                searchInput.disabled = true;
+                searchInput.placeholder = 'Select a brand on the Title page first…';
+            }
+        }
+        updateMaterialBrandHint();
+
+        // Refresh when the brand changes on the title page.
+        brandSelect?.addEventListener('change', () => {
+            clearTimeout(searchTimeout);
+            searchInput.value = '';
+            resultsDiv.classList.remove('show');
+            updateMaterialBrandHint();
+        });
 
         searchInput.addEventListener('input', () => {
             clearTimeout(searchTimeout);
             const q = searchInput.value.trim();
+            const brand = getSelectedBrand();
+            if (!brand) { resultsDiv.classList.remove('show'); updateMaterialBrandHint(); return; }
             if (q.length < 2) { resultsDiv.classList.remove('show'); return; }
             searchTimeout = setTimeout(() => {
-                fetch(`/submittal/api/materials-search/?q=${encodeURIComponent(q)}`)
+                fetch(`/submittal/api/materials-search/?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(brand.id)}`)
                     .then(r => r.json())
                     .then(data => {
                         const filtered = (data.results || []).filter(m => !selectedMaterials.find(s => s.id === m.id));

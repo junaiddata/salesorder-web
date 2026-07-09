@@ -22,13 +22,18 @@ def generated_pdf_path(instance, filename):
 
 
 def material_cert_path(instance, filename):
-    brand_code = getattr(instance.material.brand, 'code', 'unknown') if instance.material.brand else 'unknown'
-    return f'submittal/certifications/{brand_code}/{instance.material.model_no}/{instance.cert_type}/{filename}'
+    brand_id = instance.material.brand_id or 'unknown'
+    return f'submittal/certifications/{brand_id}/{instance.material.model_no}/{instance.cert_type}/{filename}'
 
 
 def catalogue_upload_path(instance, filename):
-    brand_code = getattr(instance.brand, 'code', 'unknown') if instance.brand else 'unknown'
-    return f'submittal/catalogue/{brand_code}/{instance.model_no}/{filename}'
+    brand_id = instance.brand_id or 'unknown'
+    return f'submittal/catalogue/{brand_id}/{instance.model_no}/{filename}'
+
+
+def brand_doc_path(instance, filename):
+    brand_id = instance.brand_id or 'unknown'
+    return f'submittal/brand_docs/{brand_id}/{instance.doc_type}/{filename}'
 
 
 class SubmittalBrand(models.Model):
@@ -36,7 +41,6 @@ class SubmittalBrand(models.Model):
     Brand for submittal materials. Each brand has its own column definitions.
     """
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=50, unique=True, db_index=True)
     column_definitions = models.JSONField(
         default=list, blank=True,
         help_text='[{"key": "model_no", "label": "Model No.", "order": 1}, ...]'
@@ -105,6 +109,8 @@ class SectionDivider(models.Model):
         (12, 'Country of Origin Certificate'),
         (13, 'Warranty Draft Letter'),
         (14, 'Previous Approvals'),
+        (15, 'Authorization Letter'),
+        (16, 'Previous Projects'),
     ]
 
     section_num = models.IntegerField(unique=True, choices=SECTION_CHOICES)
@@ -186,6 +192,34 @@ class MaterialCertification(models.Model):
         return f"{self.material.model_no} - {self.get_cert_type_display()} - {self.description or self.file.name}"
 
 
+class BrandDocument(models.Model):
+    """
+    Brand-level documents, uploaded once per brand and reused across submittals.
+    Types: country_of_origin, authorization_letter, previous_approval, previous_project.
+    Pulled into a submittal's PDF based on the brand chosen on the title page.
+    """
+    DOC_TYPE_CHOICES = [
+        ('country_of_origin', 'Country of Origin'),
+        ('authorization_letter', 'Authorization Letter'),
+        ('previous_approval', 'Previous Approval'),
+        ('previous_project', 'Previous Project'),
+    ]
+
+    brand = models.ForeignKey(
+        SubmittalBrand, on_delete=models.CASCADE, related_name='documents'
+    )
+    doc_type = models.CharField(max_length=30, choices=DOC_TYPE_CHOICES)
+    file = models.FileField(upload_to=brand_doc_path, max_length=255)
+    description = models.CharField(max_length=255, blank=True, default='')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['brand', 'doc_type', 'uploaded_at']
+
+    def __str__(self):
+        return f"{self.brand.name} - {self.get_doc_type_display()} - {self.description or self.file.name}"
+
+
 class ProjectContractorHistory(models.Model):
     """
     Stores previous project/contractor values for dropdown auto-complete.
@@ -222,6 +256,12 @@ class Submittal(models.Model):
     main_contractor = models.CharField(max_length=255, blank=True, default='')
     mep_contractor = models.CharField(max_length=255, blank=True, default='')
     product = models.CharField(max_length=255, blank=True, default='')
+    title_brand = models.ForeignKey(
+        'SubmittalBrand', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='title_submittals',
+        help_text="Brand shown on the title page. Used to pull brand-level documents "
+                  "(country of origin, authorization letter, previous approvals, previous projects)."
+    )
 
     # Section 2 - Index (ordered list of {label, included, display_label?} dicts, generated with ReportLab)
     index_items = models.JSONField(
@@ -341,18 +381,18 @@ class ComplianceOption(models.Model):
 
 
 class RemarkOption(models.Model):
-    """Brand-specific options for the Remarks dropdown in the compliance statement form."""
-    brand = models.ForeignKey(
-        SubmittalBrand, on_delete=models.CASCADE, related_name='remark_options',
-        help_text="Brand this remark belongs to"
+    """Material-specific options for the Remarks dropdown in the compliance statement form."""
+    material = models.ForeignKey(
+        SubmittalMaterial, on_delete=models.CASCADE, related_name='remark_options',
+        help_text="Material (item) this remark belongs to"
     )
     label = models.TextField(help_text="Remark text (can be multi-line)")
     display_order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ['brand', 'display_order', 'label']
+        ordering = ['material', 'display_order', 'label']
         verbose_name = "Remark Option"
         verbose_name_plural = "Remark Options"
 
     def __str__(self):
-        return f"{self.brand.name}: {self.label[:60]}"
+        return f"{self.material.model_no}: {self.label[:60]}"

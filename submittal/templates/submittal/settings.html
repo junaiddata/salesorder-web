@@ -40,10 +40,10 @@
     </form>
 </div>
 
-<!-- Remark Options by Brand -->
+<!-- Remark Options by Item -->
 <div class="admin-card">
-    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-tag me-2" style="color:var(--primary);opacity:0.8;"></i>Remark Options by Brand</h2>
-    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Remarks dropdown options per brand. Each brand has its own set of remark texts.</p>
+    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-tag me-2" style="color:var(--primary);opacity:0.8;"></i>Remark Options by Item</h2>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Remarks are set per item (material) under each brand. Pick a brand, choose an item, then add or edit its remarks. They appear grouped by item in the compliance statement's Remarks dropdown.</p>
 
     {% if brands %}
     <ul class="nav nav-tabs mb-0" id="brandTabs" role="tablist" style="border-bottom:2px solid var(--border);">
@@ -63,31 +63,22 @@
     <div class="tab-content" style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:1.25rem;">
         {% for brand in brands %}
         <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ brand.pk }}" role="tabpanel">
-            <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.75rem;" id="remarkList-{{ brand.pk }}">
-                {% for opt in brand.remark_options.all %}
-                <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:0.82rem;">
-                    <i class="fas fa-quote-left" style="color:#94a3b8;font-size:0.7rem;flex-shrink:0;margin-top:3px;"></i>
-                    <span style="flex:1;white-space:pre-wrap;" title="{{ opt.label }}">{{ opt.label|truncatechars:120 }}</span>
-                    <form method="post" style="margin:0;flex-shrink:0;">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="delete_remark">
-                        <input type="hidden" name="pk" value="{{ opt.pk }}">
-                        <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:0.82rem;" title="Remove" onclick="return confirm('Remove this remark?');">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </form>
-                </div>
-                {% empty %}
-                <p style="color:var(--text-muted);font-size:0.85rem;font-style:italic;">No remarks yet for {{ brand.name }}.</p>
-                {% endfor %}
+            {% if brand.materials.all %}
+            <div class="mb-3" style="max-width:560px;">
+                <label class="field-label" style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.35rem;">Item (material)</label>
+                <select class="form-select form-select-sm remark-item-select" data-brand="{{ brand.pk }}">
+                    <option value="">— Select an item —</option>
+                    {% for m in brand.materials.all %}
+                    <option value="{{ m.pk }}">{{ m.model_no }}{% with n=m.remark_options.all|length %}{% if n %} ({{ n }}){% endif %}{% endwith %}</option>
+                    {% endfor %}
+                </select>
             </div>
-            <form method="post" class="d-flex gap-2 align-items-end">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_remark">
-                <input type="hidden" name="brand_id" value="{{ brand.pk }}">
-                <textarea name="label" rows="2" placeholder='e.g. "We proposed 10751 Bronze Gate Valve. Comply with bronze body..."' required class="form-control form-control-sm" style="resize:vertical;min-height:52px;max-width:500px;"></textarea>
-                <button type="submit" class="btn btn-admin btn-admin-primary" style="white-space:nowrap;align-self:flex-end;"><i class="fas fa-plus"></i> Add</button>
-            </form>
+            <div class="remark-editor" data-brand="{{ brand.pk }}" data-material="">
+                <p style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">Select an item above to view and edit its remarks.</p>
+            </div>
+            {% else %}
+            <p style="color:var(--text-muted);font-size:0.85rem;">No items yet for {{ brand.name }}. <a href="{% url 'submittal:items_by_brand' brand.pk %}">Import materials</a> first.</p>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -98,4 +89,143 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const CSRF = '{{ csrf_token }}';
+    const SETTINGS_URL = '{% url "submittal:settings" %}';
+    const REMARKS_API_URL = '{% url "submittal:api_remark_options" %}';
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+    }
+
+    function postAction(data) {
+        data.csrfmiddlewaretoken = CSRF;
+        return fetch(SETTINGS_URL, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(data),
+        }).then(r => r.json());
+    }
+
+    function remarkRow(opt) {
+        return `<div class="remark-row" data-pk="${opt.pk}" style="display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem;">
+            <textarea class="form-control form-control-sm remark-text" rows="2" style="resize:vertical;min-height:48px;font-size:0.82rem;">${escapeHtml(opt.label)}</textarea>
+            <button type="button" class="btn btn-admin btn-admin-primary btn-sm remark-save" title="Save changes" style="align-self:flex-start;"><i class="fas fa-save"></i></button>
+            <button type="button" class="btn btn-admin btn-admin-outline btn-sm remark-del" title="Delete remark" style="align-self:flex-start;"><i class="fas fa-trash"></i></button>
+        </div>`;
+    }
+
+    const EMPTY_MSG = '<p class="remark-empty" style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">No remarks yet for this item. Add one below.</p>';
+
+    function renderEditor(editor, materialId, options) {
+        editor.dataset.material = materialId;
+        const rowsHtml = options.length ? options.map(remarkRow).join('') : EMPTY_MSG;
+        editor.innerHTML = `
+            <div class="remark-rows">${rowsHtml}</div>
+            <div style="display:flex;gap:0.5rem;align-items:flex-start;margin-top:0.75rem;border-top:1px dashed var(--border);padding-top:0.85rem;">
+                <textarea class="form-control form-control-sm remark-add-text" rows="2" placeholder="Add a remark for this item…" style="resize:vertical;min-height:48px;font-size:0.82rem;"></textarea>
+                <button type="button" class="btn btn-admin btn-admin-primary btn-sm remark-add" style="white-space:nowrap;align-self:flex-start;"><i class="fas fa-plus"></i> Add</button>
+            </div>`;
+    }
+
+    function updateCount(editor) {
+        const pane = editor.closest('.tab-pane');
+        const sel = pane ? pane.querySelector('.remark-item-select') : null;
+        if (!sel) return;
+        const n = editor.querySelectorAll('.remark-row').length;
+        const opt = sel.querySelector(`option[value="${editor.dataset.material}"]`);
+        if (opt) {
+            const base = opt.textContent.replace(/\s*\(\d+\)\s*$/, '');
+            opt.textContent = n > 0 ? `${base} (${n})` : base;
+        }
+    }
+
+    function ensureEmptyMsg(editor) {
+        const rows = editor.querySelector('.remark-rows');
+        if (rows && !rows.querySelector('.remark-row')) rows.innerHTML = EMPTY_MSG;
+    }
+
+    function flash(btn) {
+        const html = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => { btn.innerHTML = html; }, 1200);
+    }
+
+    // Load an item's remarks when picked from the dropdown.
+    document.addEventListener('change', e => {
+        const sel = e.target.closest('.remark-item-select');
+        if (!sel) return;
+        const pane = sel.closest('.tab-pane');
+        const editor = pane.querySelector('.remark-editor');
+        const materialId = sel.value;
+        if (!materialId) {
+            editor.dataset.material = '';
+            editor.innerHTML = '<p style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">Select an item above to view and edit its remarks.</p>';
+            return;
+        }
+        editor.innerHTML = '<p style="color:var(--text-muted);font-size:0.82rem;">Loading…</p>';
+        fetch(`${REMARKS_API_URL}?material_id=${encodeURIComponent(materialId)}`)
+            .then(r => r.json())
+            .then(d => renderEditor(editor, materialId, d.options || []))
+            .catch(() => { editor.innerHTML = '<p style="color:#b91c1c;font-size:0.82rem;">Failed to load remarks.</p>'; });
+    });
+
+    document.addEventListener('click', e => {
+        // Save an edited remark
+        const saveBtn = e.target.closest('.remark-save');
+        if (saveBtn) {
+            const row = saveBtn.closest('.remark-row');
+            const label = row.querySelector('.remark-text').value.trim();
+            if (!label) { alert('Remark cannot be empty.'); return; }
+            postAction({ action: 'edit_remark', pk: row.dataset.pk, label })
+                .then(d => { if (d.ok) flash(saveBtn); else alert(d.error || 'Could not save.'); });
+            return;
+        }
+        // Delete a remark
+        const delBtn = e.target.closest('.remark-del');
+        if (delBtn) {
+            if (!confirm('Delete this remark?')) return;
+            const row = delBtn.closest('.remark-row');
+            const editor = row.closest('.remark-editor');
+            postAction({ action: 'delete_remark', pk: row.dataset.pk }).then(d => {
+                if (d.ok) { row.remove(); ensureEmptyMsg(editor); updateCount(editor); }
+            });
+            return;
+        }
+        // Add a new remark
+        const addBtn = e.target.closest('.remark-add');
+        if (addBtn) {
+            const editor = addBtn.closest('.remark-editor');
+            const materialId = editor.dataset.material;
+            const ta = editor.querySelector('.remark-add-text');
+            const label = ta.value.trim();
+            if (!materialId) return;
+            if (!label) { alert('Enter a remark.'); return; }
+            postAction({ action: 'add_remark', material_id: materialId, label }).then(d => {
+                if (d.ok && d.option) {
+                    const rows = editor.querySelector('.remark-rows');
+                    const empty = rows.querySelector('.remark-empty');
+                    if (empty) empty.remove();
+                    rows.insertAdjacentHTML('beforeend', remarkRow(d.option));
+                    ta.value = '';
+                    updateCount(editor);
+                } else {
+                    alert(d.error || 'Could not add remark.');
+                }
+            });
+            return;
+        }
+    });
+})();
+</script>
 {% endblock %}
