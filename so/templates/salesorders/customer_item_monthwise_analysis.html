@@ -1,0 +1,336 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customer Item Month-wise Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --text: #1e293b; --text-secondary: #64748b;
+      --text-muted: #94a3b8; --text-placeholder: #94a3b8; --border: #e2e8f0; --border-light: #f1f5f9;
+      --primary: #3b82f6; --primary-dark: #2563eb; --primary-light: #eff6ff; --primary-ghost: #eff6ff;
+      --danger: #ef4444; --danger-light: #fef2f2;
+      --success: #10b981; --radius: 12px; --radius-sm: 8px; --radius-xs: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.08);
+      --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 2px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.875rem; font-weight: 600; text-decoration: none; cursor: pointer; transition: var(--transition); }
+    .btn:hover { background: var(--border-light); }
+    .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+
+    /* Filters */
+    .filters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 20px; }
+    .filters-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+    .field input[type="text"] { height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 0.875rem; font-family: inherit; min-width: 200px; }
+    .field input[type="text"]:focus { outline: none; border-color: var(--primary); }
+
+    .salesman-box { position: relative; }
+    .salesman-toggle { min-width: 200px; justify-content: space-between; }
+    .salesman-dropdown { display: none; position: absolute; z-index: 30; top: 44px; left: 0; width: 280px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 8px; }
+    .salesman-dropdown.open { display: block; }
+    .salesman-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; cursor: pointer; }
+    .salesman-dropdown label:hover { background: var(--border-light); }
+    .salesman-dropdown input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+    /* Summary */
+    .summary { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 18px; min-width: 170px; }
+    .stat .label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+    .stat .value { font-size: 1.4rem; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    /* Table */
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .table-scroll { overflow-x: auto; }
+    table.main-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    .main-table thead th { background: var(--border-light); color: var(--text-secondary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 11px 12px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .main-table thead th.col-customer { text-align: left; }
+    .main-table tbody td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
+    .main-table tbody td.col-customer { text-align: left; }
+    .customer-code { font-size: 0.68rem; color: var(--text-muted); }
+    .customer-name-txt { font-weight: 600; }
+    .text-center { text-align: center; }
+
+    /* Expand */
+    .expand-cell { width: 34px; text-align: center; }
+    .expand-btn { width: 26px; height: 26px; border: none; background: var(--bg); border-radius: var(--radius-xs); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.65rem; transition: all var(--transition); }
+    .expand-btn:hover { background: var(--primary-light); color: var(--primary); }
+    .customer-row.expanded .expand-btn { background: var(--primary-light); color: var(--primary); transform: rotate(90deg); }
+    .customer-row { cursor: pointer; }
+    .customer-row:hover td { background: #fafcff; }
+
+    .item-details { display: none; }
+    .customer-row.expanded + .item-details { display: table-row; }
+    .item-details td { padding: 0; background: var(--bg); border-bottom: 2px solid var(--border); }
+    .detail-inner { padding: 14px 18px 18px 40px; }
+
+    table.item-month-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; white-space: nowrap; background: var(--surface); border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+    .item-month-table th { background: #eef2f7; color: var(--text-secondary); font-weight: 700; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+    .item-month-table th.col-item { text-align: left; }
+    .item-month-table th.col-metric { text-align: left; }
+    .item-month-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
+    .item-month-table td.col-item { text-align: left; font-weight: 600; vertical-align: top; background: #fbfdff; border-right: 1px solid var(--border); }
+    .item-month-table td.col-item .item-desc { display: block; font-weight: 400; color: var(--text-secondary); font-size: 0.68rem; margin-top: 2px; white-space: normal; max-width: 220px; }
+    .item-month-table td.col-metric { text-align: left; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .item-month-table tr.metric-gp td { color: var(--success); }
+    .item-month-table tr.metric-last td { border-bottom: 2px solid var(--border); }
+    .item-month-table td.col-total { font-weight: 700; background: #fbfdff; border-left: 1px solid var(--border); }
+    .item-month-table th.col-total { border-left: 1px solid var(--border); }
+    .zero { color: var(--text-muted); }
+
+    .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); }
+
+    .pagination-bar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-top: 1px solid var(--border); }
+    .pagination-bar button { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-xs); height: 32px; padding: 0 12px; cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .pagination-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination-bar span { font-size: 0.85rem; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Customer Item Month-wise Analysis</h1>
+        <p>Per-customer items with Qty{% if is_admin %} / Avg Rate / GP%{% else %} / Avg Rate{% endif %} by month &mdash; {{ period_label }}</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn" id="expand-all-btn"><i class="fas fa-expand-alt"></i> Expand All</button>
+        <button type="button" class="btn" id="collapse-all-btn"><i class="fas fa-compress-alt"></i> Collapse All</button>
+        <a href="{% url 'home' %}" class="btn"><i class="fas fa-arrow-left"></i> Back to Home</a>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <form method="get" id="filter-form" class="filters">
+      <input type="hidden" name="page" id="page-input" value="{{ page_obj.number }}">
+      <div class="filters-row">
+        <div class="field salesman-box">
+          <label>Salesman</label>
+          <button type="button" class="btn salesman-toggle" id="salesman-toggle">
+            <span>
+              {% if selected_salesmen %}{{ selected_salesmen|length }} selected{% else %}All salesmen{% endif %}
+            </span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="salesman-dropdown" id="salesman-dropdown">
+            {% for sm in salesmen %}
+            <label>
+              <input type="checkbox" name="salesman" value="{{ sm }}" {% if sm in selected_salesmen %}checked{% endif %}>
+              <span>{{ sm }}</span>
+            </label>
+            {% empty %}
+            <div style="padding:8px;color:var(--text-muted);font-size:0.85rem;">No salesmen</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="customer">Customer</label>
+          <input type="text" name="customer" id="customer" placeholder="Name or code…" value="{{ customer_search }}">
+        </div>
+
+        <div class="field">
+          <label for="item">Item</label>
+          <input type="text" name="item" id="item" placeholder="Item code or description…" value="{{ item_search }}">
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary" onclick="document.getElementById('page-input').value=1;"><i class="fas fa-filter"></i> Apply</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Summary -->
+    <div class="summary">
+      <div class="stat">
+        <div class="label">Total Sales</div>
+        <div class="value">{{ grand_total_amt|floatformat:0|intcomma }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Qty</div>
+        <div class="value">{{ grand_total_qty|floatformat:0|intcomma }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Customers</div>
+        <div class="value">{{ total_customers|intcomma }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Period</div>
+        <div class="value">{{ period_label }}</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      {% if customers %}
+      <div class="table-scroll">
+        <table class="main-table">
+          <thead>
+            <tr>
+              <th class="expand-cell"></th>
+              <th class="col-customer">Customer</th>
+              <th>Total Qty</th>
+              <th>Total Sales</th>
+              {% if is_admin %}<th>GP %</th>{% endif %}
+              <th class="text-center">Items</th>
+            </tr>
+          </thead>
+          <tbody id="analysis-tbody">
+            {% for cust in customers %}
+            <tr class="customer-row">
+              <td class="expand-cell"><button type="button" class="expand-btn" aria-label="Expand row"><i class="fas fa-chevron-right"></i></button></td>
+              <td class="col-customer">
+                <span class="customer-name-txt">{{ cust.customer_name }}</span>
+                <span class="customer-code">{{ cust.customer_code }}</span>
+              </td>
+              <td>{{ cust.total_qty|floatformat:0|intcomma }}</td>
+              <td>{{ cust.total_amt|floatformat:0|intcomma }}</td>
+              {% if is_admin %}<td>{{ cust.gp_pct|floatformat:1 }}%</td>{% endif %}
+              <td class="text-center">{{ cust.item_count }}</td>
+            </tr>
+            <tr class="item-details">
+              <td colspan="{% if is_admin %}6{% else %}5{% endif %}">
+                <div class="detail-inner">
+                  <table class="item-month-table">
+                    <thead>
+                      <tr>
+                        <th class="col-item">Item</th>
+                        <th class="col-metric">Metric</th>
+                        {% for m in months %}<th>{{ m.label }}</th>{% endfor %}
+                        {% for yr in years %}<th class="col-total">{{ yr }} Total</th>{% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in cust.items %}
+                      <tr class="metric-qty">
+                        <td class="col-item" rowspan="{% if is_admin %}3{% else %}2{% endif %}">
+                          {{ item.item_code }}
+                          <span class="item-desc">{{ item.description }}</span>
+                        </td>
+                        <td class="col-metric">Qty</td>
+                        {% for c in item.cells %}
+                        <td {% if not c.qty %}class="zero"{% endif %}>{% if c.qty %}{{ c.qty|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                        {% for yt in item.year_totals %}
+                        <td class="col-total">{% if yt.qty %}{{ yt.qty|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                      </tr>
+                      <tr class="metric-rate {% if not is_admin %}metric-last{% endif %}">
+                        <td class="col-metric">Avg Rate</td>
+                        {% for c in item.cells %}
+                        <td {% if not c.rate %}class="zero"{% endif %}>{% if c.rate %}{{ c.rate|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                        {% for yt in item.year_totals %}
+                        <td class="col-total">{% if yt.rate %}{{ yt.rate|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                      </tr>
+                      {% if is_admin %}
+                      <tr class="metric-gp metric-last">
+                        <td class="col-metric">GP %</td>
+                        {% for c in item.cells %}
+                        <td {% if not c.qty %}class="zero"{% endif %}>{% if c.qty %}{{ c.gp_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                        {% for yt in item.year_totals %}
+                        <td class="col-total">{% if yt.qty %}{{ yt.gp_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                      </tr>
+                      {% endif %}
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                  {% if cust.items_truncated %}
+                  <p style="margin-top:10px;font-size:0.75rem;color:var(--text-muted);">
+                    Showing top {{ cust.items|length }} of {{ cust.item_count }} items by sales value &mdash;
+                    use the Item filter above to search the rest.
+                  </p>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.paginator.num_pages > 1 %}
+      <div class="pagination-bar">
+        <button type="submit" form="filter-form" {% if not page_obj.has_previous %}disabled{% endif %} onclick="document.getElementById('page-input').value={{ page_obj.number|add:"-1" }};">
+          <i class="fas fa-chevron-left"></i> Prev
+        </button>
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <button type="submit" form="filter-form" {% if not page_obj.has_next %}disabled{% endif %} onclick="document.getElementById('page-input').value={{ page_obj.number|add:"1" }};">
+          Next <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="empty">
+        <i class="fas fa-inbox" style="font-size:2rem;opacity:0.4;"></i>
+        <p style="margin-top:10px;">No sold data found for the selected filters.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // Salesman multi-select dropdown open/close
+    var toggle = document.getElementById('salesman-toggle');
+    var dropdown = document.getElementById('salesman-dropdown');
+    if (toggle && dropdown) {
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { dropdown.classList.remove('open'); });
+    }
+
+    // Row expand / collapse
+    var tbody = document.getElementById('analysis-tbody');
+    var expandAllBtn = document.getElementById('expand-all-btn');
+    var collapseAllBtn = document.getElementById('collapse-all-btn');
+
+    function getAllCustomerRows() {
+      return tbody ? Array.from(tbody.querySelectorAll('.customer-row')) : [];
+    }
+
+    if (tbody) {
+      tbody.addEventListener('click', function (e) {
+        var row = e.target.closest('.customer-row');
+        if (!row) return;
+        row.classList.toggle('expanded');
+      });
+    }
+    if (expandAllBtn) {
+      expandAllBtn.addEventListener('click', function () {
+        getAllCustomerRows().forEach(function (r) { r.classList.add('expanded'); });
+      });
+    }
+    if (collapseAllBtn) {
+      collapseAllBtn.addEventListener('click', function () {
+        getAllCustomerRows().forEach(function (r) { r.classList.remove('expanded'); });
+      });
+    }
+  })();
+  </script>
+</body>
+</html>
