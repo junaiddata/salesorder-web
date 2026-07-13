@@ -56,6 +56,11 @@ def _month_columns():
                     'year': yr, 'month': month_num,
                     'label': f"{MONTH_NAMES_SHORT[month_num - 1]}-{str(yr)[2:]}",
                 })
+    # Mark the last column of each month-name group (e.g. Jan-26, right before
+    # Feb-25 starts) so the table can draw a thicker divider there.
+    for i, m in enumerate(months):
+        is_last = (i == len(months) - 1) or (months[i + 1]['month'] != m['month'])
+        m['group_end'] = is_last
     return months
 
 
@@ -251,13 +256,14 @@ def _compute_customer_item_monthwise(request):
     }
 
 
-def _build_item_details(customers_raw, codes, n_months, years, year_col_indices,
+def _build_item_details(customers_raw, codes, months, years, year_col_indices,
                          max_items_per_customer=MAX_ITEMS_PER_CUSTOMER):
     """Build the expensive month-by-month item grid (cells/year_totals) for
     just the given customer codes — deferred out of _compute_customer_item_monthwise
     so a paginated HTML page or a capped PDF slice only pays for what it shows.
     Returns {code: {'items': [...], 'item_count', 'items_truncated', 'hidden_item_count'}}.
     """
+    n_months = len(months)
     details = {}
     for code in codes:
         cust = customers_raw.get(code)
@@ -292,6 +298,7 @@ def _build_item_details(customers_raw, codes, n_months, years, year_col_indices,
                     'rate': (a / q) if q else Decimal('0'),
                     'avg_gp': (g / q) if q else Decimal('0'),
                     'gp_pct': _pct(g, a),
+                    'group_end': months[i]['group_end'],
                 })
             # Per-year totals (2025 and 2026 kept separate, not blended together) —
             # each year's avg rate/avg GP/GP% is computed from that year's own qty/amt/gp sums.
@@ -338,7 +345,7 @@ def customer_item_monthwise_analysis(request):
     # this page — not all of them (see _build_item_details docstring).
     page_codes = [c['customer_code'] for c in page_obj]
     details = _build_item_details(
-        ctx['customers_raw'], page_codes, ctx['n_months'], ctx['years'], ctx['year_col_indices'],
+        ctx['customers_raw'], page_codes, ctx['months'], ctx['years'], ctx['year_col_indices'],
     )
     for cust in page_obj:
         cust.update(details.get(cust['customer_code'], {'items': [], 'item_count': 0,
@@ -559,7 +566,7 @@ def export_customer_item_monthwise_analysis_pdf(request):
     pdf_customers = customer_rows[:PDF_MAX_CUSTOMERS]
     pdf_details = _build_item_details(
         ctx['customers_raw'], [c['customer_code'] for c in pdf_customers],
-        ctx['n_months'], ctx['years'], ctx['year_col_indices'],
+        ctx['months'], ctx['years'], ctx['year_col_indices'],
         max_items_per_customer=PDF_MAX_ITEMS_PER_CUSTOMER,
     )
 

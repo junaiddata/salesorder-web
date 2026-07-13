@@ -18,6 +18,7 @@ from . import historical_sales_views
 from . import accounts_recording_views
 from . import brandwise_sales_analysis_views
 from . import customer_item_monthwise_analysis_views
+from . import customer_item_yearwise_analysis_views
 
 urlpatterns = [
     path('upload-items/', views.upload_items, name='upload_items'),
@@ -203,6 +204,8 @@ urlpatterns += [
     path('saparinvoices/brandwise-sales-analysis/export-pdf/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_pdf, name='export_brandwise_sales_analysis_pdf'),
     path('saparinvoices/customer-item-monthwise-analysis/', customer_item_monthwise_analysis_views.customer_item_monthwise_analysis, name='customer_item_monthwise_analysis'),
     path('saparinvoices/customer-item-monthwise-analysis/export-pdf/', customer_item_monthwise_analysis_views.export_customer_item_monthwise_analysis_pdf, name='export_customer_item_monthwise_analysis_pdf'),
+    path('saparinvoices/customer-item-yearwise-analysis/', customer_item_yearwise_analysis_views.customer_item_yearwise_analysis, name='customer_item_yearwise_analysis'),
+    path('saparinvoices/customer-item-yearwise-analysis/export-pdf/', customer_item_yearwise_analysis_views.export_customer_item_yearwise_analysis_pdf, name='export_customer_item_yearwise_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/export-pdf/', item_quoted_analysis_pdf_export.export_item_quoted_analysis_pdf, name='export_item_quoted_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/save-proposed-qty/', quotation_item_analysis_views.save_proposed_quantity, name='save_proposed_quantity'),
     path('saparinvoices/item-quoted-analysis/reset-proposed-qty/', quotation_item_analysis_views.reset_proposed_quantities, name='reset_proposed_quantities'),

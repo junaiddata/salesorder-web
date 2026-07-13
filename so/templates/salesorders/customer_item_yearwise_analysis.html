@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Customer Item Month-wise Analysis</title>
+  <title>Customer Item Year-wise Analysis</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -43,7 +43,7 @@
     .field > input[type="text"] { height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 0.875rem; font-family: inherit; min-width: 200px; }
     .field > input[type="text"]:focus { outline: none; border-color: var(--primary); }
 
-    /* Multi-select (Salesman) — same searchable design as Brandwise Sales Analysis */
+    /* Multi-select (Salesman / Firm) — searchable dropdown */
     .multi-select { position: relative; width: 260px; min-width: 220px; }
     .select-box { padding: 0 14px; min-height: 38px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8125rem; font-family: var(--font); transition: all var(--transition); }
     .select-box:hover { border-color: #94a3b8; }
@@ -105,7 +105,7 @@
     .main-table thead th.col-customer { text-align: left; }
     .main-table tbody td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
     .main-table tbody td.col-customer { text-align: left; }
-    .customer-code { font-size: 0.68rem; color: var(--text-muted); }
+    .customer-code-txt { font-size: 0.68rem; color: var(--text-muted); }
     .customer-name-txt { font-weight: 600; }
     .text-center { text-align: center; }
 
@@ -122,22 +122,17 @@
     .item-details td { padding: 0; background: var(--bg); border-bottom: 2px solid var(--border); }
     .detail-inner { padding: 14px 18px 18px 40px; }
 
-    table.item-month-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; white-space: nowrap; background: var(--surface); border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
-    .item-month-table th { background: #eef2f7; color: var(--text-secondary); font-weight: 700; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-light); }
-    .item-month-table th.col-item { text-align: left; }
-    .item-month-table th.col-metric { text-align: left; }
-    .item-month-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border-light); border-right: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
-    .item-month-table td.col-item { text-align: left; font-weight: 600; vertical-align: top; background: #fbfdff; border-right: 1px solid var(--border); }
-    .item-month-table td.col-item .item-desc { display: block; font-weight: 400; color: var(--text-secondary); font-size: 0.68rem; margin-top: 2px; white-space: normal; max-width: 220px; }
-    .item-month-table td.col-metric { text-align: left; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-    .item-month-table tr.metric-gp td { color: var(--success); }
-    .item-month-table tr.metric-last td { border-bottom: 2px solid var(--border); }
-    .item-month-table td.col-total { font-weight: 700; background: #fbfdff; border-left: 1px solid var(--border); border-right: none; }
-    .item-month-table th.col-total { border-left: 1px solid var(--border); border-right: none; }
-    /* Thick divider after each month's paired year columns (e.g. after Jan-26,
-       before Feb-25 starts) so the 2025/2026 pairs read as visually grouped. */
-    .item-month-table th.col-group-end, .item-month-table td.col-group-end { border-right: 2px solid var(--text-secondary); }
-    .zero { color: var(--text-muted); }
+    table.year-item-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; white-space: nowrap; background: var(--surface); border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+    .year-item-table th { background: #eef2f7; color: var(--text-secondary); font-weight: 700; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-light); }
+    .year-item-table th.col-item { text-align: left; }
+    .year-item-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border-light); border-right: 1px solid var(--border-light); font-variant-numeric: tabular-nums; }
+    .year-item-table td.col-item { text-align: left; font-weight: 600; background: #fbfdff; border-right: 1px solid var(--border); }
+    .year-item-table td.col-item .item-code { display: block; font-weight: 400; color: var(--text-secondary); font-size: 0.68rem; margin-top: 2px; }
+    .year-item-table td.col-total { font-weight: 700; background: #fbfdff; border-left: 1px solid var(--border); border-right: none; }
+    .year-item-table th.col-total { border-left: 1px solid var(--border); border-right: none; }
+    .year-item-table .zero { color: var(--text-muted); }
+    .year-item-table th.col-year-end, .year-item-table td.col-year-end { border-right: 2px solid var(--text-secondary); }
+    .gp-cell { color: var(--success); }
 
     .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); }
 
@@ -155,13 +150,13 @@
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <h1>Customer Item Month-wise Analysis</h1>
-        <p>Per-customer items with Qty{% if is_admin %} / Avg Rate / Avg GP / GP%{% else %} / Avg Rate{% endif %} by month &mdash; {{ period_label }}</p>
+        <h1>Customer Item Year-wise Analysis</h1>
+        <p>Per-customer Sales / Qty{% if is_admin %} / GP%{% endif %} by year ({{ years|last }}&ndash;{{ years|first }}), with the items they bought underneath each customer</p>
       </div>
       <div class="header-actions">
         <button type="button" class="btn" id="expand-all-btn"><i class="fas fa-expand-alt"></i> Expand All</button>
         <button type="button" class="btn" id="collapse-all-btn"><i class="fas fa-compress-alt"></i> Collapse All</button>
-        <a href="{% url 'export_customer_item_monthwise_analysis_pdf' %}" data-export="pdf" id="export-pdf-btn" target="_blank" class="btn btn-success">
+        <a href="{% url 'export_customer_item_yearwise_analysis_pdf' %}" data-export="pdf" id="export-pdf-btn" target="_blank" class="btn btn-success">
           <span class="btn-spinner"></span>
           <i class="fas fa-file-pdf btn-icon"></i> <span class="btn-label">Export PDF</span>
         </a>
@@ -247,8 +242,8 @@
         </div>
 
         <div class="field">
-          <label for="item">Item</label>
-          <input type="text" name="item" id="item" placeholder="Item code or description…" value="{{ item_search }}">
+          <label for="q">Item</label>
+          <input type="text" name="q" id="q" placeholder="Item code, description or UPC…" value="{{ item_search }}">
         </div>
 
         <div class="field">
@@ -258,8 +253,8 @@
               <span class="btn-spinner"></span>
               <i class="fas fa-filter btn-icon"></i> Apply
             </button>
-            {% if selected_salesmen or selected_firms or customer_search or item_search %}
-            <a href="{% url 'customer_item_monthwise_analysis' %}" class="btn" id="clear-filters-btn"><i class="fas fa-times"></i> Clear</a>
+            {% if selected_salesmen or selected_firms or item_search or customer_search %}
+            <a href="{% url 'customer_item_yearwise_analysis' %}" class="btn" id="clear-filters-btn"><i class="fas fa-times"></i> Clear</a>
             {% endif %}
           </div>
         </div>
@@ -268,21 +263,15 @@
 
     <!-- Summary -->
     <div class="summary">
+      {% for gt in grand_year_totals %}
       <div class="stat">
-        <div class="label">Total Sales</div>
-        <div class="value">{{ grand_total_amt|floatformat:0|intcomma }}</div>
+        <div class="label">{{ gt.year }} Sales</div>
+        <div class="value">{{ gt.sales|floatformat:0|intcomma }}</div>
       </div>
-      <div class="stat">
-        <div class="label">Total Qty</div>
-        <div class="value">{{ grand_total_qty|floatformat:0|intcomma }}</div>
-      </div>
+      {% endfor %}
       <div class="stat">
         <div class="label">Customers</div>
         <div class="value">{{ total_customers|intcomma }}</div>
-      </div>
-      <div class="stat">
-        <div class="label">Period</div>
-        <div class="value">{{ period_label }}</div>
       </div>
     </div>
 
@@ -295,9 +284,7 @@
             <tr>
               <th class="expand-cell"></th>
               <th class="col-customer">Customer</th>
-              <th>Total Qty</th>
-              <th>Total Sales</th>
-              {% if is_admin %}<th>GP %</th>{% endif %}
+              {% for yr in years %}<th>{{ yr }} Sales</th>{% endfor %}
               <th class="text-center">Items</th>
             </tr>
           </thead>
@@ -307,73 +294,50 @@
               <td class="expand-cell"><button type="button" class="expand-btn" aria-label="Expand row"><i class="fas fa-chevron-right"></i></button></td>
               <td class="col-customer">
                 <span class="customer-name-txt">{{ cust.customer_name }}</span>
-                <span class="customer-code">{{ cust.customer_code }}</span>
+                <span class="customer-code-txt">{{ cust.customer_code }}</span>
               </td>
-              <td>{{ cust.total_qty|floatformat:0|intcomma }}</td>
-              <td>{{ cust.total_amt|floatformat:0|intcomma }}</td>
-              {% if is_admin %}<td>{{ cust.gp_pct|floatformat:1 }}%</td>{% endif %}
+              {% for yd in cust.year_list %}<td>{% if yd.sales %}{{ yd.sales|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>{% endfor %}
               <td class="text-center">{{ cust.item_count }}</td>
             </tr>
             <tr class="item-details">
-              <td colspan="{% if is_admin %}6{% else %}5{% endif %}">
+              <td colspan="{{ years|length|add:3 }}">
                 <div class="detail-inner">
-                  <table class="item-month-table">
+                  <table class="year-item-table">
                     <thead>
                       <tr>
                         <th class="col-item">Item</th>
-                        <th class="col-metric">Metric</th>
-                        {% for m in months %}<th{% if m.group_end %} class="col-group-end"{% endif %}>{{ m.label }}</th>{% endfor %}
-                        {% for yr in years %}<th class="col-total">{{ yr }} Total</th>{% endfor %}
+                        {% for yr in years %}
+                        <th>{{ yr }} Sales</th>
+                        <th>{{ yr }} Qty</th>
+                        {% if is_admin %}<th class="col-year-end">{{ yr }} GP%</th>{% else %}<th class="col-year-end">&nbsp;</th>{% endif %}
+                        {% endfor %}
+                        <th class="col-total">Total Sales</th>
                       </tr>
                     </thead>
                     <tbody>
                       {% for item in cust.items %}
-                      <tr class="metric-qty">
-                        <td class="col-item" rowspan="{% if is_admin %}4{% else %}2{% endif %}">
-                          {{ item.item_code }}
-                          <span class="item-desc">{{ item.description }}</span>
+                      <tr>
+                        <td class="col-item">
+                          {{ item.description|default:"Unknown" }}
+                          <span class="item-code">{{ item.item_code }}</span>
                         </td>
-                        <td class="col-metric">Qty</td>
-                        {% for c in item.cells %}
-                        <td class="{% if not c.qty %}zero {% endif %}{% if c.group_end %}col-group-end{% endif %}">{% if c.qty %}{{ c.qty|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% for yd in item.year_list %}
+                        <td {% if not yd.sales %}class="zero"{% endif %}>{% if yd.sales %}{{ yd.sales|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        <td {% if not yd.qty %}class="zero"{% endif %}>{% if yd.qty %}{{ yd.qty|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% if is_admin %}
+                        <td class="col-year-end gp-cell {% if not yd.sales %}zero{% endif %}">{% if yd.sales %}{{ yd.gp_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
+                        {% else %}
+                        <td class="col-year-end">&nbsp;</td>
+                        {% endif %}
                         {% endfor %}
-                        {% for yt in item.year_totals %}
-                        <td class="col-total">{% if yt.qty %}{{ yt.qty|floatformat:0|intcomma }}{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
+                        <td class="col-total">{{ item.total_sales|floatformat:0|intcomma }}</td>
                       </tr>
-                      <tr class="metric-rate {% if not is_admin %}metric-last{% endif %}">
-                        <td class="col-metric">Avg Rate</td>
-                        {% for c in item.cells %}
-                        <td class="{% if not c.rate %}zero {% endif %}{% if c.group_end %}col-group-end{% endif %}">{% if c.rate %}{{ c.rate|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                        {% for yt in item.year_totals %}
-                        <td class="col-total">{% if yt.rate %}{{ yt.rate|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                      </tr>
-                      {% if is_admin %}
-                      <tr class="metric-gp">
-                        <td class="col-metric">Avg GP</td>
-                        {% for c in item.cells %}
-                        <td class="{% if not c.qty %}zero {% endif %}{% if c.group_end %}col-group-end{% endif %}">{% if c.qty %}{{ c.avg_gp|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                        {% for yt in item.year_totals %}
-                        <td class="col-total">{% if yt.qty %}{{ yt.avg_gp|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                      </tr>
-                      <tr class="metric-gp metric-last">
-                        <td class="col-metric">GP %</td>
-                        {% for c in item.cells %}
-                        <td class="{% if not c.qty %}zero {% endif %}{% if c.group_end %}col-group-end{% endif %}">{% if c.qty %}{{ c.gp_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                        {% for yt in item.year_totals %}
-                        <td class="col-total">{% if yt.qty %}{{ yt.gp_pct|floatformat:1 }}%{% else %}&ndash;{% endif %}</td>
-                        {% endfor %}
-                      </tr>
-                      {% endif %}
+                      {% empty %}
+                      <tr><td colspan="{{ nested_colspan }}" style="color:var(--text-muted);">No item details available.</td></tr>
                       {% endfor %}
                     </tbody>
                   </table>
-                  {% if cust.items_truncated %}
+                  {% if cust.truncated %}
                   <p style="margin-top:10px;font-size:0.75rem;color:var(--text-muted);">
                     Showing top {{ cust.items|length }} of {{ cust.item_count }} items by sales value &mdash;
                     use the Item filter above to search the rest.
@@ -400,7 +364,7 @@
       {% else %}
       <div class="empty">
         <i class="fas fa-inbox" style="font-size:2rem;opacity:0.4;"></i>
-        <p style="margin-top:10px;">No sold data found for the selected filters.</p>
+        <p style="margin-top:10px;">No customers found for the selected filters.</p>
       </div>
       {% endif %}
     </div>
@@ -410,8 +374,7 @@
   (function() {
     'use strict';
 
-    // Searchable multi-select (shared by Salesman and Firm filters — same
-    // behaviour as Brandwise Sales Analysis' Brand filter)
+    // Searchable multi-select (shared by Salesman and Firm filters)
     function initMultiSelect(prefix, placeholderText) {
       var wrapper   = document.getElementById(prefix + '-wrapper');
       var trigger   = document.getElementById(prefix + '-trigger');
@@ -523,12 +486,7 @@
     })();
 
     // Export PDF — a genuine <a target="_blank"> navigation (carrying the
-    // current filters via the query string), so the browser opens and drives
-    // the new tab itself; it shows its own native loading state while the PDF
-    // streams in. (An earlier fetch()-blob-into-a-popup version occasionally
-    // left the new tab blank — blob: URLs created in the opener aren't always
-    // navigable from a separate window depending on the browser, so this
-    // reverts to a plain, reliable link.) The button spinner is purely a
+    // current filters via the query string); the button spinner is just a
     // click-acknowledgement pulse, not tied to when the PDF actually finishes.
     (function () {
       var exportBtn = document.getElementById('export-pdf-btn');
