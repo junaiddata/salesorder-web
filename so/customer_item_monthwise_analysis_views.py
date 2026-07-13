@@ -177,19 +177,113 @@ def _compute_customer_item_monthwise(request):
     _accumulate(cm_rows, 'credit_memo__customer_code', 'credit_memo__customer_name',
                 'credit_memo__posting_date__year', 'credit_memo__posting_date__month')
 
-    # ── Build display rows ───────────────────────────────────────
+    # ── Build lightweight display rows (totals only) ──────────────
+    # Building the full month-by-month cell grid (cells/year_totals — several
+    # Decimal divisions per item per month) for every one of potentially
+    # hundreds of customers, when only a page of ~15 (or a capped PDF slice)
+    # is ever actually displayed, is the expensive part of this view. So this
+    # pass only sums qty/amt/gp per item (cheap — no division) to get customer
+    # totals for sorting/pagination; the per-item month grid is built lazily,
+    # on demand, by _build_item_details() for just the customers being shown.
     customer_rows = []
     for code, cust in customers.items():
-        item_rows = []
         cust_total_amt = Decimal('0')
         cust_total_qty = Decimal('0')
         cust_total_gp = Decimal('0')
+        item_count = 0
         for item_code, d in cust['items'].items():
             total_qty = sum(d['qty'], Decimal('0'))
             total_amt = sum(d['amt'], Decimal('0'))
             total_gp = sum(d['gp'], Decimal('0'))
             if not total_qty and not total_amt:
                 continue
+            item_count += 1
+            cust_total_amt += total_amt
+            cust_total_qty += total_qty
+            cust_total_gp += total_gp
+        if not item_count:
+            continue
+        customer_rows.append({
+            'customer_code': code,
+            'customer_name': cust['name'],
+            'item_count': item_count,
+            'total_qty': cust_total_qty,
+            'total_amt': cust_total_amt,
+            'gp_pct': _pct(cust_total_gp, cust_total_amt),
+        })
+    customer_rows.sort(key=lambda r: r['total_amt'], reverse=True)
+
+    grand_total_amt = sum((r['total_amt'] for r in customer_rows), Decimal('0'))
+    grand_total_qty = sum((r['total_qty'] for r in customer_rows), Decimal('0'))
+
+    # ── Salesman list for the filter dropdown (scoped) ────────────
+    salesmen = list(
+        SAPARInvoice.objects.filter(scope_q)
+        .exclude(salesman_name__isnull=True).exclude(salesman_name='')
+        .exclude(salesman_name__iexact='Z.DUTY')
+        .values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
+    )
+
+    # ── Firm list for the filter dropdown (all firms in Items) ────
+    firms = list(
+        Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='')
+        .values_list('item_firm', flat=True).distinct().order_by('item_firm')
+    )
+
+    return {
+        'months': months,
+        'years': years,
+        'year_col_indices': year_col_indices,
+        'n_months': n_months,
+        'customers_raw': customers,   # code -> {'name','items': {item_code: {'description','qty':[],'amt':[],'gp':[]}}}
+        'customer_rows': customer_rows,
+        'total_customers': len(customer_rows),
+        'grand_total_amt': grand_total_amt,
+        'grand_total_qty': grand_total_qty,
+        'is_admin': is_admin,
+        'salesmen': salesmen,
+        'selected_salesmen': selected_salesmen,
+        'firms': firms,
+        'selected_firms': selected_firms,
+        'customer_search': customer_search,
+        'item_search': item_search,
+        'period_label': f"Jan 2025 – {MONTH_NAMES_SHORT[end_date.month - 1]} {end_date.year}",
+    }
+
+
+def _build_item_details(customers_raw, codes, n_months, years, year_col_indices,
+                         max_items_per_customer=MAX_ITEMS_PER_CUSTOMER):
+    """Build the expensive month-by-month item grid (cells/year_totals) for
+    just the given customer codes — deferred out of _compute_customer_item_monthwise
+    so a paginated HTML page or a capped PDF slice only pays for what it shows.
+    Returns {code: {'items': [...], 'item_count', 'items_truncated', 'hidden_item_count'}}.
+    """
+    details = {}
+    for code in codes:
+        cust = customers_raw.get(code)
+        if not cust:
+            continue
+
+        # Phase 1 (cheap — sums only, no division): rank every item by total
+        # sales so we know which ones actually need the expensive month grid.
+        # Some customers carry 500-800+ distinct items; building the full
+        # cells/year_totals grid for all of them just to show the top 40 (or
+        # top 10 in the PDF) would waste most of that work.
+        ranked = []
+        for item_code, d in cust['items'].items():
+            total_qty = sum(d['qty'], Decimal('0'))
+            total_amt = sum(d['amt'], Decimal('0'))
+            total_gp = sum(d['gp'], Decimal('0'))
+            if not total_qty and not total_amt:
+                continue
+            ranked.append((item_code, d, total_qty, total_amt, total_gp))
+        ranked.sort(key=lambda r: r[3], reverse=True)
+        full_item_count = len(ranked)
+        to_detail = ranked[:max_items_per_customer]
+
+        # Phase 2 (expensive — per-month division): only for the shown items.
+        item_rows = []
+        for item_code, d, total_qty, total_amt, total_gp in to_detail:
             cells = []
             for i in range(n_months):
                 q, a, g = d['qty'][i], d['amt'][i], d['gp'][i]
@@ -223,60 +317,13 @@ def _compute_customer_item_monthwise(request):
                 'total_gp': total_gp,
                 'year_totals': year_totals,
             })
-            cust_total_amt += total_amt
-            cust_total_qty += total_qty
-            cust_total_gp += total_gp
-        if not item_rows:
-            continue
-        item_rows.sort(key=lambda r: r['total_amt'], reverse=True)
-        full_item_count = len(item_rows)
-        shown_items = item_rows[:MAX_ITEMS_PER_CUSTOMER]
-        customer_rows.append({
-            'customer_code': code,
-            'customer_name': cust['name'],
-            'items': shown_items,
+        details[code] = {
+            'items': item_rows,
             'item_count': full_item_count,
-            'items_truncated': full_item_count > len(shown_items),
-            'hidden_item_count': full_item_count - len(shown_items),
-            'total_qty': cust_total_qty,
-            'total_amt': cust_total_amt,
-            'gp_pct': _pct(cust_total_gp, cust_total_amt),
-        })
-    customer_rows.sort(key=lambda r: r['total_amt'], reverse=True)
-
-    grand_total_amt = sum((r['total_amt'] for r in customer_rows), Decimal('0'))
-    grand_total_qty = sum((r['total_qty'] for r in customer_rows), Decimal('0'))
-
-    # ── Salesman list for the filter dropdown (scoped) ────────────
-    salesmen = list(
-        SAPARInvoice.objects.filter(scope_q)
-        .exclude(salesman_name__isnull=True).exclude(salesman_name='')
-        .exclude(salesman_name__iexact='Z.DUTY')
-        .values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
-    )
-
-    # ── Firm list for the filter dropdown (all firms in Items) ────
-    firms = list(
-        Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='')
-        .values_list('item_firm', flat=True).distinct().order_by('item_firm')
-    )
-
-    return {
-        'months': months,
-        'years': years,
-        'customer_rows': customer_rows,
-        'total_customers': len(customer_rows),
-        'grand_total_amt': grand_total_amt,
-        'grand_total_qty': grand_total_qty,
-        'is_admin': is_admin,
-        'salesmen': salesmen,
-        'selected_salesmen': selected_salesmen,
-        'firms': firms,
-        'selected_firms': selected_firms,
-        'customer_search': customer_search,
-        'item_search': item_search,
-        'period_label': f"Jan 2025 – {MONTH_NAMES_SHORT[end_date.month - 1]} {end_date.year}",
-    }
+            'items_truncated': full_item_count > len(item_rows),
+            'hidden_item_count': full_item_count - len(item_rows),
+        }
+    return details
 
 
 @login_required
@@ -286,6 +333,17 @@ def customer_item_monthwise_analysis(request):
     page_size = 15
     paginator = Paginator(ctx['customer_rows'], page_size)
     page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    # Only build the expensive month-by-month item grid for the customers on
+    # this page — not all of them (see _build_item_details docstring).
+    page_codes = [c['customer_code'] for c in page_obj]
+    details = _build_item_details(
+        ctx['customers_raw'], page_codes, ctx['n_months'], ctx['years'], ctx['year_col_indices'],
+    )
+    for cust in page_obj:
+        cust.update(details.get(cust['customer_code'], {'items': [], 'item_count': 0,
+                                                          'items_truncated': False, 'hidden_item_count': 0}))
+
     ctx['customers'] = page_obj
     ctx['page_obj'] = page_obj
 
@@ -496,7 +554,17 @@ def export_customer_item_monthwise_analysis_pdf(request):
             rows.append(gp_row)
         return rows
 
-    for idx, cust in enumerate(customer_rows[:PDF_MAX_CUSTOMERS], start=1):
+    # Only build the expensive month-by-month item grid for the customers that
+    # actually make it into the (capped) PDF — not the full filtered set.
+    pdf_customers = customer_rows[:PDF_MAX_CUSTOMERS]
+    pdf_details = _build_item_details(
+        ctx['customers_raw'], [c['customer_code'] for c in pdf_customers],
+        ctx['n_months'], ctx['years'], ctx['year_col_indices'],
+        max_items_per_customer=PDF_MAX_ITEMS_PER_CUSTOMER,
+    )
+
+    for idx, cust in enumerate(pdf_customers, start=1):
+        detail = pdf_details.get(cust['customer_code'], {'items': [], 'hidden_item_count': 0})
         row = [
             Paragraph(str(idx), ts['td_c']),
             Paragraph(cust['customer_code'] or '—', ts['td']),
@@ -509,12 +577,12 @@ def export_customer_item_monthwise_analysis_pdf(request):
                               f"<font size=4.5>Qty {_fmt(cust['total_qty'])}{gp_suffix}</font>", total_cell))
         table_data.append(row)
 
-        shown_items = cust['items'][:PDF_MAX_ITEMS_PER_CUSTOMER]
+        shown_items = detail['items']
         for item in shown_items:
             for r in _item_rows(item):
                 item_sub_row_indices.add(len(table_data))
                 table_data.append(r)
-        hidden = cust['item_count'] - len(shown_items)
+        hidden = detail['hidden_item_count']
         if hidden > 0:
             item_sub_row_indices.add(len(table_data))
             more_row = [
