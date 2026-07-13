@@ -202,6 +202,7 @@ urlpatterns += [
     path('saparinvoices/brandwise-sales-analysis/export-excel/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_excel, name='export_brandwise_sales_analysis_excel'),
     path('saparinvoices/brandwise-sales-analysis/export-pdf/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_pdf, name='export_brandwise_sales_analysis_pdf'),
     path('saparinvoices/customer-item-monthwise-analysis/', customer_item_monthwise_analysis_views.customer_item_monthwise_analysis, name='customer_item_monthwise_analysis'),
+    path('saparinvoices/customer-item-monthwise-analysis/export-pdf/', customer_item_monthwise_analysis_views.export_customer_item_monthwise_analysis_pdf, name='export_customer_item_monthwise_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/export-pdf/', item_quoted_analysis_pdf_export.export_item_quoted_analysis_pdf, name='export_item_quoted_analysis_pdf'),
     path('saparinvoices/item-quoted-analysis/save-proposed-qty/', quotation_item_analysis_views.save_proposed_quantity, name='save_proposed_quantity'),
     path('saparinvoices/item-quoted-analysis/reset-proposed-qty/', quotation_item_analysis_views.reset_proposed_quantities, name='reset_proposed_quantities'),
