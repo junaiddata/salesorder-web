@@ -188,10 +188,11 @@ def customer_item_monthwise_analysis(request):
                 cells.append({
                     'qty': q,
                     'rate': (a / q) if q else Decimal('0'),
+                    'avg_gp': (g / q) if q else Decimal('0'),
                     'gp_pct': _pct(g, a),
                 })
             # Per-year totals (2025 and 2026 kept separate, not blended together) —
-            # each year's avg rate/GP% is computed from that year's own qty/amt sums.
+            # each year's avg rate/avg GP/GP% is computed from that year's own qty/amt/gp sums.
             year_totals = []
             for yr in years:
                 idxs = year_col_indices[yr]
@@ -202,6 +203,7 @@ def customer_item_monthwise_analysis(request):
                     'year': yr,
                     'qty': yr_qty,
                     'rate': (yr_amt / yr_qty) if yr_qty else Decimal('0'),
+                    'avg_gp': (yr_gp / yr_qty) if yr_qty else Decimal('0'),
                     'gp_pct': _pct(yr_gp, yr_amt),
                 })
             item_rows.append({

@@ -107,7 +107,7 @@
     <div class="header">
       <div class="header-left">
         <h1>Customer Item Month-wise Analysis</h1>
-        <p>Per-customer items with Qty{% if is_admin %} / Avg Rate / GP%{% else %} / Avg Rate{% endif %} by month &mdash; {{ period_label }}</p>
+        <p>Per-customer items with Qty{% if is_admin %} / Avg Rate / Avg GP / GP%{% else %} / Avg Rate{% endif %} by month &mdash; {{ period_label }}</p>
       </div>
       <div class="header-actions">
         <button type="button" class="btn" id="expand-all-btn"><i class="fas fa-expand-alt"></i> Expand All</button>
@@ -220,7 +220,7 @@
                     <tbody>
                       {% for item in cust.items %}
                       <tr class="metric-qty">
-                        <td class="col-item" rowspan="{% if is_admin %}3{% else %}2{% endif %}">
+                        <td class="col-item" rowspan="{% if is_admin %}4{% else %}2{% endif %}">
                           {{ item.item_code }}
                           <span class="item-desc">{{ item.description }}</span>
                         </td>
@@ -242,6 +242,15 @@
                         {% endfor %}
                       </tr>
                       {% if is_admin %}
+                      <tr class="metric-gp">
+                        <td class="col-metric">Avg GP</td>
+                        {% for c in item.cells %}
+                        <td {% if not c.qty %}class="zero"{% endif %}>{% if c.qty %}{{ c.avg_gp|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                        {% for yt in item.year_totals %}
+                        <td class="col-total">{% if yt.qty %}{{ yt.avg_gp|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>
+                        {% endfor %}
+                      </tr>
                       <tr class="metric-gp metric-last">
                         <td class="col-metric">GP %</td>
                         {% for c in item.cells %}
