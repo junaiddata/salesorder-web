@@ -449,7 +449,8 @@ def submittal_items_import(request, brand_id):
             'error': f'Invalid Excel file: {e}',
         })
 
-    # Map: our key -> possible Excel header names
+    # Fallback map: our key -> possible Excel header names, used when a brand's
+    # column_definitions entry doesn't specify its own "aliases" list.
     EXCEL_HEADER_MAP = {
         'model_no': ['Model No', 'Model No.', 'model_no', 'ModelNo'],
         'item_description': ['Item Description', 'item_description', 'Item Desc'],
@@ -460,17 +461,19 @@ def submittal_items_import(request, brand_id):
         'pressure_rating': ['PRESSURE RATING', 'Pressure Rating', 'pressure_rating'],
         'area_of_application': ['Area of Application', 'area_of_application'],
     }
+    col_defs_by_key = {cd.get('key'): cd for cd in brand.column_definitions if cd.get('key')}
     excel_cols = {str(c).strip(): c for c in df.columns}
 
     def find_col(key):
-        for name in EXCEL_HEADER_MAP.get(key, [key]):
+        aliases = (col_defs_by_key.get(key) or {}).get('aliases') or EXCEL_HEADER_MAP.get(key, [key])
+        for name in aliases:
             for ex, orig in excel_cols.items():
                 if name.lower() in ex.lower() or ex.lower() in name.lower():
                     return orig
         return None
 
     created = updated = 0
-    model_col = find_col('model_no') or next((excel_cols.get(c) for c in ['Model No', 'Model No.', 'model_no'] if c in excel_cols), None)
+    model_col = find_col('model_no')
     for _, row in df.iterrows():
         model_no = ''
         if model_col:
