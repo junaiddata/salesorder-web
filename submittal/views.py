@@ -465,10 +465,18 @@ def submittal_items_import(request, brand_id):
     excel_cols = {str(c).strip(): c for c in df.columns}
 
     def find_col(key):
-        aliases = (col_defs_by_key.get(key) or {}).get('aliases') or EXCEL_HEADER_MAP.get(key, [key])
-        for name in aliases:
+        col_def = col_defs_by_key.get(key) or {}
+        candidates = col_def.get('aliases') or EXCEL_HEADER_MAP.get(key) or [col_def.get('label') or key.replace('_', ' ')]
+        names = [str(c).lower().strip() for c in candidates]
+
+        # Exact match first, so e.g. "model" doesn't get matched to "Model No."
+        for ex, orig in excel_cols.items():
+            if ex.lower().strip() in names:
+                return orig
+        # Fall back to substring match for looser header variations
+        for name in names:
             for ex, orig in excel_cols.items():
-                if name.lower() in ex.lower() or ex.lower() in name.lower():
+                if name in ex.lower() or ex.lower() in name:
                     return orig
         return None
 
