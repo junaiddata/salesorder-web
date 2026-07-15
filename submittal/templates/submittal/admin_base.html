@@ -45,15 +45,15 @@
 
         .nav-section { padding: 1rem 0 .25rem; }
         .nav-section-title { padding: 0 1.25rem .4rem; font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.38); font-weight: 700; }
-        .nav-link {
+        .admin-sidebar .nav-link {
             display: flex; align-items: center; gap: .7rem;
             padding: .6rem 1.25rem; color: rgba(255,255,255,.72);
             text-decoration: none; font-size: .875rem; font-weight: 500;
             transition: all var(--ease); border-left: 3px solid transparent;
         }
-        .nav-link i { width: 17px; text-align: center; opacity: .85; flex-shrink: 0; }
-        .nav-link:hover { background: var(--sidebar-hover); color: #fff; border-left-color: rgba(255,255,255,.25); }
-        .nav-link.active { background: rgba(0,51,153,.55); color: #fff; border-left-color: var(--primary-300); }
+        .admin-sidebar .nav-link i { width: 17px; text-align: center; opacity: .85; flex-shrink: 0; }
+        .admin-sidebar .nav-link:hover { background: var(--sidebar-hover); color: #fff; border-left-color: rgba(255,255,255,.25); }
+        .admin-sidebar .nav-link.active { background: rgba(0,51,153,.55); color: #fff; border-left-color: var(--primary-300); }
         .sidebar-footer { margin-top: auto; padding: .75rem 0 .5rem; border-top: 1px solid rgba(255,255,255,.08); }
 
         /* ── Content ── */
@@ -121,7 +121,7 @@
 
         @media (max-width: 768px) {
             .admin-sidebar { width: 64px; }
-            .sidebar-brand .brand-label, .sidebar-brand .brand-sub, .nav-section-title, .nav-link span:not(.nav-badge) { display: none; }
+            .sidebar-brand .brand-label, .sidebar-brand .brand-sub, .nav-section-title, .admin-sidebar .nav-link span:not(.nav-badge) { display: none; }
             .admin-main, .admin-topbar { padding-left: 1rem; padding-right: 1rem; }
         }
 

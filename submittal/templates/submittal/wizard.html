@@ -1293,6 +1293,8 @@
         const BRANDS_LIST = DATA.brands_json || [];
         const COMPLIANCE_OPTIONS = DATA.compliance_options_json || [];
         const REMARK_OPTIONS_BY_MATERIAL = DATA.remark_options_by_material_json || {};
+        const REMARK_OPTIONS_BY_BRAND = DATA.remark_options_by_brand_json || {};
+        const BRAND_REMARKS_MODE = DATA.brand_remarks_mode_json || {};
         let complianceRows = DATA.existing_compliance_rows_json || [];
         let complianceBrandId = DATA.existing_compliance_brand_id || '';
 
@@ -1523,10 +1525,23 @@
         function isWarrantyDraftLetter(label) { return (label || '').trim().toLowerCase() === 'warranty draft letter'; }
 
         // Remark options come from the items selected in the Materials step only,
-        // grouped by item: [{ item, options: [{label}] }, ...]
+        // grouped by item: [{ item, options: [{label}] }, ...]. Brands set to
+        // "Brand-wide" in Settings contribute a single shared group instead of
+        // one group per item.
         function getRemarkGroupsForSelected() {
             const groups = [];
+            const brandGroupsAdded = new Set();
             selectedMaterials.forEach(m => {
+                const mode = BRAND_REMARKS_MODE[m.brand_id] || 'item';
+                if (mode === 'brand') {
+                    if (brandGroupsAdded.has(m.brand_id)) return;
+                    const opts = REMARK_OPTIONS_BY_BRAND[m.brand_id] || [];
+                    if (opts.length) {
+                        groups.push({ item: m.brand || 'Brand', options: opts });
+                        brandGroupsAdded.add(m.brand_id);
+                    }
+                    return;
+                }
                 const opts = REMARK_OPTIONS_BY_MATERIAL[m.id] || [];
                 if (opts.length) {
                     const desc = (m.item_description || '').trim();

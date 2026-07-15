@@ -1382,6 +1382,34 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
 
 
 # ---------------------------------------------------------------------------
+# Item-wise / brand-wide document resolution (Product Catalogue, Technical Details)
+# ---------------------------------------------------------------------------
+
+def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand_doc_type):
+    """
+    For each material, append either its own item-level PDF or its brand's
+    shared brand-wide PDF(s), depending on the brand's mode (set in Admin ›
+    Brands). Brand-wide docs are appended once per brand even if several
+    selected materials share that brand.
+    """
+    brand_wide_done = set()
+    for mat in materials:
+        brand = mat.brand
+        mode = getattr(brand, mode_attr, 'item') if brand else 'item'
+        if mode == 'brand':
+            if not brand or brand.pk in brand_wide_done:
+                continue
+            brand_wide_done.add(brand.pk)
+            for path in services.get_brand_documents(brand, brand_doc_type):
+                if path and os.path.exists(path):
+                    merger.append(path)
+        else:
+            path = get_item_pdf(mat)
+            if path and os.path.exists(path):
+                merger.append(path)
+
+
+# ---------------------------------------------------------------------------
 # Main Build Pipeline
 # ---------------------------------------------------------------------------
 
@@ -1392,7 +1420,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     auto-generated divider page (except Title Page) then its content.
     Custom sections use SubmittalSectionUpload for content.
     """
-    submittal = Submittal.objects.select_related('warranty_brand', 'title_brand').prefetch_related('materials').get(pk=submittal_id)
+    submittal = Submittal.objects.select_related('warranty_brand', 'title_brand').prefetch_related('materials__brand').get(pk=submittal_id)
     company_docs = services.get_company_documents()
     merger = PdfMerger()
 
@@ -1483,21 +1511,21 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         if section in (9, 10, 11):
             # Always add divider; content optional
             merger.append(_build_divider_page(visible_num, display))
-            for mat in materials:
-                paths = []
-                if section == 9:
-                    p = services.get_catalogue_pdf(mat)
-                    if p:
-                        paths = [p]
-                elif section == 10:
-                    p = services.get_technical_pdf(mat)
-                    if p:
-                        paths = [p]
-                elif section == 11:
-                    paths = services.get_certifications(mat, 'test_certificate')
-                for path in paths:
-                    if path and os.path.exists(path):
-                        merger.append(path)
+            if section == 9:
+                _append_item_or_brand_docs(
+                    merger, materials, mode_attr='catalogue_mode',
+                    get_item_pdf=services.get_catalogue_pdf, brand_doc_type='product_catalogue',
+                )
+            elif section == 10:
+                _append_item_or_brand_docs(
+                    merger, materials, mode_attr='technical_mode',
+                    get_item_pdf=services.get_technical_pdf, brand_doc_type='technical_details',
+                )
+            elif section == 11:
+                for mat in materials:
+                    for path in services.get_certifications(mat, 'test_certificate'):
+                        if path and os.path.exists(path):
+                            merger.append(path)
             continue
 
         # ── Brand-level document sections (12, 14, 15, 16) ──

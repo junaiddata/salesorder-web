@@ -25,6 +25,22 @@
             </div>
         </div>
 
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.875rem;">Product Catalogue</label>
+            <select name="catalogue_mode" class="form-select form-select-sm">
+                <option value="item" {% if not brand or brand.catalogue_mode == 'item' %}selected{% endif %}>Item-wise — each material has its own catalogue PDF</option>
+                <option value="brand" {% if brand and brand.catalogue_mode == 'brand' %}selected{% endif %}>Brand-wise — one shared catalogue PDF for every item</option>
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.875rem;">Technical Details</label>
+            <select name="technical_mode" class="form-select form-select-sm">
+                <option value="item" {% if not brand or brand.technical_mode == 'item' %}selected{% endif %}>Item-wise — each material has its own technical PDF</option>
+                <option value="brand" {% if brand and brand.technical_mode == 'brand' %}selected{% endif %}>Brand-wise — one shared technical PDF for every item</option>
+            </select>
+        </div>
+
         <div class="d-flex gap-2">
             <button type="submit" class="btn btn-admin btn-admin-primary">
                 <i class="fas fa-save"></i> {% if brand %}Update{% else %}Add{% endif %} Brand

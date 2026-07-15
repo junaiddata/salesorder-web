@@ -40,10 +40,10 @@
     </form>
 </div>
 
-<!-- Remark Options by Item -->
+<!-- Remark Options -->
 <div class="admin-card">
-    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-tag me-2" style="color:var(--primary);opacity:0.8;"></i>Remark Options by Item</h2>
-    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Remarks are set per item (material) under each brand. Pick a brand, choose an item, then add or edit its remarks. They appear grouped by item in the compliance statement's Remarks dropdown.</p>
+    <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;"><i class="fas fa-tag me-2" style="color:var(--primary);opacity:0.8;"></i>Remark Options</h2>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1.25rem;">Each brand can be set to <strong>Item-wise</strong> (pick an item, then add or edit its remarks) or <strong>Brand-wide</strong> (one shared remark list used for every item under that brand). They appear in the compliance statement's Remarks dropdown.</p>
 
     {% if brands %}
     <ul class="nav nav-tabs mb-0" id="brandTabs" role="tablist" style="border-bottom:2px solid var(--border);">
@@ -63,7 +63,37 @@
     <div class="tab-content" style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:1.25rem;">
         {% for brand in brands %}
         <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ brand.pk }}" role="tabpanel">
-            {% if brand.materials.all %}
+            <div class="btn-group remarks-mode-toggle mb-3" data-brand="{{ brand.pk }}" role="group" aria-label="Remarks mode">
+                <button type="button" class="btn btn-admin btn-sm {% if brand.remarks_mode == 'item' %}btn-admin-primary{% else %}btn-admin-outline{% endif %}" data-mode="item">
+                    <i class="fas fa-list"></i> Item-wise
+                </button>
+                <button type="button" class="btn btn-admin btn-sm {% if brand.remarks_mode == 'brand' %}btn-admin-primary{% else %}btn-admin-outline{% endif %}" data-mode="brand">
+                    <i class="fas fa-tags"></i> Brand-wide
+                </button>
+            </div>
+
+            {% if brand.remarks_mode == 'brand' %}
+            <p style="color:var(--text-muted);font-size:0.8rem;">These remarks apply to every item under <strong>{{ brand.name }}</strong>.</p>
+            <div class="remark-editor" data-brand="{{ brand.pk }}" data-mode="brand" data-material="">
+                {% with opts=brand.remark_options.all %}
+                <div class="remark-rows">
+                    {% for opt in opts %}
+                    <div class="remark-row" data-pk="{{ opt.pk }}" style="display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:0.5rem;">
+                        <textarea class="form-control form-control-sm remark-text" rows="2" style="resize:vertical;min-height:48px;font-size:0.82rem;">{{ opt.label }}</textarea>
+                        <button type="button" class="btn btn-admin btn-admin-primary btn-sm remark-save" title="Save changes" style="align-self:flex-start;"><i class="fas fa-save"></i></button>
+                        <button type="button" class="btn btn-admin btn-admin-outline btn-sm remark-del" title="Delete remark" style="align-self:flex-start;"><i class="fas fa-trash"></i></button>
+                    </div>
+                    {% empty %}
+                    <p class="remark-empty" style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">No remarks yet for {{ brand.name }}. Add one below.</p>
+                    {% endfor %}
+                </div>
+                {% endwith %}
+                <div style="display:flex;gap:0.5rem;align-items:flex-start;margin-top:0.75rem;border-top:1px dashed var(--border);padding-top:0.85rem;">
+                    <textarea class="form-control form-control-sm remark-add-text" rows="2" placeholder="Add a remark for this brand…" style="resize:vertical;min-height:48px;font-size:0.82rem;"></textarea>
+                    <button type="button" class="btn btn-admin btn-admin-primary btn-sm remark-add" style="white-space:nowrap;align-self:flex-start;"><i class="fas fa-plus"></i> Add</button>
+                </div>
+            </div>
+            {% elif brand.materials.all %}
             <div class="mb-3" style="max-width:560px;">
                 <label class="field-label" style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.35rem;">Item (material)</label>
                 <select class="form-select form-select-sm remark-item-select" data-brand="{{ brand.pk }}">
@@ -73,7 +103,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="remark-editor" data-brand="{{ brand.pk }}" data-material="">
+            <div class="remark-editor" data-brand="{{ brand.pk }}" data-mode="item" data-material="">
                 <p style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">Select an item above to view and edit its remarks.</p>
             </div>
             {% else %}
@@ -206,12 +236,16 @@
         const addBtn = e.target.closest('.remark-add');
         if (addBtn) {
             const editor = addBtn.closest('.remark-editor');
+            const isBrandWide = editor.dataset.mode === 'brand';
             const materialId = editor.dataset.material;
             const ta = editor.querySelector('.remark-add-text');
             const label = ta.value.trim();
-            if (!materialId) return;
+            if (!isBrandWide && !materialId) return;
             if (!label) { alert('Enter a remark.'); return; }
-            postAction({ action: 'add_remark', material_id: materialId, label }).then(d => {
+            const payload = isBrandWide
+                ? { action: 'add_remark', brand_id: editor.dataset.brand, label }
+                : { action: 'add_remark', material_id: materialId, label };
+            postAction(payload).then(d => {
                 if (d.ok && d.option) {
                     const rows = editor.querySelector('.remark-rows');
                     const empty = rows.querySelector('.remark-empty');
@@ -225,6 +259,30 @@
             });
             return;
         }
+        // Switch a brand between item-wise and brand-wide remarks
+        const modeBtn = e.target.closest('.remarks-mode-toggle button');
+        if (modeBtn) {
+            const group = modeBtn.closest('.remarks-mode-toggle');
+            const brandId = group.dataset.brand;
+            const mode = modeBtn.dataset.mode;
+            if (modeBtn.classList.contains('btn-admin-primary')) return;
+            postAction({ action: 'set_remarks_mode', brand_id: brandId, mode }).then(d => {
+                if (d.ok) {
+                    window.location.href = `${window.location.pathname}?tab=${encodeURIComponent(brandId)}`;
+                } else {
+                    alert(d.error || 'Could not update remarks mode.');
+                }
+            });
+            return;
+        }
+    });
+
+    // Re-activate the brand tab that was open before a remarks-mode switch reloaded the page.
+    document.addEventListener('DOMContentLoaded', () => {
+        const tabId = new URLSearchParams(window.location.search).get('tab');
+        if (!tabId) return;
+        const btn = document.getElementById(`tab-${tabId}`);
+        if (btn && window.bootstrap) new bootstrap.Tab(btn).show();
     });
 })();
 </script>

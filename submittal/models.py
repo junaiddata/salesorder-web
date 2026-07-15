@@ -50,6 +50,23 @@ class SubmittalBrand(models.Model):
         default=False,
         help_text="When enabled, warranty letter is auto-generated from materials table instead of PDF upload. Configure in Admin."
     )
+    DOC_MODE_CHOICES = [
+        ('item', 'Item-wise'),
+        ('brand', 'Brand-wide'),
+    ]
+    REMARKS_MODE_CHOICES = DOC_MODE_CHOICES
+    remarks_mode = models.CharField(
+        max_length=10, choices=REMARKS_MODE_CHOICES, default='item',
+        help_text="Item-wise: remarks are set per material. Brand-wide: one shared remark list for every item under this brand."
+    )
+    catalogue_mode = models.CharField(
+        max_length=10, choices=DOC_MODE_CHOICES, default='item',
+        help_text="Item-wise: each material has its own Product Catalogue PDF. Brand-wide: one shared Product Catalogue PDF for every item under this brand."
+    )
+    technical_mode = models.CharField(
+        max_length=10, choices=DOC_MODE_CHOICES, default='item',
+        help_text="Item-wise: each material has its own Technical Details PDF. Brand-wide: one shared Technical Details PDF for every item under this brand."
+    )
 
     class Meta:
         ordering = ['display_order', 'name']
@@ -195,14 +212,18 @@ class MaterialCertification(models.Model):
 class BrandDocument(models.Model):
     """
     Brand-level documents, uploaded once per brand and reused across submittals.
-    Types: country_of_origin, authorization_letter, previous_approval, previous_project.
-    Pulled into a submittal's PDF based on the brand chosen on the title page.
+    Types: country_of_origin, authorization_letter, previous_approval, previous_project
+    (pulled in for the brand chosen on the title page), plus product_catalogue and
+    technical_details (pulled in per-material's brand when that brand is set to
+    "Brand-wide" mode for Product Catalogue / Technical Details).
     """
     DOC_TYPE_CHOICES = [
         ('country_of_origin', 'Country of Origin'),
         ('authorization_letter', 'Authorization Letter'),
         ('previous_approval', 'Previous Approval'),
         ('previous_project', 'Previous Project'),
+        ('product_catalogue', 'Product Catalogue'),
+        ('technical_details', 'Technical Details'),
     ]
 
     brand = models.ForeignKey(
@@ -381,18 +402,29 @@ class ComplianceOption(models.Model):
 
 
 class RemarkOption(models.Model):
-    """Material-specific options for the Remarks dropdown in the compliance statement form."""
+    """
+    Options for the Remarks dropdown in the compliance statement form.
+    Tied either to a specific material (item-wise brands) or directly to a
+    brand (brand-wide brands) depending on SubmittalBrand.remarks_mode.
+    """
     material = models.ForeignKey(
         SubmittalMaterial, on_delete=models.CASCADE, related_name='remark_options',
-        help_text="Material (item) this remark belongs to"
+        null=True, blank=True,
+        help_text="Material (item) this remark belongs to (item-wise brands)"
+    )
+    brand = models.ForeignKey(
+        SubmittalBrand, on_delete=models.CASCADE, related_name='remark_options',
+        null=True, blank=True,
+        help_text="Brand this remark belongs to (brand-wide brands)"
     )
     label = models.TextField(help_text="Remark text (can be multi-line)")
     display_order = models.IntegerField(default=0)
 
     class Meta:
-        ordering = ['material', 'display_order', 'label']
+        ordering = ['material', 'brand', 'display_order', 'label']
         verbose_name = "Remark Option"
         verbose_name_plural = "Remark Options"
 
     def __str__(self):
-        return f"{self.material.model_no}: {self.label[:60]}"
+        owner = self.material.model_no if self.material_id else (self.brand.name if self.brand_id else '?')
+        return f"{owner}: {self.label[:60]}"

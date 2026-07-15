@@ -1,3 +1,4 @@
+
 {% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
@@ -1199,6 +1200,12 @@
                 </a>
             </li>
             {% endif %}
+            <li>
+                <a href="{% url 'submittal:list' %}">
+                    <i class="fas fa-file-signature"></i>
+                    Submittals
+                </a>
+            </li>
             <li>
                 <a href="{% url 'sync_settings' %}">
                     <i class="fas fa-cog"></i>

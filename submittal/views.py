@@ -80,16 +80,26 @@ def submittal_wizard(request, pk=None):
                 all_columns.append({'key': k, 'label': col.get('label', k)})
 
     compliance_options = list(ComplianceOption.objects.values('pk', 'label'))
-    brands = SubmittalBrand.objects.prefetch_related('materials__remark_options').order_by('display_order', 'name')
-    # Remarks are per material (item). The compliance-statement Remarks dropdown is
-    # built from the items actually selected in the Materials step, so provide a
-    # simple map of material_id -> its remark options.
+    brands = SubmittalBrand.objects.prefetch_related('materials__remark_options', 'remark_options').order_by('display_order', 'name')
+    # Remarks are either per material (item-wise brands) or shared across the
+    # whole brand (brand-wide brands, set in Settings). The compliance-statement
+    # Remarks dropdown is built from the items actually selected in the
+    # Materials step, so provide both maps plus each brand's mode; the wizard
+    # JS picks the right one per selected material based on its brand's mode.
     remark_options_by_material = {}
+    remark_options_by_brand = {}
+    brand_remarks_mode = {}
     for b in brands:
-        for m in b.materials.all():
-            opts = [{'label': r.label} for r in m.remark_options.all()]
+        brand_remarks_mode[b.pk] = b.remarks_mode
+        if b.remarks_mode == 'brand':
+            opts = [{'label': r.label} for r in b.remark_options.all()]
             if opts:
-                remark_options_by_material[m.pk] = opts
+                remark_options_by_brand[b.pk] = opts
+        else:
+            for m in b.materials.all():
+                opts = [{'label': r.label} for r in m.remark_options.all()]
+                if opts:
+                    remark_options_by_material[m.pk] = opts
     warranty_brands_with_format = [b.pk for b in brands if getattr(b, 'use_generated_warranty', False)]
 
     # Single JSON payload for wizard script (avoids Django {{ }} in JS, fixes linter errors)
@@ -102,6 +112,8 @@ def submittal_wizard(request, pk=None):
         'brands_json': [{'pk': b.pk, 'name': b.name} for b in brands],
         'compliance_options_json': compliance_options,
         'remark_options_by_material_json': remark_options_by_material,
+        'remark_options_by_brand_json': remark_options_by_brand,
+        'brand_remarks_mode_json': brand_remarks_mode,
         'existing_compliance_rows_json': existing_compliance_rows,
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'default_index_items': list(DEFAULT_INDEX_ITEMS),
@@ -377,6 +389,7 @@ def api_materials_search(request):
             'material': d.get('material', ''),
             'size': d.get('size', ''),
             'wras_number': d.get('wras_number', ''),
+            'brand_id': m.brand_id,
             'brand': m.get('brand') or (m.brand.name if m.brand else ''),
             'pressure_rating': d.get('pressure_rating', ''),
             'area_of_application': d.get('area_of_application', ''),
@@ -537,6 +550,8 @@ def submittal_settings(request):
     if request.method == 'POST':
         action = request.POST.get('action', '')
 
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
         # ── Compliance Options ──
         if action == 'add_compliance':
             label = request.POST.get('label', '').strip()
@@ -557,18 +572,36 @@ def submittal_settings(request):
                 ComplianceOption.objects.filter(pk=pk).update(display_order=i)
             return JsonResponse({'ok': True})
 
-        # ── Remark Options (per material / item) ──
-        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        # ── Remarks mode per brand (item-wise vs brand-wide) ──
+        if action == 'set_remarks_mode':
+            brand_id = request.POST.get('brand_id')
+            mode = request.POST.get('mode')
+            if brand_id and mode in dict(SubmittalBrand.REMARKS_MODE_CHOICES):
+                SubmittalBrand.objects.filter(pk=brand_id).update(remarks_mode=mode)
+                if is_ajax:
+                    return JsonResponse({'ok': True})
+            elif is_ajax:
+                return JsonResponse({'ok': False, 'error': 'Invalid brand or mode.'}, status=400)
+            return redirect('submittal:settings')
 
+        # ── Remark Options (per material / item, or brand-wide) ──
         if action == 'add_remark':
             material_id = request.POST.get('material_id')
+            brand_id = request.POST.get('brand_id')
             label = request.POST.get('label', '').strip()
+            if brand_id and brand_id.isdigit() and not material_id and label:
+                order = RemarkOption.objects.filter(brand_id=brand_id, material__isnull=True).count()
+                opt = RemarkOption.objects.create(brand_id=brand_id, label=label, display_order=order)
+                if is_ajax:
+                    return JsonResponse({'ok': True, 'option': {'pk': opt.pk, 'label': opt.label}})
+                return redirect('submittal:settings')
             if material_id and material_id.isdigit() and label:
                 order = RemarkOption.objects.filter(material_id=material_id).count()
                 opt = RemarkOption.objects.create(material_id=material_id, label=label, display_order=order)
                 if is_ajax:
                     return JsonResponse({'ok': True, 'option': {'pk': opt.pk, 'label': opt.label}})
-            elif is_ajax:
+                return redirect('submittal:settings')
+            if is_ajax:
                 return JsonResponse({'ok': False, 'error': 'Select an item and enter a remark.'}, status=400)
             return redirect('submittal:settings')
 
@@ -599,7 +632,7 @@ def submittal_settings(request):
 
     brands = (
         SubmittalBrand.objects
-        .prefetch_related('materials__remark_options')
+        .prefetch_related('materials__remark_options', 'remark_options')
         .order_by('display_order', 'name')
     )
     compliance_options = ComplianceOption.objects.all()
@@ -836,8 +869,15 @@ def admin_brand_edit(request, pk):
         # ── Save brand details ──
         name = request.POST.get('name', '').strip()
         if name:
+            valid_modes = dict(SubmittalBrand.DOC_MODE_CHOICES)
             brand.name = name
             brand.use_generated_warranty = request.POST.get('use_generated_warranty') == 'on'
+            catalogue_mode = request.POST.get('catalogue_mode')
+            if catalogue_mode in valid_modes:
+                brand.catalogue_mode = catalogue_mode
+            technical_mode = request.POST.get('technical_mode')
+            if technical_mode in valid_modes:
+                brand.technical_mode = technical_mode
             brand.save()
             messages.success(request, f'Brand "{name}" updated.')
             return redirect('submittal:admin_brands')
