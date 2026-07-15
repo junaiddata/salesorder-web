@@ -214,7 +214,7 @@ def create_quotation(request):
             user_salesman_map = {
                 'alabamakadhar': ['KADER'],
                 'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
-                'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],   
+                'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH','ANKITHA'],   
                 'alabamaaijaz': ['AIJAZ'],               # Single allowed
                 
             }
@@ -233,10 +233,15 @@ def create_quotation(request):
         # END: Salesman Filtering Logic
         # ---------------------------------------------------------------------
         firms = Items.objects.values_list('item_firm', flat=True).distinct().order_by('item_firm')
+        is_alabama_user = (
+            request.user.is_authenticated
+            and request.user.username.lower().startswith('alabama')
+        )
         return render(request, 'so/quotations/create_quotation.html', {
             'customers': customers,
             'salesmen': salesmen,
             'firms': firms,
+            'is_alabama_user': is_alabama_user,
         })
 
 from django.shortcuts import render

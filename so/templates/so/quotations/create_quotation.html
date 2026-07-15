@@ -338,6 +338,7 @@
                         <p class="help-text">For CASH/walk-in customers - this name will appear on the quotation</p>
                     </div>
 
+                    {% if not is_alabama_user %}
                     <div class="form-group">
                         <label for="license_name">Our License <span class="required-mark">*</span></label>
                         <select id="license_name" name="license_name" required>
@@ -346,6 +347,7 @@
                         </select>
                         <p class="help-text">Select the company license name to appear on the quotation PDF</p>
                     </div>
+                    {% endif %}
 
                     <div class="form-group">
                         <label for="remarks">Remarks</label>
