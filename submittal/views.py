@@ -323,14 +323,16 @@ def _delete_temp_upload_files(submittal):
 def submittal_generate_pdf(request, pk):
     submittal = get_object_or_404(Submittal, pk=pk)
     force_regenerate = request.GET.get('regenerate') == '1'
+    inline = request.GET.get('inline') == '1'
     filename_dl = f"Submittal_{submittal.project[:30].replace(' ', '_')}_{submittal.pk}.pdf"
 
+    # Serve the cached PDF if available (works for both preview and download; read-only, no side effects)
     if not force_regenerate and submittal.generated_pdf and submittal.generated_pdf.name:
         try:
             return FileResponse(
                 submittal.generated_pdf.open('rb'),
                 content_type='application/pdf',
-                as_attachment=True,
+                as_attachment=not inline,
                 filename=filename_dl,
             )
         except Exception:
@@ -338,6 +340,16 @@ def submittal_generate_pdf(request, pk):
 
     pdf_buf = build_submittal_pdf(submittal.pk)
     pdf_buf.seek(0)
+
+    if inline:
+        # Preview: stream the freshly built PDF without caching it as the final
+        # output or deleting temp uploads, so the submittal can keep being edited.
+        return FileResponse(
+            pdf_buf,
+            content_type='application/pdf',
+            as_attachment=False,
+            filename=filename_dl,
+        )
 
     stored_name = f"Submittal_{submittal.pk}.pdf"
     submittal.generated_pdf.save(stored_name, ContentFile(pdf_buf.read()), save=True)
@@ -352,6 +364,49 @@ def submittal_generate_pdf(request, pk):
         as_attachment=True,
         filename=filename_dl,
     )
+
+
+@require_POST
+@login_required
+def submittal_save_stamp(request, pk):
+    """Save an uploaded company stamp image for a submittal and invalidate the
+    cached PDF so it gets re-stamped on next generate/preview."""
+    submittal = get_object_or_404(Submittal, pk=pk)
+    f = request.FILES.get('stamp_image')
+    if not f:
+        return JsonResponse({'error': 'Please choose a stamp image.'}, status=400)
+    if not (f.content_type or '').startswith('image/'):
+        return JsonResponse({'error': 'File must be an image.'}, status=400)
+
+    if submittal.stamp and submittal.stamp.name:
+        submittal.stamp.delete(save=False)
+    submittal.stamp = f
+
+    if submittal.generated_pdf and submittal.generated_pdf.name:
+        submittal.generated_pdf.delete(save=False)
+        submittal.generated_pdf = None
+        submittal.pdf_generated_at = None
+
+    submittal.save()
+    return JsonResponse({'success': True, 'stamp_url': submittal.stamp.url})
+
+
+@require_POST
+@login_required
+def submittal_clear_stamp(request, pk):
+    """Remove the saved company stamp and invalidate the cached PDF so it regenerates without it."""
+    submittal = get_object_or_404(Submittal, pk=pk)
+    if submittal.stamp and submittal.stamp.name:
+        submittal.stamp.delete(save=False)
+        submittal.stamp = None
+
+    if submittal.generated_pdf and submittal.generated_pdf.name:
+        submittal.generated_pdf.delete(save=False)
+        submittal.generated_pdf = None
+        submittal.pdf_generated_at = None
+
+    submittal.save()
+    return JsonResponse({'success': True})
 
 
 @require_GET

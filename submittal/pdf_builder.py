@@ -8,7 +8,7 @@ import os
 from io import BytesIO
 
 from django.conf import settings
-from PyPDF2 import PdfMerger
+from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
@@ -931,6 +931,58 @@ def _append(merger, pdf, add_divider=False, div_num=0, div_name=''):
         merger.append(pdf)
 
 
+def _split_paragraph_into_chunks(text, style, avail_width, max_chunk_height):
+    """Break long text into a list of Paragraphs that each fit within
+    max_chunk_height at avail_width. Lets a single long cell's text flow
+    across several normal-sized table rows (and therefore across pages via
+    the table's regular row-by-row splitting) instead of being forced into
+    one oversized, unsplittable row."""
+    if not text:
+        return [Paragraph('', style)]
+
+    if '<br/>' not in text:
+        # Plain word-wrapped text -- ReportLab's own Paragraph.split() cuts
+        # this cleanly and can be trusted directly.
+        chunks = []
+        remaining = Paragraph(text, style)
+        for _ in range(500):  # safety cap against pathological inputs
+            parts = remaining.split(avail_width, max_chunk_height)
+            if not parts:
+                chunks.append(remaining)
+                break
+            chunks.append(parts[0])
+            if len(parts) == 1:
+                break
+            remaining = parts[1]
+        return chunks or [Paragraph('', style)]
+
+    # Text has explicit <br/> breaks (e.g. a pasted bullet list carried over
+    # from the original newlines). ReportLab's Paragraph.split() can insert a
+    # spurious extra blank line when the cut point lands exactly on one of
+    # these forced breaks, so chunk it ourselves by grouping whole
+    # <br/>-delimited segments instead of splitting the hard-broken paragraph.
+    segments = text.split('<br/>')
+    leading = style.leading
+    max_lines = max(1, int(max_chunk_height / leading))
+
+    chunks = []
+    current_segments = []
+    current_lines = 0
+    for seg in segments:
+        seg_para = Paragraph(seg if seg else '&nbsp;', style)
+        _, seg_h = seg_para.wrap(avail_width, 1000000)
+        seg_lines = max(1, round(seg_h / leading))
+        if current_segments and current_lines + seg_lines > max_lines:
+            chunks.append(Paragraph('<br/>'.join(current_segments), style))
+            current_segments = []
+            current_lines = 0
+        current_segments.append(seg)
+        current_lines += seg_lines
+    if current_segments:
+        chunks.append(Paragraph('<br/>'.join(current_segments), style))
+    return chunks or [Paragraph('', style)]
+
+
 # ---------------------------------------------------------------------------
 # Compliance Statement PDF (Section 6 - generated from form rows)
 # ---------------------------------------------------------------------------
@@ -949,6 +1001,14 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     FIRST_TOP_MARGIN = 320   # space for header, title, and project details
     LATER_TOP_MARGIN = 170   # space for company header + title on continuation pages
     BOTTOM_MARGIN = 50       # space for "Page X of Y"
+
+    # A single table row can't be split across pages by ReportLab if one of its
+    # cells is taller than the available page frame (LayoutError). Long
+    # Specification/Remarks text is pre-chunked into several normal-sized
+    # sub-rows (each capped to this height) so it flows across as many rows
+    # -- and therefore pages -- as it needs via the table's normal per-row
+    # page-splitting, instead of shrinking to fit on a single page.
+    CHUNK_MAX_H = 150
 
     style_cell = ParagraphStyle('CSCell', fontSize=8, fontName='Helvetica', leading=11)
     style_header_cell = ParagraphStyle('CSHdr', fontSize=8, fontName='Helvetica-Bold', textColor=WHITE, leading=10)
@@ -1049,16 +1109,55 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     ]
     table_data = [header_row]
 
+    spec_avail_w = col_widths[1] - 8
+    remarks_avail_w = col_widths[3] - 8
+
+    row_style_commands = []
     for i, row in enumerate(rows, 1):
         spec = row.get('specification', '') or ''
         compliance = row.get('compliance', '') or ''
         remarks = row.get('remarks', '') or ''
-        table_data.append([
-            Paragraph(str(i), style_cell),
-            Paragraph(str(spec).replace('\n', '<br/>'), style_cell),
-            Paragraph(str(compliance), style_bold if compliance else style_cell),
-            Paragraph(str(remarks).replace('\n', '<br/>'), style_cell),
-        ])
+
+        spec_chunks = _split_paragraph_into_chunks(
+            str(spec).replace('\n', '<br/>'), style_cell, spec_avail_w, CHUNK_MAX_H)
+        remarks_chunks = _split_paragraph_into_chunks(
+            str(remarks).replace('\n', '<br/>'), style_cell, remarks_avail_w, CHUNK_MAX_H)
+        n_sub = max(len(spec_chunks), len(remarks_chunks))
+        while len(spec_chunks) < n_sub:
+            spec_chunks.append(Paragraph('', style_cell))
+        while len(remarks_chunks) < n_sub:
+            remarks_chunks.append(Paragraph('', style_cell))
+
+        start_row = len(table_data)
+        for j in range(n_sub):
+            sr_cell = Paragraph(str(i), style_cell) if j == 0 else Paragraph('', style_cell)
+            compliance_cell = (
+                Paragraph(str(compliance), style_bold if compliance else style_cell)
+                if j == 0 else Paragraph('', style_cell)
+            )
+            table_data.append([sr_cell, spec_chunks[j], compliance_cell, remarks_chunks[j]])
+
+        end_row = len(table_data) - 1
+        # Each chunk is its own table row, and rows normally get 4pt top +
+        # 4pt bottom padding -- between two chunks of the SAME wrapped
+        # paragraph that reads as a stray blank line splitting a sentence.
+        # Zero out the padding at those internal chunk boundaries so the
+        # text reads as one continuous flow; keep normal padding at the
+        # item's outer top/bottom edge.
+        for chunk_row in range(start_row, end_row):
+            row_style_commands.append(('BOTTOMPADDING', (0, chunk_row), (-1, chunk_row), 0))
+            row_style_commands.append(('TOPPADDING', (0, chunk_row + 1), (-1, chunk_row + 1), 0))
+        # NOTE: deliberately not SPANning the SR.NO/COMPLIANCE cells across an
+        # item's continuation sub-rows -- a spanned cell must be laid out as one
+        # atomic block, which would reintroduce the "row too tall to split
+        # across pages" problem this chunking is meant to solve. Shade all of
+        # an item's sub-rows the same alternating color instead.
+        bg = WHITE if (i % 2 == 1) else HexColor('#F5F7FA')
+        row_style_commands.append(('BACKGROUND', (0, start_row), (-1, end_row), bg))
+        # Horizontal separator only after an item's LAST sub-row, not between
+        # its own continuation sub-rows (those are one wrapped specification,
+        # not separate rows, so no line should cut through the middle of it).
+        row_style_commands.append(('LINEBELOW', (0, end_row), (-1, end_row), 0.5, colors.grey))
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
@@ -1066,24 +1165,34 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, HexColor('#F5F7FA')]),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.grey),
+        ('LINEAFTER', (0, 0), (-2, -1), 0.5, colors.grey),
+        # By default ReportLab's BOX only draws a top border on the table's
+        # true first page and a bottom border on its true last page, leaving
+        # every page break in between visually "open". 'splitfirst'/'splitlast'
+        # are its built-in hooks for closing/reopening the box on every page
+        # the table happens to break across.
+        ('LINEABOVE', (0, 'splitfirst'), (-1, 'splitfirst'), 0.5, colors.grey),
+        ('LINEBELOW', (0, 'splitlast'), (-1, 'splitlast'), 0.5, colors.grey),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-    ]))
+    ] + row_style_commands))
 
     first_frame = Frame(
         36, BOTTOM_MARGIN,
         PAGE_W - 72, PAGE_H - FIRST_TOP_MARGIN - BOTTOM_MARGIN,
         id='first',
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
     )
     later_frame = Frame(
         36, BOTTOM_MARGIN,
         PAGE_W - 72, PAGE_H - LATER_TOP_MARGIN - BOTTOM_MARGIN,
         id='later',
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
     )
 
     # Two-pass: first build to get page count, then build with "Page X of Y"
@@ -1410,6 +1519,49 @@ def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand
 
 
 # ---------------------------------------------------------------------------
+# Company stamp
+# ---------------------------------------------------------------------------
+
+def stamp_image_on_all_pages(pdf_buf: BytesIO, stamp_path: str) -> BytesIO:
+    """Overlay the company stamp image onto the bottom-right corner of every page."""
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+
+    pdf_buf.seek(0)
+    reader = PdfReader(pdf_buf)
+    writer = PdfWriter()
+
+    im = Image.open(stamp_path)
+    iw, ih = im.size
+    im.close()
+    max_w, max_h = 90, 90
+    scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
+    stamp_w, stamp_h = iw * scale, ih * scale
+    margin = 30
+
+    for page in reader.pages:
+        page_w = float(page.mediabox.width)
+        page_h = float(page.mediabox.height)
+        overlay_buf = BytesIO()
+        c = canvas.Canvas(overlay_buf, pagesize=(page_w, page_h))
+        c.drawImage(
+            ImageReader(stamp_path),
+            page_w - stamp_w - margin, margin,
+            width=stamp_w, height=stamp_h,
+            mask='auto', preserveAspectRatio=True,
+        )
+        c.save()
+        overlay_buf.seek(0)
+        page.merge_page(PdfReader(overlay_buf).pages[0])
+        writer.add_page(page)
+
+    output = BytesIO()
+    writer.write(output)
+    output.seek(0)
+    return output
+
+
+# ---------------------------------------------------------------------------
 # Main Build Pipeline
 # ---------------------------------------------------------------------------
 
@@ -1541,4 +1693,11 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     merger.write(output)
     merger.close()
     output.seek(0)
+
+    if submittal.stamp and submittal.stamp.name:
+        try:
+            output = stamp_image_on_all_pages(output, submittal.stamp.path)
+        except Exception:
+            pass
+
     return output

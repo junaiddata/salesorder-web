@@ -11,6 +11,8 @@ urlpatterns = [
     path('<int:pk>/delete/', views.submittal_delete, name='delete'),
     path('save/', views.submittal_save, name='save'),
     path('<int:pk>/generate-pdf/', views.submittal_generate_pdf, name='generate_pdf'),
+    path('<int:pk>/stamp/save/', views.submittal_save_stamp, name='save_stamp'),
+    path('<int:pk>/stamp/clear/', views.submittal_clear_stamp, name='clear_stamp'),
 
     # Admin panel
     path('admin/', views.admin_index, name='admin_index'),

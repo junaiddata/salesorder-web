@@ -267,6 +267,10 @@ def section_upload_path(instance, filename):
     return f'submittal/section_uploads/{instance.submittal_id or "new"}/{filename}'
 
 
+def submittal_stamp_path(instance, filename):
+    return f'submittal/stamps/{instance.pk or "new"}/{filename}'
+
+
 class Submittal(models.Model):
     """Main submittal document combining all sections."""
 
@@ -344,6 +348,12 @@ class Submittal(models.Model):
         'SubmittalBrand', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='compliance_submittals',
         help_text="Brand used for remark options in compliance statement"
+    )
+
+    # Company stamp, stamped onto every page of the generated PDF
+    stamp = models.ImageField(
+        upload_to=submittal_stamp_path, blank=True, null=True,
+        help_text="Company stamp image, stamped onto every page of the generated PDF"
     )
 
     # Stored output PDF — generated once, temp uploads deleted after
