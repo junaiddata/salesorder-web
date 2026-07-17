@@ -1389,6 +1389,19 @@
         const EXISTING_WARRANTY_MATERIALS_COLUMNS = DATA.existing_warranty_materials_columns || [];
         const WARRANTY_BRANDS_WITH_FORMAT = DATA.warranty_brands_with_format || [];
 
+        // Tracks the warranty brand across step revisits (buildDynamicUploads
+        // re-renders #dynamicUploads every time step 3 is shown, so this must
+        // live outside the DOM). Defaults to following the title-page brand
+        // until the user explicitly picks a different warranty brand
+        // themselves -- an already-saved warranty brand (editing a submittal
+        // that had one set) counts as an explicit choice too.
+        let currentWarrantyBrandId = EXISTING_WARRANTY_BRAND_ID;
+        let warrantyBrandTouched = !!EXISTING_WARRANTY_BRAND_ID;
+        // Set by initWarrantyForm() whenever the warranty select is on-screen,
+        // so an auto-sync from the title page can refresh the upload/generate
+        // area toggle without faking a 'change' event (see below).
+        let warrantyToggleAreasFn = null;
+
         const AUTO_LABELS = new Set([
             'title page', 'index', 'company profile', 'trade license',
             'list of proposed material', 'product catalogue', 'technical details',
@@ -1903,7 +1916,7 @@
                 if (isWarrantyDraftLetter(it.label)) {
                     const warrantyColDefs = colDefs;
                     const warrantyCols = EXISTING_WARRANTY_MATERIALS_COLUMNS || [];
-                    const warrantyBrandId = String(EXISTING_WARRANTY_BRAND_ID || '');
+                    const warrantyBrandId = String(currentWarrantyBrandId || '');
                     const warrantyDateType = EXISTING_WARRANTY_DATE_TYPE || 'toc';
                     const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
                     const hasGeneratedFormat = warrantyBrandId && brandsWithFormat.includes(parseInt(warrantyBrandId));
@@ -2042,8 +2055,19 @@
                 if (uploadArea) uploadArea.style.display = hasFormat ? 'none' : 'block';
                 if (generateArea) generateArea.style.display = hasFormat ? 'block' : 'none';
             }
+            // Exposed so the title-page brand listener can refresh the
+            // upload/generate areas after an auto-sync, without going through
+            // the 'change' listener below (which would wrongly mark this as
+            // a manual user choice).
+            warrantyToggleAreasFn = toggleAreas;
 
-            brandSelect?.addEventListener('change', toggleAreas);
+            brandSelect?.addEventListener('change', () => {
+                // A manual choice here always wins from now on -- stop
+                // following the title-page brand for this submittal.
+                warrantyBrandTouched = true;
+                currentWarrantyBrandId = brandSelect.value || '';
+                toggleAreas();
+            });
 
             function serializeWarrantyColumns() {
                 if (!colBox || !hiddenInput) return;
@@ -2212,6 +2236,20 @@
             searchInput.value = '';
             resultsDiv.classList.remove('show');
             updateMaterialBrandHint();
+
+            // Follow the title-page brand into the Warranty Draft Letter's
+            // Brand field, as long as the user hasn't picked a different one
+            // there themselves. Only patches the live select if the
+            // Documents step has already been rendered; otherwise the value
+            // is simply picked up the next time buildDynamicUploads() runs.
+            if (!warrantyBrandTouched) {
+                currentWarrantyBrandId = brandSelect.value || '';
+                const warrantySelect = document.getElementById('warrantyBrandSelect');
+                if (warrantySelect && warrantySelect.value !== currentWarrantyBrandId) {
+                    warrantySelect.value = currentWarrantyBrandId;
+                    warrantyToggleAreasFn?.();
+                }
+            }
         });
 
         searchInput.addEventListener('input', () => {

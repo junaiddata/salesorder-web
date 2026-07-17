@@ -508,7 +508,10 @@ def _draw_wrapped(c, text, x, y, max_w, font_name, font_size, leading):
 # Index Page (Section 2)
 # ---------------------------------------------------------------------------
 
-def _build_index_page(items: list) -> BytesIO:
+def _build_index_page(items: list, page_numbers: list = None) -> BytesIO:
+    """page_numbers, if given, is a list of ints parallel to items -- the
+    page each section actually starts on in the final merged PDF -- printed
+    right-aligned after each entry's dotted leader line."""
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
@@ -528,8 +531,11 @@ def _build_index_page(items: list) -> BytesIO:
     row_xl, row_xr = 80, PAGE_W - 80
     row_y = title_y - 36
     row_h = 26
+    page_col_w = 28   # reserved width at the right edge for the page number
 
     for idx, label in enumerate(items, 1):
+        page_num = page_numbers[idx - 1] if page_numbers and idx <= len(page_numbers) else None
+
         bg = HexColor('#EEF2F8') if idx % 2 == 0 else WHITE
         c.setFillColor(bg)
         c.rect(row_xl - 6, row_y - 6, row_xr - row_xl + 12, row_h, fill=1, stroke=0)
@@ -548,10 +554,16 @@ def _build_index_page(items: list) -> BytesIO:
         c.setLineWidth(0.5)
         c.setDash([2, 3])
         lw = c.stringWidth(label, 'Helvetica', 10)
-        x1, x2 = row_xl + 30 + lw + 6, row_xr - 28
+        x1, x2 = row_xl + 30 + lw + 6, row_xr - page_col_w
         if x2 > x1:
             c.line(x1, row_y + 7, x2, row_y + 7)
         c.setDash()
+
+        if page_num is not None:
+            c.setFont('Helvetica-Bold', 10)
+            c.setFillColor(BLUE_DARK)
+            c.drawRightString(row_xr, row_y + 3, str(page_num))
+
         row_y -= row_h
 
     c.save()
@@ -1818,67 +1830,102 @@ def stamp_image_on_all_pages(pdf_buf: BytesIO, stamp_path: str) -> BytesIO:
 # Main Build Pipeline
 # ---------------------------------------------------------------------------
 
+class _PageCollector:
+    """
+    Stand-in for PdfMerger during the page-counting pass: same .append(piece)
+    interface the per-section branches already use, but just stores each
+    piece in a list instead of writing to a merged output.
+    """
+    def __init__(self):
+        self.pieces = []
+
+    def append(self, piece):
+        self.pieces.append(piece)
+
+
+def _count_pages(piece) -> int:
+    """Page count of one already-built piece (BytesIO buffer or file path).
+    Leaves BytesIO buffers seeked back to 0 so they can still be merged later."""
+    if isinstance(piece, BytesIO):
+        piece.seek(0)
+        n = len(PdfReader(piece).pages)
+        piece.seek(0)
+        return n
+    if isinstance(piece, str) and os.path.exists(piece):
+        return len(PdfReader(piece).pages)
+    return 0
+
+
 def build_submittal_pdf(submittal_id: int) -> BytesIO:
     """
     Build the complete merged submittal PDF.
     Order follows submittal.index_items. Each included section gets an
     auto-generated divider page (except Title Page) then its content.
     Custom sections use SubmittalSectionUpload for content.
+
+    Built in two passes: the first materializes every listed section's
+    content and counts its pages -- needed to print each section's starting
+    page number on the Index page before those later sections are actually
+    laid out -- and the second assembles the final merged PDF (Title Page,
+    Index with real page numbers, then every section's already-built
+    pieces) without regenerating anything.
     """
     submittal = Submittal.objects.select_related('warranty_brand', 'title_brand').prefetch_related('materials__brand').get(pk=submittal_id)
     company_docs = services.get_company_documents()
-    merger = PdfMerger()
 
     items = _get_ordered_index_items(submittal)
-    display_labels = [it['display'] for it in items]
     materials = submittal.materials.all().order_by('display_order')
     seen = set()
     visible_num = 0
 
+    has_title = any(_label_to_section(it['canonical']) == 1 for it in items)
+    has_index = any(_label_to_section(it['canonical']) == 2 for it in items)
+    # Both are always exactly 1 page (fixed single-canvas builders), so this
+    # offset can be computed up front without building either of them yet.
+    running_page = (1 if has_title else 0) + (1 if has_index else 0)
+
+    # ── Pass 1: build every listed section's content, tracking start pages ──
+    # The printed Index page's list (and therefore the page numbers/divider
+    # numbering it must match) starts at Company Profile -- Title Page and
+    # Index aren't listed there since they're not "sections" a reader looks
+    # up by number.
+    entries = []   # [{'display':, 'start_page':, 'pieces': [...]}] in final order
     for item in items:
         display = item['display']
         canonical = item['canonical']
         section = _label_to_section(canonical)
+
+        if section in (1, 2):
+            continue  # Title Page / Index handled in pass 2, once numbers are known
+
+        start_page = running_page + 1
         visible_num += 1
-
-        # ── Title Page: no divider ──
-        if section == 1:
-            merger.append(_build_title_page(submittal))
-            seen.add(1)
-            continue
-
-        # ── Index: no divider ──
-        if section == 2:
-            merger.append(_build_index_page(display_labels))
-            seen.add(2)
-            continue
+        collector = _PageCollector()
 
         # Skip duplicate sections
         if section is not None and section in seen:
+            entries.append({'display': display, 'start_page': start_page, 'pieces': []})
             continue
         if section is not None:
             seen.add(section)
 
         # ── Standard single-content sections ──
         if section == 3:
-            _append(merger, _safe_path(company_docs.company_profile_pdf),
+            _append(collector, _safe_path(company_docs.company_profile_pdf),
                     True, visible_num, display)
-            continue
 
-        if section == 4:
-            _append(merger, _safe_path(company_docs.trade_license_pdf),
+        elif section == 4:
+            _append(collector, _safe_path(company_docs.trade_license_pdf),
                     True, visible_num, display)
-            continue
 
-        if section == 7:
-            _append(merger, _build_materials_table(submittal),
+        elif section == 7:
+            _append(collector, _build_materials_table(submittal),
                     True, visible_num, display)
-            continue
 
         # ── Upload-based sections (standard or custom) ──
-        if section in (5, 6, 8, 13) or section is None:
+        elif section in (5, 6, 8, 13) or section is None:
             # Always add divider; content optional (show renamed display)
-            merger.append(_build_divider_page(visible_num, display))
+            collector.append(_build_divider_page(visible_num, display))
 
             # Section 13: generated warranty letter (brand-specific format, when
             # the brand has one) OR uploaded PDF
@@ -1886,63 +1933,77 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                 warranty_brand = getattr(submittal, 'warranty_brand', None)
                 letter_builder = _resolve_warranty_letter_builder(warranty_brand)
                 if letter_builder:
-                    merger.append(letter_builder(submittal))
+                    collector.append(letter_builder(submittal))
                 else:
                     upload_path = _get_upload_path(submittal, canonical)
                     if not upload_path:
                         upload_path = _safe_path(submittal.warranty_draft_pdf)
                     if upload_path:
-                        merger.append(upload_path)
-                continue
+                        collector.append(upload_path)
+            else:
+                upload_path = _get_upload_path(submittal, canonical)
+                if not upload_path:
+                    legacy_map = {
+                        5: submittal.vendor_list_pdf,
+                        6: submittal.comply_statement_file,
+                        8: submittal.area_of_application_pdf,
+                    }
+                    ff = legacy_map.get(section)
+                    upload_path = _safe_path(ff) if ff else None
+                if upload_path:
+                    collector.append(upload_path)
 
-            upload_path = _get_upload_path(submittal, canonical)
-            if not upload_path:
-                legacy_map = {
-                    5: submittal.vendor_list_pdf,
-                    6: submittal.comply_statement_file,
-                    8: submittal.area_of_application_pdf,
-                }
-                ff = legacy_map.get(section)
-                upload_path = _safe_path(ff) if ff else None
-            if upload_path:
-                merger.append(upload_path)
-
-            # Section 6: also append generated compliance table if rows exist
-            if section == 6 and (submittal.compliance_rows or []):
-                compliance_pdf = _build_compliance_statement_pdf(submittal)
-                merger.append(compliance_pdf)
-            continue
+                # Section 6: also append generated compliance table if rows exist
+                if section == 6 and (submittal.compliance_rows or []):
+                    collector.append(_build_compliance_statement_pdf(submittal))
 
         # ── Material-level multi sections (9, 10, 11) ──
-        if section in (9, 10, 11):
+        elif section in (9, 10, 11):
             # Always add divider; content optional
-            merger.append(_build_divider_page(visible_num, display))
+            collector.append(_build_divider_page(visible_num, display))
             if section == 9:
                 _append_item_or_brand_docs(
-                    merger, materials, mode_attr='catalogue_mode',
+                    collector, materials, mode_attr='catalogue_mode',
                     get_item_pdf=services.get_catalogue_pdf, brand_doc_type='product_catalogue',
                 )
             elif section == 10:
                 _append_item_or_brand_docs(
-                    merger, materials, mode_attr='technical_mode',
+                    collector, materials, mode_attr='technical_mode',
                     get_item_pdf=services.get_technical_pdf, brand_doc_type='technical_details',
                 )
             elif section == 11:
                 _append_item_or_brand_docs(
-                    merger, materials, mode_attr='test_cert_mode',
+                    collector, materials, mode_attr='test_cert_mode',
                     get_item_pdf=lambda m: services.get_certifications(m, 'test_certificate'),
                     brand_doc_type='test_certificate',
                 )
-            continue
 
         # ── Brand-level document sections (12, 14, 15, 16) ──
         # Pulled once from the brand chosen on the title page.
-        if section in BRAND_DOC_SECTIONS:
-            merger.append(_build_divider_page(visible_num, display))
+        elif section in BRAND_DOC_SECTIONS:
+            collector.append(_build_divider_page(visible_num, display))
             brand = getattr(submittal, 'title_brand', None)
             for path in services.get_brand_documents(brand, BRAND_DOC_SECTIONS[section]):
                 if path and os.path.exists(path):
-                    merger.append(path)
+                    collector.append(path)
+
+        running_page += sum(_count_pages(p) for p in collector.pieces)
+        entries.append({'display': display, 'start_page': start_page, 'pieces': collector.pieces})
+
+    # ── Pass 2: assemble the final PDF now that every start page is known ──
+    merger = PdfMerger()
+    if has_title:
+        merger.append(_build_title_page(submittal))
+    if has_index:
+        display_labels = [e['display'] for e in entries]
+        page_numbers = [e['start_page'] for e in entries]
+        merger.append(_build_index_page(display_labels, page_numbers))
+
+    for entry in entries:
+        for piece in entry['pieces']:
+            if isinstance(piece, BytesIO):
+                piece.seek(0)
+            merger.append(piece)
 
     output = BytesIO()
     merger.write(output)
