@@ -1624,7 +1624,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
                   ('Date', 'Invoice No.', 'LPO No./ DO No.', 'Brand/Model', 'Total Qty.')]
     table_data = [header_row]
     for mat in materials:
-        desc = mat.get('model', '') or mat.model_no
+        desc = "W/H ARISTON "+ mat.get('model_no', '') or mat.model_no
         table_data.append([
             Paragraph('', style_cell), Paragraph('', style_cell), Paragraph('', style_cell),
             Paragraph(str(desc), style_cell), Paragraph('', style_cell),
