@@ -759,6 +759,63 @@
         .btn-remove-idx { color: var(--text-light); }
         .btn-remove-idx:hover { color: var(--accent); background: var(--accent-light); }
 
+        /* ─── Title-page field reordering (fixed + custom, freely interleaved) ─── */
+        .sortable-field-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            border-radius: var(--radius-lg);
+            padding: 0.4rem 0.5rem;
+            margin: 0 -0.5rem 1rem;
+            transition: background var(--transition);
+        }
+        .sortable-field-row:hover { background: var(--bg); }
+        .sortable-field-row.sortable-ghost { opacity: 0.35; background: var(--primary-subtle); }
+        .sortable-field-row.sortable-chosen { background: var(--primary-ghost); box-shadow: 0 2px 12px rgba(26,86,219,0.15); z-index: 10; }
+        .sortable-field-row:last-child { margin-bottom: 0; }
+
+        .drag-handle-field {
+            color: var(--text-light);
+            cursor: grab;
+            font-size: 0.9rem;
+            padding: 0.7rem 0.15rem 0 0.15rem;
+            flex-shrink: 0;
+            transition: color var(--transition);
+        }
+        .drag-handle-field:hover { color: var(--primary); }
+        .drag-handle-field:active { cursor: grabbing; }
+
+        .sortable-field-body { flex: 1; min-width: 0; }
+
+        .custom-field-row {
+            border: 1.5px dashed #c4b5fd;
+            background: #faf5ff;
+        }
+        .custom-field-row .sortable-field-body {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.4rem 0;
+        }
+        .custom-field-text {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #6d28d9;
+        }
+        .btn-remove-field {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.78rem;
+            padding: 4px 6px;
+            border-radius: 5px;
+            color: var(--text-light);
+            flex-shrink: 0;
+            transition: all var(--transition);
+        }
+        .btn-remove-field:hover { color: var(--accent); background: var(--accent-light); }
+
         .add-custom-bar {
             display: flex;
             gap: 0.5rem;
@@ -1090,42 +1147,71 @@
                     </div>
                 </div>
 
-                {% for field in title_form %}
-                {% if field.name == 'brand' %}
-                <div class="form-field" data-field="brand">
-                    <label class="field-label">{{ field.label }}</label>
-                    {{ field }}
-                    <div class="helper-note">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Shown on the title page. Its brand-level documents (Country of Origin, Authorization Letter, Previous Approvals, Previous Projects) are pulled into the PDF automatically. Manage them under Admin → Brands.</span>
-                    </div>
+                <div class="helper-note" style="margin-bottom:0.85rem;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Drag <i class="fas fa-grip-vertical" style="font-size:0.65rem;"></i> any field — including ones you add below — to reorder them, in any position, not just at the end.</span>
                 </div>
-                {% else %}
-                <div class="form-field form-group-hist" data-field="{{ field.name }}">
-                    <label class="field-label">{{ field.label }}</label>
-                    <div class="mode-toggle mb-2">
-                        <label>
-                            <input type="radio" name="mode_{{ field.name }}" value="existing" class="mode-radio">
-                            <i class="fas fa-folder-open" style="font-size:0.72rem;"></i> Existing
-                        </label>
-                        <label>
-                            <input type="radio" name="mode_{{ field.name }}" value="new" class="mode-radio" checked>
-                            <i class="fas fa-pen" style="font-size:0.72rem;"></i> New
-                        </label>
+
+                <div id="titleFieldsSortable">
+                    {% for field in title_form %}
+                    {% if field.name == 'brand' %}
+                    <div class="form-field sortable-field-row" data-order-type="fixed" data-field="brand">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="field-label">{{ field.label }}</label>
+                            {{ field }}
+                            <div class="helper-note">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Shown on the title page. Its brand-level documents (Country of Origin, Authorization Letter, Previous Approvals, Previous Projects) are pulled into the PDF automatically. Manage them under Admin → Brands.</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="d-flex gap-2 align-items-start">
-                        <div class="flex-grow-1">{{ field }}</div>
-                        <button type="button" class="btn-browse-existing btn-select-existing" data-field="{{ field.name }}" style="display:none;">
-                            <i class="fas fa-list"></i> Browse
+                    {% else %}
+                    <div class="form-field form-group-hist sortable-field-row" data-order-type="fixed" data-field="{{ field.name }}">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="field-label">{{ field.label }}</label>
+                            <div class="mode-toggle mb-2">
+                                <label>
+                                    <input type="radio" name="mode_{{ field.name }}" value="existing" class="mode-radio">
+                                    <i class="fas fa-folder-open" style="font-size:0.72rem;"></i> Existing
+                                </label>
+                                <label>
+                                    <input type="radio" name="mode_{{ field.name }}" value="new" class="mode-radio" checked>
+                                    <i class="fas fa-pen" style="font-size:0.72rem;"></i> New
+                                </label>
+                            </div>
+                            <div class="d-flex gap-2 align-items-start">
+                                <div class="flex-grow-1">{{ field }}</div>
+                                <button type="button" class="btn-browse-existing btn-select-existing" data-field="{{ field.name }}" style="display:none;">
+                                    <i class="fas fa-list"></i> Browse
+                                </button>
+                            </div>
+                            <div class="existing-list-panel" id="panel_{{ field.name }}">
+                                <input type="text" class="existing-list-search" placeholder="Type to filter…" data-field="{{ field.name }}">
+                                <div class="existing-list-items" id="list_{{ field.name }}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                <div class="form-field" data-field="custom_fields" style="margin-top:0.5rem;">
+                    <label class="field-label">Additional Fields <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+                    <div class="add-custom-bar">
+                        <input type="text" id="customFieldLabelInput" placeholder="Field name (e.g. Tender No.)">
+                        <input type="text" id="customFieldValueInput" placeholder="Value">
+                        <button type="button" class="btn-add-custom" id="btnAddCustomField">
+                            <i class="fas fa-plus"></i> Add Field
                         </button>
                     </div>
-                    <div class="existing-list-panel" id="panel_{{ field.name }}">
-                        <input type="text" class="existing-list-search" placeholder="Type to filter…" data-field="{{ field.name }}">
-                        <div class="existing-list-items" id="list_{{ field.name }}"></div>
+                    <div class="helper-note">
+                        <i class="fas fa-info-circle"></i>
+                        <span>New fields are added to the bottom of the list above and shown wherever project details appear (title page, compliance statement, materials list) — drag them wherever you'd like, including between existing fields.</span>
                     </div>
+                    <input type="hidden" name="field_order_json" id="fieldOrderJson">
                 </div>
-                {% endif %}
-                {% endfor %}
             </div>
 
             <!-- ═══ STEP 1: Materials ═══ -->
@@ -1458,6 +1544,106 @@
 
         renderIndexList();
         initSortable();
+
+        // ── Title-page field order (fixed + custom, freely interleaved) ──
+        // Unlike the other reorderable lists on this page, this one drags real
+        // DOM nodes directly (not a JS-array-driven re-render): the fixed
+        // fields are live form inputs with Existing/New toggles and history
+        // panels wired to them, so we move the actual elements instead of
+        // recreating them from data on every change.
+        const EXISTING_FIELD_ORDER = DATA.existing_field_order || [];
+
+        function createCustomFieldRow(label, value) {
+            const row = document.createElement('div');
+            row.className = 'form-field sortable-field-row custom-field-row';
+            row.dataset.orderType = 'custom';
+            row.dataset.label = label;
+            row.dataset.value = value;
+            row.innerHTML = `
+                <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                <div class="sortable-field-body">
+                    <span class="custom-field-text">${escapeHtml(label)}: ${escapeHtml(value)}</span>
+                    <button type="button" class="btn-remove-field" title="Remove"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+            row.querySelector('.btn-remove-field').addEventListener('click', () => {
+                row.remove();
+                serializeFieldOrder();
+            });
+            return row;
+        }
+
+        function serializeFieldOrder() {
+            const container = document.getElementById('titleFieldsSortable');
+            const order = [];
+            container.querySelectorAll(':scope > .sortable-field-row').forEach(row => {
+                if (row.dataset.orderType === 'fixed') {
+                    order.push({ type: 'fixed', key: row.dataset.field });
+                } else if (row.dataset.orderType === 'custom') {
+                    order.push({ type: 'custom', label: row.dataset.label, value: row.dataset.value });
+                }
+            });
+            document.getElementById('fieldOrderJson').value = JSON.stringify(order);
+        }
+
+        (function applyExistingFieldOrder() {
+            const container = document.getElementById('titleFieldsSortable');
+            if (!container || !EXISTING_FIELD_ORDER.length) { serializeFieldOrder(); return; }
+
+            const fixedNodes = {};
+            container.querySelectorAll(':scope > [data-order-type="fixed"]').forEach(row => {
+                fixedNodes[row.dataset.field] = row;
+            });
+
+            const usedKeys = new Set();
+            const fragment = document.createDocumentFragment();
+            EXISTING_FIELD_ORDER.forEach(entry => {
+                if (!entry) return;
+                if (entry.type === 'fixed' && fixedNodes[entry.key]) {
+                    fragment.appendChild(fixedNodes[entry.key]);
+                    usedKeys.add(entry.key);
+                } else if (entry.type === 'custom' && entry.label && entry.value) {
+                    fragment.appendChild(createCustomFieldRow(entry.label, entry.value));
+                }
+            });
+            // A fixed field missing from the saved order (e.g. the form gained
+            // one after this submittal was last saved) must still show up.
+            Object.keys(fixedNodes).forEach(key => {
+                if (!usedKeys.has(key)) fragment.appendChild(fixedNodes[key]);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(fragment);
+            serializeFieldOrder();
+        })();
+
+        Sortable.create(document.getElementById('titleFieldsSortable'), {
+            handle: '.drag-handle-field',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: serializeFieldOrder,
+        });
+
+        document.getElementById('btnAddCustomField').addEventListener('click', () => {
+            const labelInput = document.getElementById('customFieldLabelInput');
+            const valueInput = document.getElementById('customFieldValueInput');
+            const label = labelInput.value.trim();
+            const value = valueInput.value.trim();
+            if (!label || !value) { (label ? valueInput : labelInput).focus(); return; }
+            document.getElementById('titleFieldsSortable').appendChild(createCustomFieldRow(label, value));
+            labelInput.value = '';
+            valueInput.value = '';
+            serializeFieldOrder();
+            labelInput.focus();
+        });
+
+        document.getElementById('customFieldValueInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddCustomField').click(); }
+        });
+        document.getElementById('customFieldLabelInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('customFieldValueInput').focus(); }
+        });
 
         // ── Column selector ──
         let showAllColumns = true;

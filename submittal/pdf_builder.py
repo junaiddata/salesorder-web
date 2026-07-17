@@ -107,6 +107,55 @@ def _label_to_section(label: str):
     return INDEX_LABEL_TO_SECTION.get(_norm(label))
 
 
+# The six fixed project-detail fields, keyed the same way in every PDF
+# section that shows them (title page, compliance statement, materials
+# list) -- only the label wording differs slightly per section.
+FIXED_FIELD_KEYS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor', 'brand']
+
+TITLE_PAGE_LABELS = {
+    'project': 'Project', 'client': 'Employer', 'consultant': 'Consultant',
+    'main_contractor': 'Contractor', 'mep_contractor': 'MEP Contractor', 'brand': 'Brand',
+}
+PROJECT_DETAIL_LABELS = {
+    'project': 'Project', 'client': 'Client', 'consultant': 'Consultant',
+    'main_contractor': 'Main Contractor', 'mep_contractor': 'MEP Contractor', 'brand': 'Brand',
+}
+
+
+def _fixed_field_value(submittal, key):
+    if key == 'brand':
+        return submittal.title_brand.name if submittal.title_brand else submittal.product
+    return getattr(submittal, key, '') or ''
+
+
+def _ordered_project_fields(submittal, label_map):
+    """
+    Build the ordered (label, value) list for the project-details block shown
+    on the title page, compliance statement, and materials list. Honors the
+    user's custom field_order, which may interleave custom fields anywhere
+    among the fixed ones rather than only appending them at the end.
+    label_map supplies this section's label wording for each fixed key.
+    """
+    order = submittal.field_order or []
+    if not order:
+        return [(label_map[k], _fixed_field_value(submittal, k)) for k in FIXED_FIELD_KEYS if k in label_map]
+
+    result = []
+    for entry in order:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get('type') == 'fixed':
+            key = entry.get('key')
+            if key in label_map:
+                result.append((label_map[key], _fixed_field_value(submittal, key)))
+        elif entry.get('type') == 'custom':
+            label = (entry.get('label') or '').strip()
+            value = (entry.get('value') or '').strip()
+            if label and value:
+                result.append((label, value))
+    return result
+
+
 def needs_upload(label: str) -> bool:
     """Return True if this index label requires a per-submittal file upload."""
     key = _norm(label)
@@ -385,15 +434,8 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
     # ── Dynamic fields ────────────────────────────────────────────────
-    fields = [
-        ('Project',        submittal.project),
-        ('Employer',       submittal.client),
-        ('Consultant',     submittal.consultant),
-        ('Contractor',     submittal.main_contractor),
-        ('MEP Contractor', submittal.mep_contractor),
-        ('Brand',          submittal.title_brand.name if submittal.title_brand else submittal.product),
-        ('Manufacturer',   getattr(submittal, 'manufacturer', '')),
-    ]
+    fields = _ordered_project_fields(submittal, TITLE_PAGE_LABELS)
+    fields.append(('Manufacturer', getattr(submittal, 'manufacturer', '')))
 
     # Starting Y position below "MATERIAL SUBMITTAL" in background
     field_y = PAGE_H - 370
@@ -721,42 +763,54 @@ def _get_warranty_columns(submittal):
     return _get_effective_columns(submittal, column_override=sel)
 
 
+# Continuation pages keep the original tight margin (header/title only,
+# no project details -- same pattern as the compliance statement's later
+# pages) so the table gets maximum room once the project block has already
+# been shown once, on page 1.
+MATERIAL_LATER_TOP_MARGIN = 230
+
+
 class _MaterialPageTemplate(BaseDocTemplate):
     """
     Custom doc template that draws material_page_bg.png on every page.
     The table flows naturally within the frame area below the header/title
-    already baked into the background image.
+    already baked into the background image. Page 1 additionally reserves
+    space for a project-details block (Project/Client/Consultant/etc,
+    mirroring the compliance statement) drawn between the baked-in title
+    and the table.
     """
 
-    def __init__(self, buf, bg_path, **kwargs):
+    def __init__(self, buf, bg_path, submittal, **kwargs):
         self._bg_path = bg_path
-        super().__init__(buf, **kwargs)
-
-        # Frame starts below the header + "LIST OF PROPOSED MATERIALS" title
-        # in the background image. Adjust top_start based on your bg image.
-        top_start = kwargs.get('topMargin', 230)
+        self._submittal = submittal
+        # Extra fields beyond the 6 fixed ones push the table's start
+        # further down so they never overlap it -- see _draw_first_page.
+        extra_fields = max(0, len(_ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)) - len(FIXED_FIELD_KEYS))
+        first_top = kwargs.pop('topMargin', 320) + extra_fields * 16
         bottom_end = kwargs.get('bottomMargin', 50)
         left = kwargs.get('leftMargin', 50)
         right = kwargs.get('rightMargin', 50)
+        super().__init__(buf, topMargin=first_top, **kwargs)
+
         frame_w = PAGE_W - left - right
-        frame_h = PAGE_H - top_start - bottom_end
 
-        frame = Frame(
-            left,
-            bottom_end,
-            frame_w,
-            frame_h,
-            id='material_frame',
+        first_frame = Frame(
+            left, bottom_end, frame_w,
+            PAGE_H - first_top - bottom_end,
+            id='material_first',
         )
-        template = PageTemplate(
-            id='material_bg',
-            frames=[frame],
-            onPage=self._draw_bg,
+        later_frame = Frame(
+            left, bottom_end, frame_w,
+            PAGE_H - MATERIAL_LATER_TOP_MARGIN - bottom_end,
+            id='material_later',
         )
-        self.addPageTemplates([template])
+        self.addPageTemplates([
+            PageTemplate(id='MaterialFirst', frames=[first_frame], onPage=self._draw_first_page),
+            PageTemplate(id='MaterialLater', frames=[later_frame], onPage=self._draw_later_page),
+        ])
 
-    def _draw_bg(self, canvas_obj, doc):
-        """Draw background image on every page."""
+    def _draw_bg(self, canvas_obj):
+        """Draw background image (header + baked-in title)."""
         if os.path.exists(self._bg_path):
             canvas_obj.saveState()
             canvas_obj.drawImage(
@@ -768,6 +822,31 @@ class _MaterialPageTemplate(BaseDocTemplate):
                 mask='auto',
             )
             canvas_obj.restoreState()
+
+    def _draw_first_page(self, canvas_obj, doc):
+        """Background + project details, drawn below the baked-in title."""
+        self._draw_bg(canvas_obj)
+        submittal = self._submittal
+
+        fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        field_y = PAGE_H - 200
+        label_x, colon_x, value_x = 55, 170, 180
+        max_w = PAGE_W - value_x - 36
+
+        for lbl, val in fields:
+            if not val:
+                continue
+            canvas_obj.setFont('Helvetica-Bold', 9)
+            canvas_obj.setFillColor(colors.black)
+            canvas_obj.drawString(label_x, field_y, lbl)
+            canvas_obj.drawString(colon_x, field_y, ':')
+            canvas_obj.setFont('Helvetica', 9)
+            _draw_wrapped(canvas_obj, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
+            field_y -= 16
+
+    def _draw_later_page(self, canvas_obj, doc):
+        """Background only (no project details) on continuation pages."""
+        self._draw_bg(canvas_obj)
 
 
 def _build_materials_table(submittal: Submittal) -> BytesIO:
@@ -783,10 +862,11 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
     doc = _MaterialPageTemplate(
         buf,
         bg_path=bg_path,
+        submittal=submittal,
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
-        topMargin=230,     # below header + "LIST OF PROPOSED MATERIALS" in bg
+        topMargin=320,     # page 1: below title + project-details block
         bottomMargin=50,
     )
 
@@ -865,7 +945,7 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
     ]))
 
     # ── Build PDF ─────────────────────────────────────────────────────
-    elements = [table]
+    elements = [NextPageTemplate('MaterialLater'), table]
     doc.build(elements)
     buf.seek(0)
     return buf
@@ -997,8 +1077,11 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
 
     buf = BytesIO()
 
-    # Page frame leaves room for the first-page header content
-    FIRST_TOP_MARGIN = 320   # space for header, title, and project details
+    # Page frame leaves room for the first-page header content. Extra fields
+    # beyond the 6 fixed ones push the table's start further down so they
+    # never overlap it.
+    _extra_field_count = max(0, len(_ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)) - len(FIXED_FIELD_KEYS))
+    FIRST_TOP_MARGIN = 320 + _extra_field_count * 16
     LATER_TOP_MARGIN = 170   # space for company header + title on continuation pages
     BOTTOM_MARGIN = 50       # space for "Page X of Y"
 
@@ -1038,14 +1121,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         c.line(cx - tw / 2, title_y - 4, cx + tw / 2, title_y - 4)
 
         # Project details
-        fields = [
-            ('Project', submittal.project),
-            ('Client', submittal.client),
-            ('Consultant', submittal.consultant),
-            ('Main Contractor', submittal.main_contractor),
-            ('MEP Contractor', submittal.mep_contractor),
-            ('Brand', submittal.title_brand.name if submittal.title_brand else submittal.product),
-        ]
+        fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
         field_y = title_y - 30
         label_x, colon_x, value_x = 55, 170, 180
         max_w = PAGE_W - value_x - 36
@@ -1490,16 +1566,191 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
     return buf
 
 
+def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
+    """
+    Build the Ariston "LETTER OF WARRANTY", styled after the Ariston reference
+    letter -- distinct from the Pegler-style certificate in
+    _build_warranty_letter_pdf. Fixed Ariston warranty terms (thermostat/
+    element/anode vs. glass lining periods, exclusions, service center
+    contact), a blank fill-in-by-hand table row per item (only the
+    item description is prefilled; Date/Invoice/LPO/Qty are left blank for
+    the point-of-sale paperwork), and the Meraj Asad Khan / Director of Sales
+    sign-off. Uses the same TOC/Invoice date_type toggle and DRAFT watermark
+    + logo page template as the Pegler letter.
+    """
+    buf = BytesIO()
+    doc = _WarrantyDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=80,   # leave room for logo
+        bottomMargin=50,
+    )
+
+    style_body = ParagraphStyle(
+        'AWBody', fontSize=10, fontName='Helvetica', leading=14, spaceAfter=6,
+    )
+    style_title = ParagraphStyle(
+        'AWTitle', fontSize=13, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, spaceAfter=4, textColor=colors.black,
+    )
+    style_ref = ParagraphStyle(
+        'AWRef', fontSize=9, fontName='Helvetica-Bold', leading=13,
+    )
+    style_bullet = ParagraphStyle(
+        'AWBullet', fontSize=10, fontName='Helvetica', leading=14,
+        spaceAfter=4, leftIndent=14,
+    )
+    style_cell = ParagraphStyle(
+        'AWCell', fontSize=8, fontName='Helvetica', leading=10, alignment=TA_CENTER,
+    )
+    style_header = ParagraphStyle(
+        'AWHeader', fontSize=8, fontName='Helvetica-Bold', leading=10, alignment=TA_CENTER,
+    )
+
+    # ── Fetch materials ───────────────────────────────────────────────
+    materials = (
+        submittal.materials
+        .select_related('brand')
+        .all()
+        .order_by('display_order', 'model_no')
+    )
+
+    # ── Fill-in-by-hand table: Date / Invoice / LPO-DO / Brand-Model / Qty ──
+    # Only Brand/Model (item description) is prefilled; the rest are left
+    # blank on the printed letter for point-of-sale details to be written in.
+    header_row = [Paragraph(h, style_header) for h in
+                  ('Date', 'Invoice No.', 'LPO No./ DO No.', 'Brand/Model', 'Total Qty.')]
+    table_data = [header_row]
+    for mat in materials:
+        desc = mat.get('item_description', '') or mat.model_no
+        table_data.append([
+            Paragraph('', style_cell), Paragraph('', style_cell), Paragraph('', style_cell),
+            Paragraph(str(desc), style_cell), Paragraph('', style_cell),
+        ])
+    if not materials:
+        table_data.append([Paragraph('', style_cell) for _ in range(5)])
+    end_row = len(table_data)
+    table_data.append([Paragraph('<b>End of List</b>', style_cell)] + [Paragraph('', style_cell)] * 4)
+
+    col_widths = [55, 65, 90, 190, 60]
+    tbl = Table(table_data, colWidths=col_widths)
+    tbl.setStyle(TableStyle([
+        ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
+        ('SPAN',       (0, end_row), (-1, end_row)),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    # ── date_type / date_word (same toggle as the Pegler letter) ───────
+    today = date.today().strftime('%B %d, %Y')
+    date_type = getattr(submittal, 'warranty_date_type', 'toc') or 'toc'
+    date_word = 'INVOICE' if date_type == 'invoice' else 'TOC'
+
+    elements = [
+        # REF -- left blank for manual fill-in (no counter tracked in-system)
+        Paragraph('REF:', style_ref),
+        Spacer(1, 4),
+        Paragraph('LETTER OF WARRANTY', style_title),
+        Spacer(1, 6),
+        Paragraph(f'Date: {today}', style_body),
+        Spacer(1, 16),
+
+        tbl,
+        Spacer(1, 14),
+
+        Paragraph(
+            f'We are pleased to confirm the Warranty against manufacturing defects only starting '
+            f'from the date of <b>{date_word}</b>.',
+            style_body,
+        ),
+
+        Paragraph('» Thermostat, Element and Anode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 1 Year', style_bullet),
+        Paragraph('» Glass Lining of the Tank&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 7 Years', style_bullet),
+        Spacer(1, 6),
+
+        Paragraph(
+            'Magnesium anode is not covered by warranty in virtue of its nature as consumable '
+            'material during the usage of the heater (magnesium anode to be replaced every 12 '
+            'months from the date of filling the tank and as per instructions manual).',
+            style_body,
+        ),
+        Paragraph(
+            'The above warranty becomes effective if the Installation instructions as well as the '
+            'maintenance requirements as detailed in their technical literature are complied with.',
+            style_body,
+        ),
+        Paragraph('<b>(Operation and Maintenance Manual is provided with each unit)</b>', style_body),
+        Spacer(1, 2),
+
+        Paragraph('• As per the manufacturer guidelines all warranty given as per the supply/invoice date.', style_bullet),
+        Paragraph('• Manufacturer’s instructions manual must be strictly complied for warranty claim.', style_bullet),
+        Paragraph('• <b>TOC date cannot be exceeded 6 months from the date of invoice.</b>', style_bullet),
+        Spacer(1, 6),
+
+        Paragraph('The Warranty does not include the damage due to the following:', style_body),
+        Paragraph('» Bad and Incorrect Installation.', style_bullet),
+        Paragraph('» “Switching On” the Water Heater without water in it.', style_bullet),
+        Paragraph('» Damage caused by other parties.', style_bullet),
+        Paragraph('» Magnesium Anode not regularly checked and changed (Annual Periodic Maintenance as per Manual)', style_bullet),
+        Paragraph('» The required 8 bar pressure safety valve is not installed.', style_bullet),
+        Spacer(1, 6),
+
+        Paragraph(
+            'Any maintenance request within the warranty period, kindly contact directly Ariston '
+            'Service Center (800-2747866) and provide them invoice details.',
+            style_body,
+        ),
+        Paragraph(
+            "Warranty claims will be considered only after inspection by the manufacturer's team "
+            "and their approval.",
+            style_body,
+        ),
+        Spacer(1, 26),
+
+        # Sign-off
+        Paragraph('For,', style_body),
+        Paragraph('M/s. Junaid Sanitary &amp; Electrical Materials Trading LLC', style_body),
+        Spacer(1, 36),   # signature gap
+        Paragraph('Mr. Meraj Asad Khan', style_body),
+        Paragraph('Director of Sales', style_body),
+    ]
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf
+
+
+def _resolve_warranty_letter_builder(warranty_brand):
+    """
+    Return the generated-letter builder function for this brand, or None if
+    the brand isn't set to generate one (upload mode applies instead).
+    Add new brand-specific letter formats here as they're needed -- each
+    brand keeps its own fixed wording/layout, same pattern as Ariston's.
+    """
+    if not warranty_brand or not getattr(warranty_brand, 'use_generated_warranty', False):
+        return None
+    name = (warranty_brand.name or '').strip().lower()
+    if name.startswith('ariston'):
+        return _build_ariston_warranty_letter_pdf
+    return _build_warranty_letter_pdf
+
+
 # ---------------------------------------------------------------------------
 # Item-wise / brand-wide document resolution (Product Catalogue, Technical Details)
 # ---------------------------------------------------------------------------
 
 def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand_doc_type):
     """
-    For each material, append either its own item-level PDF or its brand's
+    For each material, append either its own item-level PDF(s) or its brand's
     shared brand-wide PDF(s), depending on the brand's mode (set in Admin ›
     Brands). Brand-wide docs are appended once per brand even if several
     selected materials share that brand.
+
+    get_item_pdf(material) may return a single path, None, or a list of
+    paths (e.g. multiple test certificates per item).
     """
     brand_wide_done = set()
     for mat in materials:
@@ -1513,9 +1764,11 @@ def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand
                 if path and os.path.exists(path):
                     merger.append(path)
         else:
-            path = get_item_pdf(mat)
-            if path and os.path.exists(path):
-                merger.append(path)
+            result = get_item_pdf(mat)
+            paths = result if isinstance(result, (list, tuple)) else [result]
+            for path in paths:
+                if path and os.path.exists(path):
+                    merger.append(path)
 
 
 # ---------------------------------------------------------------------------
@@ -1627,12 +1880,13 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
             # Always add divider; content optional (show renamed display)
             merger.append(_build_divider_page(visible_num, display))
 
-            # Section 13: generated warranty letter (when brand has format) OR uploaded PDF
+            # Section 13: generated warranty letter (brand-specific format, when
+            # the brand has one) OR uploaded PDF
             if section == 13:
                 warranty_brand = getattr(submittal, 'warranty_brand', None)
-                use_generated = warranty_brand and getattr(warranty_brand, 'use_generated_warranty', False)
-                if use_generated:
-                    merger.append(_build_warranty_letter_pdf(submittal))
+                letter_builder = _resolve_warranty_letter_builder(warranty_brand)
+                if letter_builder:
+                    merger.append(letter_builder(submittal))
                 else:
                     upload_path = _get_upload_path(submittal, canonical)
                     if not upload_path:
@@ -1674,10 +1928,11 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                     get_item_pdf=services.get_technical_pdf, brand_doc_type='technical_details',
                 )
             elif section == 11:
-                for mat in materials:
-                    for path in services.get_certifications(mat, 'test_certificate'):
-                        if path and os.path.exists(path):
-                            merger.append(path)
+                _append_item_or_brand_docs(
+                    merger, materials, mode_attr='test_cert_mode',
+                    get_item_pdf=lambda m: services.get_certifications(m, 'test_certificate'),
+                    brand_doc_type='test_certificate',
+                )
             continue
 
         # ── Brand-level document sections (12, 14, 15, 16) ──

@@ -67,6 +67,10 @@ class SubmittalBrand(models.Model):
         max_length=10, choices=DOC_MODE_CHOICES, default='item',
         help_text="Item-wise: each material has its own Technical Details PDF. Brand-wide: one shared Technical Details PDF for every item under this brand."
     )
+    test_cert_mode = models.CharField(
+        max_length=10, choices=DOC_MODE_CHOICES, default='item',
+        help_text="Item-wise: each material has its own Test Certificate(s). Brand-wide: one shared set of Test Certificates for every item under this brand."
+    )
 
     class Meta:
         ordering = ['display_order', 'name']
@@ -213,9 +217,9 @@ class BrandDocument(models.Model):
     """
     Brand-level documents, uploaded once per brand and reused across submittals.
     Types: country_of_origin, authorization_letter, previous_approval, previous_project
-    (pulled in for the brand chosen on the title page), plus product_catalogue and
-    technical_details (pulled in per-material's brand when that brand is set to
-    "Brand-wide" mode for Product Catalogue / Technical Details).
+    (pulled in for the brand chosen on the title page), plus product_catalogue,
+    technical_details, and test_certificate (pulled in per-material's brand when
+    that brand is set to "Brand-wide" mode for that document type).
     """
     DOC_TYPE_CHOICES = [
         ('country_of_origin', 'Country of Origin'),
@@ -224,6 +228,7 @@ class BrandDocument(models.Model):
         ('previous_project', 'Previous Project'),
         ('product_catalogue', 'Product Catalogue'),
         ('technical_details', 'Technical Details'),
+        ('test_certificate', 'Test Certificate'),
     ]
 
     brand = models.ForeignKey(
@@ -286,6 +291,13 @@ class Submittal(models.Model):
         related_name='title_submittals',
         help_text="Brand shown on the title page. Used to pull brand-level documents "
                   "(country of origin, authorization letter, previous approvals, previous projects)."
+    )
+    field_order = models.JSONField(
+        default=list, blank=True,
+        help_text="Order (and any custom additions) of the project-details block shown on the "
+                  "title page, compliance statement and materials list: "
+                  "[{'type': 'fixed', 'key': 'project'}, {'type': 'custom', 'label': ..., 'value': ...}, ...]. "
+                  "Empty = default fixed order (project, client, consultant, main_contractor, mep_contractor, brand)."
     )
 
     # Section 2 - Index (ordered list of {label, included, display_label?} dicts, generated with ReportLab)

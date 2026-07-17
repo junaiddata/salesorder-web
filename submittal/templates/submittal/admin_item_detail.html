@@ -79,6 +79,9 @@
 <div class="admin-card">
     <h5 class="mb-3"><i class="fas fa-certificate me-2"></i>Test Certificates</h5>
     <p class="text-muted small mb-3">Add Test Certificates for this material. Country of Origin, Authorization Letter, Previous Approvals and Previous Projects are now managed per-brand on the <a href="{% url 'submittal:admin_brand_edit' material.brand.pk %}">Brand page</a>.</p>
+    {% if material.brand.test_cert_mode == 'brand' %}
+    <p class="text-muted small mb-3"><i class="fas fa-circle-info me-1"></i>{{ material.brand.name }} is set to <strong>Brand-wide</strong> test certificates — these per-item files are ignored. Manage them on the <a href="{% url 'submittal:admin_brand_edit' material.brand.pk %}">Brand page</a> instead.</p>
+    {% endif %}
 
     <form method="post" enctype="multipart/form-data" class="mb-4 p-3 bg-light rounded">
         {% csrf_token %}

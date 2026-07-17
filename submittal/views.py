@@ -16,7 +16,7 @@ from .models import (
 )
 from .forms import TitlePageForm
 from .services import get_history_values
-from .pdf_builder import build_submittal_pdf, DEFAULT_INDEX_ITEMS, needs_upload
+from .pdf_builder import build_submittal_pdf, DEFAULT_INDEX_ITEMS, needs_upload, FIXED_FIELD_KEYS
 
 
 @login_required
@@ -34,6 +34,7 @@ def submittal_wizard(request, pk=None):
     selected_material_ids = []
     existing_index_items = []
     existing_uploads = {}
+    existing_field_order = []
 
     existing_compliance_rows = []
     existing_compliance_brand_id = None
@@ -49,6 +50,7 @@ def submittal_wizard(request, pk=None):
         }
         selected_material_ids = list(submittal.materials.values_list('pk', flat=True))
         existing_index_items = submittal.index_items or []
+        existing_field_order = submittal.field_order or []
         for up in submittal.section_uploads.all():
             existing_uploads[up.index_label] = up.file.name.split('/')[-1] if up.file else ''
         existing_compliance_rows = submittal.compliance_rows or []
@@ -118,6 +120,7 @@ def submittal_wizard(request, pk=None):
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'default_index_items': list(DEFAULT_INDEX_ITEMS),
         'existing_index_items': existing_index_items,
+        'existing_field_order': existing_field_order,
         'existing_warranty_brand_id': existing_warranty_brand_id or '',
         'existing_warranty_date_type': existing_warranty_date_type,
         'existing_warranty_materials_columns': existing_warranty_materials_columns,
@@ -178,6 +181,27 @@ def submittal_save(request):
             submittal.index_items = json.loads(index_items_json)
         except (ValueError, TypeError):
             pass
+
+    field_order_json = request.POST.get('field_order_json', '')
+    if field_order_json:
+        try:
+            field_order = json.loads(field_order_json)
+        except (ValueError, TypeError):
+            field_order = []
+        cleaned = []
+        for entry in field_order:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get('type') == 'fixed' and entry.get('key') in FIXED_FIELD_KEYS:
+                cleaned.append({'type': 'fixed', 'key': entry['key']})
+            elif entry.get('type') == 'custom':
+                label = (entry.get('label') or '').strip()
+                value = (entry.get('value') or '').strip()
+                if label and value:
+                    cleaned.append({'type': 'custom', 'label': label, 'value': value})
+        submittal.field_order = cleaned
+    else:
+        submittal.field_order = []
 
     materials_columns_json = request.POST.get('materials_columns_json', '')
     if materials_columns_json:
@@ -933,6 +957,9 @@ def admin_brand_edit(request, pk):
             technical_mode = request.POST.get('technical_mode')
             if technical_mode in valid_modes:
                 brand.technical_mode = technical_mode
+            test_cert_mode = request.POST.get('test_cert_mode')
+            if test_cert_mode in valid_modes:
+                brand.test_cert_mode = test_cert_mode
             brand.save()
             messages.success(request, f'Brand "{name}" updated.')
             return redirect('submittal:admin_brands')
