@@ -6,13 +6,14 @@ from .models import SubmittalBrand
 class TitlePageForm(forms.Form):
     """Step 1: Title page details."""
     project = forms.CharField(
+        required=False,
         widget=forms.Textarea(attrs={
             'rows': 3, 'class': 'form-control',
             'placeholder': 'e.g. GEMS FPS – PHASE 2 (G+3 FIRST POINT SCHOOL)...'
         })
     )
     client = forms.CharField(
-        max_length=255,
+        max_length=255, required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'e.g. M/s. PREMIER SCHOOL INTERNATIONAL'

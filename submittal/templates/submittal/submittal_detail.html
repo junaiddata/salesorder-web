@@ -106,20 +106,35 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="font-size:.85rem;">Upload the company stamp picture. It will be stamped onto every page of the generated PDF.</p>
+                <p class="text-muted" style="font-size:.85rem;">Upload the company stamp picture, and choose which pages of the generated PDF it's stamped onto.</p>
                 {% if submittal.stamp %}
                 <div class="mb-2" style="font-size:.82rem;">
                     <strong>Current stamp:</strong><br>
                     <img src="{{ submittal.stamp.url }}" alt="Current stamp" style="max-height:90px;border:1px solid var(--line-soft);border-radius:4px;padding:4px;margin-top:.4rem;background:#fff;">
                 </div>
                 {% endif %}
-                <label for="stampFileInput" class="form-label" style="font-size:.82rem;font-weight:600;">Stamp image (PNG/JPG)</label>
+                <label for="stampFileInput" class="form-label" style="font-size:.82rem;font-weight:600;">Stamp image (PNG/JPG){% if submittal.stamp %} — optional, leave empty to keep the current one{% endif %}</label>
                 <input type="file" id="stampFileInput" accept="image/*" class="form-control">
                 <div id="stampPreviewWrap" style="display:none;margin-top:.6rem;">
                     <span style="font-size:.82rem;font-weight:600;">Preview:</span><br>
                     <img id="stampPreviewImg" alt="Stamp preview" style="max-height:90px;border:1px solid var(--line-soft);border-radius:4px;padding:4px;margin-top:.4rem;background:#fff;">
                 </div>
-                <div id="stampError" class="text-danger" style="font-size:.8rem;display:none;margin-top:.4rem;"></div>
+
+                <div class="mt-3">
+                    <label class="form-label" style="font-size:.82rem;font-weight:600;">Apply stamp to</label>
+                    <div class="d-flex flex-column gap-2" style="font-size:.85rem;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="stampMode" id="stampModeAll" value="all" {% if submittal.stamp_mode != 'custom' %}checked{% endif %}>
+                            <label class="form-check-label" for="stampModeAll">All pages</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="stampMode" id="stampModeCustom" value="custom" {% if submittal.stamp_mode == 'custom' %}checked{% endif %}>
+                            <label class="form-check-label" for="stampModeCustom">List of Proposed Material &amp; Comply Statement with Project Specification only</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="stampError" class="text-danger" style="font-size:.8rem;display:none;margin-top:.6rem;"></div>
             </div>
             <div class="modal-footer">
                 {% if submittal.stamp %}
@@ -283,12 +298,18 @@
     const previewImg = document.getElementById('stampPreviewImg');
     const errEl = document.getElementById('stampError');
     const saveBtn = document.getElementById('btnSaveStamp');
+    const modeAllRadio = document.getElementById('stampModeAll');
+    const modeCustomRadio = document.getElementById('stampModeCustom');
+    const HAS_SAVED_STAMP = {% if submittal.stamp %}true{% else %}false{% endif %};
+    const SAVED_STAMP_MODE = '{{ submittal.stamp_mode|default:"all" }}';
 
     function resetModal() {
         fileInput.value = '';
         previewWrap.style.display = 'none';
         previewImg.src = '';
         errEl.style.display = 'none';
+        modeAllRadio.checked = SAVED_STAMP_MODE !== 'custom';
+        modeCustomRadio.checked = SAVED_STAMP_MODE === 'custom';
     }
     document.getElementById('stampModal').addEventListener('shown.bs.modal', resetModal);
 
@@ -315,7 +336,7 @@
     saveBtn.addEventListener('click', () => {
         errEl.style.display = 'none';
         const file = fileInput.files[0];
-        if (!file) {
+        if (!file && !HAS_SAVED_STAMP) {
             errEl.textContent = 'Please choose a stamp image.';
             errEl.style.display = 'block';
             return;
@@ -324,7 +345,8 @@
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
 
         const fd = new FormData();
-        fd.append('stamp_image', file);
+        if (file) fd.append('stamp_image', file);
+        fd.append('stamp_mode', modeCustomRadio.checked ? 'custom' : 'all');
 
         fetch('{% url "submittal:save_stamp" submittal.pk %}', {
             method: 'POST',

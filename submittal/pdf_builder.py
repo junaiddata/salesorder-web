@@ -113,7 +113,7 @@ def _label_to_section(label: str):
 FIXED_FIELD_KEYS = ['project', 'client', 'consultant', 'main_contractor', 'mep_contractor', 'brand']
 
 TITLE_PAGE_LABELS = {
-    'project': 'Project', 'client': 'Employer', 'consultant': 'Consultant',
+    'project': 'Project', 'client': 'Client', 'consultant': 'Consultant',
     'main_contractor': 'Contractor', 'mep_contractor': 'MEP Contractor', 'brand': 'Brand',
 }
 PROJECT_DETAIL_LABELS = {
@@ -1490,11 +1490,15 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
             Paragraph(value, style_label_val),
         ]
 
+    # All project-detail fields that are actually filled in (same set/order as
+    # the title page, compliance statement and materials list), plus the
+    # fixed Subject line.
     info_data = [
-        _lbl_row('Project',  submittal.project or ''),
-        _lbl_row('Employer', submittal.client  or ''),
-        _lbl_row('Subject',  'Warranty Certificate for Plumbing Valves'),
+        _lbl_row(lbl, val)
+        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        if val
     ]
+    info_data.append(_lbl_row('Subject', 'Warranty Certificate for Plumbing Valves'))
     info_tbl = Table(info_data, colWidths=[lbl_w, col_w, val_w])
     info_tbl.setStyle(TableStyle([
         ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica'),
@@ -1569,8 +1573,8 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
         # Sign-off
         Paragraph('For M/s. Junaid Sanitary Electrical Material Trading LLC', style_body),
         Spacer(1, 36),   # signature gap
-        Paragraph('Mr. Junaid Nasheer', style_body),
-        Paragraph('Sales Manager', style_body),
+        Paragraph('Mr. Meraj Asad Khan', style_body),
+        Paragraph('Director Of Sales', style_body),
     ]
 
     doc.build(elements)
@@ -1597,11 +1601,13 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         leftMargin=50,
         rightMargin=50,
         topMargin=80,   # leave room for logo
-        bottomMargin=50,
+        bottomMargin=28,
     )
 
+    # Kept compact (vs. the Pegler letter's spacing) so the added project-
+    # details block, plus a handful of item rows, still leaves this a single page.
     style_body = ParagraphStyle(
-        'AWBody', fontSize=10, fontName='Helvetica', leading=14, spaceAfter=6,
+        'AWBody', fontSize=10, fontName='Helvetica', leading=12, spaceAfter=4,
     )
     style_title = ParagraphStyle(
         'AWTitle', fontSize=13, fontName='Helvetica-Bold',
@@ -1611,14 +1617,19 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         'AWRef', fontSize=9, fontName='Helvetica-Bold', leading=13,
     )
     style_bullet = ParagraphStyle(
-        'AWBullet', fontSize=10, fontName='Helvetica', leading=14,
-        spaceAfter=4, leftIndent=14,
+        'AWBullet', fontSize=10, fontName='Helvetica', leading=12,
+        spaceAfter=2, leftIndent=14,
     )
     style_cell = ParagraphStyle(
         'AWCell', fontSize=8, fontName='Helvetica', leading=10, alignment=TA_CENTER,
     )
     style_header = ParagraphStyle(
         'AWHeader', fontSize=8, fontName='Helvetica-Bold', leading=10, alignment=TA_CENTER,
+    )
+    # Compact so the project-details block never risks pushing this onto a
+    # second page -- the letter is meant to stay a single page.
+    style_project = ParagraphStyle(
+        'AWProject', fontSize=9, fontName='Helvetica', leading=10, spaceAfter=1,
     )
 
     # ── Fetch materials ───────────────────────────────────────────────
@@ -1652,14 +1663,22 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
         ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
         ('SPAN',       (0, end_row), (-1, end_row)),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
 
     # ── date_type / date_word (same toggle as the Pegler letter) ───────
     today = date.today().strftime('%B %d, %Y')
     date_type = getattr(submittal, 'warranty_date_type', 'toc') or 'toc'
     date_word = 'INVOICE' if date_type == 'invoice' else 'TOC'
+
+    # All project-detail fields that are actually filled in (same set/order as
+    # the title page, compliance statement and materials list).
+    project_elements = [
+        Paragraph(f'<b>{lbl}</b> : {val}', style_project)
+        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        if val
+    ]
 
     elements = [
         # REF -- left blank for manual fill-in (no counter tracked in-system)
@@ -1668,10 +1687,13 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         Paragraph('LETTER OF WARRANTY', style_title),
         Spacer(1, 6),
         Paragraph(f'Date: {today}', style_body),
-        Spacer(1, 16),
+        Spacer(1, 8),
+
+        *project_elements,
+        Spacer(1, 6),
 
         tbl,
-        Spacer(1, 14),
+        Spacer(1, 8),
 
         Paragraph(
             f'We are pleased to confirm the Warranty against manufacturing defects only starting '
@@ -1681,7 +1703,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
 
         Paragraph('» Thermostat, Element and Anode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 1 Year', style_bullet),
         Paragraph('» Glass Lining of the Tank&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 7 Years', style_bullet),
-        Spacer(1, 6),
+        Spacer(1, 4),
 
         Paragraph(
             'Magnesium anode is not covered by warranty in virtue of its nature as consumable '
@@ -1700,7 +1722,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         Paragraph('• As per the manufacturer guidelines all warranty given as per the supply/invoice date.', style_bullet),
         Paragraph('• Manufacturer’s instructions manual must be strictly complied for warranty claim.', style_bullet),
         Paragraph('• <b>TOC date cannot be exceeded 6 months from the date of invoice.</b>', style_bullet),
-        Spacer(1, 6),
+        Spacer(1, 4),
 
         Paragraph('The Warranty does not include the damage due to the following:', style_body),
         Paragraph('» Bad and Incorrect Installation.', style_bullet),
@@ -1708,7 +1730,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         Paragraph('» Damage caused by other parties.', style_bullet),
         Paragraph('» Magnesium Anode not regularly checked and changed (Annual Periodic Maintenance as per Manual)', style_bullet),
         Paragraph('» The required 8 bar pressure safety valve is not installed.', style_bullet),
-        Spacer(1, 6),
+        Spacer(1, 4),
 
         Paragraph(
             'Any maintenance request within the warranty period, kindly contact directly Ariston '
@@ -1720,12 +1742,12 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
             "and their approval.",
             style_body,
         ),
-        Spacer(1, 26),
+        Spacer(1, 14),
 
         # Sign-off
         Paragraph('For,', style_body),
         Paragraph('M/s. Junaid Sanitary &amp; Electrical Materials Trading LLC', style_body),
-        Spacer(1, 36),   # signature gap
+        Spacer(1, 24),   # signature gap
         Paragraph('Mr. Meraj Asad Khan', style_body),
         Paragraph('Director of Sales', style_body),
     ]
@@ -1787,8 +1809,14 @@ def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand
 # Company stamp
 # ---------------------------------------------------------------------------
 
-def stamp_image_on_all_pages(pdf_buf: BytesIO, stamp_path: str) -> BytesIO:
-    """Overlay the company stamp image onto the bottom-right corner of every page."""
+# Sections stamped when Submittal.stamp_mode == 'custom' (List of Proposed
+# Material, Comply Statement with Project Specification).
+STAMP_CUSTOM_SECTIONS = (6, 7)
+
+
+def stamp_image_on_pages(pdf_buf: BytesIO, stamp_path: str, pages: set = None) -> BytesIO:
+    """Overlay the company stamp image onto the bottom-right corner of the
+    given 1-indexed pages, or every page when pages is None/empty."""
     from PIL import Image
     from reportlab.lib.utils import ImageReader
 
@@ -1804,7 +1832,11 @@ def stamp_image_on_all_pages(pdf_buf: BytesIO, stamp_path: str) -> BytesIO:
     stamp_w, stamp_h = iw * scale, ih * scale
     margin = 30
 
-    for page in reader.pages:
+    for idx, page in enumerate(reader.pages, 1):
+        if pages and idx not in pages:
+            writer.add_page(page)
+            continue
+
         page_w = float(page.mediabox.width)
         page_h = float(page.mediabox.height)
         overlay_buf = BytesIO()
@@ -1889,7 +1921,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     # numbering it must match) starts at Company Profile -- Title Page and
     # Index aren't listed there since they're not "sections" a reader looks
     # up by number.
-    entries = []   # [{'display':, 'start_page':, 'pieces': [...]}] in final order
+    entries = []   # [{'display':, 'section':, 'start_page':, 'page_count':, 'pieces': [...]}] in final order
     for item in items:
         display = item['display']
         canonical = item['canonical']
@@ -1904,7 +1936,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
 
         # Skip duplicate sections
         if section is not None and section in seen:
-            entries.append({'display': display, 'start_page': start_page, 'pieces': []})
+            entries.append({'display': display, 'section': section, 'start_page': start_page, 'page_count': 0, 'pieces': []})
             continue
         if section is not None:
             seen.add(section)
@@ -1913,6 +1945,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         if section == 3:
             _append(collector, _safe_path(company_docs.company_profile_pdf),
                     True, visible_num, display)
+
 
         elif section == 4:
             _append(collector, _safe_path(company_docs.trade_license_pdf),
@@ -1987,8 +2020,12 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                 if path and os.path.exists(path):
                     collector.append(path)
 
-        running_page += sum(_count_pages(p) for p in collector.pieces)
-        entries.append({'display': display, 'start_page': start_page, 'pieces': collector.pieces})
+        page_count = sum(_count_pages(p) for p in collector.pieces)
+        running_page += page_count
+        entries.append({
+            'display': display, 'section': section, 'start_page': start_page,
+            'page_count': page_count, 'pieces': collector.pieces,
+        })
 
     # ── Pass 2: assemble the final PDF now that every start page is known ──
     merger = PdfMerger()
@@ -2012,7 +2049,15 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
 
     if submittal.stamp and submittal.stamp.name:
         try:
-            output = stamp_image_on_all_pages(output, submittal.stamp.path)
+            stamp_pages = None
+            if submittal.stamp_mode == 'custom':
+                stamp_pages = set()
+                for entry in entries:
+                    if entry['section'] in STAMP_CUSTOM_SECTIONS:
+                        stamp_pages.update(
+                            range(entry['start_page'], entry['start_page'] + entry['page_count'])
+                        )
+            output = stamp_image_on_pages(output, submittal.stamp.path, stamp_pages)
         except Exception:
             pass
 

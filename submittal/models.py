@@ -280,7 +280,7 @@ class Submittal(models.Model):
     """Main submittal document combining all sections."""
 
     # Section 1 - Title Page
-    project = models.TextField(help_text="Project name/description")
+    project = models.TextField(blank=True, default='', help_text="Project name/description")
     client = models.CharField(max_length=255, blank=True, default='')
     consultant = models.CharField(max_length=255, blank=True, default='')
     main_contractor = models.CharField(max_length=255, blank=True, default='')
@@ -362,10 +362,20 @@ class Submittal(models.Model):
         help_text="Brand used for remark options in compliance statement"
     )
 
-    # Company stamp, stamped onto every page of the generated PDF
+    # Company stamp, stamped onto the generated PDF (all pages, or just the
+    # List of Proposed Material + Compliance Statement sections)
     stamp = models.ImageField(
         upload_to=submittal_stamp_path, blank=True, null=True,
-        help_text="Company stamp image, stamped onto every page of the generated PDF"
+        help_text="Company stamp image, stamped onto the generated PDF"
+    )
+    STAMP_MODE_CHOICES = [
+        ('all', 'All Pages'),
+        ('custom', 'List of Proposed Material & Compliance Statement only'),
+    ]
+    stamp_mode = models.CharField(
+        max_length=10, choices=STAMP_MODE_CHOICES, default='all',
+        help_text="Stamp every page, or only the List of Proposed Material and "
+                  "Comply Statement with Project Specification sections."
     )
 
     # Stored output PDF — generated once, temp uploads deleted after

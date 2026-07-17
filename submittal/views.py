@@ -393,18 +393,27 @@ def submittal_generate_pdf(request, pk):
 @require_POST
 @login_required
 def submittal_save_stamp(request, pk):
-    """Save an uploaded company stamp image for a submittal and invalidate the
-    cached PDF so it gets re-stamped on next generate/preview."""
+    """Save an uploaded company stamp image (and/or its all-pages/custom-
+    sections placement) for a submittal, invalidating the cached PDF so it
+    gets re-stamped on next generate/preview. The image itself is only
+    required the first time -- once a stamp is saved, the mode can be
+    changed on its own without re-uploading it."""
     submittal = get_object_or_404(Submittal, pk=pk)
     f = request.FILES.get('stamp_image')
-    if not f:
-        return JsonResponse({'error': 'Please choose a stamp image.'}, status=400)
-    if not (f.content_type or '').startswith('image/'):
-        return JsonResponse({'error': 'File must be an image.'}, status=400)
 
-    if submittal.stamp and submittal.stamp.name:
-        submittal.stamp.delete(save=False)
-    submittal.stamp = f
+    if f:
+        if not (f.content_type or '').startswith('image/'):
+            return JsonResponse({'error': 'File must be an image.'}, status=400)
+        if submittal.stamp and submittal.stamp.name:
+            submittal.stamp.delete(save=False)
+        submittal.stamp = f
+    elif not (submittal.stamp and submittal.stamp.name):
+        return JsonResponse({'error': 'Please choose a stamp image.'}, status=400)
+
+    stamp_mode = request.POST.get('stamp_mode', 'all')
+    if stamp_mode not in dict(Submittal.STAMP_MODE_CHOICES):
+        stamp_mode = 'all'
+    submittal.stamp_mode = stamp_mode
 
     if submittal.generated_pdf and submittal.generated_pdf.name:
         submittal.generated_pdf.delete(save=False)
@@ -423,6 +432,7 @@ def submittal_clear_stamp(request, pk):
     if submittal.stamp and submittal.stamp.name:
         submittal.stamp.delete(save=False)
         submittal.stamp = None
+    submittal.stamp_mode = 'all'
 
     if submittal.generated_pdf and submittal.generated_pdf.name:
         submittal.generated_pdf.delete(save=False)
