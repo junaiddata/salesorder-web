@@ -3458,7 +3458,7 @@ SALES_USER_MAP = {
     "mr. nasheer": ["B.MR.NASHEER AHMAD", "NASHEER SIR"],
     "abul": ["R.ABUDHABI," "ABUL"],
     "deira 2 store": ["R.DEIRA 2"],
-    "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID", "RAFIQ"],
+    "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID", "RAFIQ","ABU BAQAR"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
     "alabama": ["D. ALABAMA", "ALABAMA"],     # both entries for Meraj
     "anish": ["ANISH DIP","ANISH", "B.ANISH DIP","A.ANISH - ABUBACKER","A. ANISH - ABUBACKER"],
