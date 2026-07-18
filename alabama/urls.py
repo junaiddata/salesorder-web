@@ -5,6 +5,7 @@ from . import item_analysis_views
 from . import customer_analysis_views
 from . import sales_analysis_views
 from . import salesorder_views
+from . import quotation_combined_views
 
 app_name = 'alabama'
 
@@ -25,6 +26,17 @@ urlpatterns = [
     path('purchase-summary/<str:document_number>/', views.purchase_summary_detail, name='purchase_summary_detail'),
     path('quotations/', views.quotation_list, name='quotation_list'),
     path('quotations/upload/', views.quotation_upload, name='quotation_upload'),
+    path('quotations/combined/', quotation_combined_views.combined_quotations_list, name='combined_quotations_list'),
+    path(
+        'quotations/combined/export-consolidated-excel/',
+        quotation_combined_views.export_combined_quotations_consolidated_excel,
+        name='export_combined_quotations_consolidated_excel',
+    ),
+    path(
+        'quotations/combined/export-items-excel/',
+        quotation_combined_views.export_combined_quotations_items_excel,
+        name='export_combined_quotations_items_excel',
+    ),
     path('quotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sales-orders/', salesorder_views.salesorder_list, name='salesorder_list'),
     path('sales-orders/upload/', salesorder_views.salesorder_upload, name='salesorder_upload'),

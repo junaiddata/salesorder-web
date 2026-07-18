@@ -88,10 +88,22 @@
         .qcal-month-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 140px; }
         .qcal-month-summary-label { font-size: 0.77rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--combo-text-secondary); }
         .qcal-month-summary-number { font-size: 1.12rem; font-weight: 700; color: var(--combo-text); font-variant-numeric: tabular-nums; }
+        .qcal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+        @media (max-width: 1200px) { .qcal-layout { grid-template-columns: 1fr; } }
         .qcal-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
         @media (max-width: 1200px) { .qcal-calendar-grid { grid-template-columns: repeat(5, 1fr); } }
         @media (max-width: 768px) { .qcal-calendar-grid { grid-template-columns: repeat(4, 1fr); } }
         @media (max-width: 480px) { .qcal-calendar-grid { grid-template-columns: repeat(3, 1fr); } }
+
+        /* Weekly totals panel (same idea as the home page calendar) */
+        .qcal-weekly-panel { border: 1px solid var(--combo-border); border-radius: 10px; background: var(--combo-surface); overflow: hidden; }
+        .qcal-weekly-panel-header { padding: 12px 14px; border-bottom: 1px solid var(--combo-border-light); background: var(--combo-bg); font-weight: 700; font-size: 0.9rem; color: var(--combo-text); }
+        .qcal-week-row { padding: 12px 14px; border-bottom: 1px solid var(--combo-border-light); }
+        .qcal-week-row:last-child { border-bottom: 0; }
+        .qcal-week-label { font-size: 0.78rem; font-weight: 700; color: var(--combo-text-secondary); margin-bottom: 6px; }
+        .qcal-week-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .qcal-week-metric span { display: block; font-size: 0.62rem; color: var(--combo-text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .qcal-week-metric strong { display: block; font-size: 0.82rem; color: var(--combo-text); font-variant-numeric: tabular-nums; }
         .qcal-calendar-day {
             background: white; border: 1px solid var(--combo-border); border-radius: 6px; padding: 0.5rem 0.3rem;
             text-align: center; transition: all 0.2s ease; min-height: 72px; display: flex; flex-direction: column; justify-content: space-between;
@@ -338,7 +350,7 @@
             </div>
         </div>
         <div id="qcal-grid-container">
-            {% include 'so/quotations/_combined_calendar_body.html' with month_days=combined_month_days today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_quotation_count=combined_month_quotation_count %}
+            {% include 'so/quotations/_combined_calendar_body.html' with month_days=combined_month_days weekly_totals=combined_weekly_totals today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_quotation_count=combined_month_quotation_count %}
         </div>
     </div>
 

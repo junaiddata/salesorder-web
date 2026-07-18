@@ -506,6 +506,24 @@ def _style_inapp_quotation_excel_worksheet(worksheet):
     worksheet.freeze_panes = "A2"
 
 
+def _inapp_quotation_division_lock(request):
+    """
+    Which single division (if any) the in-app quotations list/calendar should be locked to.
+    An explicit ?division=ALABAMA|JUNAID GET param (used by links from the Alabama/Junaid
+    sections) takes priority; otherwise falls back to a non-so/manager admin's own company.
+    Returns 'ALABAMA', 'JUNAID', or None (both divisions visible — the so/manager default).
+    """
+    sel = (request.GET.get('division') or '').strip().upper()
+    if sel in ('ALABAMA', 'JUNAID'):
+        return sel
+    if hasattr(request.user, 'role') and request.user.role.role == 'Admin':
+        uname = (request.user.username or '').strip().lower()
+        if uname in ('so', 'manager'):
+            return None
+        return 'ALABAMA' if getattr(request.user.role, 'company', 'Junaid') == 'Alabama' else 'JUNAID'
+    return None
+
+
 def view_quotations(request):
     import calendar
     from datetime import date as date_cls
@@ -518,6 +536,7 @@ def view_quotations(request):
         and hasattr(request.user, 'role')
         and getattr(request.user.role, 'role', None) == 'Admin'
     )
+    division_lock = _inapp_quotation_division_lock(request)
 
     if request.GET.get('ajax') == 'inapp_quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         if not show_inapp_calendar:
@@ -577,8 +596,15 @@ def view_quotations(request):
             for day_num in range(1, last_calendar_day + 1):
                 day_date = date_cls(qcal_year, grid_month, day_num)
                 day_qs = scope_qs.filter(quotation_date=day_date)
-                j_total, j_cnt = _agg_division(day_qs, 'JUNAID')
-                a_total, a_cnt = _agg_division(day_qs, 'ALABAMA')
+                if division_lock == 'ALABAMA':
+                    j_total, j_cnt = 0.0, 0
+                    a_total, a_cnt = _agg_division(day_qs, 'ALABAMA')
+                elif division_lock == 'JUNAID':
+                    j_total, j_cnt = _agg_division(day_qs, 'JUNAID')
+                    a_total, a_cnt = 0.0, 0
+                else:
+                    j_total, j_cnt = _agg_division(day_qs, 'JUNAID')
+                    a_total, a_cnt = _agg_division(day_qs, 'ALABAMA')
                 inapp_month_days.append({
                     'date': day_date,
                     'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
@@ -601,6 +627,7 @@ def view_quotations(request):
                     'month_days': inapp_month_days,
                     'today': today,
                     'qcal_months': qcal_months,
+                    'division_lock': division_lock,
                     'junaid_month_total': junaid_month_total,
                     'junaid_month_count': junaid_month_count,
                     'alabama_month_total': alabama_month_total,
@@ -670,7 +697,8 @@ def view_quotations(request):
         'current_status': status,
         'start_date': start_date,
         'end_date': end_date,
-        'selected_division': division or 'All',
+        'selected_division': division_lock or (division or 'All'),
+        'division_lock': division_lock,
         'search_query': q,
         'query_string': query_string,
         'show_inapp_calendar': show_inapp_calendar,
@@ -1162,23 +1190,46 @@ def _combined_quotation_calendar_context(request):
                     cost += Decimal(str(it.item.item_cost)) * Decimal(str(it.quantity or 0))
             _bump(q.quotation_date, total, total - cost)
 
-    # --- Build the day grid for the selected months ---
+    # --- Build the day grid for the selected months, plus Mon-Sat weekly totals ---
     month_days = []
+    weekly_totals = []
     for grid_month in qcal_months:
         _, last_day_in_month = _calendar.monthrange(qcal_year, grid_month)
         is_current_month = (qcal_year == current_year and grid_month == current_month)
         last_day = min(today.day, last_day_in_month) if is_current_month else last_day_in_month
+        week_acc = None
         for day_num in range(1, last_day + 1):
             day_date = date_cls(qcal_year, grid_month, day_num)
             cell = day_data.get(day_date)
+            day_total = cell['total_value'] if cell else Decimal('0')
+            day_gp = cell['gp'] if cell else Decimal('0')
+            day_count = cell['count'] if cell else 0
+
+            if day_date.weekday() == 0 or week_acc is None:
+                week_acc = {
+                    'label': f"Week of {day_date.strftime('%d %b')}",
+                    'total_value': Decimal('0'),
+                    'gp': Decimal('0'),
+                    'quotation_count': 0,
+                }
+                weekly_totals.append(week_acc)
+            if day_date.weekday() <= 5:
+                week_acc['total_value'] += day_total
+                week_acc['gp'] += day_gp
+                week_acc['quotation_count'] += day_count
+
             month_days.append({
                 'date': day_date,
                 'formatted_date': f"{month_names_short[grid_month - 1]} {day_num}",
-                'total_value': cell['total_value'] if cell else Decimal('0'),
-                'gp': cell['gp'] if cell else Decimal('0'),
-                'quotation_count': cell['count'] if cell else 0,
+                'total_value': day_total,
+                'gp': day_gp,
+                'quotation_count': day_count,
                 'has_quotations': bool(cell and cell['count'] > 0),
             })
+
+    for week in weekly_totals:
+        _wv = float(week['total_value'])
+        week['gp_pct'] = round(float(week['gp']) / _wv * 100, 1) if _wv else 0
 
     return {
         'today': today,
@@ -1188,6 +1239,7 @@ def _combined_quotation_calendar_context(request):
         'calendar_months': calendar_months,
         'calendar_period_label': calendar_period_label,
         'combined_month_days': month_days,
+        'combined_weekly_totals': weekly_totals,
         'combined_month_total_value': sum((d['total_value'] for d in month_days), Decimal('0')),
         'combined_month_total_gp': sum((d['gp'] for d in month_days), Decimal('0')),
         'combined_month_quotation_count': sum(d['quotation_count'] for d in month_days),
@@ -1210,6 +1262,7 @@ def combined_quotations_list(request):
             'so/quotations/_combined_calendar_body.html',
             {
                 'month_days': cal_ctx['combined_month_days'],
+                'weekly_totals': cal_ctx['combined_weekly_totals'],
                 'today': cal_ctx['today'],
                 'qcal_months': cal_ctx['qcal_months'],
                 'combined_month_total_value': cal_ctx['combined_month_total_value'],

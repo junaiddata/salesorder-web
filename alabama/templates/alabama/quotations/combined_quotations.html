@@ -1,0 +1,382 @@
+{% extends "alabama/base_no_sidebar.html" %}
+{% load humanize %}
+
+{% block title %}Alabama - Combined Quotations{% endblock %}
+
+{% block page_title %}Combined quotations{% endblock %}
+{% block page_subtitle %}SAP (Excel upload) &amp; App, Alabama only — newest first{% endblock %}
+
+{% block extra_head %}
+<style>
+    .combo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 1rem; }
+    .combo-actions .btn-outline {
+        display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 0.8125rem;
+        font-weight: 500; border-radius: 8px; border: 1px solid var(--gray-200); background: var(--white);
+        color: var(--gray-700); text-decoration: none;
+    }
+    .combo-actions .btn-outline:hover { border-color: var(--primary-color); color: var(--primary-color); }
+
+    .filters-card { margin-bottom: 1.25rem; }
+    .filters-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px; padding: 20px;
+    }
+    .field label {
+        display: block; font-size: 0.813rem; font-weight: 500; color: var(--gray-500); margin-bottom: 6px;
+    }
+    .input, .select {
+        width: 100%; padding: 10px 12px; font-size: 0.875rem; font-family: inherit;
+        border: 1px solid var(--gray-200); border-radius: 8px; outline: none;
+    }
+    .multi-select { position: relative; }
+    .select-box {
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%; padding: 10px 12px; font-size: 0.875rem;
+        background: var(--white); border: 1px solid var(--gray-200);
+        border-radius: 8px; cursor: pointer;
+    }
+    .options-container {
+        display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+        max-height: 220px; overflow-y: auto; background: var(--white);
+        border: 1px solid var(--gray-200); border-radius: 8px;
+        box-shadow: var(--shadow-md); z-index: 100; padding: 8px;
+    }
+    .options-container.active { display: block; }
+    .option-label { display: block; padding: 6px 10px; cursor: pointer; font-size: 0.875rem; }
+    .option-label:hover { background: var(--gray-100); }
+    .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 20px 20px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 0.8125rem; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: var(--primary-color); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: #059669; color: white; }
+    .btn-success:hover { background: #047857; }
+    .btn-outline-success { background: var(--white); color: #059669; border: 1px solid #a7f3d0; }
+    .btn-outline-success:hover { background: #ecfdf5; }
+
+    /* Calendar */
+    .qcal-widget { margin-bottom: 1.25rem; padding: 1rem; }
+    .qcal-title { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.75rem; }
+    .qcal-header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 1rem; }
+    .qcal-header label { font-size: 0.82rem; font-weight: 600; color: var(--gray-500); margin-right: 4px; }
+    .qcal-header select { padding: 6px 10px; border: 1px solid var(--gray-200); border-radius: 8px; font-size: 0.87rem; background: white; }
+    .qcal-month-picker { width: 100%; flex-basis: 100%; margin-top: 0.35rem; padding-top: 0.75rem; border-top: 1px solid #f1f5f9; }
+    .qcal-month-picker-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--gray-500); margin-bottom: 0.5rem; }
+    .qcal-month-checkboxes { display: flex; flex-wrap: wrap; gap: 0.4rem 0.35rem; align-items: center; }
+    .qcal-month-chip {
+        display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; padding: 0.35rem 0.5rem;
+        border-radius: 8px; border: 1px solid var(--gray-200); background: white; font-size: 0.72rem;
+        font-weight: 500; color: var(--gray-900); user-select: none;
+    }
+    .qcal-month-chip:hover { border-color: var(--primary-color); background: var(--gray-100); }
+    .qcal-month-chip:has(input:checked) { background: #fee2e2; border-color: var(--primary-color); }
+    .qcal-month-chip input[type="checkbox"] { width: 0.95rem; height: 0.95rem; margin: 0; accent-color: var(--primary-color); }
+    .qcal-month-summary {
+        display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 1rem; padding: 12px 14px;
+        background: var(--gray-100); border: 1px solid #f1f5f9; border-radius: 8px;
+    }
+    .qcal-month-summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 140px; }
+    .qcal-month-summary-label { font-size: 0.77rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); }
+    .qcal-month-summary-number { font-size: 1.12rem; font-weight: 700; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+    .qcal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+    @media (max-width: 1200px) { .qcal-layout { grid-template-columns: 1fr; } }
+    .qcal-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
+    @media (max-width: 1200px) { .qcal-calendar-grid { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 768px) { .qcal-calendar-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 480px) { .qcal-calendar-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    /* Weekly totals panel (same idea as the home page calendar) */
+    .qcal-weekly-panel { border: 1px solid var(--gray-200); border-radius: 10px; background: var(--white); overflow: hidden; }
+    .qcal-weekly-panel-header { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; background: var(--gray-100); font-weight: 700; font-size: 0.9rem; color: var(--gray-900); }
+    .qcal-week-row { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; }
+    .qcal-week-row:last-child { border-bottom: 0; }
+    .qcal-week-label { font-size: 0.78rem; font-weight: 700; color: var(--gray-500); margin-bottom: 6px; }
+    .qcal-week-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .qcal-week-metric span { display: block; font-size: 0.62rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.03em; }
+    .qcal-week-metric strong { display: block; font-size: 0.82rem; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+    .qcal-calendar-day {
+        background: white; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem 0.3rem;
+        text-align: center; min-height: 72px; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .qcal-calendar-day-today { border-color: var(--primary-color) !important; background: #fef2f2 !important; }
+    .qcal-calendar-day-empty { background: var(--gray-100) !important; border-color: #f1f5f9 !important; opacity: 0.75; }
+    .qcal-calendar-day-empty .qcal-calendar-day-label,
+    .qcal-calendar-day-empty .qcal-calendar-day-value,
+    .qcal-calendar-day-empty .qcal-calendar-day-count { color: #94a3b8; }
+    .qcal-calendar-day-label { font-size: 0.73rem; font-weight: 600; color: var(--gray-500); margin-bottom: 0.25rem; }
+    .qcal-calendar-day-value { font-size: 0.78rem; font-weight: 700; color: var(--gray-900); line-height: 1.15; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+    .qcal-calendar-day-count { font-size: 0.63rem; color: var(--gray-500); line-height: 1.1; }
+
+    .table-card { margin-top: 0; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    thead th {
+        padding: 8px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+        color: var(--gray-500); background: var(--gray-100); border-bottom: 1px solid var(--gray-200); text-align: left;
+    }
+    tbody td { padding: 6px 10px; font-size: 0.8rem; border-bottom: 1px solid #f1f5f9; }
+    tbody tr:hover { background: #fafbfc; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .badge { display: inline-flex; padding: 2px 8px; font-size: 0.68rem; font-weight: 600; border-radius: 999px; }
+    .badge-sap { background: #e0e7ff; color: #3730a3; }
+    .badge-app { background: #ecfdf5; color: #047857; }
+    .so-link { color: var(--primary-color); text-decoration: none; font-weight: 600; }
+    .so-link:hover { text-decoration: underline; }
+    .table-footer {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+        padding: 10px 14px; background: var(--gray-100); border-top: 1px solid #f1f5f9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="combo-actions">
+    <a href="{% url 'alabama:quotation_list' %}" class="btn-outline"><i class="fas fa-database"></i>SAP quotations</a>
+    <a href="{% url 'view_quotations' %}?division=ALABAMA" class="btn-outline"><i class="fas fa-file-alt"></i>App quotations</a>
+    <a href="{% url 'alabama:home' %}" class="btn-outline"><i class="fas fa-home"></i>Alabama home</a>
+</div>
+
+<div class="card filters-card">
+    <form method="get" id="combinedFiltersForm" class="filters-grid">
+        <div class="field">
+            <label>Search</label>
+            <input class="input" type="text" name="q" value="{{ search_query|default:'' }}" placeholder="Number / customer / salesman">
+        </div>
+        <div class="field">
+            <label>From</label>
+            <input class="input" type="date" name="start_date" value="{{ start_date }}">
+        </div>
+        <div class="field">
+            <label>To</label>
+            <input class="input" type="date" name="end_date" value="{{ end_date }}">
+        </div>
+        <div class="field">
+            <label>Source</label>
+            <select class="select" name="source">
+                <option value="all" {% if source == 'all' %}selected{% endif %}>All</option>
+                <option value="sap" {% if source == 'sap' %}selected{% endif %}>SAP only</option>
+                <option value="app" {% if source == 'app' %}selected{% endif %}>App only</option>
+            </select>
+        </div>
+        {% if not request.user.role.role == 'Salesman' %}
+        <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+                <div class="select-box" id="salesman-trigger">
+                    <span id="salesman-text">All Salesmen</span>
+                </div>
+                <div class="options-container" id="salesman-options">
+                    {% for s in salesman_choices %}
+                    <label class="option-label">
+                        <input type="checkbox" name="salesman_filter" value="{{ s }}" {% if s in selected_salesmen %}checked{% endif %}>
+                        {{ s }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="field">
+            <label>Status</label>
+            <select class="select" name="status">
+                <option value="All" {% if current_status == 'All' %}selected{% endif %}>All</option>
+                <option value="Approved" {% if current_status == 'Approved' %}selected{% endif %}>Approved</option>
+                <option value="On Hold" {% if current_status == 'On Hold' %}selected{% endif %}>On Hold</option>
+                <option value="Pending" {% if current_status == 'Pending' %}selected{% endif %}>Pending</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Rows</label>
+            <select class="select" name="page_size">
+                <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+            </select>
+        </div>
+        <div class="field" style="align-self:end;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i>Apply</button>
+        </div>
+    </form>
+    <div class="export-row">
+        <span style="font-size:0.8rem;color:var(--gray-500);">Export (current filters):</span>
+        <button type="button" class="btn btn-success" id="btnCombinedExportSummary"><i class="fas fa-file-excel"></i>Excel — summary</button>
+        <button type="button" class="btn btn-outline-success" id="btnCombinedExportItems"><i class="fas fa-file-excel"></i>Excel — line items</button>
+    </div>
+    <p style="font-size:0.78rem;color:var(--gray-500);padding:0 20px 16px;margin:0;">Dates: SAP uses <strong>posting date</strong>, app uses <strong>quotation date</strong>. Status <strong>Pending</strong> or <strong>On Hold</strong> limits SAP to open documents; <strong>Approved</strong> filters the app list only.</p>
+</div>
+
+<div class="card qcal-widget">
+    <h2 class="qcal-title" data-combined-calendar-title>{{ calendar_period_label }} — Combined quotations by date</h2>
+    <div class="qcal-header">
+        <label for="qcal-year">Year</label>
+        <select id="qcal-year" aria-label="Calendar year">
+            {% for y in calendar_years %}
+            <option value="{{ y }}" {% if qcal_year == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+        <span id="qcal-loading" style="font-size: 0.82rem; color: var(--gray-500); display: none;">Loading…</span>
+        <div class="qcal-month-picker" id="qcal-month-picker" role="group" aria-label="Months for calendar">
+            <span class="qcal-month-picker-label">Months <span style="font-weight: 400; color: var(--gray-500);">(select one or more)</span></span>
+            <div class="qcal-month-checkboxes">
+                {% for num, name in calendar_months %}
+                <label class="qcal-month-chip">
+                    <input type="checkbox" name="qcal_month" value="{{ num }}" {% if num in qcal_months %}checked{% endif %}>
+                    <span>{{ name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div id="qcal-grid-container">
+        {% include 'alabama/quotations/_combined_calendar_body.html' with month_days=combined_month_days weekly_totals=combined_weekly_totals today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_quotation_count=combined_month_quotation_count %}
+    </div>
+</div>
+
+<div class="card table-card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Source</th>
+                    <th>Quotation</th>
+                    <th>Customer code</th>
+                    <th>Customer name</th>
+                    <th style="text-align:right">Total</th>
+                    <th>Status</th>
+                    <th>Salesman</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in page_obj %}
+                <tr>
+                    <td>{% if row.display_date %}{{ row.display_date|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+                    <td>
+                        {% if row.source == 'SAP' %}
+                        <span class="badge badge-sap">SAP</span>
+                        {% else %}
+                        <span class="badge badge-app">App</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ row.number }}</code></td>
+                    <td>{{ row.customer_code }}</td>
+                    <td>{{ row.customer_name }}</td>
+                    <td class="num">{{ row.total|floatformat:2|intcomma }}</td>
+                    <td><small>{{ row.status }}</small></td>
+                    <td><small>{{ row.salesman }}</small></td>
+                    <td><a href="{{ row.detail_url }}" class="so-link">Open</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" style="text-align:center;color:var(--gray-500);padding:24px;">No quotations match the filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="table-footer">
+        <div style="font-size:0.75rem; color:var(--gray-500);">
+            Total rows: <strong>{{ total_count }}</strong>
+        </div>
+        {% include 'alabama/_pagination.html' with page_obj=page_obj query_string=query_string %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  'use strict';
+
+  var salesmanTrigger = document.getElementById('salesman-trigger');
+  var salesmanOptions = document.getElementById('salesman-options');
+  var salesmanText = document.getElementById('salesman-text');
+  if (salesmanTrigger) {
+    var salesmanCheckboxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
+    function updateSalesmanText() {
+      var checked = Array.from(salesmanCheckboxes).filter(function (c) { return c.checked; });
+      salesmanText.textContent = checked.length === 0 ? 'All Salesmen' : checked.length === 1 ? checked[0].nextSibling.textContent.trim() : checked.length + ' selected';
+    }
+    salesmanTrigger.addEventListener('click', function () { salesmanOptions.classList.toggle('active'); });
+    salesmanCheckboxes.forEach(function (cb) { cb.addEventListener('change', updateSalesmanText); });
+    document.addEventListener('click', function (e) {
+      if (!salesmanTrigger.contains(e.target) && !salesmanOptions.contains(e.target)) salesmanOptions.classList.remove('active');
+    });
+    updateSalesmanText();
+  }
+
+  function combinedExportParams() {
+    var form = document.getElementById('combinedFiltersForm');
+    if (!form) return '';
+    var fd = new FormData(form);
+    var params = new URLSearchParams();
+    fd.forEach(function (value, key) {
+      if (key === 'page_size') return;
+      params.append(key, value);
+    });
+    return params.toString();
+  }
+  var uSummary = "{% url 'alabama:export_combined_quotations_consolidated_excel' %}";
+  var uItems = "{% url 'alabama:export_combined_quotations_items_excel' %}";
+  var btnS = document.getElementById('btnCombinedExportSummary');
+  var btnI = document.getElementById('btnCombinedExportItems');
+  if (btnS) btnS.addEventListener('click', function () {
+    var q = combinedExportParams();
+    window.location.href = q ? (uSummary + '?' + q) : uSummary;
+  });
+  if (btnI) btnI.addEventListener('click', function () {
+    var q = combinedExportParams();
+    window.location.href = q ? (uItems + '?' + q) : uItems;
+  });
+
+  var calYear = document.getElementById('qcal-year');
+  var calMonthPicker = document.getElementById('qcal-month-picker');
+  var gridContainer = document.getElementById('qcal-grid-container');
+  var loadingEl = document.getElementById('qcal-loading');
+  var titleEl = document.querySelector('[data-combined-calendar-title]');
+  var MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  if (!calYear || !calMonthPicker || !gridContainer) return;
+
+  function selectedMonths() {
+    return Array.from(calMonthPicker.querySelectorAll('input[name="qcal_month"]:checked'))
+      .map(function (i) { return parseInt(i.value, 10); })
+      .filter(function (n) { return n >= 1 && n <= 12; })
+      .sort(function (a, b) { return a - b; });
+  }
+  function updateTitle() {
+    if (!titleEl) return;
+    var months = selectedMonths();
+    if (!months.length) {
+      titleEl.textContent = calYear.value + ' — Combined quotations by date';
+      return;
+    }
+    var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
+    titleEl.textContent = label + ' ' + calYear.value + ' — Combined quotations by date';
+  }
+  function loadCalendar() {
+    if (loadingEl) loadingEl.style.display = 'inline';
+    var months = selectedMonths();
+    if (!months.length) {
+      var curM = new Date().getMonth() + 1;
+      var cb = calMonthPicker.querySelector('input[name="qcal_month"][value="' + curM + '"]');
+      if (cb) cb.checked = true;
+      months = selectedMonths();
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('qcal_year', calYear.value);
+    url.searchParams.delete('qcal_month');
+    months.forEach(function (m) { url.searchParams.append('qcal_month', String(m)); });
+    url.searchParams.set('ajax', 'combined_calendar');
+    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { gridContainer.innerHTML = html; updateTitle(); })
+      .catch(function () {
+        gridContainer.innerHTML = '<div style="padding:1rem;color:var(--gray-500);">Could not load calendar.</div>';
+      })
+      .finally(function () { if (loadingEl) loadingEl.style.display = 'none'; });
+  }
+  calYear.addEventListener('change', loadCalendar);
+  calMonthPicker.addEventListener('change', function (e) {
+    if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) loadCalendar();
+  });
+})();
+</script>
+{% endblock %}

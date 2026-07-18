@@ -1,5 +1,6 @@
 {% load humanize %}
 <div class="ic-month-summary">
+    {% if division_lock != 'ALABAMA' %}
     <div class="ic-month-summary-block">
         <div class="ic-month-summary-title">Junaid {% if qcal_months|length > 1 %}(combined){% else %}(month){% endif %}</div>
         <div class="ic-month-summary-nums">
@@ -8,6 +9,8 @@
             <span class="ic-month-summary-cnt">{{ junaid_month_count|intcomma }} qt</span>
         </div>
     </div>
+    {% endif %}
+    {% if division_lock != 'JUNAID' %}
     <div class="ic-month-summary-block">
         <div class="ic-month-summary-title">Alabama {% if qcal_months|length > 1 %}(combined){% else %}(month){% endif %}</div>
         <div class="ic-month-summary-nums">
@@ -16,5 +19,6 @@
             <span class="ic-month-summary-cnt">{{ alabama_month_count|intcomma }} qt</span>
         </div>
     </div>
+    {% endif %}
 </div>
-{% include 'so/quotations/_inapp_quotation_calendar_grid.html' with month_days=month_days today=today %}
+{% include 'so/quotations/_inapp_quotation_calendar_grid.html' with month_days=month_days today=today division_lock=division_lock %}

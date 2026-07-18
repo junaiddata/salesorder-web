@@ -803,25 +803,34 @@
         <div class="page-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div>
-                    <h1 class="mb-1">Quotations</h1>
+                    <h1 class="mb-1">{% if division_lock == 'ALABAMA' %}Alabama {% elif division_lock == 'JUNAID' %}Junaid {% endif %}Quotations</h1>
                     <p class="mb-0 opacity-75">Manage and track all customer quotations</p>
                 </div>
                 <div class="mt-2 mt-md-0">
-                    {% if request.user.role.role == 'Salesman' %}
-                        <a href="{% url 'sales_home' %}" class="btn btn-light">
-                            <i class="fas fa-home me-2"></i>Back to Home
+                    {% if division_lock == 'ALABAMA' %}
+                        <a href="{% url 'alabama:home' %}" class="btn btn-light">
+                            <i class="fas fa-home me-2"></i>Back to Alabama
+                        </a>
+                        <a href="{% url 'alabama:combined_quotations_list' %}" class="btn btn-light">
+                            <i class="fas fa-layer-group me-2"></i>Combined (SAP + App)
                         </a>
                     {% else %}
-                        <a href="{% url 'home' %}" class="btn btn-light">
-                            <i class="fas fa-home me-2"></i>Back to Home
+                        {% if request.user.role.role == 'Salesman' %}
+                            <a href="{% url 'sales_home' %}" class="btn btn-light">
+                                <i class="fas fa-home me-2"></i>Back to Home
+                            </a>
+                        {% else %}
+                            <a href="{% url 'home' %}" class="btn btn-light">
+                                <i class="fas fa-home me-2"></i>Back to Home
+                            </a>
+                        {% endif %}
+                        <a href="{% url 'create_quotation' %}" class="btn btn-light">
+                            <i class="fas fa-plus-circle me-2"></i>Create New Quotation
+                        </a>
+                        <a href="{% url 'combined_quotations_list' %}" class="btn btn-light">
+                            <i class="fas fa-layer-group me-2"></i>Combined (SAP + App)
                         </a>
                     {% endif %}
-                    <a href="{% url 'create_quotation' %}" class="btn btn-light">
-                        <i class="fas fa-plus-circle me-2"></i>Create New Quotation
-                    </a>
-                    <a href="{% url 'combined_quotations_list' %}" class="btn btn-light">
-                        <i class="fas fa-layer-group me-2"></i>Combined (SAP + App)
-                    </a>
                 </div>
             </div>
         </div>
@@ -864,6 +873,14 @@
         </div>
         {% endif %}
 
+        {% if division_lock %}
+        <input type="hidden" id="divisionFilter" name="division" value="{{ division_lock }}">
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <span class="badge bg-secondary" title="This view is locked to {{ division_lock|title }} quotations">
+                <i class="fas fa-lock me-1"></i>{{ division_lock|title }}
+            </span>
+        </div>
+        {% else %}
         <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
             <label for="divisionFilter" class="form-label mb-0 me-2 d-none d-sm-block">Division:</label>
             <select class="form-select form-select-sm" id="divisionFilter" name="division">
@@ -872,6 +889,7 @@
                 <option value="ALABAMA" {% if selected_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
             </select>
         </div>
+        {% endif %}
 
         <div class="d-flex align-items-start me-3 mb-2 mb-lg-0">
             <label class="form-label mb-0 me-2 d-none d-sm-block pt-1">Firm:</label>
@@ -908,7 +926,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary btn-sm me-2 mb-2 mb-lg-0"><i class="fas fa-filter me-1"></i> Apply</button>
-        <a href="{% url 'view_quotations' %}" class="btn btn-outline-secondary btn-sm me-2 mb-2 mb-lg-0">Reset</a>
+        <a href="{% url 'view_quotations' %}{% if division_lock %}?division={{ division_lock }}{% endif %}" class="btn btn-outline-secondary btn-sm me-2 mb-2 mb-lg-0">Reset</a>
         <button type="button" class="btn btn-success btn-sm me-2 mb-2 mb-lg-0" id="btnExportInappConsolidatedExcel" title="Export filtered quotations (one row per quote)"><i class="fas fa-file-excel me-1"></i> Excel summary</button>
         <button type="button" class="btn btn-outline-success btn-sm mb-2 mb-lg-0" id="btnExportInappItemsExcel" title="Export filtered quotations (one row per line item)"><i class="fas fa-file-excel me-1"></i> Excel by item</button>
     </form>
@@ -919,19 +937,19 @@
     <ul class="nav nav-tabs justify-content-md-start">
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'All' or not current_status %}active{% endif %}" 
-               href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">All Quotations</a>
+               href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">All Quotations</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'Approved' %}active{% endif %}" 
-               href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Approved</a>
+               href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">Approved</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'On Hold' %}active{% endif %}" 
-               href="?status=On+Hold{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">On Hold</a>
+               href="?status=On+Hold{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">On Hold</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'Pending' %}active{% endif %}" 
-               href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Pending</a>
+               href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">Pending</a>
         </li>
     </ul>
 </div>
@@ -940,7 +958,7 @@
         {% if show_inapp_calendar %}
         <!-- Calendar: Admin only; quotation_date totals (Junaid / Alabama); independent of list filters -->
         <div class="inapp-calendar-section">
-            <h2 data-inapp-calendar-title>{{ calendar_period_label }} — In-app quotations</h2>
+            <h2 data-inapp-calendar-title>{% if division_lock %}{{ division_lock|title }} — {% endif %}{{ calendar_period_label }} — In-app quotations</h2>
             <div class="ic-cal-header">
                 <label for="ic-qcal-year">Year</label>
                 <select id="ic-qcal-year" aria-label="Calendar year">
@@ -962,7 +980,7 @@
                 </div>
             </div>
             <div id="ic-calendar-ajax-root">
-                {% include 'so/quotations/_inapp_quotation_calendar_body.html' with month_days=inapp_month_days today=today junaid_month_total=junaid_month_total junaid_month_count=junaid_month_count alabama_month_total=alabama_month_total alabama_month_count=alabama_month_count qcal_months=qcal_months %}
+                {% include 'so/quotations/_inapp_quotation_calendar_body.html' with month_days=inapp_month_days today=today junaid_month_total=junaid_month_total junaid_month_count=junaid_month_count alabama_month_total=alabama_month_total alabama_month_count=alabama_month_count qcal_months=qcal_months division_lock=division_lock %}
             </div>
         </div>
         {% endif %}
@@ -1120,6 +1138,8 @@
     const icQcalMonthPicker = document.getElementById('ic-qcal-month-picker');
     const icQcalLoading = document.getElementById('ic-qcal-loading');
     const icCalTitle = document.querySelector('[data-inapp-calendar-title]');
+    const ICQCAL_DIVISION_LOCK = "{{ division_lock|default:'' }}";
+    const ICQCAL_DIVISION_LABEL = ICQCAL_DIVISION_LOCK ? (ICQCAL_DIVISION_LOCK.charAt(0) + ICQCAL_DIVISION_LOCK.slice(1).toLowerCase() + ' — ') : '';
     const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     function selectedIcQcalMonths() {
       if (!icQcalMonthPicker) return [];
@@ -1131,11 +1151,11 @@
       if (!icCalTitle || !icQcalYear) return;
       var months = selectedIcQcalMonths();
       if (!months.length) {
-        icCalTitle.textContent = icQcalYear.value + ' — In-app quotations';
+        icCalTitle.textContent = ICQCAL_DIVISION_LABEL + icQcalYear.value + ' — In-app quotations';
         return;
       }
       var label = months.map(function (m) { return MONTH_LONG[m - 1] || ''; }).join(', ');
-      icCalTitle.textContent = label + ' ' + icQcalYear.value + ' — In-app quotations';
+      icCalTitle.textContent = ICQCAL_DIVISION_LABEL + label + ' ' + icQcalYear.value + ' — In-app quotations';
     }
     function loadInappCalendar() {
       if (!icQcalYear || !icQcalMonthPicker || !icCalRoot) return;
@@ -1152,6 +1172,7 @@
       url.searchParams.delete('qcal_month');
       monthsPick.forEach(function (m) { url.searchParams.append('qcal_month', String(m)); });
       url.searchParams.set('ajax', 'inapp_quotation_calendar');
+      if (ICQCAL_DIVISION_LOCK) url.searchParams.set('division', ICQCAL_DIVISION_LOCK);
       fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
         .then(function (r) { return r.text(); })
         .then(function (html) {
