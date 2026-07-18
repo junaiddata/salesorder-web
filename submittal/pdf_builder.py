@@ -884,7 +884,7 @@ def _order_materials_for_pdf(materials):
     ariston_sorted = sorted(
         (materials[i] for i in ariston_idx),
         key=lambda m: _size_sort_value(m.get('size', '')),
-        reverse=True,
+        
     )
     for i, mat in zip(ariston_idx, ariston_sorted):
         materials[i] = mat
