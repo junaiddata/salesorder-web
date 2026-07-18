@@ -587,10 +587,12 @@
                         <span class="info-label">Division (PDF letterhead)</span>
                         <span class="info-value">{{ quotation.get_division_display }}</span>
                     </div>
+                    {% if quotation.division != 'ALABAMA' %}
                     <div class="info-item">
                         <span class="info-label">Our License (PDF)</span>
                         <span class="info-value">{{ quotation.get_license_name_display|default:"JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH" }}</span>
                     </div>
+                    {% endif %}
                     <div class="info-item">
                         <span class="info-label">Valid Until</span>
                         <span class="info-value">{{ quotation.valid_until|date:"F j, Y"|default:"Not specified" }}</span>
@@ -644,6 +646,7 @@
         {% endif %}
 
         <!-- License Name Edit (all users) -->
+        {% if quotation.division != 'ALABAMA' %}
         <div class="sap-card" style="margin-bottom: 24px; border: 1px solid #0d6efd33;">
             <div class="sap-card-header" style="background: #f0f4ff;">
                 <h5 style="margin:0;"><i class="fas fa-id-card"></i> Our License Name (PDF)</h5>
@@ -664,6 +667,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         <!-- Margin Summary (Admin Only) -->
         {% if is_admin %}

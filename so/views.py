@@ -336,28 +336,18 @@ def create_sales_order(request):
     # -------------------------------------------------------------------------
     salesmen = Salesman.objects.all()
 
-    # Filter Logic: Only apply if user is logged in AND is NOT a superuser/admin
-    if request.user.is_authenticated and not request.user.is_superuser:
-        current_username = request.user.username.lower()
-
-        # Define Mapping: 'username' -> List of ['Name1', 'Name2']
-        user_salesman_map = {
-            'alabamakadhar': ['KADER','A.KADER'],
-            'alabamamusharaf': ['MUSHARAF','A.MUSHARAF'],   # Multiple allowed
-            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],
-            'alabamaaijaz': ['AIJAZ'],               # Single allowed
-            
-        }
-
-        if current_username in user_salesman_map:
-            target_names = user_salesman_map[current_username]
-            
-            # Build a complex query: (name contains A) OR (name contains B)
-            query = Q()
-            for name in target_names:
-                query |= Q(salesman_name__icontains=name)
-            
-            salesmen = salesmen.filter(query)
+    # Salesman-role users only see their own mapped salesman name(s) (SALES_USER_MAP).
+    if (
+        request.user.is_authenticated
+        and hasattr(request.user, 'role')
+        and request.user.role.role == 'Salesman'
+    ):
+        current_username = (request.user.username or '').strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            salesmen = salesmen.filter(salesman_name__in=allowed_names)
+        else:
+            salesmen = salesmen.none()
 
     # -------------------------------------------------------------------------
     firms = Items.objects.values_list('item_firm', flat=True).distinct()
@@ -483,30 +473,21 @@ def edit_sales_order(request, order_id):
     # -------------------------------------------------------------------------
     salesmen = Salesman.objects.all()
 
-    # Filter Logic: Only apply if user is logged in AND is NOT a superuser/admin
-    if request.user.is_authenticated and not request.user.is_superuser:
-        current_username = request.user.username.lower()
-
-        # Define Mapping: 'username' -> List of ['Name1', 'Name2']
-        user_salesman_map = {
-            'alabamakadhar': ['KADER'],
-            'alabamamusharaf': ['MUSHARAF'],   # Multiple allowed
-            'alabamaadmin': ['KADER','MUSHARAF','AIJAZ','CASH'],               # Single allowed
-            
-        }
-
-        if current_username in user_salesman_map:
-            target_names = user_salesman_map[current_username]
-            
-            # Build a complex query: (name contains A) OR (name contains B)
-            query = Q()
-            for name in target_names:
-                query |= Q(salesman_name__icontains=name)
-            
-            salesmen = salesmen.filter(query)
+    # Salesman-role users only see their own mapped salesman name(s) (SALES_USER_MAP).
+    if (
+        request.user.is_authenticated
+        and hasattr(request.user, 'role')
+        and request.user.role.role == 'Salesman'
+    ):
+        current_username = (request.user.username or '').strip().lower()
+        allowed_names = SALES_USER_MAP.get(current_username)
+        if allowed_names:
+            salesmen = salesmen.filter(salesman_name__in=allowed_names)
+        else:
+            salesmen = salesmen.none()
 
     # -------------------------------------------------------------------------
-    
+
     firms = Items.objects.values_list('item_firm', flat=True).distinct()
 
     return render(request, 'so/edit_sales_order.html', {
