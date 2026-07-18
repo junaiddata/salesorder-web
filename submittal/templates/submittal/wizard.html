@@ -1373,6 +1373,7 @@
         const historyData = DATA.history || {};
         const preselected = DATA.selected_material_ids || [];
         const existingUploads = DATA.existing_uploads || {};
+        const existingUploadPages = DATA.existing_upload_pages || {};
         const ALL_COLUMN_DEFS = DATA.all_column_definitions || [];
         const EXISTING_MATERIALS_COLUMNS = DATA.existing_materials_columns || [];
 
@@ -1973,6 +1974,8 @@
 
                 // ── Compliance Statement section ──
                 if (isComplyStatement(it.label)) {
+                    const existingPages = existingUploadPages[safeKey] || '';
+                    const pagesFieldName = `section_upload_pages__${safeKey}`;
                     return `
                         <div class="upload-row comply-section">
                             <label><i class="fas fa-file-contract"></i> ${escapeHtml(it.label)}</label>
@@ -1984,6 +1987,12 @@
                                 </div>
                                 <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
                                 ${existing ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existing)}</div>` : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Leave empty to skip</span></div>'}
+
+                                <div class="mt-2" style="max-width:320px;">
+                                    <span class="field-label" style="font-size:0.78rem;">Pages to include <span style="font-weight:400;color:var(--text-muted);">(optional)</span></span>
+                                    <input type="text" name="${escapeHtml(pagesFieldName)}" class="form-control form-control-sm" placeholder="e.g. 2 or 1,3-5" value="${escapeHtml(existingPages)}">
+                                    <div class="helper-note mt-1"><i class="fas fa-info-circle"></i><span>Only these pages from the uploaded PDF are used. Leave empty to include all pages.</span></div>
+                                </div>
                             </div>
 
                             <div class="comply-form-block">

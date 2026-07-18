@@ -34,6 +34,7 @@ def submittal_wizard(request, pk=None):
     selected_material_ids = []
     existing_index_items = []
     existing_uploads = {}
+    existing_upload_pages = {}
     existing_field_order = []
 
     existing_compliance_rows = []
@@ -53,6 +54,7 @@ def submittal_wizard(request, pk=None):
         existing_field_order = submittal.field_order or []
         for up in submittal.section_uploads.all():
             existing_uploads[up.index_label] = up.file.name.split('/')[-1] if up.file else ''
+            existing_upload_pages[up.index_label] = up.page_range or ''
         existing_compliance_rows = submittal.compliance_rows or []
         existing_compliance_brand_id = submittal.compliance_brand_id
 
@@ -109,6 +111,7 @@ def submittal_wizard(request, pk=None):
         'history': history,
         'selected_material_ids': selected_material_ids,
         'existing_uploads': existing_uploads,
+        'existing_upload_pages': existing_upload_pages,
         'all_column_definitions': all_columns,
         'existing_materials_columns': existing_materials_columns,
         'brands_json': [{'pk': b.pk, 'name': b.name} for b in brands],
@@ -259,7 +262,7 @@ def submittal_save(request):
         submittal.materials.clear()
 
     # Section uploads — files keyed by "section_upload_<label>"
-    _save_section_uploads(submittal, request.FILES)
+    _save_section_uploads(submittal, request.FILES, request.POST)
 
     ProjectContractorHistory.objects.create(
         project=submittal.project,
@@ -277,8 +280,13 @@ def submittal_save(request):
     })
 
 
-def _save_section_uploads(submittal, files):
-    """Save uploaded files into SubmittalSectionUpload, keyed by index label."""
+def _save_section_uploads(submittal, files, post=None):
+    """
+    Save uploaded files into SubmittalSectionUpload, keyed by index label.
+    Also saves/updates the optional per-label page range (e.g. "section_upload_pages__<label>",
+    used by the Comply Statement PDF to extract only the specified pages).
+    """
+    post = post or {}
     for key, f in files.items():
         if not key.startswith('section_upload__'):
             continue
@@ -291,7 +299,19 @@ def _save_section_uploads(submittal, files):
         if obj.file:
             obj.file.delete(save=False)
         obj.file = f
+        obj.page_range = (post.get(f'section_upload_pages__{label}') or '').strip()
         obj.save()
+
+    # Page range may be edited without re-uploading a new file
+    for key in post.keys():
+        if not key.startswith('section_upload_pages__'):
+            continue
+        label = key[len('section_upload_pages__'):]
+        if not label or f'section_upload__{label}' in files:
+            continue  # already handled above alongside the new file
+        SubmittalSectionUpload.objects.filter(
+            submittal=submittal, index_label=label
+        ).update(page_range=(post.get(key) or '').strip())
 
 
 def _get_detail_columns(submittal):

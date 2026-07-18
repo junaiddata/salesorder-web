@@ -405,6 +405,11 @@ class SubmittalSectionUpload(models.Model):
     submittal = models.ForeignKey(Submittal, on_delete=models.CASCADE, related_name='section_uploads')
     index_label = models.CharField(max_length=255, help_text="Must match the index item label exactly")
     file = models.FileField(upload_to=section_upload_path)
+    page_range = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text="Optional page range to extract from the uploaded PDF, e.g. '2' or '1,3-5'. "
+                  "Empty = include all pages."
+    )
     uploaded_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -5,6 +5,7 @@ with ReportLab, then merges all sections using PyPDF2.
 Divider pages are auto-generated (not uploaded).
 """
 import os
+import re
 from io import BytesIO
 
 from django.conf import settings
@@ -861,6 +862,35 @@ class _MaterialPageTemplate(BaseDocTemplate):
         self._draw_bg(canvas_obj)
 
 
+def _size_sort_value(size_str):
+    """Largest numeric value found in a 'size' string (e.g. '100L' -> 100, '1/2 to 2' -> 2)."""
+    nums = re.findall(r'\d+(?:\.\d+)?', str(size_str or ''))
+    return max(float(n) for n in nums) if nums else -1
+
+
+def _order_materials_for_pdf(materials):
+    """
+    Materials keep their normal display_order/model_no order, except Ariston
+    items: those are re-sorted by 'size' descending (largest capacity first)
+    in their existing slots, leaving any other brands' positions untouched.
+    """
+    materials = list(materials)
+    ariston_idx = [
+        i for i, m in enumerate(materials)
+        if m.brand and (m.brand.name or '').strip().lower().startswith('ariston')
+    ]
+    if len(ariston_idx) < 2:
+        return materials
+    ariston_sorted = sorted(
+        (materials[i] for i in ariston_idx),
+        key=lambda m: _size_sort_value(m.get('size', '')),
+        reverse=True,
+    )
+    for i, mat in zip(ariston_idx, ariston_sorted):
+        materials[i] = mat
+    return materials
+
+
 def _build_materials_table(submittal: Submittal) -> BytesIO:
     """
     Build materials table PDF with background image on every page.
@@ -908,6 +938,7 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
         .all()
         .order_by('display_order', 'model_no')
     )
+    materials = _order_materials_for_pdf(materials)
     cols = _get_effective_columns(submittal)
 
     # ── Build table header ────────────────────────────────────────────
@@ -986,6 +1017,74 @@ def _get_upload_path(submittal, label):
     except SubmittalSectionUpload.DoesNotExist:
         pass
     return None
+
+
+def _get_upload(submittal, label):
+    """Get the per-submittal SubmittalSectionUpload row for a given index label, if any."""
+    try:
+        return SubmittalSectionUpload.objects.get(submittal=submittal, index_label=label)
+    except SubmittalSectionUpload.DoesNotExist:
+        return None
+
+
+def _parse_page_range(page_range, total_pages):
+    """
+    Parse a 1-indexed page range string like '2' or '1,3-5' into a sorted,
+    de-duplicated list of 0-indexed page numbers clamped to total_pages.
+    Returns None if the string is empty or resolves to no valid pages.
+    """
+    if not page_range:
+        return None
+    indices = []
+    seen = set()
+    for part in page_range.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            start_str, _, end_str = part.partition('-')
+            try:
+                start, end = int(start_str), int(end_str)
+            except ValueError:
+                continue
+            if start > end:
+                start, end = end, start
+            page_numbers = range(start, end + 1)
+        else:
+            try:
+                page_numbers = [int(part)]
+            except ValueError:
+                continue
+        for p in page_numbers:
+            idx = p - 1
+            if 0 <= idx < total_pages and idx not in seen:
+                seen.add(idx)
+                indices.append(idx)
+    return indices or None
+
+
+def _extract_pdf_pages(pdf_path, page_range):
+    """
+    Return a BytesIO containing only the pages selected by page_range (1-indexed,
+    e.g. '1,3-5') from the PDF at pdf_path. If page_range is empty or invalid,
+    the original path is returned unchanged so the whole PDF is used.
+    """
+    if not page_range:
+        return pdf_path
+    try:
+        reader = PdfReader(pdf_path)
+        indices = _parse_page_range(page_range, len(reader.pages))
+        if not indices:
+            return pdf_path
+        writer = PdfWriter()
+        for idx in indices:
+            writer.add_page(reader.pages[idx])
+        buf = BytesIO()
+        writer.write(buf)
+        buf.seek(0)
+        return buf
+    except Exception:
+        return pdf_path
 
 
 def _get_ordered_index_items(submittal: Submittal) -> list:
@@ -1974,7 +2073,9 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                     if upload_path:
                         collector.append(upload_path)
             else:
-                upload_path = _get_upload_path(submittal, canonical)
+                upload_obj = _get_upload(submittal, canonical)
+                upload_path = _safe_path(upload_obj.file) if upload_obj else None
+                page_range = upload_obj.page_range if upload_obj else ''
                 if not upload_path:
                     legacy_map = {
                         5: submittal.vendor_list_pdf,
@@ -1984,7 +2085,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                     ff = legacy_map.get(section)
                     upload_path = _safe_path(ff) if ff else None
                 if upload_path:
-                    collector.append(upload_path)
+                    collector.append(_extract_pdf_pages(upload_path, page_range))
 
                 # Section 6: also append generated compliance table if rows exist
                 if section == 6 and (submittal.compliance_rows or []):
