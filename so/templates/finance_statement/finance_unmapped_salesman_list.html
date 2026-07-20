@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unmapped Salesman Names</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8fafc; margin: 0; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; }
+    .card-header { padding: 14px 16px; border-bottom: 1px solid #e2e8f0; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+    .card-body { padding: 14px 16px; }
+    .btn { display: inline-block; padding: 9px 14px; border-radius: 6px; text-decoration: none; border: 1px solid #2563eb; background: #2563eb; color: #fff; font-size: 14px; }
+    .btn-secondary { background: #fff; color: #1e293b; border-color: #cbd5e1; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; color: #000000; font-size: 12px; text-transform: uppercase; }
+    .text-right { text-align: right; }
+    .hint { color: #475569; font-size: 13px; margin: 0 0 14px; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <span>Unmapped Salesman Names</span>
+        <a class="btn btn-secondary" href="{% url 'finance_statement_list' %}">Back to Finance List</a>
+      </div>
+      <div class="card-body">
+        <p class="hint">
+          These SAP "Sales Employee" spellings have no entry in <code>SALESMAN_MAPPING</code>
+          (<code>so/salesman_mapping.py</code>). Every finance sync silently skips customers with
+          these names, so their outstanding balance, PDC, and credit figures stay frozen at
+          whatever they were before the name changed. Add each name to the mapping, then re-run
+          the finance sync to refresh their data.
+        </p>
+        <p class="hint">
+          <strong>{{ total_names }}</strong> unmapped name{{ total_names|pluralize }},
+          affecting <strong>{{ total_customers }}</strong> customer record{{ total_customers|pluralize }}.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" style="padding: 0;">
+        <table>
+          <thead>
+            <tr>
+              <th>SAP Salesman Name</th>
+              <th class="text-right">Affected Customers</th>
+              <th>Sample Customer</th>
+              <th>First Seen</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in unmapped %}
+            <tr>
+              <td><code>{{ row.sap_name }}</code></td>
+              <td class="text-right">{{ row.customer_count }}</td>
+              <td>{{ row.sample_customer_code }} - {{ row.sample_customer_name }}</td>
+              <td>{{ row.first_seen_at|date:"d M Y H:i" }}</td>
+              <td>{{ row.last_seen_at|date:"d M Y H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" style="text-align:center; color:#64748b; padding: 20px;">
+                No unmapped salesman names in the latest sync.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

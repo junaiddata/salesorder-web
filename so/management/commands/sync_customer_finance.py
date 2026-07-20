@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.db import transaction
 from so.api_client import SAPAPIClient
-from so.models import Customer, Salesman
+from so.models import Customer, Salesman, UnmappedSalesmanName
 from so.salesman_mapping import map_salesman_name
 import logging
 from logging.handlers import RotatingFileHandler
@@ -127,17 +127,18 @@ def sync_customer_finance_summary():
             
             to_create = []
             to_update = []
-            
+            unmapped_tracker = {}  # sap_name -> {'count', 'sample_customer_code', 'sample_customer_name'}
+
             for record in finance_data:
                 try:
                     card_code = record.get('CardCode', '').strip()
                     if not card_code:
                         stats['errors'].append("Record missing CardCode, skipping")
                         continue
-                    
+
                     card_name = record.get('CardName', '').strip() or card_code
                     sap_salesman_name = record.get('Sales Employee', '').strip()
-                    
+
                     # Handle salesman - map SAP name to simplified name
                     # Skip customers without valid mapping
                     salesman = None
@@ -146,7 +147,15 @@ def sync_customer_finance_summary():
                         if mapped_name:
                             salesman = salesman_map.get(mapped_name)
                         else:
-                            # No mapping found - skip this customer
+                            # No mapping found - skip this customer, but track it so it's
+                            # visible on-screen instead of only in a log file (see
+                            # UnmappedSalesmanName / finance_unmapped_salesman_list view)
+                            entry = unmapped_tracker.setdefault(sap_salesman_name, {
+                                'count': 0,
+                                'sample_customer_code': card_code,
+                                'sample_customer_name': card_name,
+                            })
+                            entry['count'] += 1
                             stats['errors'].append(f"Customer {card_code}: No mapping for salesman '{sap_salesman_name}', skipping")
                             continue
                     else:
@@ -237,7 +246,27 @@ def sync_customer_finance_summary():
                 ]
                 Customer.objects.bulk_update(to_update, fields=update_fields, batch_size=1000)
                 logger.info(f"Updated {len(to_update)} customers")
-            
+
+            # Rebuild the unmapped-salesman table from this run: drop names that got
+            # resolved (mapping was added or SAP stopped sending them), upsert the rest
+            # so they're visible on-screen instead of buried in a log file.
+            UnmappedSalesmanName.objects.exclude(sap_name__in=unmapped_tracker.keys()).delete()
+            for sap_name, info in unmapped_tracker.items():
+                UnmappedSalesmanName.objects.update_or_create(
+                    sap_name=sap_name,
+                    defaults={
+                        'customer_count': info['count'],
+                        'sample_customer_code': info['sample_customer_code'],
+                        'sample_customer_name': info['sample_customer_name'],
+                    },
+                )
+            if unmapped_tracker:
+                total_unmapped_customers = sum(v['count'] for v in unmapped_tracker.values())
+                logger.warning(
+                    f"{len(unmapped_tracker)} distinct unmapped salesman names "
+                    f"affecting {total_unmapped_customers} customers - see Finance Statement > Unmapped Salesmen"
+                )
+
             logger.info(f"Sync completed: {stats['created']} created, {stats['updated']} updated, {len(stats['errors'])} errors")
             
     except Exception as e:

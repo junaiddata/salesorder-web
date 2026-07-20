@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 import pandas as pd
 from io import BytesIO
-from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice
+from so.models import Customer, Salesman, FinanceCreditEditLog, CustomerPendingInvoice, UnmappedSalesmanName
 from so.views import SALES_USER_MAP
 from so.finance_statement_scope import (
     apply_finance_store_filter_by_salesman,
@@ -101,6 +101,22 @@ def finance_statement_list(request):
     
     # Salesmen for filter dropdown (scoped for salesman users)
     salesmen = _finance_salesmen_for_user(request)
+
+    # Unmapped-salesman alert (manager only): customers whose SAP salesman name
+    # has no entry in SALESMAN_MAPPING are silently skipped by the finance sync,
+    # so their figures go stale. Surface it on-screen instead of a log file.
+    is_manager = request.user.username == 'manager'
+    unmapped_summary = None
+    if is_manager:
+        name_count = UnmappedSalesmanName.objects.count()
+        if name_count:
+            customer_count = UnmappedSalesmanName.objects.aggregate(
+                total=Coalesce(Sum('customer_count'), Value(0))
+            )['total']
+            unmapped_summary = {
+                'name_count': name_count,
+                'customer_count': customer_count,
+            }
     
     # Calculate totals
     totals = customers.aggregate(
@@ -135,7 +151,8 @@ def finance_statement_list(request):
         'page_obj': page_obj,  # Also pass as page_obj for template
         'salesmen': salesmen,
         'finance_statement_scoped_user': not finance_statement_user_sees_all_customers(request.user),
-        'is_manager': request.user.username == 'manager',
+        'is_manager': is_manager,
+        'unmapped_summary': unmapped_summary,
         'show_detail_columns': show_detail_columns,
         'filters': {
             'q': search_query,
@@ -447,6 +464,29 @@ def finance_credit_edit_list(request):
         'total_edits': edits.count(),
     }
     return render(request, 'finance_statement/finance_credit_edit_list.html', context)
+
+
+@login_required
+def finance_unmapped_salesman_list(request):
+    """
+    Manager-only: SAP salesman spellings with no entry in SALESMAN_MAPPING.
+    Rebuilt by sync_customer_finance on every run - customers with these names
+    are silently skipped by the sync, so their finance figures go stale.
+    """
+    if request.user.username != 'manager':
+        return HttpResponseForbidden("Only manager can view unmapped salesman names.")
+
+    unmapped = UnmappedSalesmanName.objects.all().order_by('-customer_count')
+    total_customers = unmapped.aggregate(
+        total=Coalesce(Sum('customer_count'), Value(0))
+    )['total']
+
+    context = {
+        'unmapped': unmapped,
+        'total_names': unmapped.count(),
+        'total_customers': total_customers,
+    }
+    return render(request, 'finance_statement/finance_unmapped_salesman_list.html', context)
 
 
 @login_required

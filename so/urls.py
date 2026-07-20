@@ -61,6 +61,7 @@ urlpatterns = [
     path('finance-statement/<int:customer_id>/save-credit-edit/', finance_statement_views.save_finance_credit_edit, name='save_finance_credit_edit'),
     path('finance-statement/<int:customer_id>/save-internal-remarks/', finance_statement_views.save_finance_internal_remarks, name='save_finance_internal_remarks'),
     path('finance-statement/credit-edits/', finance_statement_views.finance_credit_edit_list, name='finance_credit_edit_list'),
+    path('finance-statement/unmapped-salesmen/', finance_statement_views.finance_unmapped_salesman_list, name='finance_unmapped_salesman_list'),
     path('finance-statement/export/', finance_statement_views.export_finance_statement_list_excel, name='export_finance_statement_list_excel'),
     path('finance-statement/export-pdf/', finance_statement_pdf_export.export_finance_statement_list_pdf, name='export_finance_statement_list_pdf'),
     path('finance-statement/<int:customer_id>/export/', finance_statement_views.export_finance_statement_detail_excel, name='export_finance_statement_detail_excel'),

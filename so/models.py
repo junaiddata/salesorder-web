@@ -152,6 +152,28 @@ class FinanceCreditEditLog(models.Model):
     def __str__(self):
         return f"{self.customer.customer_code} - {self.edited_credit_limit}"
 
+
+class UnmappedSalesmanName(models.Model):
+    """
+    SAP 'Sales Employee' spellings seen in the finance sync with no entry in
+    SALESMAN_MAPPING. Rebuilt on every sync_customer_finance run so a manager
+    can see, on-screen, which customers are stuck on stale finance data instead
+    of that only being logged to a file nobody watches.
+    """
+    sap_name = models.CharField(max_length=255, unique=True)
+    customer_count = models.IntegerField(default=0)
+    sample_customer_code = models.CharField(max_length=50, blank=True, null=True)
+    sample_customer_name = models.CharField(max_length=100, blank=True, null=True)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-customer_count']
+
+    def __str__(self):
+        return f"{self.sap_name} ({self.customer_count} customers)"
+
+
 class SalesOrder(models.Model):
     STATUS = (
         ('Pending', 'Pending'),
