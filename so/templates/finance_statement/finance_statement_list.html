@@ -666,17 +666,6 @@
       </div>
     </header>
 
-    {% if unmapped_summary %}
-    <div class="card" style="background:#fff7ed;border-color:#fdba74;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="color:#9a3412;font-size:0.9rem;">
-        <strong>{{ unmapped_summary.name_count }}</strong> unmapped salesman name{{ unmapped_summary.name_count|pluralize }}
-        from the last finance sync — <strong>{{ unmapped_summary.customer_count }}</strong> customer record{{ unmapped_summary.customer_count|pluralize }}
-        are showing stale figures until these are mapped.
-      </span>
-      <a class="btn btn-secondary" style="border-color:#fdba74;" href="{% url 'finance_unmapped_salesman_list' %}">Review Now</a>
-    </div>
-    {% endif %}
-
     <!-- Filters -->
     <div class="card filters-card">
       <form id="filters" class="filters-grid" method="get">

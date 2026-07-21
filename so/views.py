@@ -4579,6 +4579,7 @@ def quotation_detail(request, q_number):
     total_profit = doc_total - total_estimated_cost
     margin_percent = (total_profit / doc_total * 100) if doc_total and doc_total != 0 else 0.0
     from_old_pi = request.GET.get('from') == 'old_pi'
+    from_combined = request.GET.get('from') == 'combined'
 
     # If any item has cost 0.0, don't show Est. Cost / Margin / % — show warning instead
     has_zero_cost_items = is_admin and any(
@@ -4592,6 +4593,7 @@ def quotation_detail(request, q_number):
         'total_profit': total_profit,
         'margin_percent': margin_percent,
         'from_old_pi': from_old_pi,
+        'from_combined': from_combined,
         'is_admin': is_admin,
         'has_zero_cost_items': has_zero_cost_items,
     }

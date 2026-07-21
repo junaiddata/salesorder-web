@@ -1283,7 +1283,7 @@ def combined_quotations_list(request):
                 'total': float(s.document_total or 0),
                 'status': (s.status or '')[:80],
                 'salesman': s.salesman_name or '',
-                'detail_url': reverse('quotation_detail', args=[s.q_number]),
+                'detail_url': reverse('quotation_detail', args=[s.q_number]) + '?from=combined',
             })
     if source in ('all', 'app'):
         # Only Junaid in-app quotations are merged into the combined list.
