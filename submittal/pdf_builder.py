@@ -487,21 +487,54 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     return buf
 
 
-def _draw_wrapped(c, text, x, y, max_w, font_name, font_size, leading):
-    words = str(text).split()
+def _wrap_text_lines(text, max_w, font_name, font_size):
+    """Split text into lines that fit max_w, breaking mid-word when a single
+    word (no spaces) is itself wider than max_w -- otherwise it would be
+    drawn as one unbroken string running off the page."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    def _split_long_word(word):
+        chunks = []
+        chunk = ''
+        for ch in word:
+            test = chunk + ch
+            if chunk and stringWidth(test, font_name, font_size) > max_w:
+                chunks.append(chunk)
+                chunk = ch
+            else:
+                chunk = test
+        if chunk:
+            chunks.append(chunk)
+        return chunks
+
+    lines = []
     line = ''
-    cy = y
-    c.setFont(font_name, font_size)
-    for w in words:
-        test = f'{line} {w}'.strip()
-        if c.stringWidth(test, font_name, font_size) > max_w:
-            c.drawString(x, cy, line)
-            cy -= leading
-            line = w
+    for word in str(text).split():
+        if stringWidth(word, font_name, font_size) > max_w:
+            if line:
+                lines.append(line)
+                line = ''
+            lines.extend(_split_long_word(word))
+            continue
+        test = f'{line} {word}'.strip()
+        if stringWidth(test, font_name, font_size) > max_w:
+            lines.append(line)
+            line = word
         else:
             line = test
     if line:
-        c.drawString(x, cy, line)
+        lines.append(line)
+    return lines or ['']
+
+
+def _draw_wrapped(c, text, x, y, max_w, font_name, font_size, leading):
+    c.setFont(font_name, font_size)
+    lines = _wrap_text_lines(text, max_w, font_name, font_size)
+    cy = y
+    for i, ln in enumerate(lines):
+        c.drawString(x, cy, ln)
+        if i < len(lines) - 1:
+            cy -= leading
     return cy
 
 
@@ -796,10 +829,17 @@ class _MaterialPageTemplate(BaseDocTemplate):
     def __init__(self, buf, bg_path, submittal, **kwargs):
         self._bg_path = bg_path
         self._submittal = submittal
-        # Extra fields beyond the 6 fixed ones push the table's start
-        # further down so they never overlap it -- see _draw_first_page.
-        extra_fields = max(0, len(_ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)) - len(FIXED_FIELD_KEYS))
-        first_top = kwargs.pop('topMargin', 320) + extra_fields * 16
+        # Extra fields beyond the 6 fixed ones, plus any long values that
+        # wrap onto extra lines, push the table's start further down so
+        # they never overlap it -- see _draw_first_page.
+        fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        extra_fields = max(0, len(fields) - len(FIXED_FIELD_KEYS))
+        wrap_max_w = PAGE_W - 180 - 36
+        extra_wrap_lines = sum(
+            len(_wrap_text_lines(str(val), wrap_max_w, 'Helvetica', 9)) - 1
+            for _, val in fields if val
+        )
+        first_top = kwargs.pop('topMargin', 320) + extra_fields * 16 + extra_wrap_lines * 12
         bottom_end = kwargs.get('bottomMargin', 50)
         left = kwargs.get('leftMargin', 50)
         right = kwargs.get('rightMargin', 50)
@@ -854,8 +894,9 @@ class _MaterialPageTemplate(BaseDocTemplate):
             canvas_obj.drawString(label_x, field_y, lbl)
             canvas_obj.drawString(colon_x, field_y, ':')
             canvas_obj.setFont('Helvetica', 9)
-            _draw_wrapped(canvas_obj, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
-            field_y -= 16
+            end_y = _draw_wrapped(canvas_obj, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
+            lines_used = max(1, int(round((field_y - end_y) / 12)) + 1)
+            field_y -= max(16, lines_used * 12 + 4)
 
     def _draw_later_page(self, canvas_obj, doc):
         """Background only (no project details) on continuation pages."""
@@ -1189,10 +1230,16 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     buf = BytesIO()
 
     # Page frame leaves room for the first-page header content. Extra fields
-    # beyond the 6 fixed ones push the table's start further down so they
-    # never overlap it.
-    _extra_field_count = max(0, len(_ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)) - len(FIXED_FIELD_KEYS))
-    FIRST_TOP_MARGIN = 320 + _extra_field_count * 16
+    # beyond the 6 fixed ones, plus any long values that wrap onto extra
+    # lines, push the table's start further down so they never overlap it.
+    _cs_fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+    _extra_field_count = max(0, len(_cs_fields) - len(FIXED_FIELD_KEYS))
+    _cs_wrap_max_w = PAGE_W - 180 - 36
+    _extra_wrap_lines = sum(
+        len(_wrap_text_lines(str(val), _cs_wrap_max_w, 'Helvetica', 9)) - 1
+        for _, val in _cs_fields if val
+    )
+    FIRST_TOP_MARGIN = 320 + _extra_field_count * 16 + _extra_wrap_lines * 12
     LATER_TOP_MARGIN = 170   # space for company header + title on continuation pages
     BOTTOM_MARGIN = 50       # space for "Page X of Y"
 
@@ -1246,8 +1293,9 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
             c.drawString(label_x, field_y, lbl)
             c.drawString(colon_x, field_y, ':')
             c.setFont('Helvetica', 9)
-            _draw_wrapped(c, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
-            field_y -= 16
+            end_y = _draw_wrapped(c, val, value_x, field_y, max_w, 'Helvetica', 9, 12)
+            lines_used = max(1, int(round((field_y - end_y) / 12)) + 1)
+            field_y -= max(16, lines_used * 12 + 4)
 
         # Page X of Y at bottom (small)
         page_num = getattr(doc, 'page', 1)
