@@ -3435,7 +3435,7 @@ SALES_USER_MAP = {
     "abubaqar": ["B. MR.RAFIQ ABU- PROJ","A.MR.RAFIQ ABU-TRD", "A. RAFIQ ABU - RASHID", "ABU BAQAR"],
     "rashid": ["A.MR.RASHID", "A.MR.RASHID CONT"],
     "parthiban": ["B.MR.PARTHIBAN", "PARTHIBAN"],
-    "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT", "SIYAB", "R.ABUDHABI"],
+    "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT", "SIYAB", "R.ABUDHABI","ABUL"],
     "mr. nasheer": ["B.MR.NASHEER AHMAD", "NASHEER SIR"],
     "abul": ["R.ABUDHABI," "ABUL"],
     "deira 2 store": ["R.DEIRA 2"],
