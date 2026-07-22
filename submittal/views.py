@@ -16,7 +16,10 @@ from .models import (
 )
 from .forms import TitlePageForm
 from .services import get_history_values
-from .pdf_builder import build_submittal_pdf, DEFAULT_INDEX_ITEMS, needs_upload, FIXED_FIELD_KEYS
+from .pdf_builder import (
+    build_submittal_pdf, DEFAULT_INDEX_ITEMS, DEFAULT_UNCHECKED_INDEX_ITEMS,
+    needs_upload, FIXED_FIELD_KEYS,
+)
 
 
 @login_required
@@ -122,6 +125,7 @@ def submittal_wizard(request, pk=None):
         'existing_compliance_rows_json': existing_compliance_rows,
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'default_index_items': list(DEFAULT_INDEX_ITEMS),
+        'default_unchecked_index_items': list(DEFAULT_UNCHECKED_INDEX_ITEMS),
         'existing_index_items': existing_index_items,
         'existing_field_order': existing_field_order,
         'existing_warranty_brand_id': existing_warranty_brand_id or '',

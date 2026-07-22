@@ -1416,6 +1416,9 @@
 
         // ── Index Builder ──
         const DEFAULT_INDEX_ITEMS = DATA.default_index_items || [];
+        const DEFAULT_UNCHECKED_INDEX_ITEMS = new Set(
+            (DATA.default_unchecked_index_items || []).map(l => l.trim().toLowerCase())
+        );
         const EXISTING_INDEX_ITEMS = DATA.existing_index_items || [];
 
         let indexItems = [];
@@ -1426,7 +1429,12 @@
                     : { label: e.label || '', included: e.included !== false, custom: e.custom || false, display_label: e.display_label || '' }
             );
         } else {
-            indexItems = DEFAULT_INDEX_ITEMS.map(l => ({ label: l, included: true, custom: false, display_label: '' }));
+            indexItems = DEFAULT_INDEX_ITEMS.map(l => ({
+                label: l,
+                included: !DEFAULT_UNCHECKED_INDEX_ITEMS.has(l.trim().toLowerCase()),
+                custom: false,
+                display_label: '',
+            }));
         }
 
         function renderIndexList() {

@@ -60,16 +60,20 @@ DEFAULT_INDEX_ITEMS = [
     "Highlighted Vendor List",
     "Comply Statement with Project Specification",
     "List of Proposed Material",
-    "Area of Application",
     "Product Catalogue",
-    "Technical Details",
     "Test Certificates",
     "Country of Origin Certificate",
     "Authorization Letter",
     "Warranty Draft Letter",
     "Previous Approvals",
     "Previous Projects",
+    "Area of Application",
+    "Technical Details",
 ]
+
+# Index items that default to unticked (excluded) for new submittals --
+# still selectable, just not pre-included like the rest of DEFAULT_INDEX_ITEMS.
+DEFAULT_UNCHECKED_INDEX_ITEMS = {"area of application", "technical details"}
 
 INDEX_LABEL_TO_SECTION = {
     "title page": 1,
