@@ -786,7 +786,11 @@ def _get_effective_columns(submittal, column_override=None):
     first_brand = next((m.brand for m in materials if m.brand and m.brand.column_definitions), None)
     if first_brand:
         ordered = []
-        for col in first_brand.column_definitions:
+        sorted_defs = sorted(
+            first_brand.column_definitions,
+            key=lambda c: c.get('order', 0)
+        )
+        for col in sorted_defs:
             key = col.get('key')
             if key and key in seen_keys:
                 ordered.append((key, seen_keys[key]))
