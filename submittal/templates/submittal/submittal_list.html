@@ -175,5 +175,14 @@ function filterCards(q) {
     const none = document.getElementById('noResults');
     if (none) none.style.display = visible === 0 ? 'block' : 'none';
 }
+
+(function initCompanyFilterFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const company = (params.get('company') || '').toLowerCase();
+    if (company === 'junaid' || company === 'alabama') {
+        const btn = document.querySelector(`#companyTabs .pill[data-company="${company}"]`);
+        if (btn) setCompanyFilter(company, btn);
+    }
+})();
 </script>
 {% endblock %}

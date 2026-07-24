@@ -235,6 +235,12 @@
                     </li>
                 </ul>
             </li>
+            <li>
+                <a href="{% url 'submittal:list' %}?company=alabama">
+                    <i class="fas fa-file-contract"></i>
+                    Submittals
+                </a>
+            </li>
             {% if is_alabama_admin %}
             <li class="has-submenu">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
