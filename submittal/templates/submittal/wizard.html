@@ -1147,6 +1147,24 @@
                     </div>
                 </div>
 
+                <div class="form-field" data-field="company" style="margin-bottom:0.85rem;">
+                    <label class="field-label">Letterhead / Company</label>
+                    <div class="mode-toggle mb-2">
+                        <label>
+                            <input type="radio" name="company" value="junaid" class="mode-radio" {% if submittal.company != 'alabama' %}checked{% endif %}>
+                            <i class="fas fa-building" style="font-size:0.72rem;"></i> Junaid
+                        </label>
+                        <label>
+                            <input type="radio" name="company" value="alabama" class="mode-radio" {% if submittal.company == 'alabama' %}checked{% endif %}>
+                            <i class="fas fa-building" style="font-size:0.72rem;"></i> Alabama
+                        </label>
+                    </div>
+                    <div class="helper-note">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Controls which company letterhead/branding is used throughout the generated PDF (title page, dividers, materials table, index, compliance statement).</span>
+                    </div>
+                </div>
+
                 <div class="helper-note" style="margin-bottom:0.85rem;">
                     <i class="fas fa-info-circle"></i>
                     <span>Drag <i class="fas fa-grip-vertical" style="font-size:0.65rem;"></i> any field — including ones you add below — to reorder them, in any position, not just at the end.</span>

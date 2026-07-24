@@ -8,12 +8,14 @@
     <div class="page-sub">Upload company-wide PDFs used in all submittals</div>
 </div>
 
-{% for field_name, label, current_name in upload_fields %}
+{% if junaid_fields %}
+<h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin:1.5rem 0 0.6rem;">Junaid</h2>
+{% for field_name, label, current_name in junaid_fields %}
 <div class="admin-card">
     <div class="d-flex align-items-start justify-content-between mb-3">
         <div>
             <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;">{{ label }}</h2>
-            <div style="font-size:0.8rem;color:var(--text-muted);">Used in section auto-generation for all submittals</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Used in section auto-generation for Junaid-letterhead submittals</div>
         </div>
         {% if current_name %}
         <span class="badge" style="background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;white-space:nowrap;"><i class="fas fa-check me-1"></i>Uploaded</span>
@@ -39,7 +41,43 @@
         </button>
     </form>
 </div>
-{% empty %}
+{% endfor %}
+
+<h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin:1.5rem 0 0.6rem;">Alabama</h2>
+{% for field_name, label, current_name in alabama_fields %}
+<div class="admin-card">
+    <div class="d-flex align-items-start justify-content-between mb-3">
+        <div>
+            <h2 style="font-size:0.95rem;font-weight:600;margin:0 0 0.2rem;">{{ label }}</h2>
+            <div style="font-size:0.8rem;color:var(--text-muted);">Used in section auto-generation for Alabama-letterhead submittals</div>
+        </div>
+        {% if current_name %}
+        <span class="badge" style="background:#dcfce7;color:#166534;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;white-space:nowrap;"><i class="fas fa-check me-1"></i>Uploaded</span>
+        {% else %}
+        <span class="badge" style="background:#fef3c7;color:#92400e;font-size:0.75rem;font-weight:500;padding:0.25rem 0.6rem;white-space:nowrap;"><i class="fas fa-exclamation me-1"></i>Not uploaded</span>
+        {% endif %}
+    </div>
+
+    {% if current_name %}
+    <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background:#f8fafc;border:1px solid var(--border);font-size:0.82rem;">
+        <i class="fas fa-file-pdf text-danger"></i>
+        <span style="color:var(--text-muted);">Current file:</span>
+        <span style="font-weight:500;">{{ current_name }}</span>
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2 flex-wrap">
+        {% csrf_token %}
+        <input type="hidden" name="field" value="{{ field_name }}">
+        <input type="file" name="file" class="form-control form-control-sm" accept=".pdf" style="max-width:380px;">
+        <button type="submit" class="btn btn-admin btn-admin-primary" style="white-space:nowrap;">
+            <i class="fas fa-upload"></i> {% if current_name %}Replace{% else %}Upload{% endif %}
+        </button>
+    </form>
+</div>
+{% endfor %}
+
+{% else %}
 <!-- Fallback for old template context without upload_fields -->
 <div class="admin-card">
     <p class="text-muted mb-4" style="font-size:0.875rem;">Upload company-wide PDFs used in all submittals.</p>
@@ -77,5 +115,5 @@
         {% if index_standard_name %}<small class="text-success mt-1 d-block"><i class="fas fa-check me-1"></i>{{ index_standard_name }}</small>{% endif %}
     </form>
 </div>
-{% endfor %}
+{% endif %}
 {% endblock %}

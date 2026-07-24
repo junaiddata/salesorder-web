@@ -78,7 +78,8 @@ class SubmittalSectionUploadInline(admin.TabularInline):
 
 @admin.register(Submittal)
 class SubmittalAdmin(admin.ModelAdmin):
-    list_display = ('project', 'client', 'product', 'created_at')
+    list_display = ('project', 'client', 'product', 'company', 'created_at')
+    list_filter = ('company',)
     search_fields = ('project', 'client', 'product')
     filter_horizontal = ('materials',)
     inlines = [SubmittalSectionUploadInline]

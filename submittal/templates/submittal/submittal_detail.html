@@ -68,6 +68,7 @@
             {% if submittal.client %}<span><i class="fas fa-building"></i> {{ submittal.client }}</span>{% endif %}
             {% if submittal.product %}<span><i class="fas fa-box"></i> {{ submittal.product }}</span>{% endif %}
             <span><i class="fas fa-calendar-alt"></i> Created {{ submittal.created_at|date:"d M Y" }}</span>
+            {% if submittal.company == 'alabama' %}<span style="color:#fecaca;"><i class="fas fa-building-flag"></i> Alabama letterhead</span>{% endif %}
             {% if submittal.pdf_generated_at %}<span style="color:#a7f3d0;"><i class="fas fa-circle-check"></i> PDF generated {{ submittal.pdf_generated_at|date:"d M Y" }}</span>{% endif %}
         </div>
         <div class="hero-actions">

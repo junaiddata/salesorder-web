@@ -171,6 +171,9 @@ def submittal_save(request):
     pk = request.POST.get('submittal_id')
     submittal = get_object_or_404(Submittal, pk=pk) if pk else Submittal()
 
+    company = request.POST.get('company', 'junaid')
+    submittal.company = company if company in dict(Submittal.COMPANY_CHOICES) else 'junaid'
+
     submittal.project = title_form.cleaned_data['project']
     submittal.client = title_form.cleaned_data['client']
     submittal.consultant = title_form.cleaned_data['consultant']
@@ -1041,7 +1044,10 @@ def admin_company_docs(request):
         field = request.POST.get('field', '')
         f = request.FILES.get('file')
         if field and f:
-            valid = ['company_profile_pdf', 'trade_license_pdf', 'index_standard_pdf']
+            valid = [
+                'company_profile_pdf', 'trade_license_pdf', 'index_standard_pdf',
+                'alabama_company_profile_pdf', 'alabama_trade_license_pdf',
+            ]
             if field in valid:
                 old = getattr(docs, field)
                 if old and old.name:
@@ -1054,14 +1060,20 @@ def admin_company_docs(request):
     def _basename(ff):
         return os.path.basename(ff.name) if ff and ff.name else None
 
-    upload_fields = [
+    junaid_fields = [
         ('company_profile_pdf', 'Company Profile PDF', _basename(docs.company_profile_pdf)),
         ('trade_license_pdf', 'Trade License PDF', _basename(docs.trade_license_pdf)),
         ('index_standard_pdf', 'Index Standard PDF', _basename(docs.index_standard_pdf)),
     ]
+    alabama_fields = [
+        ('alabama_company_profile_pdf', 'Company Profile PDF', _basename(docs.alabama_company_profile_pdf)),
+        ('alabama_trade_license_pdf', 'Trade License PDF', _basename(docs.alabama_trade_license_pdf)),
+    ]
     return render(request, 'submittal/admin_company_docs.html', {
         'docs': docs,
-        'upload_fields': upload_fields,
+        'upload_fields': junaid_fields,
+        'junaid_fields': junaid_fields,
+        'alabama_fields': alabama_fields,
         'company_profile_name': _basename(docs.company_profile_pdf),
         'trade_license_name': _basename(docs.trade_license_pdf),
         'index_standard_name': _basename(docs.index_standard_pdf),

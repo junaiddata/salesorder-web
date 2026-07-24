@@ -106,6 +106,7 @@
                     {% if s.client %}<span><i class="fas fa-building"></i>{{ s.client }}</span>{% endif %}
                     {% if s.product %}<span><i class="fas fa-box"></i>{{ s.product }}</span>{% endif %}
                     <span><i class="fas fa-calendar-alt"></i>{{ s.created_at|date:"d M Y" }}</span>
+                    {% if s.company == 'alabama' %}<span class="chip-x" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-building"></i> Alabama</span>{% endif %}
                     {% if s.pdf_generated_at %}<span class="chip-x green"><i class="fas fa-circle-check"></i> PDF ready</span>{% endif %}
                 </div>
             </div>

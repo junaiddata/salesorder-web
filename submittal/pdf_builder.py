@@ -35,6 +35,42 @@ WHITE = colors.white
 
 PAGE_W, PAGE_H = A4
 
+# ---------------------------------------------------------------------------
+# Company branding (letterhead) -- Submittal.company selects which set of
+# background assets / legal name is used throughout the generated PDF.
+# ---------------------------------------------------------------------------
+ALABAMA_RED = HexColor('#D6161E')
+ALABAMA_NAVY = HexColor('#050A30')
+
+COMPANY_BG = {
+    'junaid': {
+        'title': os.path.join('media', 'title_page_bg1.png'),
+        'divider': os.path.join('media', 'divider_page_bg.png'),
+        'materials': os.path.join('media', 'materials_page_bg.png'),
+        'plain': None,   # Junaid's index/compliance pages use the vector box header instead
+        'watermark_logo': os.path.join('media', 'footer-logo1.png'),
+    },
+    'alabama': {
+        'title': os.path.join('media', 'alabama_letterhead_plain.png'),
+        'divider': os.path.join('media', 'alabama_letterhead_watermark.png'),
+        'materials': os.path.join('media', 'alabama_letterhead_plain.png'),
+        'plain': os.path.join('media', 'alabama_letterhead_plain.png'),
+        'watermark_logo': os.path.join('media', 'alabama.jpeg'),
+    },
+}
+
+COMPANY_LEGAL_NAME = {
+    'junaid': 'Junaid Sanitary Electrical Material Trading LLC',
+    'alabama': 'Alabama Building Materials Trading LLC',
+}
+
+
+def _company_key(company) -> str:
+    """Normalize a Submittal instance or a raw company string to a valid key."""
+    if company is not None and not isinstance(company, str):
+        company = getattr(company, 'company', 'junaid')
+    return company if company in COMPANY_BG else 'junaid'
+
 # Standard sections that have content auto-provided (no upload needed)
 AUTO_CONTENT_LABELS = {
     "title page", "index",
@@ -423,10 +459,11 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
+    company = _company_key(submittal)
 
     # ── Draw background image (full page) ─────────────────────────────
-    bg_path = os.path.join('media', 'title_page_bg1.png')
-    if os.path.exists(bg_path):
+    bg_path = COMPANY_BG[company]['title']
+    if bg_path and os.path.exists(bg_path):
         c.drawImage(
             bg_path,
             0, 0,
@@ -438,12 +475,29 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
 
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
+    accent_color = ALABAMA_NAVY if company == 'alabama' else BLUE_DARK
+
+    # Alabama's background has no baked-in "MATERIAL SUBMITTAL" title (unlike
+    # Junaid's), so draw it dynamically in the open space below the letterhead.
+    if company == 'alabama':
+        title_y = PAGE_H - 190
+        c.setFont(FONT_TITLE, 22)
+        c.setFillColor(colors.black)
+        c.drawString(72, title_y, 'MATERIAL SUBMITTAL')
+        tw = stringWidth('MATERIAL SUBMITTAL', FONT_TITLE, 22)
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(1)
+        c.line(72, title_y - 5, 72 + tw, title_y - 5)
+        field_start_y = title_y - 45
+    else:
+        # Starting Y position below "MATERIAL SUBMITTAL" baked into the background
+        field_start_y = PAGE_H - 370
+
     # ── Dynamic fields ────────────────────────────────────────────────
     fields = _ordered_project_fields(submittal, TITLE_PAGE_LABELS)
     fields.append(('Manufacturer', getattr(submittal, 'manufacturer', '')))
 
-    # Starting Y position below "MATERIAL SUBMITTAL" in background
-    field_y = PAGE_H - 370
+    field_y = field_start_y
     arrow_x = 58
     label_x = 72
     colon_x = 178
@@ -455,7 +509,7 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
             continue
 
         # ── Arrow "❯" ────────────────────────────────────────────────
-        c.setFillColor(BLUE_DARK)
+        c.setFillColor(accent_color)
         c.setFont(FONT_BODY_BOLD, 12)
         c.drawString(arrow_x, field_y, '\u276F')
 
@@ -546,23 +600,30 @@ def _draw_wrapped(c, text, x, y, max_w, font_name, font_size, leading):
 # Index Page (Section 2)
 # ---------------------------------------------------------------------------
 
-def _build_index_page(items: list, page_numbers: list = None) -> BytesIO:
+def _build_index_page(items: list, page_numbers: list = None, company: str = 'junaid') -> BytesIO:
     """page_numbers, if given, is a list of ints parallel to items -- the
     page each section actually starts on in the final merged PDF -- printed
     right-aligned after each entry's dotted leader line."""
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
+    company = _company_key(company)
+    accent_color = ALABAMA_NAVY if company == 'alabama' else BLUE_DARK
 
-    _draw_left_strips(c)
-    _draw_company_header(c)
+    if company == 'alabama':
+        plain_bg = COMPANY_BG['alabama']['plain']
+        if plain_bg and os.path.exists(plain_bg):
+            c.drawImage(plain_bg, 0, 0, width=PAGE_W, height=PAGE_H, preserveAspectRatio=False, mask='auto')
+    else:
+        _draw_left_strips(c)
+        _draw_company_header(c)
 
     title_y = PAGE_H - 170 - 50
     c.setFont('Helvetica-Bold', 20)
-    c.setFillColor(BLUE_DARK)
+    c.setFillColor(accent_color)
     c.drawCentredString(cx, title_y, 'INDEX')
     tw = c.stringWidth('INDEX', 'Helvetica-Bold', 20)
-    c.setStrokeColor(BLUE_DARK)
+    c.setStrokeColor(accent_color)
     c.setLineWidth(1.5)
     c.line(cx - tw / 2, title_y - 4, cx + tw / 2, title_y - 4)
 
@@ -704,20 +765,20 @@ def _draw_centered_wrapped(c, text, cx, y, max_width, font_name, font_size, lead
     return start_y - (n - 1) * leading
 
 
-def _build_divider_page(section_number: int, section_name: str) -> BytesIO:
+def _build_divider_page(section_number: int, section_name: str, company: str = 'junaid') -> BytesIO:
     """
     Build divider page using a pre-designed background image.
     Only the section name text is drawn dynamically on top.
-    
-    Background image: media/divider_page_bg.png
+
+    Background image: media/divider_page_bg.png (or the Alabama equivalent)
     """
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     cx = PAGE_W / 2
 
     # ── Draw background image (full page) ─────────────────────────────
-    bg_path = os.path.join('media', 'divider_page_bg.png')
-    if os.path.exists(bg_path):
+    bg_path = COMPANY_BG[_company_key(company)]['divider']
+    if bg_path and os.path.exists(bg_path):
         c.drawImage(
             bg_path,
             0, 0,
@@ -834,9 +895,10 @@ class _MaterialPageTemplate(BaseDocTemplate):
     and the table.
     """
 
-    def __init__(self, buf, bg_path, submittal, **kwargs):
+    def __init__(self, buf, bg_path, submittal, company='junaid', **kwargs):
         self._bg_path = bg_path
         self._submittal = submittal
+        self._company = _company_key(company)
         # Extra fields beyond the 6 fixed ones, plus any long values that
         # wrap onto extra lines, push the table's start further down so
         # they never overlap it -- see _draw_first_page.
@@ -884,9 +946,25 @@ class _MaterialPageTemplate(BaseDocTemplate):
             )
             canvas_obj.restoreState()
 
+    def _draw_title(self, canvas_obj):
+        """Alabama's background has no baked-in section title (unlike Junaid's), so draw it dynamically."""
+        if self._company != 'alabama':
+            return
+        canvas_obj.saveState()
+        title_y = PAGE_H - 155
+        canvas_obj.setFont('Helvetica-Bold', 14)
+        canvas_obj.setFillColor(colors.black)
+        canvas_obj.drawString(55, title_y, 'LIST OF PROPOSED MATERIALS')
+        tw = canvas_obj.stringWidth('LIST OF PROPOSED MATERIALS', 'Helvetica-Bold', 14)
+        canvas_obj.setStrokeColor(colors.black)
+        canvas_obj.setLineWidth(1)
+        canvas_obj.line(55, title_y - 6, 55 + tw, title_y - 6)
+        canvas_obj.restoreState()
+
     def _draw_first_page(self, canvas_obj, doc):
         """Background + project details, drawn below the baked-in title."""
         self._draw_bg(canvas_obj)
+        self._draw_title(canvas_obj)
         submittal = self._submittal
 
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
@@ -909,6 +987,7 @@ class _MaterialPageTemplate(BaseDocTemplate):
     def _draw_later_page(self, canvas_obj, doc):
         """Background only (no project details) on continuation pages."""
         self._draw_bg(canvas_obj)
+        self._draw_title(canvas_obj)
 
 
 def _size_sort_value(size_str):
@@ -947,13 +1026,15 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
     Table is rendered inside frame area below the pre-designed header & title.
     """
     buf = BytesIO()
-    bg_path = os.path.join('media', 'materials_page_bg.png')
+    company = _company_key(submittal)
+    bg_path = COMPANY_BG[company]['materials']
 
     # ── Use custom template with background ───────────────────────────
     doc = _MaterialPageTemplate(
         buf,
         bg_path=bg_path,
         submittal=submittal,
+        company=company,
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
@@ -1158,10 +1239,10 @@ def _get_ordered_index_items(submittal: Submittal) -> list:
     return items
 
 
-def _append(merger, pdf, add_divider=False, div_num=0, div_name=''):
+def _append(merger, pdf, add_divider=False, div_num=0, div_name='', company='junaid'):
     """Append optional divider then content to merger."""
     if add_divider and div_name:
-        divider = _build_divider_page(div_num, div_name)
+        divider = _build_divider_page(div_num, div_name, company=company)
         merger.append(divider)
     if pdf is None:
         return
@@ -1263,13 +1344,24 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     style_header_cell = ParagraphStyle('CSHdr', fontSize=8, fontName='Helvetica-Bold', textColor=WHITE, leading=10)
     style_bold = ParagraphStyle('CSBold', fontSize=8, fontName='Helvetica-Bold', leading=11)
 
+    company = _company_key(submittal)
+
+    def _draw_cs_header(c):
+        """Draw the letterhead header for the compliance statement pages."""
+        if company == 'alabama':
+            plain_bg = COMPANY_BG['alabama']['plain']
+            if plain_bg and os.path.exists(plain_bg):
+                c.drawImage(plain_bg, 0, 0, width=PAGE_W, height=PAGE_H, preserveAspectRatio=False, mask='auto')
+        else:
+            _draw_left_strips(c)
+            _draw_company_header(c, box_y=PAGE_H - 150, box_h=100, use_black=True)
+
     def _draw_first_page(canvas_obj, doc):
         """Draw company header, title, and project details on the first page."""
         c = canvas_obj
         cx = PAGE_W / 2
 
-        _draw_left_strips(c)
-        _draw_company_header(c, box_y=PAGE_H - 150, box_h=100, use_black=True)
+        _draw_cs_header(c)
 
         # Horizontal rule
         rule_y = PAGE_H - 160
@@ -1317,8 +1409,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         c = canvas_obj
         cx = PAGE_W / 2
 
-        _draw_left_strips(c)
-        _draw_company_header(c, box_y=PAGE_H - 150, box_h=100, use_black=True)
+        _draw_cs_header(c)
 
         # Horizontal rule
         rule_y = PAGE_H - 160
@@ -1516,8 +1607,9 @@ def _draw_draft_watermark(c, doc):
     c.saveState()
 
     # ── Logo top-right ───────────────────────────────────────────────
-    logo_path = os.path.join('media', 'footer-logo1.png')
-    if os.path.exists(logo_path):
+    company = _company_key(getattr(doc, '_company', 'junaid'))
+    logo_path = COMPANY_BG[company]['watermark_logo']
+    if logo_path and os.path.exists(logo_path):
         logo_w = 160
         logo_h = 55
         c.drawImage(
@@ -1536,7 +1628,8 @@ def _draw_draft_watermark(c, doc):
 class _WarrantyDocTemplate(BaseDocTemplate):
     """Custom doc template that injects watermark + logo on every page."""
 
-    def __init__(self, buf, **kwargs):
+    def __init__(self, buf, company='junaid', **kwargs):
+        self._company = _company_key(company)
         super().__init__(buf, **kwargs)
         frame = Frame(
             self.leftMargin,
@@ -1560,8 +1653,10 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
     materials table in body, TOC bold note, Mr. Junaid Nasheer sign-off).
     """
     buf = BytesIO()
+    company = _company_key(submittal)
     doc = _WarrantyDocTemplate(
         buf,
+        company=company,
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
@@ -1726,7 +1821,7 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
         Spacer(1, 30),
 
         # Sign-off
-        Paragraph('For M/s. Junaid Sanitary Electrical Material Trading LLC', style_body),
+        Paragraph(f'For M/s. {COMPANY_LEGAL_NAME[company]}', style_body),
         Spacer(1, 36),   # signature gap
         Paragraph('Mr. Meraj Asad Khan', style_body),
         Paragraph('Director Of Sales', style_body),
@@ -1750,8 +1845,10 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
     + logo page template as the Pegler letter.
     """
     buf = BytesIO()
+    company = _company_key(submittal)
     doc = _WarrantyDocTemplate(
         buf,
+        company=company,
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
@@ -1901,7 +1998,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
 
         # Sign-off
         Paragraph('For,', style_body),
-        Paragraph('M/s. Junaid Sanitary &amp; Electrical Materials Trading LLC', style_body),
+        Paragraph(f'M/s. {COMPANY_LEGAL_NAME[company]}', style_body),
         Spacer(1, 24),   # signature gap
         Paragraph('Mr. Meraj Asad Khan', style_body),
         Paragraph('Director of Sales', style_body),
@@ -2059,6 +2156,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     """
     submittal = Submittal.objects.select_related('warranty_brand', 'title_brand').prefetch_related('materials__brand').get(pk=submittal_id)
     company_docs = services.get_company_documents()
+    company = _company_key(submittal)
 
     items = _get_ordered_index_items(submittal)
     materials = submittal.materials.all().order_by('display_order')
@@ -2098,22 +2196,22 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
 
         # ── Standard single-content sections ──
         if section == 3:
-            _append(collector, _safe_path(company_docs.company_profile_pdf),
-                    True, visible_num, display)
+            _append(collector, _safe_path(company_docs.profile_pdf_for(company)),
+                    True, visible_num, display, company=company)
 
 
         elif section == 4:
-            _append(collector, _safe_path(company_docs.trade_license_pdf),
-                    True, visible_num, display)
+            _append(collector, _safe_path(company_docs.trade_license_pdf_for(company)),
+                    True, visible_num, display, company=company)
 
         elif section == 7:
             _append(collector, _build_materials_table(submittal),
-                    True, visible_num, display)
+                    True, visible_num, display, company=company)
 
         # ── Upload-based sections (standard or custom) ──
         elif section in (5, 6, 8, 13) or section is None:
             # Always add divider; content optional (show renamed display)
-            collector.append(_build_divider_page(visible_num, display))
+            collector.append(_build_divider_page(visible_num, display, company=company))
 
             # Section 13: generated warranty letter (brand-specific format, when
             # the brand has one) OR uploaded PDF
@@ -2150,7 +2248,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         # ── Material-level multi sections (9, 10, 11) ──
         elif section in (9, 10, 11):
             # Always add divider; content optional
-            collector.append(_build_divider_page(visible_num, display))
+            collector.append(_build_divider_page(visible_num, display, company=company))
             if section == 9:
                 _append_item_or_brand_docs(
                     collector, materials, mode_attr='catalogue_mode',
@@ -2171,7 +2269,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         # ── Brand-level document sections (12, 14, 15, 16) ──
         # Pulled once from the brand chosen on the title page.
         elif section in BRAND_DOC_SECTIONS:
-            collector.append(_build_divider_page(visible_num, display))
+            collector.append(_build_divider_page(visible_num, display, company=company))
             brand = getattr(submittal, 'title_brand', None)
             for path in services.get_brand_documents(brand, BRAND_DOC_SECTIONS[section]):
                 if path and os.path.exists(path):
@@ -2191,7 +2289,7 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
     if has_index:
         display_labels = [e['display'] for e in entries]
         page_numbers = [e['start_page'] for e in entries]
-        merger.append(_build_index_page(display_labels, page_numbers))
+        merger.append(_build_index_page(display_labels, page_numbers, company=company))
 
     for entry in entries:
         for piece in entry['pieces']:

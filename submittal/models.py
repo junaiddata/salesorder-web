@@ -96,6 +96,14 @@ class CompanyDocuments(models.Model):
         upload_to=company_doc_path, blank=True, null=True,
         help_text="Trade license PDF (Section 4)"
     )
+    alabama_company_profile_pdf = models.FileField(
+        upload_to=company_doc_path, blank=True, null=True,
+        help_text="Company profile PDF (Section 3) used when the submittal's letterhead is Alabama"
+    )
+    alabama_trade_license_pdf = models.FileField(
+        upload_to=company_doc_path, blank=True, null=True,
+        help_text="Trade license PDF (Section 4) used when the submittal's letterhead is Alabama"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -109,6 +117,12 @@ class CompanyDocuments(models.Model):
     def get_instance(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+    def profile_pdf_for(self, company):
+        return self.alabama_company_profile_pdf if company == 'alabama' else self.company_profile_pdf
+
+    def trade_license_pdf_for(self, company):
+        return self.alabama_trade_license_pdf if company == 'alabama' else self.trade_license_pdf
 
 
 class SectionDivider(models.Model):
@@ -278,6 +292,16 @@ def submittal_stamp_path(instance, filename):
 
 class Submittal(models.Model):
     """Main submittal document combining all sections."""
+
+    COMPANY_CHOICES = [
+        ('junaid', 'Junaid'),
+        ('alabama', 'Alabama'),
+    ]
+    company = models.CharField(
+        max_length=10, choices=COMPANY_CHOICES, default='junaid',
+        help_text="Which company letterhead/branding is used on the generated PDF "
+                  "(title page, dividers, materials table, index, compliance statement)."
+    )
 
     # Section 1 - Title Page
     project = models.TextField(blank=True, default='', help_text="Project name/description")
