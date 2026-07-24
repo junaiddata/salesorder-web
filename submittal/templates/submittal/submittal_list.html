@@ -90,15 +90,22 @@
     {% if submittals %}
     <div class="sec-head">
         <h2>All Submittals <span class="count" id="visibleCount">({{ submittals|length }})</span></h2>
-        <div class="search-x" style="min-width:260px;">
-            <i class="fas fa-search"></i>
-            <input type="text" class="input-x" id="searchInput" placeholder="Search project, client or product…" oninput="filterCards(this.value)">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="pill-row" id="companyTabs">
+                <button type="button" class="pill active" data-company="all" onclick="setCompanyFilter('all', this)">All</button>
+                <button type="button" class="pill" data-company="junaid" onclick="setCompanyFilter('junaid', this)">Junaid</button>
+                <button type="button" class="pill" data-company="alabama" onclick="setCompanyFilter('alabama', this)">Alabama</button>
+            </div>
+            <div class="search-x" style="min-width:260px;">
+                <i class="fas fa-search"></i>
+                <input type="text" class="input-x" id="searchInput" placeholder="Search project, client or product…" oninput="filterCards(this.value)">
+            </div>
         </div>
     </div>
 
     <div id="submittalGrid">
         {% for s in submittals %}
-        <div class="sub-card" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
+        <div class="sub-card" data-company="{{ s.company }}" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
             <span class="sic"><i class="fas fa-file-pdf"></i></span>
             <div class="meta">
                 <a href="{% url 'submittal:detail' s.pk %}" class="stitle">{{ s.project|truncatewords:14 }}</a>
@@ -143,12 +150,23 @@
 
 {% block extra_js %}
 <script>
+let currentCompanyFilter = 'all';
+
+function setCompanyFilter(company, btn) {
+    currentCompanyFilter = company;
+    document.querySelectorAll('#companyTabs .pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    filterCards(document.getElementById('searchInput').value);
+}
+
 function filterCards(q) {
     const term = (q || '').toLowerCase();
     const cards = document.querySelectorAll('#submittalGrid .sub-card');
     let visible = 0;
     cards.forEach(c => {
-        const match = !term || c.dataset.search.includes(term);
+        const matchesSearch = !term || c.dataset.search.includes(term);
+        const matchesCompany = currentCompanyFilter === 'all' || c.dataset.company === currentCompanyFilter;
+        const match = matchesSearch && matchesCompany;
         c.style.display = match ? '' : 'none';
         if (match) visible++;
     });
