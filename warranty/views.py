@@ -30,17 +30,12 @@ def warranty_list(request):
         'letters': letters,
         'company_filter': company,
         'status_filter': status,
-        'is_manager': _is_manager(request.user),
     })
 
 
 @login_required
 def warranty_form(request, pk=None):
     letter = get_object_or_404(WarrantyLetter, pk=pk) if pk else None
-
-    if _is_manager(request.user):
-        messages.error(request, "The manager account can only approve or reject warranty letters.")
-        return redirect('warranty:detail', pk=letter.pk) if letter else redirect('warranty:list')
 
     company = (letter.company if letter else request.GET.get('company', 'junaid'))
     if company not in dict(WarrantyLetter.COMPANY_CHOICES):
@@ -76,9 +71,6 @@ def warranty_form(request, pk=None):
 @login_required
 @require_POST
 def warranty_save(request):
-    if _is_manager(request.user):
-        return JsonResponse({'error': 'The manager account can only approve or reject warranty letters.'}, status=403)
-
     pk = request.POST.get('letter_id')
     letter = get_object_or_404(WarrantyLetter, pk=pk) if pk else WarrantyLetter()
 
@@ -183,9 +175,6 @@ def warranty_detail(request, pk):
 @require_POST
 def warranty_delete(request, pk):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
-    if _is_manager(request.user):
-        messages.error(request, "The manager account can only approve or reject warranty letters.")
-        return redirect('warranty:detail', pk=letter.pk)
     project_name = (letter.project or '')[:50]
     letter.invalidate_pdf()
     if letter.signature_image:
