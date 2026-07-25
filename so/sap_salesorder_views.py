@@ -6489,7 +6489,11 @@ def arinvoice_list(request):
     total_without_vat_value = grand_total_agg['total_without_vat']
     vat_total_value = grand_total_agg['vat_total']
     total_gross_profit_value = grand_total_agg['total_gross_profit']
-    
+    gp_percent_value = (
+        float(total_gross_profit_value) / float(total_without_vat_value) * 100
+        if total_without_vat_value else 0
+    )
+
     qs = qs.order_by('-posting_date', '-invoice_number')
     
     # Pagination
@@ -6519,6 +6523,7 @@ def arinvoice_list(request):
         'total_without_vat_value': total_without_vat_value,
         'vat_total_value': vat_total_value,
         'total_gross_profit_value': total_gross_profit_value,
+        'gp_percent_value': gp_percent_value,
         'salesmen': salesmen,
         'filters': {
             'q': q,
@@ -7779,6 +7784,10 @@ def combined_sales_invoices_list(request):
     total_range = p["total_range"]
 
     combined_total_without_vat, combined_total_gp = combined_ar_totals(invoice_qs, creditmemo_qs)
+    combined_gp_percent = (
+        float(combined_total_gp) / float(combined_total_without_vat) * 100
+        if combined_total_without_vat else 0
+    )
     summary = combined_ar_summary_metrics(
         request.user, salesman_scope_q_salesorder, store_filter, salesmen_filter
     )
@@ -7842,6 +7851,7 @@ def combined_sales_invoices_list(request):
         'total_count': paginator.count,
         'total_without_vat_value': combined_total_without_vat,
         'total_gross_profit_value': combined_total_gp,
+        'gp_percent_value': combined_gp_percent,
         'salesmen': all_salesmen,
         'today_sales': today_sales,
         'today_gp': today_gp,

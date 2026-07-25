@@ -6,6 +6,7 @@ from . import customer_analysis_views
 from . import sales_analysis_views
 from . import salesorder_views
 from . import quotation_combined_views
+from . import credit_note_analysis_views
 
 app_name = 'alabama'
 
@@ -21,6 +22,9 @@ urlpatterns = [
         name='sales_summary_detail',
     ),
     path('sales-analysis/', sales_analysis_views.sales_analysis_dashboard, name='sales_analysis_dashboard'),
+    path('ar-invoices/', views.arinvoice_list, name='arinvoice_list'),
+    path('credit-memos/', views.arcreditmemo_list, name='arcreditmemo_list'),
+    path('credit-note-analysis/', credit_note_analysis_views.credit_note_analysis, name='credit_note_analysis'),
     path('purchase-summary/', views.purchase_summary_list, name='purchase_summary_list'),
     path('purchase-summary/upload/', views.purchase_summary_upload, name='purchase_summary_upload'),
     path('purchase-summary/<str:document_number>/', views.purchase_summary_detail, name='purchase_summary_detail'),

@@ -346,9 +346,13 @@ def alabama_sales_home(request):
     return render(request, 'alabama/sales_home.html', context)
 
 
-@login_required
-def sales_summary_list(request):
-    """Combined Sales Summary list (like combined_sales_invoices_list)."""
+def _sales_summary_list_impl(request, forced_doc_type=None, active_page='sales_summary',
+                              page_title='Sales Summary',
+                              page_subtitle='Invoices and Credit Memos (Excel upload)'):
+    """Shared implementation behind Sales Summary, AR Invoices, and Credit
+    Memos -- the latter two are just this same AlabamaSalesLine data (there's
+    no separate SAP-synced AR model for Alabama, unlike Junaid) pinned to one
+    document_type via forced_doc_type, presented as their own nav pages."""
     from django.db.models import Sum, Value, DecimalField
     from django.db.models.functions import Coalesce
 
@@ -359,7 +363,7 @@ def sales_summary_list(request):
     # Filters
     q = request.GET.get('q', '').strip()
     salesmen_filter = request.GET.getlist('salesman')
-    document_type_filter = request.GET.get('document_type', '').strip()
+    document_type_filter = forced_doc_type or request.GET.get('document_type', '').strip()
     start = request.GET.get('start', '').strip()
     end = request.GET.get('end', '').strip()
     total_range = request.GET.get('total', '').strip()
@@ -570,9 +574,36 @@ def sales_summary_list(request):
         'is_admin': request.user.is_superuser or request.user.is_staff or (
             request.user.username or ''
         ).strip().lower() == 'manager',
-        'active_page': 'sales_summary',
+        'active_page': active_page,
+        'lock_document_type': bool(forced_doc_type),
+        'page_title': page_title,
+        'page_subtitle': page_subtitle,
     }
     return render(request, 'alabama/sales_summary_list.html', context)
+
+
+@login_required
+def sales_summary_list(request):
+    """Combined Sales Summary list (like combined_sales_invoices_list)."""
+    return _sales_summary_list_impl(request)
+
+
+@login_required
+def arinvoice_list(request):
+    """AR Invoices -- Alabama Sales Summary filtered to Invoice documents only."""
+    return _sales_summary_list_impl(
+        request, forced_doc_type='Invoice', active_page='arinvoice_list',
+        page_title='AR Invoices', page_subtitle='Invoice documents from Alabama Sales Summary',
+    )
+
+
+@login_required
+def arcreditmemo_list(request):
+    """Credit Memos -- Alabama Sales Summary filtered to Credit Memo documents only."""
+    return _sales_summary_list_impl(
+        request, forced_doc_type='Credit Memo', active_page='arcreditmemo_list',
+        page_title='Credit Memos', page_subtitle='Credit memo documents from Alabama Sales Summary',
+    )
 
 
 @login_required

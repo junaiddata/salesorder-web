@@ -186,7 +186,7 @@
                     Dashboard
                 </a>
             </li>
-            <li class="has-submenu {% if active_page in 'sales_summary sales_summary_detail sales_analysis' %}open{% endif %}">
+            <li class="has-submenu {% if active_page in 'sales_summary sales_summary_detail sales_analysis item_analysis customer_analysis arinvoice_list arcreditmemo_list credit_note_analysis' %}open{% endif %}">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">
                     <i class="fas fa-file-invoice-dollar"></i>
                     Sales Invoices
@@ -198,8 +198,33 @@
                         </a>
                     </li>
                     <li>
+                        <a href="{% url 'alabama:item_analysis' %}" class="{% if active_page == 'item_analysis' %}active{% endif %}">
+                            <i class="fas fa-chart-bar"></i> Item Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:customer_analysis' %}" class="{% if active_page == 'customer_analysis' %}active{% endif %}">
+                            <i class="fas fa-users"></i> Customer Analysis
+                        </a>
+                    </li>
+                    <li>
                         <a href="{% url 'alabama:sales_analysis_dashboard' %}" class="{% if active_page == 'sales_analysis' %}active{% endif %}">
                             <i class="fas fa-chart-line"></i> Sales Analysis
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:arinvoice_list' %}" class="{% if active_page == 'arinvoice_list' %}active{% endif %}">
+                            <i class="fas fa-file-invoice"></i> AR Invoices
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:arcreditmemo_list' %}" class="{% if active_page == 'arcreditmemo_list' %}active{% endif %}">
+                            <i class="fas fa-file-invoice-dollar"></i> Credit Memos
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'alabama:credit_note_analysis' %}" class="{% if active_page == 'credit_note_analysis' %}active{% endif %}">
+                            <i class="fas fa-rotate-left"></i> Credit Note Analysis
                         </a>
                     </li>
                 </ul>
@@ -300,18 +325,6 @@
                         </a>
                     </li>
                 </ul>
-            </li>
-            <li>
-                <a href="{% url 'alabama:item_analysis' %}" class="{% if active_page == 'item_analysis' %}active{% endif %}">
-                    <i class="fas fa-chart-bar"></i>
-                    Item Analysis
-                </a>
-            </li>
-            <li>
-                <a href="{% url 'alabama:customer_analysis' %}" class="{% if active_page == 'customer_analysis' %}active{% endif %}">
-                    <i class="fas fa-users"></i>
-                    Customer Analysis
-                </a>
             </li>
             {% if is_manager %}
             <li>

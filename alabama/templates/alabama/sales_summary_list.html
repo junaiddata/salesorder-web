@@ -1,10 +1,10 @@
 {% extends "alabama/base_no_sidebar.html" %}
 {% load humanize %}
 
-{% block title %}Alabama - Sales Summary{% endblock %}
+{% block title %}Alabama - {{ page_title|default:"Sales Summary" }}{% endblock %}
 
-{% block page_title %}Sales Summary{% endblock %}
-{% block page_subtitle %}Invoices and Credit Memos (Excel upload){% endblock %}
+{% block page_title %}{{ page_title|default:"Sales Summary" }}{% endblock %}
+{% block page_subtitle %}{{ page_subtitle|default:"Invoices and Credit Memos (Excel upload)" }}{% endblock %}
 
 {% block extra_head %}
   <style>
@@ -34,6 +34,46 @@
     .input:focus, .select:focus {
       border-color: var(--primary-color);
     }
+    .multi-select { position: relative; }
+    .select-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.875rem;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .select-box:hover { border-color: var(--primary-color); }
+    .options-container {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 240px;
+      overflow-y: auto;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      z-index: 100;
+      padding: 8px;
+    }
+    .options-container.active { display: block; }
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .option-label:hover { background: var(--gray-100); }
     .stat-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -148,6 +188,7 @@
         <input class="input" type="date" name="end" value="{{ filters.end }}">
       </div>
 
+      {% if not lock_document_type %}
       <div class="field">
         <label>Document Type</label>
         <select class="select" name="document_type">
@@ -156,6 +197,7 @@
           <option value="Credit Memo" {% if filters.document_type == 'Credit Memo' %}selected{% endif %}>Credit Memos Only</option>
         </select>
       </div>
+      {% endif %}
 
       <div class="field">
         <label>Per Page</label>
@@ -195,7 +237,9 @@
       <table>
         <thead>
           <tr>
+            {% if not lock_document_type %}
             <th>Type</th>
+            {% endif %}
             <th>Date</th>
             <th>Document Number</th>
             <th>Customer</th>
@@ -209,6 +253,7 @@
         <tbody>
           {% for doc in page_obj %}
           <tr>
+            {% if not lock_document_type %}
             <td>
               {% if doc.document_type == 'Invoice' %}
               <span class="badge badge-invoice">Invoice</span>
@@ -216,6 +261,7 @@
               <span class="badge badge-creditmemo">Credit Memo</span>
               {% endif %}
             </td>
+            {% endif %}
             <td>{{ doc.posting_date|date:"d-m-y"|default:"-" }}</td>
             <td>
               {% if doc.document_type == 'Invoice' %}
@@ -233,7 +279,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="{% if is_admin %}7{% else %}6{% endif %}" class="empty-state">
+            <td colspan="{% if lock_document_type %}{% if is_admin %}6{% else %}5{% endif %}{% else %}{% if is_admin %}7{% else %}6{% endif %}{% endif %}" class="empty-state">
               No documents found. Upload Excel data first.
             </td>
           </tr>

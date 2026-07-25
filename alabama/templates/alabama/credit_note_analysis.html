@@ -1,0 +1,323 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alabama Credit Note Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1800px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 2px; }
+    .header-right { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .btn { padding: 9px 18px; border: none; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all var(--transition); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .table-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+    .table-title { font-size: 1.125rem; font-weight: 600; color: var(--text); }
+    .table-subtitle { font-size: 0.875rem; color: var(--text-secondary); margin-top: 4px; }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; padding: 0 0 18px; }
+    .stat-cards > div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
+    .stat-cards .label { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .stat-cards .val { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-top: 2px; }
+    .stat-cards .val.danger { color: var(--danger); }
+
+    .filters-card { margin-bottom: 20px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; padding: 18px 20px; }
+    .field { display: flex; flex-direction: column; }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 5px; }
+    .field input[type="text"], .field input[type="date"] {
+      width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 0.85rem; font-family: inherit;
+      transition: border-color var(--transition);
+    }
+    .field input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+    .multi-select { position: relative; width: 100%; }
+    .select-box { padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; transition: all var(--transition); }
+    .select-box:hover { border-color: var(--primary); }
+    .select-box::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 0.75rem; color: var(--text-muted); }
+    .options-container { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-md); max-height: 240px; overflow-y: auto; z-index: 1000; display: none; margin-top: 4px; }
+    .options-container.active { display: block; }
+    .option-label { display: block; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; transition: background var(--transition); }
+    .option-label:hover { background: var(--bg); }
+    .option-label input[type="checkbox"] { margin-right: 8px; accent-color: var(--primary); }
+    .option-label.hidden { display: none; }
+    .search-box-container { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 10; }
+    .search-box { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.8rem; font-family: inherit; background: var(--bg); color: var(--text); }
+    .search-box:focus { outline: none; border-color: var(--primary); }
+
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    thead { background: var(--bg); }
+    th { padding: 12px 16px; text-align: left; font-size: 0.813rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background var(--transition); }
+    tbody tr:hover { background: var(--bg); }
+    td { padding: 12px 16px; font-size: 0.875rem; color: var(--text); vertical-align: top; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    .item-row { cursor: pointer; }
+    .item-row:hover { background: var(--bg); }
+    .expand-icon { display: inline-block; width: 20px; text-align: center; transition: transform var(--transition); color: var(--text-muted); }
+    .item-row.expanded .expand-icon { transform: rotate(90deg); color: var(--primary); }
+    .customer-details { display: none; background: var(--bg); }
+    .item-row.expanded + .customer-details { display: table-row; }
+    .customer-details td { padding: 16px 16px 16px 56px; background: var(--bg); }
+    .customer-info { margin-bottom: 12px; padding: 12px; background: var(--surface); border-radius: var(--radius-sm); border-left: 3px solid var(--primary); }
+    .customer-name { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .customer-meta { font-size: 0.813rem; color: var(--text-secondary); }
+    .customer-meta strong { color: var(--text); }
+
+    .item-code { font-weight: 600; color: var(--primary); font-size: 0.8rem; }
+    .item-upc { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
+    .item-description { color: var(--text-secondary); font-size: 0.8rem; max-width: 260px; }
+
+    .badge { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 14px; }
+    .pagination a { padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--primary); text-decoration: none; font-size: 0.85rem; transition: all var(--transition); }
+    .pagination a:hover { background: var(--primary-light); }
+    .pagination span.disabled { padding: 7px 12px; color: var(--text-muted); opacity: 0.6; font-size: 0.85rem; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state i { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+    .total-count { padding: 14px 24px 0; text-align: right; color: var(--text-secondary); font-size: 0.825rem; }
+
+    @media (max-width: 768px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .header-right { width: 100%; justify-content: flex-start; }
+      table { min-width: 700px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Credit Note Analysis</h1>
+        <p>Itemwise returns — which items are credited back most, from Alabama Sales Summary</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'alabama:item_analysis' %}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Item Analysis</a>
+        <a href="{% url 'alabama:customer_analysis' %}" class="btn btn-secondary"><i class="fas fa-users"></i> Customer Analysis</a>
+        <a href="{% url 'alabama:home' %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+      </div>
+    </div>
+
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'alabama:credit_note_analysis' %}" id="filters-form">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" id="search-input" value="{{ filters.q }}" placeholder="Item Code, Description, or UPC">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen…" autocomplete="off">
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                    <label class="option-label" data-value="{{ salesman }}">
+                      <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                      <span class="option-text">{{ salesman }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" value="{{ filters.start }}">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" value="{{ filters.end }}">
+          </div>
+          <div class="field" style="flex-direction: row; gap: 8px; align-self: end;">
+            <a href="{% url 'alabama:credit_note_analysis' %}" class="btn btn-secondary" style="flex:1; justify-content:center;">Clear</a>
+            <button class="btn btn-primary" type="submit" style="flex:1; justify-content:center;">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="stat-cards">
+      <div><div class="label">Total Qty Returned</div><div class="val danger">{{ grand_total_quantity|intcomma }}</div></div>
+      <div><div class="label">Total Value</div><div class="val danger">{{ grand_total_value|floatformat:2|intcomma }}</div></div>
+      <div><div class="label">Credit Memos</div><div class="val">{{ grand_total_credit_memos|intcomma }}</div></div>
+      <div><div class="label">Customers</div><div class="val">{{ grand_total_customers|intcomma }}</div></div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <h3 class="table-title">Itemwise Credit Note Analysis</h3>
+          <div class="table-subtitle">Showing {{ total_count }} item{{ total_count|pluralize }} • Click on any row to see customer details</div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;"></th>
+              <th>Item Code</th>
+              <th>Item Description</th>
+              <th>UPC</th>
+              <th class="text-right">Total Qty Returned</th>
+              <th class="text-center">Credit Memos</th>
+              <th class="text-center">Customers</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr class="item-row">
+              <td><span class="expand-icon">▶</span></td>
+              <td>
+                <div class="item-code">{{ item.item_code|default:"—" }}</div>
+              </td>
+              <td><div class="item-description">{{ item.item_description|default:"Unknown" }}</div></td>
+              <td>{{ item.upc_code|default:"—" }}</td>
+              <td class="text-right"><span class="badge badge-danger">{{ item.total_quantity|intcomma }}</span></td>
+              <td class="text-center">{{ item.credit_memo_count }}</td>
+              <td class="text-center">{{ item.customer_count }}</td>
+            </tr>
+            <tr class="customer-details">
+              <td colspan="7">
+                <div style="padding: 4px 0 12px;">
+                  <h4 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text);">
+                    Customer Details ({{ item.customers|length }} customer{{ item.customers|length|pluralize }})
+                  </h4>
+                  {% for customer in item.customers %}
+                    <div class="customer-info">
+                      <div class="customer-name">{{ customer.customer_name }}</div>
+                      {% if customer.customer_code %}<div class="customer-meta">Code: {{ customer.customer_code }}</div>{% endif %}
+                      <div class="customer-meta" style="margin-top:4px;">
+                        Quantity Returned: <strong>{{ customer.total_quantity|intcomma }}</strong> •
+                        Value: <strong>{{ customer.total_value|floatformat:2|intcomma }}</strong> •
+                        Credit Memos: <strong>{{ customer.credit_memo_count }}</strong>
+                      </div>
+                      {% if customer.credit_memo_numbers %}
+                        <div class="customer-meta" style="margin-top:4px;">
+                          Credit Memo Numbers: <strong>{{ customer.credit_memo_numbers|join:", " }}</strong>
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% empty %}
+                    <div style="padding: 8px; color: var(--text-muted); font-style: italic;">No customer details available</div>
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No credit note data found.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include 'alabama/_pagination.html' with page_obj=page_obj query_string=query_string %}
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      function qsa(sel) { return document.querySelectorAll(sel); }
+      function qs(sel) { return document.querySelector(sel); }
+
+      document.querySelectorAll('.item-row').forEach(function (row) {
+        row.addEventListener('click', function () {
+          this.classList.toggle('expanded');
+        });
+      });
+
+      var salesmanTrigger = qs('#salesman-trigger');
+      var salesmanOptions = qs('#salesman-options');
+      var salesmanText = qs('#salesman-text');
+      var salesmanSearch = qs('#salesman-search');
+
+      function getSalesmanCbs() { return qsa('#salesman-options-list input[type="checkbox"]'); }
+
+      if (salesmanTrigger) {
+        salesmanTrigger.addEventListener('click', function (e) {
+          e.stopPropagation();
+          salesmanOptions.classList.toggle('active');
+          if (salesmanOptions.classList.contains('active')) {
+            setTimeout(function () { salesmanSearch.focus(); }, 80);
+          }
+        });
+        salesmanOptions.addEventListener('click', function (e) { e.stopPropagation(); });
+        salesmanSearch.addEventListener('input', function () {
+          var t = this.value.toLowerCase();
+          qsa('#salesman-options-list .option-label').forEach(function (l) {
+            l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(t));
+          });
+        });
+        document.addEventListener('click', function (e) {
+          if (!qs('#salesman-wrapper').contains(e.target)) salesmanOptions.classList.remove('active');
+        });
+
+        function refreshLabel() {
+          var checked = Array.from(getSalesmanCbs()).filter(function (x) { return x.checked; });
+          salesmanText.textContent = checked.length === 0 ? 'All Salesmen' : (checked.length === 1 ? checked[0].value : checked.length + ' Selected');
+        }
+        getSalesmanCbs().forEach(function (cb) { cb.addEventListener('change', refreshLabel); });
+        refreshLabel();
+      }
+
+      var searchInput = qs('#search-input');
+      if (searchInput) {
+        searchInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); qs('#filters-form').submit(); }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

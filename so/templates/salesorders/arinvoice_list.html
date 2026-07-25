@@ -571,6 +571,10 @@
           <span class="stat-label">Total GP:</span>
           <span class="stat-value">{{ total_gross_profit_value|default:0|floatformat:2 }}</span>
         </div>
+        <div class="stat-item">
+          <span class="stat-label">GP %:</span>
+          <span class="stat-value">{{ gp_percent_value|default:0|floatformat:2 }}%</span>
+        </div>
         {% endif %}
       </div>
     </div>

@@ -842,12 +842,13 @@ function initializeSelect2() {
     $('#salesman').select2({ placeholder: "Select salesman", minimumResultsForSearch: 5, width: '100%', allowClear: true });
     $('#customer').select2({ placeholder: "Select customer", width: '100%', allowClear: true });
     $('#common_firm').select2({
-        placeholder: "Select brand(s)…",
+        placeholder: "Select or type brand(s)…",
         allowClear: true,
         width: '100%',
-        closeOnSelect: false
+        closeOnSelect: false,
+        tags: true
     }).on('change', toggleCommonFirm);
-    $('.item-firm').select2({ placeholder: "Select Firm", allowClear: true, width: '100%' });
+    $('.item-firm').select2({ placeholder: "Select or type firm", allowClear: true, width: '100%', tags: true });
 }
 
 function updateItemNumbers() {
