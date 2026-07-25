@@ -1,0 +1,324 @@
+{% extends 'warranty/base.html' %}
+{% load static %}
+
+{% block title %}{{ letter.ref_no|default:"Warranty Letter" }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-row { display: flex; padding: .55rem 0; border-bottom: 1px solid var(--line-soft); font-size: .88rem; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { width: 180px; flex-shrink: 0; color: var(--muted); font-weight: 600; }
+    .detail-value { color: var(--ink); white-space: pre-wrap; }
+    .terms-list { margin: 0; padding-left: 1.2rem; font-size: .88rem; }
+    .terms-list li { margin-bottom: .4rem; }
+    .sign-preview { max-height: 90px; border: 1px solid var(--line-soft); border-radius: 6px; padding: 6px; background: #fff; }
+</style>
+{% endblock %}
+
+{% block body %}
+{% csrf_token %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-shield-halved" style="opacity:.85"></i> {{ letter.ref_no|default:"Untitled Warranty Letter" }}</h1>
+            <p>{{ letter.project|truncatewords:20|default:"—" }}</p>
+            <div class="hero-actions">
+                {% if letter.status == 'Draft' %}<span class="chip-x gray" style="background:rgba(255,255,255,.15);color:#fff;">Draft</span>
+                {% elif letter.status == 'Pending' %}<span class="chip-x amber">Pending Approval</span>
+                {% elif letter.status == 'Approved' %}<span class="chip-x green">Approved</span>
+                {% else %}<span class="chip-x red">Rejected</span>{% endif %}
+                <a href="#" id="btnPreviewPdf" class="btn-x btn-light-x"><i class="fas fa-eye"></i> Preview PDF</a>
+                <a href="{% url 'warranty:generate_pdf' letter.pk %}" class="btn-x btn-ghost-x"><i class="fas fa-download"></i> Download PDF</a>
+                {% if letter.is_editable %}
+                <a href="{% url 'warranty:edit' letter.pk %}" class="btn-x btn-ghost-x"
+                   {% if letter.status == 'Pending' %}title="Editing will withdraw this letter from approval"{% endif %}>
+                    <i class="fas fa-pen"></i> Edit
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap-narrow u-page">
+
+    {% if letter.status == 'Draft' or letter.status == 'Rejected' %}
+    <div class="card-x mb-3">
+        <div class="card-x-body u-spread">
+            <div>
+                <strong>{% if letter.status == 'Rejected' %}This letter was rejected.{% else %}This letter is a draft.{% endif %}</strong>
+                <div class="u-muted" style="font-size:.85rem;">Edit as needed, then submit it for the manager's approval.</div>
+            </div>
+            <form method="post" action="{% url 'warranty:submit' letter.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-paper-plane"></i> Submit for Approval</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if letter.status == 'Draft' %}
+    <div class="card-x mb-3">
+        <div class="card-x-body u-spread">
+            <div class="u-muted" style="font-size:.85rem;">Only Draft letters can be deleted.</div>
+            <form method="post" action="{% url 'warranty:delete' letter.pk %}"
+                  data-confirm="Delete this warranty letter? This cannot be undone."
+                  data-confirm-title="Delete warranty letter" data-confirm-ok-label="Delete">
+                {% csrf_token %}
+                <button type="submit" class="btn-x btn-danger-x"><i class="fas fa-trash"></i> Delete</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if letter.status == 'Pending' %}
+    <div class="card-x mb-3">
+        <div class="card-x-body u-spread">
+            <div>
+                <strong>Awaiting manager approval.</strong>
+                <div class="u-muted" style="font-size:.85rem;">Need to change something? Just click Edit above — it'll withdraw this letter back to Draft automatically. Or withdraw it now without editing.</div>
+            </div>
+            <form method="post" action="{% url 'warranty:withdraw' letter.pk %}"
+                  data-confirm="Withdraw this letter back to Draft? You will need to resubmit it for approval."
+                  data-confirm-title="Withdraw submission" data-confirm-ok-label="Withdraw"
+                  data-confirm-severity="warn" data-confirm-icon="fa-rotate-left">
+                {% csrf_token %}
+                <button type="submit" class="btn-x btn-ghost-x" style="--fg:var(--warn-700);--bd:#fde68a;--bg:var(--warn-50);"><i class="fas fa-rotate-left"></i> Withdraw to Draft</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_manager and letter.status == 'Pending' %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><span class="ic"><i class="fas fa-gavel"></i></span><h2>Manager Approval</h2></div>
+        <div class="card-x-body">
+            <form method="post" action="{% url 'warranty:update_approval' letter.pk %}">
+                {% csrf_token %}
+                <div class="field-x">
+                    <label class="label-x">Comments</label>
+                    <textarea name="remarks" class="input-x" rows="2" placeholder="Optional comments"></textarea>
+                </div>
+                <div class="u-row">
+                    <button type="submit" name="approval_status" value="Approved" class="btn-x btn-success-x"><i class="fas fa-check"></i> Approve</button>
+                    <button type="submit" name="approval_status" value="Rejected" class="btn-x btn-danger-x"><i class="fas fa-xmark"></i> Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if letter.approval_updated_by %}
+    <div class="card-x mb-3">
+        <div class="card-x-body" style="font-size:.85rem;">
+            <strong>{{ letter.status }}</strong> by {{ letter.approval_updated_by.username }} on {{ letter.approval_updated_at|date:"d M Y, H:i" }}
+            {% if letter.approval_remarks %}<div class="u-muted mt-1">"{{ letter.approval_remarks }}"</div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_manager and letter.status == 'Approved' %}
+    <div class="card-x mb-3">
+        <div class="card-x-head u-spread">
+            <div class="u-row"><span class="ic"><i class="fas fa-stamp"></i></span><h2>Signature &amp; Stamp</h2></div>
+            <button type="button" class="btn-x sm btn-primary-x" data-bs-toggle="modal" data-bs-target="#signStampModal"><i class="fas fa-pen-nib"></i> Attach</button>
+        </div>
+        <div class="card-x-body u-row" style="gap:1.5rem;flex-wrap:wrap;">
+            <div>
+                <div class="label-x">Signature</div>
+                {% if letter.signature_image %}<img src="{{ letter.signature_image.url }}" class="sign-preview" alt="Signature">
+                {% else %}<span class="u-muted">Not attached</span>{% endif %}
+            </div>
+            <div>
+                <div class="label-x">Stamp</div>
+                {% if letter.stamp_image %}<img src="{{ letter.stamp_image.url }}" class="sign-preview" alt="Stamp">
+                {% else %}<span class="u-muted">Not attached</span>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card-x mb-3">
+        <div class="card-x-head"><span class="ic"><i class="fas fa-file-lines"></i></span><h2>Project Details</h2></div>
+        <div class="card-x-body" style="padding-top:.25rem;padding-bottom:.25rem;">
+            <div class="detail-row"><span class="detail-label">Company</span><span class="detail-value">{{ letter.get_company_display }}</span></div>
+            <div class="detail-row"><span class="detail-label">Ref No</span><span class="detail-value">{{ letter.ref_no|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">{{ letter.letter_date|date:"d M Y" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">{{ letter.project|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value">{{ letter.client|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Consultant</span><span class="detail-value">{{ letter.consultant|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Main Contractor</span><span class="detail-value">{{ letter.main_contractor|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Brand</span><span class="detail-value">{{ letter.brand|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">ISO Standard</span><span class="detail-value">{{ letter.iso_standard|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Intro Text</span><span class="detail-value">{{ letter.intro_text|default:"—" }}</span></div>
+        </div>
+    </div>
+
+    {% if items %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><span class="ic"><i class="fas fa-table"></i></span><h2>Items <span class="count">({{ items|length }})</span></h2></div>
+        <div class="card-x-body" style="padding:1rem;">
+            <div class="tbl-x-wrap" style="border:none;">
+                <table class="tbl-x">
+                    <thead><tr><th>Date</th><th>Invoice No.</th><th>LPO No.</th><th>Brand/Model</th><th>Total Qty.</th></tr></thead>
+                    <tbody>
+                        {% for it in items %}
+                        <tr><td>{{ it.date }}</td><td>{{ it.invoice_no }}</td><td>{{ it.lpo_no }}</td><td>{{ it.brand_model }}</td><td>{{ it.total_qty }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if letter.terms_text %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
+        <div class="card-x-body">
+            <ul class="terms-list">
+                {% for line in letter.terms_text.splitlines %}{% if line %}<li>{{ line }}</li>{% endif %}{% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card-x mb-3">
+        <div class="card-x-head"><span class="ic"><i class="fas fa-signature"></i></span><h2>Sign-off</h2></div>
+        <div class="card-x-body" style="padding-top:.25rem;padding-bottom:.25rem;">
+            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{{ letter.signatory_name|default:"—" }}</span></div>
+            <div class="detail-row"><span class="detail-label">Title</span><span class="detail-value">{{ letter.signatory_title|default:"—" }}</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Signature & Stamp modal -->
+<div class="modal fade" id="signStampModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-pen-nib"></i> Attach Signature &amp; Stamp</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="field-x">
+                    <label class="label-x">Signature image</label>
+                    {% if letter.signature_image %}<img src="{{ letter.signature_image.url }}" class="sign-preview mb-2" alt="Current signature"><br>{% endif %}
+                    <input type="file" id="signatureFileInput" accept="image/*" class="form-control">
+                    <div id="signaturePreviewWrap" style="display:none;margin-top:.5rem;"><img id="signaturePreviewImg" class="sign-preview" alt="Signature preview"></div>
+                    <div class="u-row mt-2">
+                        <button type="button" id="btnSaveSignature" class="btn-x sm btn-primary-x"><i class="fas fa-check"></i> Save Signature</button>
+                        {% if letter.signature_image %}<button type="button" id="btnClearSignature" class="btn-x sm btn-ghost-x"><i class="fas fa-trash"></i> Remove</button>{% endif %}
+                    </div>
+                    <div id="signatureError" class="text-danger mt-1" style="font-size:.8rem;display:none;"></div>
+                </div>
+                <hr>
+                <div class="field-x">
+                    <label class="label-x">Stamp image</label>
+                    {% if letter.stamp_image %}<img src="{{ letter.stamp_image.url }}" class="sign-preview mb-2" alt="Current stamp"><br>{% endif %}
+                    <input type="file" id="stampFileInput" accept="image/*" class="form-control">
+                    <div id="stampPreviewWrap" style="display:none;margin-top:.5rem;"><img id="stampPreviewImg" class="sign-preview" alt="Stamp preview"></div>
+                    <div class="u-row mt-2">
+                        <button type="button" id="btnSaveStamp" class="btn-x sm btn-primary-x"><i class="fas fa-check"></i> Save Stamp</button>
+                        {% if letter.stamp_image %}<button type="button" id="btnClearStamp" class="btn-x sm btn-ghost-x"><i class="fas fa-trash"></i> Remove</button>{% endif %}
+                    </div>
+                    <div id="stampError" class="text-danger mt-1" style="font-size:.8rem;display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    function csrfToken() {
+        const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+
+    function wireImageUpload({ fileInputId, previewWrapId, previewImgId, saveBtnId, clearBtnId, errorId, saveUrl, clearUrl, fieldName }) {
+        const fileInput = document.getElementById(fileInputId);
+        const previewWrap = document.getElementById(previewWrapId);
+        const previewImg = document.getElementById(previewImgId);
+        const saveBtn = document.getElementById(saveBtnId);
+        const clearBtn = document.getElementById(clearBtnId);
+        const errEl = document.getElementById(errorId);
+        if (!fileInput) return;
+
+        fileInput.addEventListener('change', () => {
+            errEl.style.display = 'none';
+            const file = fileInput.files[0];
+            if (!file) { previewWrap.style.display = 'none'; return; }
+            const reader = new FileReader();
+            reader.onload = (e) => { previewImg.src = e.target.result; previewWrap.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        });
+
+        saveBtn.addEventListener('click', () => {
+            errEl.style.display = 'none';
+            const file = fileInput.files[0];
+            if (!file) { errEl.textContent = 'Please choose an image.'; errEl.style.display = 'block'; return; }
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+            const fd = new FormData();
+            fd.append(fieldName, file);
+            fetch(saveUrl, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) { window.location.reload(); }
+                    else {
+                        errEl.textContent = data.error || 'Could not save.';
+                        errEl.style.display = 'block';
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-check"></i> Save';
+                    }
+                })
+                .catch(() => {
+                    errEl.textContent = 'Network error — please try again.';
+                    errEl.style.display = 'block';
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-check"></i> Save';
+                });
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                showAppConfirm({
+                    message: 'Remove this image? You can attach a new one afterwards.',
+                    title: 'Remove image',
+                    okLabel: 'Remove',
+                    onConfirm: () => {
+                        fetch(clearUrl, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() } })
+                            .then(r => r.json())
+                            .then(data => { if (data.success) window.location.reload(); });
+                    },
+                });
+            });
+        }
+    }
+
+    wireImageUpload({
+        fileInputId: 'signatureFileInput', previewWrapId: 'signaturePreviewWrap', previewImgId: 'signaturePreviewImg',
+        saveBtnId: 'btnSaveSignature', clearBtnId: 'btnClearSignature', errorId: 'signatureError',
+        saveUrl: '{% url "warranty:save_signature" letter.pk %}', clearUrl: '{% url "warranty:clear_signature" letter.pk %}',
+        fieldName: 'signature_image',
+    });
+    wireImageUpload({
+        fileInputId: 'stampFileInput', previewWrapId: 'stampPreviewWrap', previewImgId: 'stampPreviewImg',
+        saveBtnId: 'btnSaveStamp', clearBtnId: 'btnClearStamp', errorId: 'stampError',
+        saveUrl: '{% url "warranty:save_stamp" letter.pk %}', clearUrl: '{% url "warranty:clear_stamp" letter.pk %}',
+        fieldName: 'stamp_image',
+    });
+
+    const previewBtn = document.getElementById('btnPreviewPdf');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open('{% url "warranty:generate_pdf" letter.pk %}?inline=1', '_blank');
+        });
+    }
+})();
+</script>
+{% endblock %}

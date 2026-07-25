@@ -1,0 +1,99 @@
+{% extends 'warranty/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard | Warranty Letters{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-shield-halved" style="opacity:.85"></i> Warranty Letters</h1>
+            <p>Create, submit for manager approval, and generate signed &amp; stamped warranty letters as a polished PDF.</p>
+            <div class="hero-actions">
+                <a href="{% url 'warranty:new' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> New Warranty Letter</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Warranty Letters <span class="count">({{ letters|length }})</span></h2>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="pill-row">
+                <a href="?{% if status_filter %}status={{ status_filter }}{% endif %}" class="pill {% if not company_filter %}active{% endif %}">All Companies</a>
+                <a href="?company=junaid{% if status_filter %}&status={{ status_filter }}{% endif %}" class="pill {% if company_filter == 'junaid' %}active{% endif %}">Junaid</a>
+                <a href="?company=alabama{% if status_filter %}&status={{ status_filter }}{% endif %}" class="pill {% if company_filter == 'alabama' %}active{% endif %}">Alabama</a>
+            </div>
+            <div class="pill-row">
+                <a href="?{% if company_filter %}company={{ company_filter }}{% endif %}" class="pill {% if not status_filter %}active{% endif %}">All Status</a>
+                <a href="?status=Draft{% if company_filter %}&company={{ company_filter }}{% endif %}" class="pill {% if status_filter == 'Draft' %}active{% endif %}">Draft</a>
+                <a href="?status=Pending{% if company_filter %}&company={{ company_filter }}{% endif %}" class="pill {% if status_filter == 'Pending' %}active{% endif %}">Pending</a>
+                <a href="?status=Approved{% if company_filter %}&company={{ company_filter }}{% endif %}" class="pill {% if status_filter == 'Approved' %}active{% endif %}">Approved</a>
+                <a href="?status=Rejected{% if company_filter %}&company={{ company_filter }}{% endif %}" class="pill {% if status_filter == 'Rejected' %}active{% endif %}">Rejected</a>
+            </div>
+        </div>
+    </div>
+
+    {% if letters %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Ref No</th>
+                    <th>Project</th>
+                    <th>Client</th>
+                    <th>Company</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in letters %}
+                <tr>
+                    <td>{{ l.ref_no|default:"—" }}</td>
+                    <td>{{ l.project|truncatewords:10|default:"—" }}</td>
+                    <td>{{ l.client|default:"—" }}</td>
+                    <td>{{ l.get_company_display }}</td>
+                    <td>
+                        {% if l.status == 'Draft' %}<span class="chip-x gray">Draft</span>
+                        {% elif l.status == 'Pending' %}<span class="chip-x amber">Pending Approval</span>
+                        {% elif l.status == 'Approved' %}<span class="chip-x green">Approved</span>
+                        {% else %}<span class="chip-x red">Rejected</span>{% endif %}
+                    </td>
+                    <td>{{ l.created_at|date:"d M Y" }}</td>
+                    <td class="actions">
+                        <a href="{% url 'warranty:detail' l.pk %}" class="btn-x sm" title="View"><i class="fas fa-eye"></i></a>
+                        {% if l.is_editable %}
+                        <a href="{% url 'warranty:edit' l.pk %}" class="btn-x sm"
+                           title="{% if l.status == 'Pending' %}Edit (withdraws from approval){% else %}Edit{% endif %}">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        {% endif %}
+                        {% if l.status == 'Draft' %}
+                        <form method="post" action="{% url 'warranty:delete' l.pk %}" style="display:inline;"
+                              data-confirm="Delete this warranty letter? This cannot be undone."
+                              data-confirm-title="Delete warranty letter" data-confirm-ok-label="Delete">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x sm btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-shield-halved"></i></div>
+            <h3>No warranty letters yet</h3>
+            <p>Create your first warranty letter — fill in the project details, items and terms, then submit it for manager approval.</p>
+            <a href="{% url 'warranty:new' %}" class="btn-x btn-primary-x lg"><i class="fas fa-plus"></i> Create your first warranty letter</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -35,6 +35,15 @@ WHITE = colors.white
 
 PAGE_W, PAGE_H = A4
 
+# Alabama's redesigned letterhead (media/alabama_letterhead_plain.png) bakes
+# in a taller header (wave banner + logo + tagline + contact block + rule)
+# than the old compact box header, ending ~285pt below the top of the page.
+# Every Alabama page that draws its own section heading on top of that
+# background (title page, index, materials list, compliance statement)
+# anchors its first line of text at this baseline so nothing overlaps the
+# letterhead artwork.
+ALABAMA_CONTENT_TOP_Y = 514
+
 # ---------------------------------------------------------------------------
 # Company branding (letterhead) -- Submittal.company selects which set of
 # background assets / legal name is used throughout the generated PDF.
@@ -480,15 +489,11 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     # Alabama's background has no baked-in "MATERIAL SUBMITTAL" title (unlike
     # Junaid's), so draw it dynamically in the open space below the letterhead.
     if company == 'alabama':
-        title_y = PAGE_H - 190
-        c.setFont(FONT_TITLE, 22)
+        title_y = ALABAMA_CONTENT_TOP_Y
+        c.setFont(FONT_BODY_BOLD, 26)
         c.setFillColor(colors.black)
-        c.drawString(72, title_y, 'MATERIAL SUBMITTAL')
-        tw = stringWidth('MATERIAL SUBMITTAL', FONT_TITLE, 22)
-        c.setStrokeColor(colors.black)
-        c.setLineWidth(1)
-        c.line(72, title_y - 5, 72 + tw, title_y - 5)
-        field_start_y = title_y - 45
+        c.drawString(50, title_y, 'MATERIAL SUBMITTAL')
+        field_start_y = title_y - 60
     else:
         # Starting Y position below "MATERIAL SUBMITTAL" baked into the background
         field_start_y = PAGE_H - 370
@@ -618,7 +623,7 @@ def _build_index_page(items: list, page_numbers: list = None, company: str = 'ju
         _draw_left_strips(c)
         _draw_company_header(c)
 
-    title_y = PAGE_H - 170 - 50
+    title_y = ALABAMA_CONTENT_TOP_Y if company == 'alabama' else PAGE_H - 170 - 50
     c.setFont('Helvetica-Bold', 20)
     c.setFillColor(accent_color)
     c.drawCentredString(cx, title_y, 'INDEX')
@@ -805,9 +810,9 @@ def _build_divider_page(section_number: int, section_name: str, company: str = '
 
     leading = font_size + 8
 
-    # Center vertically – slightly above page center 
-    # (logo watermark is roughly at center, text sits over it)
-    center_y = PAGE_H / 2 + 10
+    # Center vertically – above the watermark logo (roughly at page center)
+    # so the section title doesn't collide with the "ALABAMA" wordmark text.
+    center_y = PAGE_H / 2 + 70
 
     c.setFillColor(colors.HexColor('#1a1a1a'))  # near-black for readability
     _draw_centered_wrapped(
@@ -883,6 +888,9 @@ def _get_warranty_columns(submittal):
 # pages) so the table gets maximum room once the project block has already
 # been shown once, on page 1.
 MATERIAL_LATER_TOP_MARGIN = 230
+# Alabama's taller letterhead header needs more reserved space at the top of
+# continuation pages than Junaid's compact box header.
+MATERIAL_LATER_TOP_MARGIN_ALABAMA = 360
 
 
 class _MaterialPageTemplate(BaseDocTemplate):
@@ -922,9 +930,10 @@ class _MaterialPageTemplate(BaseDocTemplate):
             PAGE_H - first_top - bottom_end,
             id='material_first',
         )
+        later_margin = MATERIAL_LATER_TOP_MARGIN_ALABAMA if self._company == 'alabama' else MATERIAL_LATER_TOP_MARGIN
         later_frame = Frame(
             left, bottom_end, frame_w,
-            PAGE_H - MATERIAL_LATER_TOP_MARGIN - bottom_end,
+            PAGE_H - later_margin - bottom_end,
             id='material_later',
         )
         self.addPageTemplates([
@@ -951,14 +960,10 @@ class _MaterialPageTemplate(BaseDocTemplate):
         if self._company != 'alabama':
             return
         canvas_obj.saveState()
-        title_y = PAGE_H - 155
+        title_y = ALABAMA_CONTENT_TOP_Y
         canvas_obj.setFont('Helvetica-Bold', 14)
         canvas_obj.setFillColor(colors.black)
-        canvas_obj.drawString(55, title_y, 'LIST OF PROPOSED MATERIALS')
-        tw = canvas_obj.stringWidth('LIST OF PROPOSED MATERIALS', 'Helvetica-Bold', 14)
-        canvas_obj.setStrokeColor(colors.black)
-        canvas_obj.setLineWidth(1)
-        canvas_obj.line(55, title_y - 6, 55 + tw, title_y - 6)
+        canvas_obj.drawString(50, title_y, 'LIST OF PROPOSED MATERIALS')
         canvas_obj.restoreState()
 
     def _draw_first_page(self, canvas_obj, doc):
@@ -968,7 +973,7 @@ class _MaterialPageTemplate(BaseDocTemplate):
         submittal = self._submittal
 
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
-        field_y = PAGE_H - 200
+        field_y = (ALABAMA_CONTENT_TOP_Y - 40) if self._company == 'alabama' else PAGE_H - 200
         label_x, colon_x, value_x = 55, 170, 180
         max_w = PAGE_W - value_x - 36
 
@@ -1038,7 +1043,7 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
-        topMargin=320,     # page 1: below title + project-details block
+        topMargin=460 if company == 'alabama' else 320,     # page 1: below title + project-details block
         bottomMargin=50,
     )
 
@@ -1328,8 +1333,13 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         len(_wrap_text_lines(str(val), _cs_wrap_max_w, 'Helvetica', 9)) - 1
         for _, val in _cs_fields if val
     )
-    FIRST_TOP_MARGIN = 320 + _extra_field_count * 16 + _extra_wrap_lines * 12
-    LATER_TOP_MARGIN = 170   # space for company header + title on continuation pages
+    company = _company_key(submittal)
+    FIRST_TOP_MARGIN = (
+        (460 if company == 'alabama' else 320)
+        + _extra_field_count * 16 + _extra_wrap_lines * 12
+    )
+    # space for company header + title on continuation pages
+    LATER_TOP_MARGIN = 360 if company == 'alabama' else 170
     BOTTOM_MARGIN = 50       # space for "Page X of Y"
 
     # A single table row can't be split across pages by ReportLab if one of its
@@ -1344,8 +1354,6 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     style_header_cell = ParagraphStyle('CSHdr', fontSize=8, fontName='Helvetica-Bold', textColor=WHITE, leading=10)
     style_bold = ParagraphStyle('CSBold', fontSize=8, fontName='Helvetica-Bold', leading=11)
 
-    company = _company_key(submittal)
-
     def _draw_cs_header(c):
         """Draw the letterhead header for the compliance statement pages."""
         if company == 'alabama':
@@ -1356,20 +1364,22 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
             _draw_left_strips(c)
             _draw_company_header(c, box_y=PAGE_H - 150, box_h=100, use_black=True)
 
-    def _draw_first_page(canvas_obj, doc):
-        """Draw company header, title, and project details on the first page."""
-        c = canvas_obj
+    def _draw_cs_title(c):
+        """Draw the horizontal rule (if not already baked into the letterhead)
+        and the 'COMPLIANCE STATEMENT' title. Returns the title's baseline y."""
         cx = PAGE_W / 2
-
-        _draw_cs_header(c)
-
-        # Horizontal rule
+        if company == 'alabama':
+            # Alabama's letterhead already bakes in a rule below the contact
+            # block, so the title sits directly below it with no extra rule.
+            title_y = ALABAMA_CONTENT_TOP_Y
+            c.setFont('Helvetica-Bold', 18)
+            c.setFillColor(colors.black)
+            c.drawCentredString(cx, title_y, 'COMPLIANCE STATEMENT')
+            return title_y
         rule_y = PAGE_H - 160
         c.setStrokeColor(colors.black)
         c.setLineWidth(1)
         c.line(36, rule_y, PAGE_W - 36, rule_y)
-
-        # Title
         title_y = rule_y - 28
         c.setFont('Helvetica-Bold', 16)
         c.setFillColor(colors.black)
@@ -1377,6 +1387,15 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         tw = c.stringWidth('COMPLIANCE STATEMENT', 'Helvetica-Bold', 16)
         c.setLineWidth(1.2)
         c.line(cx - tw / 2, title_y - 4, cx + tw / 2, title_y - 4)
+        return title_y
+
+    def _draw_first_page(canvas_obj, doc):
+        """Draw company header, title, and project details on the first page."""
+        c = canvas_obj
+        cx = PAGE_W / 2
+
+        _draw_cs_header(c)
+        title_y = _draw_cs_title(c)
 
         # Project details
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
@@ -1410,21 +1429,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         cx = PAGE_W / 2
 
         _draw_cs_header(c)
-
-        # Horizontal rule
-        rule_y = PAGE_H - 160
-        c.setStrokeColor(colors.black)
-        c.setLineWidth(1)
-        c.line(36, rule_y, PAGE_W - 36, rule_y)
-
-        # Title (no "continued")
-        title_y = rule_y - 28
-        c.setFont('Helvetica-Bold', 16)
-        c.setFillColor(colors.black)
-        c.drawCentredString(cx, title_y, 'COMPLIANCE STATEMENT')
-        tw = c.stringWidth('COMPLIANCE STATEMENT', 'Helvetica-Bold', 16)
-        c.setLineWidth(1.2)
-        c.line(cx - tw / 2, title_y - 4, cx + tw / 2, title_y - 4)
+        _draw_cs_title(c)
 
         # Page X of Y at bottom (small)
         page_num = getattr(doc, 'page', 1)

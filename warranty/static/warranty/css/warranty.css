@@ -1,0 +1,63 @@
+/* Warranty Letters — small additions on top of the shared submittal/ui.css design system. */
+.text-danger { color: var(--danger); }
+
+/* =====================================================================
+   Confirmation dialog — compact, centered, replaces the browser confirm()
+   ===================================================================== */
+.confirm-dialog { max-width: 316px; margin-left: auto; margin-right: auto; }
+.confirm-dialog-content {
+    border: none;
+    border-radius: var(--r-xl, 20px);
+    box-shadow: 0 24px 48px -12px rgba(15, 23, 42, .28), 0 8px 20px -8px rgba(15, 23, 42, .14);
+    padding: 1.85rem 1.6rem 1.5rem;
+    text-align: center;
+    position: relative;
+}
+.confirm-dialog-x {
+    position: absolute; top: .7rem; right: .7rem;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: none; background: transparent; color: var(--faint);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; cursor: pointer; transition: all var(--ease);
+}
+.confirm-dialog-x:hover { background: var(--surface-alt); color: var(--muted); }
+.confirm-dialog-icon {
+    width: 50px; height: 50px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; margin: 0 auto .95rem;
+    background: var(--danger-50); color: var(--danger);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.confirm-dialog-title {
+    font-size: 1.02rem; font-weight: 700; color: var(--ink);
+    margin: 0 0 .45rem; letter-spacing: -.01em;
+}
+.confirm-dialog-msg {
+    font-size: .84rem; line-height: 1.55; color: var(--muted);
+    margin: 0 0 1.5rem;
+}
+.confirm-dialog-actions { display: flex; gap: .55rem; }
+.confirm-dialog-btn {
+    flex: 1; appearance: none; cursor: pointer; font: inherit;
+    font-size: .84rem; font-weight: 600; padding: .62rem .9rem;
+    border-radius: 10px; transition: all var(--ease); line-height: 1.2;
+}
+.confirm-dialog-btn.ghost {
+    background: var(--surface-alt); color: var(--body); border: 1px solid var(--line);
+}
+.confirm-dialog-btn.ghost:hover { background: var(--line-soft); }
+.confirm-dialog-btn.solid {
+    background: var(--danger); color: #fff; border: 1px solid var(--danger);
+    box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.confirm-dialog-btn.solid:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.confirm-dialog-btn.solid.warn {
+    background: var(--warn); border-color: var(--warn);
+    box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.confirm-dialog-btn.solid.primary {
+    background: var(--primary); border-color: var(--primary);
+    box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.confirm-dialog-icon.warn { background: var(--warn-50); color: var(--warn-700); box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 8%, transparent); }
+.confirm-dialog-icon.primary { background: var(--primary-50); color: var(--primary); box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 8%, transparent); }

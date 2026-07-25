@@ -241,6 +241,12 @@
                     Submittals
                 </a>
             </li>
+            <li>
+                <a href="{% url 'warranty:list' %}?company=alabama">
+                    <i class="fas fa-shield-halved"></i>
+                    Warranty Letters
+                </a>
+            </li>
             {% if is_alabama_admin %}
             <li class="has-submenu">
                 <a href="#" onclick="event.preventDefault(); this.parentElement.classList.toggle('open');">

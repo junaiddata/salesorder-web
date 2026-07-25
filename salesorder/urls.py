@@ -27,4 +27,5 @@ urlpatterns = [
     path('tradelicense/', include('tradelicense.urls')),
     path('businesscards/', include('businesscards.urls')),
     path('submittal/', include('submittal.urls')),
+    path('warranty/', include('warranty.urls')),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'businesscards',
     'alabama',
     'submittal',
+    'warranty',
 
     'django.contrib.humanize',
     

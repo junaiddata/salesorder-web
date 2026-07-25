@@ -1,0 +1,256 @@
+{% extends 'warranty/base.html' %}
+{% load static %}
+
+{% block title %}{% if letter %}Edit{% else %}New{% endif %} Warranty Letter{% endblock %}
+
+{% block extra_css %}
+<style>
+    .items-tbl { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .items-tbl th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: .4rem .5rem; }
+    .items-tbl td { padding: .35rem .5rem; }
+    .items-tbl input.input-x { padding: .45rem .6rem; font-size: .82rem; }
+    .row-remove { color: var(--danger); background: none; border: none; cursor: pointer; padding: .4rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner">
+        <h1><i class="fas fa-shield-halved" style="opacity:.85"></i> {% if letter %}Edit{% else %}New{% endif %} Warranty Letter</h1>
+        <p>Every field below can be customized freely — this is what will appear on the generated PDF.</p>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    {% if letter.status == 'Pending' %}
+    <div class="card-x mb-3" style="border-color:#fde68a;background:var(--warn-50);">
+        <div class="card-x-body" style="font-size:.85rem;color:var(--warn-700);">
+            <i class="fas fa-triangle-exclamation"></i> This letter is currently pending manager approval. Saving your changes will withdraw it back to Draft — you'll need to submit it again afterwards.
+        </div>
+    </div>
+    {% endif %}
+    <form id="warrantyForm">
+        {% csrf_token %}
+        {% if letter %}<input type="hidden" name="letter_id" value="{{ letter.pk }}">{% endif %}
+
+        <div class="card-x mb-3">
+            <div class="card-x-head"><span class="ic"><i class="fas fa-building"></i></span><h2>Company &amp; Reference</h2></div>
+            <div class="card-x-body">
+                <div class="two-col">
+                    <div class="field-x">
+                        <label class="label-x">Company</label>
+                        <select name="company" id="companySelect" class="input-x">
+                            <option value="junaid" {% if company == 'junaid' %}selected{% endif %}>Junaid</option>
+                            <option value="alabama" {% if company == 'alabama' %}selected{% endif %}>Alabama</option>
+                        </select>
+                    </div>
+                    <div class="field-x">
+                        <label class="label-x">Ref No</label>
+                        <div class="u-row">
+                            <input type="text" name="ref_no" id="refNoInput" class="input-x" value="{{ letter.ref_no|default:'' }}" placeholder="e.g. {{ ref_no_prefix|default:'JN/WC' }}/2026/0001">
+                            <button type="button" class="btn-x sm" id="suggestRefBtn"><i class="fas fa-wand-magic-sparkles"></i> Suggest</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Date</label>
+                    <input type="date" name="letter_date" class="input-x" style="max-width:220px;"
+                           value="{% if letter %}{{ letter.letter_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card-x mb-3">
+            <div class="card-x-head"><span class="ic"><i class="fas fa-file-lines"></i></span><h2>Project Details</h2></div>
+            <div class="card-x-body">
+                <div class="field-x">
+                    <label class="label-x">Project Name</label>
+                    <textarea name="project" class="input-x" rows="2">{{ letter.project|default:'' }}</textarea>
+                </div>
+                <div class="two-col">
+                    <div class="field-x">
+                        <label class="label-x">Client</label>
+                        <input type="text" name="client" class="input-x" value="{{ letter.client|default:'' }}">
+                    </div>
+                    <div class="field-x">
+                        <label class="label-x">Consultant</label>
+                        <input type="text" name="consultant" class="input-x" value="{{ letter.consultant|default:'' }}">
+                    </div>
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Main Contractor</label>
+                    <input type="text" name="main_contractor" class="input-x" value="{{ letter.main_contractor|default:'' }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card-x mb-3">
+            <div class="card-x-head"><span class="ic"><i class="fas fa-award"></i></span><h2>Brand &amp; Compliance</h2></div>
+            <div class="card-x-body">
+                <div class="two-col">
+                    <div class="field-x">
+                        <label class="label-x">Brand</label>
+                        <input type="text" name="brand" id="brandInput" class="input-x" value="{{ letter.brand|default:'' }}" placeholder="e.g. Pegler">
+                    </div>
+                    <div class="field-x">
+                        <label class="label-x">ISO / Quality Standard</label>
+                        <input type="text" name="iso_standard" id="isoInput" class="input-x" value="{{ letter.iso_standard|default:'ISO 9001:2015' }}">
+                    </div>
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Intro Text</label>
+                    <textarea name="intro_text" id="introText" class="input-x" rows="2">{{ letter.intro_text|default:'' }}</textarea>
+                    <div class="u-muted mt-1" style="font-size:.78rem;">Auto-fills from the brand/standard above when empty — freely editable.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-x mb-3">
+            <div class="card-x-head u-spread">
+                <div class="u-row"><span class="ic"><i class="fas fa-table"></i></span><h2>Items</h2></div>
+                <button type="button" class="btn-x sm" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
+            </div>
+            <div class="card-x-body">
+                <table class="items-tbl" id="itemsTable">
+                    <thead>
+                        <tr><th>Date</th><th>Invoice No.</th><th>LPO No.</th><th>Brand/Model</th><th>Total Qty.</th><th></th></tr>
+                    </thead>
+                    <tbody id="itemsTbody"></tbody>
+                </table>
+                <input type="hidden" name="items_json" id="itemsJson">
+            </div>
+        </div>
+        {{ items_data|json_script:"items-data" }}
+
+        <div class="card-x mb-3">
+            <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
+            <div class="card-x-body">
+                <div class="field-x">
+                    <label class="label-x">One bullet point per line</label>
+                    <textarea name="terms_text" id="termsText" class="input-x" rows="5">{{ default_terms_text|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-x mb-3">
+            <div class="card-x-head"><span class="ic"><i class="fas fa-signature"></i></span><h2>Sign-off</h2></div>
+            <div class="card-x-body">
+                <div class="two-col">
+                    <div class="field-x">
+                        <label class="label-x">Signatory Name</label>
+                        <input type="text" name="signatory_name" class="input-x" value="{{ default_signatory_name|default:'' }}">
+                    </div>
+                    <div class="field-x">
+                        <label class="label-x">Signatory Title</label>
+                        <input type="text" name="signatory_title" class="input-x" value="{{ default_signatory_title|default:'' }}">
+                    </div>
+                </div>
+                <div class="u-muted" style="font-size:.8rem;">The signature and stamp images can only be attached by the manager, once this letter has been Approved.</div>
+            </div>
+        </div>
+
+        <div class="u-row" style="justify-content:flex-end;">
+            {% if letter %}<a href="{% url 'warranty:detail' letter.pk %}" class="btn-x">Cancel</a>{% endif %}
+            <button type="button" class="btn-x" id="btnSaveDraft"><i class="fas fa-floppy-disk"></i> Save Draft</button>
+            <button type="button" class="btn-x btn-primary-x" id="btnSaveSubmit"><i class="fas fa-paper-plane"></i> Save &amp; Submit for Approval</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const DEFAULT_INTRO_TEMPLATE = "{{ default_intro_template|default:''|escapejs }}";
+    const EXISTING_ITEMS = JSON.parse(document.getElementById('items-data').textContent);
+
+    // ── Items table ──────────────────────────────────────────────────
+    const itemsTbody = document.getElementById('itemsTbody');
+
+    function addItemRow(row) {
+        row = row || {};
+        const tr = document.createElement('tr');
+        const fields = ['date', 'invoice_no', 'lpo_no', 'brand_model', 'total_qty'];
+        tr.innerHTML = fields.map(f =>
+            `<td><input type="text" class="input-x" data-field="${f}" value="${(row[f] || '').replace(/"/g, '&quot;')}"></td>`
+        ).join('') + `<td><button type="button" class="row-remove" title="Remove row"><i class="fas fa-trash"></i></button></td>`;
+        tr.querySelector('.row-remove').addEventListener('click', () => tr.remove());
+        itemsTbody.appendChild(tr);
+    }
+
+    if (EXISTING_ITEMS.length) {
+        EXISTING_ITEMS.forEach(addItemRow);
+    } else {
+        addItemRow();
+    }
+
+    document.getElementById('addRowBtn').addEventListener('click', () => addItemRow());
+
+    function collectItemsJson() {
+        const rows = [];
+        itemsTbody.querySelectorAll('tr').forEach(tr => {
+            const row = {};
+            let hasValue = false;
+            tr.querySelectorAll('input[data-field]').forEach(inp => {
+                row[inp.dataset.field] = inp.value.trim();
+                if (inp.value.trim()) hasValue = true;
+            });
+            if (hasValue) rows.push(row);
+        });
+        return JSON.stringify(rows);
+    }
+
+    // ── Intro text auto-fill ─────────────────────────────────────────
+    function autoFillIntro() {
+        const introEl = document.getElementById('introText');
+        if (introEl.value.trim() || !DEFAULT_INTRO_TEMPLATE) return;
+        const brand = document.getElementById('brandInput').value.trim();
+        const iso = document.getElementById('isoInput').value.trim();
+        introEl.value = DEFAULT_INTRO_TEMPLATE.split('{brand}').join(brand).split('{iso_standard}').join(iso);
+    }
+    document.getElementById('brandInput').addEventListener('blur', autoFillIntro);
+    document.getElementById('isoInput').addEventListener('blur', autoFillIntro);
+
+    // ── Ref No suggestion ────────────────────────────────────────────
+    document.getElementById('suggestRefBtn').addEventListener('click', () => {
+        const company = document.getElementById('companySelect').value;
+        fetch(`/warranty/api/suggest-ref-no/?company=${encodeURIComponent(company)}`)
+            .then(r => r.json())
+            .then(data => { if (data.ref_no) document.getElementById('refNoInput').value = data.ref_no; })
+            .catch(() => {});
+    });
+
+    // ── Save ──────────────────────────────────────────────────────────
+    function saveLetter(submitNow, btn) {
+        const form = document.getElementById('warrantyForm');
+        const fd = new FormData(form);
+        fd.set('items_json', collectItemsJson());
+        if (submitNow) fd.set('submit_now', '1');
+
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+        fetch('{% url "warranty:save" %}', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert('Error: ' + JSON.stringify(data.errors || data.error || 'Could not save.'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            })
+            .catch(err => {
+                alert('Network error: ' + err);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            });
+    }
+
+    document.getElementById('btnSaveDraft').addEventListener('click', function () { saveLetter(false, this); });
+    document.getElementById('btnSaveSubmit').addEventListener('click', function () { saveLetter(true, this); });
+</script>
+{% endblock %}
