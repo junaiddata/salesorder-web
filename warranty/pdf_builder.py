@@ -13,6 +13,7 @@ the Submittal app's internal warranty letter.
 import os
 from io import BytesIO
 
+import numpy as np
 from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -23,7 +24,7 @@ from reportlab.platypus import (
     Paragraph, Spacer, Table, TableStyle, ListFlowable, ListItem, Image,
 )
 
-from .models import WarrantyLetterSettings
+from .models import WarrantyLetterSettings, default_item_columns
 
 PAGE_W, PAGE_H = A4
 
@@ -31,14 +32,67 @@ HEADER_LOGO_BOX = (160, 55)   # (max width, max height)
 FOOTER_IMAGE_BOX = (PAGE_W - 60, 75)
 
 
-def _fit_image_flowable(path, max_w, max_h):
+def _strip_light_background(im, threshold=225, feather=40):
+    """Turn a near-white/paper-colored background transparent, so a
+    scanned or photographed signature overlays cleanly onto the page
+    instead of showing a visible rectangle. Dark ink strokes stay opaque;
+    pixels between (threshold-feather) and threshold fade smoothly so
+    anti-aliased edges don't look jagged."""
+    arr = np.array(im.convert('RGBA')).astype(np.float32)
+    luminance = arr[..., :3].mean(axis=2)
+    factor = np.clip((threshold - luminance) / feather, 0.0, 1.0)
+    arr[..., 3] *= factor
+    return PILImage.fromarray(arr.astype('uint8'), 'RGBA')
+
+
+def _fit_image_flowable(path, max_w, max_h, strip_background=False):
     """Return a reportlab Image flowable scaled to fit within max_w/max_h,
-    preserving aspect ratio (platypus Image doesn't do this on its own)."""
+    preserving aspect ratio (platypus Image doesn't do this on its own).
+    strip_background=True clears a near-white paper background to
+    transparent, for scanned signatures that weren't pre-cleaned."""
     im = PILImage.open(path)
     iw, ih = im.size
-    im.close()
     scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
+
+    if strip_background:
+        cleaned = _strip_light_background(im)
+        im.close()
+        buf = BytesIO()
+        cleaned.save(buf, format='PNG')
+        buf.seek(0)
+        return Image(buf, width=iw * scale, height=ih * scale)
+
+    im.close()
     return Image(path, width=iw * scale, height=ih * scale)
+
+
+def _compose_signature_and_stamp(sig_path, stamp_path, box_w=170, box_h=88, render_scale=4):
+    """Layer the signature on top of the stamp into a single image, the way
+    they'd overlap when actually signed and stamped on a printed letter --
+    stamp sitting right-of-center, signature crossing over it from the
+    upper-left, both anchored as one block directly above the signatory's
+    name. Returns a reportlab Image flowable sized box_w x box_h (pt)."""
+    px_w, px_h = int(box_w * render_scale), int(box_h * render_scale)
+    canvas_im = PILImage.new('RGBA', (px_w, px_h), (0, 0, 0, 0))
+
+    def _load_scaled(path, max_w, max_h, strip_bg):
+        im = PILImage.open(path)
+        im = _strip_light_background(im) if strip_bg else im.convert('RGBA')
+        iw, ih = im.size
+        scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
+        return im.resize((max(1, int(iw * scale)), max(1, int(ih * scale))), PILImage.LANCZOS)
+
+    stamp_im = _load_scaled(stamp_path, px_w * 0.62, px_h * 0.95, strip_bg=False)
+    stamp_pos = (px_w - stamp_im.width - int(px_w * 0.03), (px_h - stamp_im.height) // 2)
+    canvas_im.alpha_composite(stamp_im, stamp_pos)
+
+    sig_im = _load_scaled(sig_path, px_w * 0.8, px_h * 0.6, strip_bg=True)
+    canvas_im.alpha_composite(sig_im, (0, 0))
+
+    buf = BytesIO()
+    canvas_im.save(buf, format='PNG')
+    buf.seek(0)
+    return Image(buf, width=box_w, height=box_h)
 
 
 class _WarrantyLetterDocTemplate(BaseDocTemplate):
@@ -132,20 +186,22 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ]))
 
-    # ── Items table ────────────────────────────────────────────────────
-    headers = ['Date', 'Invoice No.', 'LPO No.', 'Brand/Model', 'Total Qty.']
-    col_widths = [55, 85, 85, 190, 50]
+    # ── Items table -- columns are freely customizable per letter ───────
+    columns = letter.item_columns or default_item_columns()
+    ncols = len(columns)
+    headers = [c.get('label', '') for c in columns]
+    # Distribute the full table width evenly across however many columns
+    # the user configured, same "even split with a floor" approach used for
+    # the submittal app's dynamic materials table.
+    available_w = doc.width
+    col_widths = [max(40, available_w // ncols)] * ncols
+    col_widths[-1] += available_w - sum(col_widths)  # absorb integer-division remainder
+
     table_data = [[Paragraph(h, style_header) for h in headers]]
     for item in letter.items.all():
-        table_data.append([
-            Paragraph(item.date, style_cell),
-            Paragraph(item.invoice_no, style_cell),
-            Paragraph(item.lpo_no, style_cell),
-            Paragraph(item.brand_model, style_cell),
-            Paragraph(item.total_qty, style_cell),
-        ])
+        table_data.append([Paragraph(item.get(c['key'], ''), style_cell) for c in columns])
     end_row_idx = len(table_data)
-    table_data.append([Paragraph('END OF LIST', style_header), '', '', '', ''])
+    table_data.append([Paragraph('END OF LIST', style_header)] + [''] * (ncols - 1))
 
     items_tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     items_tbl.setStyle(TableStyle([
@@ -165,25 +221,34 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
     ) if terms_lines else None
 
     # ── Sign-off block ────────────────────────────────────────────────
-    sig_flowable = None
-    if letter.signature_image and os.path.exists(letter.signature_image.path):
-        sig_flowable = _fit_image_flowable(letter.signature_image.path, 130, 50)
-    stamp_flowable = None
-    if letter.stamp_image and os.path.exists(letter.stamp_image.path):
-        stamp_flowable = _fit_image_flowable(letter.stamp_image.path, 90, 90)
+    # Signature and stamp overlap into one block (signature crossing over
+    # the stamp, like ink signed across an already-stamped page), sitting
+    # directly above the name -- rather than sitting in separate columns.
+    has_sig = bool(letter.signature_image and os.path.exists(letter.signature_image.path))
+    has_stamp = bool(letter.stamp_image and os.path.exists(letter.stamp_image.path))
 
-    sign_table = Table(
-        [[sig_flowable or Spacer(1, 50), stamp_flowable or Spacer(1, 50)]],
-        colWidths=[200, 100],
-    )
-    sign_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-    ]))
+    sign_stamp_flowable = None
+    if has_sig and has_stamp:
+        sign_stamp_flowable = _compose_signature_and_stamp(
+            letter.signature_image.path, letter.stamp_image.path,
+        )
+    elif has_sig:
+        sign_stamp_flowable = _fit_image_flowable(letter.signature_image.path, 130, 50, strip_background=True)
+    elif has_stamp:
+        sign_stamp_flowable = _fit_image_flowable(letter.stamp_image.path, 90, 90)
+    if sign_stamp_flowable:
+        # Image flowables default to hAlign='CENTER'; this block sits
+        # directly in the page flow (not inside a table cell), so without
+        # this it drifts to the middle of the page instead of the left
+        # margin where the name/title below it starts.
+        sign_stamp_flowable.hAlign = 'LEFT'
+
+    name_title_lines = []
+    if letter.signatory_name:
+        name_title_lines.append(f'<b>{letter.signatory_name}</b>')
+    if letter.signatory_title:
+        name_title_lines.append(letter.signatory_title)
+    name_title_flowable = Paragraph('<br/>'.join(name_title_lines), style_body) if name_title_lines else None
 
     # ── Assemble ─────────────────────────────────────────────────────
     elements = [
@@ -212,13 +277,11 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
         Paragraph('For,', style_body),
         Paragraph(f'M/s. {settings_row.legal_company_name}', style_body_bold),
         Spacer(1, 8),
-        sign_table,
-        Spacer(1, 4),
     ]
-    if letter.signatory_name:
-        elements.append(Paragraph(f'<b>{letter.signatory_name}</b>', style_body))
-    if letter.signatory_title:
-        elements.append(Paragraph(letter.signatory_title, style_body))
+    if sign_stamp_flowable:
+        elements += [sign_stamp_flowable, Spacer(1, 2)]
+    if name_title_flowable:
+        elements.append(name_title_flowable)
 
     doc.build(elements)
     buf.seek(0)

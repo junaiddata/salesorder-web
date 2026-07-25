@@ -8,7 +8,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings
+from .models import WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings, default_item_columns
 from .pdf_builder import build_warranty_letter_pdf
 from . import services
 
@@ -30,6 +30,7 @@ def warranty_list(request):
         'letters': letters,
         'company_filter': company,
         'status_filter': status,
+        'is_manager': _is_manager(request.user),
     })
 
 
@@ -37,22 +38,17 @@ def warranty_list(request):
 def warranty_form(request, pk=None):
     letter = get_object_or_404(WarrantyLetter, pk=pk) if pk else None
 
-    if letter and not letter.is_editable:
-        messages.error(request, "This warranty letter can no longer be edited.")
-        return redirect('warranty:detail', pk=letter.pk)
+    if _is_manager(request.user):
+        messages.error(request, "The manager account can only approve or reject warranty letters.")
+        return redirect('warranty:detail', pk=letter.pk) if letter else redirect('warranty:list')
 
     company = (letter.company if letter else request.GET.get('company', 'junaid'))
     if company not in dict(WarrantyLetter.COMPANY_CHOICES):
         company = 'junaid'
 
     letter_settings = WarrantyLetterSettings.get_instance(company)
-    items_data = [
-        {
-            'date': it.date, 'invoice_no': it.invoice_no, 'lpo_no': it.lpo_no,
-            'brand_model': it.brand_model, 'total_qty': it.total_qty,
-        }
-        for it in (letter.items.all() if letter else [])
-    ]
+    items_data = [it.data for it in (letter.items.all() if letter else [])]
+    item_columns = (letter.item_columns if letter else None) or default_item_columns()
 
     if not letter:
         # Prefill editable defaults for a brand-new letter.
@@ -68,6 +64,7 @@ def warranty_form(request, pk=None):
         'letter': letter,
         'company': company,
         'items_data': items_data,
+        'item_columns': item_columns,
         'default_signatory_name': default_signatory_name,
         'default_signatory_title': default_signatory_title,
         'default_terms_text': default_terms_text,
@@ -79,11 +76,11 @@ def warranty_form(request, pk=None):
 @login_required
 @require_POST
 def warranty_save(request):
+    if _is_manager(request.user):
+        return JsonResponse({'error': 'The manager account can only approve or reject warranty letters.'}, status=403)
+
     pk = request.POST.get('letter_id')
     letter = get_object_or_404(WarrantyLetter, pk=pk) if pk else WarrantyLetter()
-
-    if letter.pk and not letter.is_editable:
-        return JsonResponse({'error': 'This warranty letter can no longer be edited.'}, status=403)
 
     # Editing a Pending letter withdraws it back to Draft -- the manager
     # hasn't acted on it yet, so there's nothing to "undo", it just needs
@@ -112,6 +109,24 @@ def warranty_save(request):
     letter.signatory_name = request.POST.get('signatory_name', '').strip()
     letter.signatory_title = request.POST.get('signatory_title', '').strip()
 
+    # Item table columns -- freely customized per letter (add/remove/rename
+    # via the form UI), posted as an ordered [{key, label}, ...] list.
+    columns_json = request.POST.get('columns_json', '')
+    columns = []
+    if columns_json:
+        try:
+            parsed = json.loads(columns_json)
+        except (ValueError, TypeError):
+            parsed = []
+        for col in parsed:
+            if not isinstance(col, dict):
+                continue
+            key = (col.get('key') or '').strip()
+            label = (col.get('label') or '').strip()
+            if key and label:
+                columns.append({'key': key, 'label': label})
+    letter.item_columns = columns or default_item_columns()
+
     is_new = letter.pk is None
     if is_new:
         letter.created_by = request.user
@@ -124,7 +139,8 @@ def warranty_save(request):
     # Items table -- delete and recreate from the posted JSON, mirroring the
     # simple JSON-synced-hidden-field pattern used elsewhere in this codebase
     # (e.g. Submittal.field_order / compliance_rows) but as a real related
-    # table since these rows are genuinely tabular data.
+    # table since these rows are genuinely tabular data. Row values are
+    # free-form key/value pairs keyed by the columns above.
     items_json = request.POST.get('items_json', '')
     letter.items.all().delete()
     if items_json:
@@ -132,18 +148,12 @@ def warranty_save(request):
             rows = json.loads(items_json)
         except (ValueError, TypeError):
             rows = []
+        valid_keys = {c['key'] for c in letter.item_columns}
         for idx, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            WarrantyLetterItem.objects.create(
-                letter=letter,
-                display_order=idx,
-                date=(row.get('date') or '').strip(),
-                invoice_no=(row.get('invoice_no') or '').strip(),
-                lpo_no=(row.get('lpo_no') or '').strip(),
-                brand_model=(row.get('brand_model') or '').strip(),
-                total_qty=(row.get('total_qty') or '').strip(),
-            )
+            data = {k: (v or '').strip() for k, v in row.items() if k in valid_keys}
+            WarrantyLetterItem.objects.create(letter=letter, display_order=idx, data=data)
 
     submit_now = request.POST.get('submit_now') == '1'
     if submit_now and letter.status in WarrantyLetter.SUBMITTABLE_STATUSES:
@@ -173,8 +183,8 @@ def warranty_detail(request, pk):
 @require_POST
 def warranty_delete(request, pk):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
-    if letter.status != 'Draft':
-        messages.error(request, "Only Draft warranty letters can be deleted.")
+    if _is_manager(request.user):
+        messages.error(request, "The manager account can only approve or reject warranty letters.")
         return redirect('warranty:detail', pk=letter.pk)
     project_name = (letter.project or '')[:50]
     letter.invalidate_pdf()
@@ -191,6 +201,9 @@ def warranty_delete(request, pk):
 @require_POST
 def warranty_submit(request, pk):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
+    if _is_manager(request.user):
+        messages.error(request, "The manager account can only approve or reject warranty letters.")
+        return redirect('warranty:detail', pk=letter.pk)
     if letter.status not in WarrantyLetter.SUBMITTABLE_STATUSES:
         messages.error(request, "Only Draft or Rejected warranty letters can be submitted for approval.")
         return redirect('warranty:detail', pk=letter.pk)
@@ -209,6 +222,9 @@ def warranty_withdraw(request, pk):
     """Pull a Pending letter back to Draft so it can be edited again, e.g.
     if it was submitted by mistake before the manager has acted on it."""
     letter = get_object_or_404(WarrantyLetter, pk=pk)
+    if _is_manager(request.user):
+        messages.error(request, "The manager account can only approve or reject warranty letters.")
+        return redirect('warranty:detail', pk=letter.pk)
     if letter.status != 'Pending':
         messages.error(request, "Only letters pending approval can be withdrawn.")
         return redirect('warranty:detail', pk=letter.pk)
@@ -253,8 +269,8 @@ def warranty_update_approval(request, pk):
 def _save_image_field(request, pk, field_name, post_field_name):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
 
-    if not _is_manager(request.user):
-        return JsonResponse({'error': 'Only the manager can attach the signature/stamp.'}, status=403)
+    if _is_manager(request.user):
+        return JsonResponse({'error': 'The manager account can only approve or reject warranty letters.'}, status=403)
     if letter.status != 'Approved':
         return JsonResponse({'error': 'The warranty letter must be Approved first.'}, status=403)
 
@@ -277,8 +293,8 @@ def _save_image_field(request, pk, field_name, post_field_name):
 def _clear_image_field(request, pk, field_name):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
 
-    if not _is_manager(request.user):
-        return JsonResponse({'error': 'Only the manager can clear the signature/stamp.'}, status=403)
+    if _is_manager(request.user):
+        return JsonResponse({'error': 'The manager account can only approve or reject warranty letters.'}, status=403)
     if letter.status != 'Approved':
         return JsonResponse({'error': 'The warranty letter must be Approved first.'}, status=403)
 

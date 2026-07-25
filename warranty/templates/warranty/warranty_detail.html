@@ -1,5 +1,6 @@
 {% extends 'warranty/base.html' %}
 {% load static %}
+{% load warranty_extras %}
 
 {% block title %}{{ letter.ref_no|default:"Warranty Letter" }}{% endblock %}
 
@@ -29,7 +30,7 @@
                 {% else %}<span class="chip-x red">Rejected</span>{% endif %}
                 <a href="#" id="btnPreviewPdf" class="btn-x btn-light-x"><i class="fas fa-eye"></i> Preview PDF</a>
                 <a href="{% url 'warranty:generate_pdf' letter.pk %}" class="btn-x btn-ghost-x"><i class="fas fa-download"></i> Download PDF</a>
-                {% if letter.is_editable %}
+                {% if not is_manager %}
                 <a href="{% url 'warranty:edit' letter.pk %}" class="btn-x btn-ghost-x"
                    {% if letter.status == 'Pending' %}title="Editing will withdraw this letter from approval"{% endif %}>
                     <i class="fas fa-pen"></i> Edit
@@ -41,6 +42,8 @@
 </div>
 
 <div class="u-wrap-narrow u-page">
+
+    {% if not is_manager %}
 
     {% if letter.status == 'Draft' or letter.status == 'Rejected' %}
     <div class="card-x mb-3">
@@ -57,10 +60,9 @@
     </div>
     {% endif %}
 
-    {% if letter.status == 'Draft' %}
     <div class="card-x mb-3">
         <div class="card-x-body u-spread">
-            <div class="u-muted" style="font-size:.85rem;">Only Draft letters can be deleted.</div>
+            <div class="u-muted" style="font-size:.85rem;">Edit or delete this warranty letter at any time.</div>
             <form method="post" action="{% url 'warranty:delete' letter.pk %}"
                   data-confirm="Delete this warranty letter? This cannot be undone."
                   data-confirm-title="Delete warranty letter" data-confirm-ok-label="Delete">
@@ -69,7 +71,6 @@
             </form>
         </div>
     </div>
-    {% endif %}
 
     {% if letter.status == 'Pending' %}
     <div class="card-x mb-3">
@@ -87,6 +88,8 @@
             </form>
         </div>
     </div>
+    {% endif %}
+
     {% endif %}
 
     {% if is_manager and letter.status == 'Pending' %}
@@ -117,7 +120,7 @@
     </div>
     {% endif %}
 
-    {% if is_manager and letter.status == 'Approved' %}
+    {% if not is_manager and letter.status == 'Approved' %}
     <div class="card-x mb-3">
         <div class="card-x-head u-spread">
             <div class="u-row"><span class="ic"><i class="fas fa-stamp"></i></span><h2>Signature &amp; Stamp</h2></div>
@@ -160,10 +163,10 @@
         <div class="card-x-body" style="padding:1rem;">
             <div class="tbl-x-wrap" style="border:none;">
                 <table class="tbl-x">
-                    <thead><tr><th>Date</th><th>Invoice No.</th><th>LPO No.</th><th>Brand/Model</th><th>Total Qty.</th></tr></thead>
+                    <thead><tr>{% for col in letter.item_columns %}<th>{{ col.label }}</th>{% endfor %}</tr></thead>
                     <tbody>
                         {% for it in items %}
-                        <tr><td>{{ it.date }}</td><td>{{ it.invoice_no }}</td><td>{{ it.lpo_no }}</td><td>{{ it.brand_model }}</td><td>{{ it.total_qty }}</td></tr>
+                        <tr>{% for col in letter.item_columns %}<td>{{ it.data|dict_get:col.key }}</td>{% endfor %}</tr>
                         {% endfor %}
                     </tbody>
                 </table>

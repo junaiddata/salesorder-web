@@ -21,6 +21,18 @@ def warranty_settings_asset_path(instance, filename):
     return f'warranty/settings/{instance.company}/{filename}'
 
 
+def default_item_columns():
+    """Starting columns for a brand-new letter's item table -- freely
+    add/remove/rename from here per letter via the form UI."""
+    return [
+        {'key': 'date', 'label': 'Date'},
+        {'key': 'invoice_no', 'label': 'Invoice No.'},
+        {'key': 'lpo_no', 'label': 'LPO No.'},
+        {'key': 'brand_model', 'label': 'Brand/Model'},
+        {'key': 'total_qty', 'label': 'Total Qty.'},
+    ]
+
+
 class WarrantyLetterSettings(models.Model):
     """
     One row per company (junaid/alabama). Admin-configurable letterhead
@@ -86,10 +98,6 @@ class WarrantyLetter(models.Model):
     ]
     # Statuses "Submit for Approval" can be used from.
     SUBMITTABLE_STATUSES = ('Draft', 'Rejected')
-    # Once Approved, content is locked (only the manager's signature/stamp can
-    # still change). Pending letters can still be edited -- doing so silently
-    # withdraws them back to Draft, since the manager hasn't acted on them yet.
-    LOCKED_STATUSES = ('Approved',)
 
     company = models.CharField(max_length=10, choices=COMPANY_CHOICES, default='junaid')
     ref_no = models.CharField(
@@ -116,6 +124,11 @@ class WarrantyLetter(models.Model):
     terms_text = models.TextField(
         blank=True, default='',
         help_text="Warranty terms — one bullet point per line, any number of lines."
+    )
+
+    item_columns = models.JSONField(
+        default=default_item_columns, blank=True,
+        help_text="Ordered item-table columns: [{key, label}, ...]. Freely customizable per letter."
     )
 
     signatory_name = models.CharField(max_length=255, blank=True, default='')
@@ -161,10 +174,6 @@ class WarrantyLetter(models.Model):
     def __str__(self):
         return f"{self.ref_no or 'Draft'} - {self.project[:40]}"
 
-    @property
-    def is_editable(self):
-        return self.status not in self.LOCKED_STATUSES
-
     def invalidate_pdf(self):
         if self.generated_pdf:
             self.generated_pdf.delete(save=False)
@@ -173,18 +182,23 @@ class WarrantyLetter(models.Model):
 
 
 class WarrantyLetterItem(models.Model):
-    """One row of the Date / Invoice No. / LPO No. / Brand-Model / Total Qty. table."""
+    """One row of the letter's item table. Columns are freely customizable
+    per letter (see WarrantyLetter.item_columns), so row values are stored
+    as a key->value JSON dict keyed by each column's key, rather than fixed
+    model fields."""
     letter = models.ForeignKey(WarrantyLetter, on_delete=models.CASCADE, related_name='items')
     display_order = models.IntegerField(default=0)
 
-    date = models.CharField(max_length=50, blank=True, default='')
-    invoice_no = models.CharField(max_length=100, blank=True, default='')
-    lpo_no = models.CharField(max_length=100, blank=True, default='')
-    brand_model = models.CharField(max_length=255, blank=True, default='')
-    total_qty = models.CharField(max_length=50, blank=True, default='')
+    data = models.JSONField(
+        default=dict, blank=True,
+        help_text="Row values as key-value, keyed by the letter's item_columns keys."
+    )
 
     class Meta:
         ordering = ['display_order', 'pk']
 
     def __str__(self):
         return f"Letter {self.letter_id} row {self.display_order}"
+
+    def get(self, key, default=''):
+        return (self.data or {}).get(key, default)

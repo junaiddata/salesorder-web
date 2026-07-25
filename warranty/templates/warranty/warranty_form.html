@@ -10,6 +10,12 @@
     .items-tbl td { padding: .35rem .5rem; }
     .items-tbl input.input-x { padding: .45rem .6rem; font-size: .82rem; }
     .row-remove { color: var(--danger); background: none; border: none; cursor: pointer; padding: .4rem; }
+    .col-toggle-list { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .col-toggle { display: flex; align-items: center; gap: .4rem; padding: .35rem .65rem; border: 1px solid var(--line-soft); border-radius: 999px; font-size: .8rem; background: #fff; }
+    .col-toggle input[type=checkbox] { margin: 0; }
+    .col-toggle .col-remove-x { border: none; background: none; color: var(--danger); cursor: pointer; padding: 0; font-size: .75rem; line-height: 1; opacity: .6; }
+    .col-toggle .col-remove-x:hover { opacity: 1; }
+    .add-col-row { display: flex; gap: .5rem; margin-top: .6rem; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
     @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
 </style>
@@ -113,16 +119,26 @@
                 <button type="button" class="btn-x sm" id="addRowBtn"><i class="fas fa-plus"></i> Add Row</button>
             </div>
             <div class="card-x-body">
+                <div class="field-x mb-2">
+                    <label class="label-x">Columns</label>
+                    <div class="col-toggle-list" id="colToggleList"></div>
+                    <div class="add-col-row">
+                        <input type="text" class="input-x sm" id="newColumnInput" placeholder="New column name" style="max-width:220px;">
+                        <button type="button" class="btn-x sm" id="addColumnBtn"><i class="fas fa-plus"></i> Add Column</button>
+                    </div>
+                </div>
                 <table class="items-tbl" id="itemsTable">
                     <thead>
-                        <tr><th>Date</th><th>Invoice No.</th><th>LPO No.</th><th>Brand/Model</th><th>Total Qty.</th><th></th></tr>
+                        <tr id="itemsThead"></tr>
                     </thead>
                     <tbody id="itemsTbody"></tbody>
                 </table>
                 <input type="hidden" name="items_json" id="itemsJson">
+                <input type="hidden" name="columns_json" id="columnsJson">
             </div>
         </div>
         {{ items_data|json_script:"items-data" }}
+        {{ item_columns|json_script:"item-columns-data" }}
 
         <div class="card-x mb-3">
             <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
@@ -165,20 +181,119 @@
     const DEFAULT_INTRO_TEMPLATE = "{{ default_intro_template|default:''|escapejs }}";
     const EXISTING_ITEMS = JSON.parse(document.getElementById('items-data').textContent);
 
-    // ── Items table ──────────────────────────────────────────────────
+    // ── Items table — tick/untick the given columns, or add new ones ────
+    const PREDEFINED_COLUMNS = [
+        { key: 'date', label: 'Date' }, { key: 'invoice_no', label: 'Invoice No.' },
+        { key: 'lpo_no', label: 'LPO No.' }, { key: 'brand_model', label: 'Brand/Model' },
+        { key: 'total_qty', label: 'Total Qty.' },
+    ];
+    const SAVED_COLUMNS = JSON.parse(document.getElementById('item-columns-data').textContent) || [];
+    const predefinedKeys = PREDEFINED_COLUMNS.map(c => c.key);
+
+    // Working column list: every predefined column always shown (checked
+    // if it's in the saved/default set), plus any previously-added custom
+    // columns (always checked, removable).
+    let ALL_COLUMNS = PREDEFINED_COLUMNS.map(c => ({
+        key: c.key, label: c.label, custom: false,
+        checked: SAVED_COLUMNS.some(sc => sc.key === c.key),
+    }));
+    SAVED_COLUMNS.forEach(sc => {
+        if (!predefinedKeys.includes(sc.key)) {
+            ALL_COLUMNS.push({ key: sc.key, label: sc.label, custom: true, checked: true });
+        }
+    });
+
+    const colToggleList = document.getElementById('colToggleList');
+    const itemsThead = document.getElementById('itemsThead');
     const itemsTbody = document.getElementById('itemsTbody');
+
+    function escapeAttr(v) { return (v || '').replace(/"/g, '&quot;'); }
+    function escapeHtml(v) { const d = document.createElement('div'); d.textContent = v || ''; return d.innerHTML; }
+
+    function slugifyKey(label) {
+        const existing = ALL_COLUMNS.map(c => c.key);
+        let base = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'column';
+        let key = base, n = 1;
+        while (existing.includes(key)) { key = `${base}_${++n}`; }
+        return key;
+    }
+
+    function renderColumnToggles() {
+        colToggleList.innerHTML = ALL_COLUMNS.map((col, i) => `
+            <label class="col-toggle">
+                <input type="checkbox" data-col-index="${i}" ${col.checked ? 'checked' : ''}>
+                <span>${escapeHtml(col.label)}</span>
+                ${col.custom ? `<button type="button" class="col-remove-x" data-col-index="${i}" title="Remove column"><i class="fas fa-xmark"></i></button>` : ''}
+            </label>
+        `).join('');
+        colToggleList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                ALL_COLUMNS[+cb.dataset.colIndex].checked = cb.checked;
+                applyColumnVisibility();
+            });
+        });
+        colToggleList.querySelectorAll('.col-remove-x').forEach(btn => {
+            btn.addEventListener('click', () => removeCustomColumn(+btn.dataset.colIndex));
+        });
+    }
+
+    function renderHeader() {
+        itemsThead.innerHTML = ALL_COLUMNS.map(col =>
+            `<th data-col-key="${col.key}" ${col.checked ? '' : 'hidden'}>${escapeHtml(col.label)}</th>`
+        ).join('') + '<th></th>';
+    }
+
+    function applyColumnVisibility() {
+        ALL_COLUMNS.forEach(col => {
+            const th = itemsThead.querySelector(`th[data-col-key="${col.key}"]`);
+            if (th) th.hidden = !col.checked;
+            itemsTbody.querySelectorAll(`td[data-col-key="${col.key}"]`).forEach(td => { td.hidden = !col.checked; });
+        });
+    }
 
     function addItemRow(row) {
         row = row || {};
         const tr = document.createElement('tr');
-        const fields = ['date', 'invoice_no', 'lpo_no', 'brand_model', 'total_qty'];
-        tr.innerHTML = fields.map(f =>
-            `<td><input type="text" class="input-x" data-field="${f}" value="${(row[f] || '').replace(/"/g, '&quot;')}"></td>`
+        tr.innerHTML = ALL_COLUMNS.map(col =>
+            `<td data-col-key="${col.key}" ${col.checked ? '' : 'hidden'}><input type="text" class="input-x" data-field="${col.key}" value="${escapeAttr(row[col.key])}"></td>`
         ).join('') + `<td><button type="button" class="row-remove" title="Remove row"><i class="fas fa-trash"></i></button></td>`;
         tr.querySelector('.row-remove').addEventListener('click', () => tr.remove());
         itemsTbody.appendChild(tr);
     }
 
+    function addColumn() {
+        const inputEl = document.getElementById('newColumnInput');
+        const label = inputEl.value.trim();
+        if (!label) return;
+        const key = slugifyKey(label);
+        ALL_COLUMNS.push({ key, label, custom: true, checked: true });
+        inputEl.value = '';
+        renderColumnToggles();
+
+        const th = document.createElement('th');
+        th.dataset.colKey = key;
+        th.textContent = label;
+        itemsThead.insertBefore(th, itemsThead.lastElementChild);
+
+        itemsTbody.querySelectorAll('tr').forEach(tr => {
+            const td = document.createElement('td');
+            td.dataset.colKey = key;
+            td.innerHTML = `<input type="text" class="input-x" data-field="${key}" value="">`;
+            tr.insertBefore(td, tr.lastElementChild);
+        });
+    }
+
+    function removeCustomColumn(index) {
+        const col = ALL_COLUMNS[index];
+        if (!col || !col.custom) return;
+        ALL_COLUMNS.splice(index, 1);
+        renderColumnToggles();
+        itemsThead.querySelectorAll(`th[data-col-key="${col.key}"]`).forEach(el => el.remove());
+        itemsTbody.querySelectorAll(`td[data-col-key="${col.key}"]`).forEach(el => el.remove());
+    }
+
+    renderColumnToggles();
+    renderHeader();
     if (EXISTING_ITEMS.length) {
         EXISTING_ITEMS.forEach(addItemRow);
     } else {
@@ -186,6 +301,10 @@
     }
 
     document.getElementById('addRowBtn').addEventListener('click', () => addItemRow());
+    document.getElementById('addColumnBtn').addEventListener('click', addColumn);
+    document.getElementById('newColumnInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addColumn(); }
+    });
 
     function collectItemsJson() {
         const rows = [];
@@ -199,6 +318,10 @@
             if (hasValue) rows.push(row);
         });
         return JSON.stringify(rows);
+    }
+
+    function collectColumnsJson() {
+        return JSON.stringify(ALL_COLUMNS.filter(c => c.checked).map(c => ({ key: c.key, label: c.label })));
     }
 
     // ── Intro text auto-fill ─────────────────────────────────────────
@@ -223,9 +346,14 @@
 
     // ── Save ──────────────────────────────────────────────────────────
     function saveLetter(submitNow, btn) {
+        if (!ALL_COLUMNS.some(c => c.checked)) {
+            alert('Please tick at least one column for the Items table.');
+            return;
+        }
         const form = document.getElementById('warrantyForm');
         const fd = new FormData(form);
         fd.set('items_json', collectItemsJson());
+        fd.set('columns_json', collectColumnsJson());
         if (submitNow) fd.set('submit_now', '1');
 
         const originalHtml = btn.innerHTML;
