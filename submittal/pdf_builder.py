@@ -458,6 +458,27 @@ def _draw_wrapped(c, text, x, y, max_width, font_name, font_size, leading):
     return current_y
 
 
+def _project_field_columns(fields, label_x, min_colon_x, font_name, font_size,
+                            page_w, right_margin, gap=10):
+    """
+    Work out where the ':' / value columns of a Project/Client/Consultant...
+    details block should sit, given the actual labels being shown.
+
+    The label column is normally narrow enough for short labels like
+    "Consultant", but a custom/renamed label (e.g. "LEAD DESIGN Consultant")
+    can be wider than that -- so the colon column is pushed right to clear
+    the longest label actually present, instead of a fixed x that long
+    labels can run past and collide with the value.
+    """
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    widths = [stringWidth(str(lbl), font_name, font_size) for lbl, val in fields if val]
+    max_label_w = max(widths) if widths else 0
+    colon_x = max(min_colon_x, label_x + max_label_w + gap)
+    value_x = colon_x + gap
+    max_w = page_w - value_x - right_margin
+    return colon_x, value_x, max_w
+
+
 # ---------------------------------------------------------------------------
 # Title Page (Section 1) – Background image + modern font overlay
 # ---------------------------------------------------------------------------
@@ -505,9 +526,8 @@ def _build_title_page(submittal: Submittal) -> BytesIO:
     field_y = field_start_y
     arrow_x = 58
     label_x = 72
-    colon_x = 178
-    value_x = 188
-    max_w = PAGE_W - value_x - 60
+    colon_x, value_x, max_w = _project_field_columns(
+        fields, label_x, 178, FONT_LABEL, 10, PAGE_W, 60)
 
     for label, value in fields:
         if not value:
@@ -912,7 +932,8 @@ class _MaterialPageTemplate(BaseDocTemplate):
         # they never overlap it -- see _draw_first_page.
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
         extra_fields = max(0, len(fields) - len(FIXED_FIELD_KEYS))
-        wrap_max_w = PAGE_W - 180 - 36
+        self._colon_x, self._value_x, wrap_max_w = _project_field_columns(
+            fields, 55, 170, 'Helvetica-Bold', 9, PAGE_W, 36)
         extra_wrap_lines = sum(
             len(_wrap_text_lines(str(val), wrap_max_w, 'Helvetica', 9)) - 1
             for _, val in fields if val
@@ -974,8 +995,8 @@ class _MaterialPageTemplate(BaseDocTemplate):
 
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
         field_y = (ALABAMA_CONTENT_TOP_Y - 40) if self._company == 'alabama' else PAGE_H - 200
-        label_x, colon_x, value_x = 55, 170, 180
-        max_w = PAGE_W - value_x - 36
+        label_x = 55
+        colon_x, value_x, max_w = self._colon_x, self._value_x, PAGE_W - self._value_x - 36
 
         for lbl, val in fields:
             if not val:
@@ -1328,7 +1349,8 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
     # lines, push the table's start further down so they never overlap it.
     _cs_fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
     _extra_field_count = max(0, len(_cs_fields) - len(FIXED_FIELD_KEYS))
-    _cs_wrap_max_w = PAGE_W - 180 - 36
+    _cs_colon_x, _cs_value_x, _cs_wrap_max_w = _project_field_columns(
+        _cs_fields, 55, 170, 'Helvetica-Bold', 9, PAGE_W, 36)
     _extra_wrap_lines = sum(
         len(_wrap_text_lines(str(val), _cs_wrap_max_w, 'Helvetica', 9)) - 1
         for _, val in _cs_fields if val
@@ -1400,8 +1422,8 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         # Project details
         fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
         field_y = title_y - 30
-        label_x, colon_x, value_x = 55, 170, 180
-        max_w = PAGE_W - value_x - 36
+        label_x = 55
+        colon_x, value_x, max_w = _cs_colon_x, _cs_value_x, _cs_wrap_max_w
 
         c.setFont('Helvetica', 9)
         c.setFillColor(colors.black)
