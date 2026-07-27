@@ -341,7 +341,7 @@
             Back
           </a>
         {% elif from_combined %}
-          <a class="btn btn-secondary" href="{% url 'combined_quotations_list' %}">
+          <a class="btn btn-secondary" href="{% if back_url %}{{ back_url }}{% else %}{% url 'combined_quotations_list' %}{% endif %}">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
             Back
           </a>
@@ -607,7 +607,7 @@
           Back to Old PIs
         </a>
       {% elif from_combined %}
-        <a class="btn btn-secondary" href="{% url 'combined_quotations_list' %}">
+        <a class="btn btn-secondary" href="{% if back_url %}{{ back_url }}{% else %}{% url 'combined_quotations_list' %}{% endif %}">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           Back to Combined Quotations
         </a>

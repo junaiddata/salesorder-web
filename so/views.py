@@ -4581,6 +4581,11 @@ def quotation_detail(request, q_number):
     from_old_pi = request.GET.get('from') == 'old_pi'
     from_combined = request.GET.get('from') == 'combined'
 
+    from django.utils.http import url_has_allowed_host_and_scheme
+    back_url = request.GET.get('back', '')
+    if not url_has_allowed_host_and_scheme(back_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        back_url = ''
+
     # If any item has cost 0.0, don't show Est. Cost / Margin / % — show warning instead
     has_zero_cost_items = is_admin and any(
         (getattr(it, 'unit_cost') or 0) == 0 for it in items
@@ -4594,6 +4599,7 @@ def quotation_detail(request, q_number):
         'margin_percent': margin_percent,
         'from_old_pi': from_old_pi,
         'from_combined': from_combined,
+        'back_url': back_url,
         'is_admin': is_admin,
         'has_zero_cost_items': has_zero_cost_items,
     }

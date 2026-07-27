@@ -885,7 +885,7 @@
             </a>
             {% endif %}
             
-            <a href="{% url 'view_quotations' %}" class="sap-button sap-button-secondary">
+            <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'view_quotations' %}{% endif %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-arrow-left"></i>
                 Back to Quotations
             </a>

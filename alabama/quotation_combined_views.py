@@ -7,6 +7,7 @@ live in their own model/app (no Junaid division heuristics needed here).
 import calendar as _calendar
 from datetime import date as date_cls
 from decimal import Decimal
+from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
@@ -341,6 +342,7 @@ def combined_quotations_list(request):
         return HttpResponse(calendar_html, content_type='text/html')
 
     source = _combined_list_export_source(request)
+    back_param = '?back=' + quote(request.get_full_path())
 
     rows = []
     if source in ('all', 'sap'):
@@ -355,7 +357,7 @@ def combined_quotations_list(request):
                 'total': float(s.document_total or 0),
                 'status': (s.status or '')[:80],
                 'salesman': s.salesman_name or '',
-                'detail_url': reverse('alabama:quotation_detail', args=[s.q_number]),
+                'detail_url': reverse('alabama:quotation_detail', args=[s.q_number]) + back_param,
             })
     if source in ('all', 'app'):
         app_qs = alabama_inapp_quotations_filtered_qs(request).order_by('-quotation_date', '-id')
@@ -371,7 +373,7 @@ def combined_quotations_list(request):
                 'total': float(a.grand_total or 0),
                 'status': (a.status or '')[:80],
                 'salesman': a.salesman.salesman_name if a.salesman_id else '',
-                'detail_url': reverse('view_quotation_details', args=[a.id]),
+                'detail_url': reverse('view_quotation_details', args=[a.id]) + back_param,
             })
 
     _min_date = date_cls(1900, 1, 1)

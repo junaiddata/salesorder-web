@@ -41,7 +41,7 @@
       <span class="badge badge-closed">{{ quotation.status|default:"—" }}</span>
       {% endif %}
     </div>
-    <a href="{% url 'alabama:quotation_list' %}" class="btn btn-secondary">
+    <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'alabama:quotation_list' %}{% endif %}" class="btn btn-secondary">
       <i class="fas fa-arrow-left"></i> Back to Quotations
     </a>
   </div>

@@ -1421,6 +1421,11 @@ def quotation_detail(request, q_number):
     total_profit = doc_total - total_estimated_cost
     margin_percent = (total_profit / doc_total * 100) if doc_total else 0.0
 
+    from django.utils.http import url_has_allowed_host_and_scheme
+    back_url = request.GET.get('back', '')
+    if not url_has_allowed_host_and_scheme(back_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        back_url = ''
+
     context = {
         'quotation': quotation,
         'items': items,
@@ -1429,6 +1434,7 @@ def quotation_detail(request, q_number):
         'margin_percent': margin_percent,
         'is_admin': is_admin,
         'active_page': 'quotation_detail',
+        'back_url': back_url,
     }
     return render(request, 'alabama/quotation_detail.html', context)
 

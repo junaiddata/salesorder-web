@@ -1268,6 +1268,8 @@ def combined_quotations_list(request):
     if source not in ('all', 'sap', 'app'):
         source = 'all'
 
+    back_param = '?from=combined&back=' + quote(request.get_full_path())
+
     rows = []
     if source in ('all', 'sap'):
         sap_qs = sap_quotations_filtered_qs_combined(request).order_by('-posting_date', '-id')
@@ -1283,7 +1285,7 @@ def combined_quotations_list(request):
                 'total': float(s.document_total or 0),
                 'status': (s.status or '')[:80],
                 'salesman': s.salesman_name or '',
-                'detail_url': reverse('quotation_detail', args=[s.q_number]) + '?from=combined',
+                'detail_url': reverse('quotation_detail', args=[s.q_number]) + back_param,
             })
     if source in ('all', 'app'):
         # Only Junaid in-app quotations are merged into the combined list.
@@ -1302,7 +1304,7 @@ def combined_quotations_list(request):
                 'total': float(a.grand_total or 0),
                 'status': (a.status or '')[:80],
                 'salesman': a.salesman.salesman_name if a.salesman_id else '',
-                'detail_url': reverse('view_quotation_details', args=[a.id]),
+                'detail_url': reverse('view_quotation_details', args=[a.id]) + ('?back=' + quote(request.get_full_path())),
             })
 
     _min_date = date_cls(1900, 1, 1)
@@ -1361,6 +1363,17 @@ from .models import Quotation, QuotationItem
 def view_quotation_details(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
     quotation_items = quotation.items.all()
+
+    from django.utils.http import url_has_allowed_host_and_scheme
+    back_param = request.GET.get('back', '')
+    session_key = f'quotation_detail_back_url_{quotation_id}'
+    if back_param and url_has_allowed_host_and_scheme(
+        back_param, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        request.session[session_key] = back_param
+        back_url = back_param
+    else:
+        back_url = request.session.get(session_key, '')
 
     # ✅ Compute totals & undercost logic
     grand_total = 0
@@ -1485,6 +1498,7 @@ def view_quotation_details(request, quotation_id):
         "total_margin": total_margin,
         "margin_percent": margin_percent,
         "is_manager": _is_manager_account(request.user),
+        "back_url": back_url,
     })
 
 
