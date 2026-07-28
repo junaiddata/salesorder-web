@@ -637,6 +637,12 @@ def sales_summary_detail(request, doc_type_slug, document_number):
         total_gross_profit=Sum('gross_profit'),
     )
 
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        request.user.username or ''
+    ).strip().lower() == 'manager' or (
+        hasattr(request.user, 'role') and request.user.role and request.user.role.role == 'Admin'
+    )
+
     context = {
         'doc_type': doc_type,
         'doc_type_slug': doc_type_slug,
@@ -644,6 +650,7 @@ def sales_summary_detail(request, doc_type_slug, document_number):
         'header': header,
         'lines': lines,
         'totals': totals,
+        'is_admin': is_admin,
         'active_page': 'sales_summary_detail',
     }
     return render(request, 'alabama/sales_summary_detail.html', context)
