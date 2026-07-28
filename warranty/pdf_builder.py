@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (
@@ -29,7 +30,65 @@ from .models import WarrantyLetterSettings, default_item_columns
 PAGE_W, PAGE_H = A4
 
 HEADER_LOGO_BOX = (160, 55)   # (max width, max height)
-FOOTER_IMAGE_BOX = (PAGE_W - 60, 75)
+FOOTER_IMAGE_TARGET_W = PAGE_W - 60   # span (almost) the full page width
+FOOTER_IMAGE_MAX_H = 110              # cap so a very tall banner can't eat into body content
+
+
+def _trim_side_borders(im, max_trim=10, threshold=195):
+    """Trim a thin border/edge-artifact line from an image's left and
+    right sides (e.g. a faint box outline baked in by whatever tool
+    produced the graphic), so it doesn't render as a stray vertical line
+    once the image is stretched across the page. Only trims a column when
+    every pixel in it is light -- real dark content (badge ink, text)
+    stops the trim immediately, so this can't eat into actual artwork."""
+    arr = np.array(im.convert('RGB'))
+    w = arr.shape[1]
+
+    def _is_light(col):
+        return col.size == 0 or col.min() >= threshold
+
+    left, right = 0, w
+    for _ in range(max_trim):
+        if left < right - 1 and _is_light(arr[:, left]):
+            left += 1
+        else:
+            break
+    for _ in range(max_trim):
+        if right > left + 1 and _is_light(arr[:, right - 1]):
+            right -= 1
+        else:
+            break
+    if left == 0 and right == w:
+        return im
+    return im.crop((left, 0, right, im.height))
+
+
+def _prepare_footer_image(path, target_w, max_h):
+    """Load the footer banner, trim any stray border lines from its left
+    and right edges, and compute the (buffer, width, height) to draw it
+    at so it spans target_w edge to edge while preserving its own aspect
+    ratio (capped at max_h so it can't grow into the letter body).
+    reportlab's drawImage(preserveAspectRatio=True) fits *within* a given
+    w AND h box, picking whichever dimension is tighter -- for a
+    banner-shaped image inside a much wider/shorter box that means it
+    gets fit to the height and ends up far narrower than the page instead
+    of spanning it edge to edge, so the height here is computed from the
+    image's real aspect ratio rather than left to reportlab."""
+    with PILImage.open(path) as im:
+        trimmed = _trim_side_borders(im)
+        iw, ih = trimmed.size
+        if not iw or not ih:
+            draw_w, draw_h = target_w, max_h or target_w
+        else:
+            draw_h = target_w * (ih / iw)
+            if max_h and draw_h > max_h:
+                draw_w, draw_h = max_h * (iw / ih), max_h
+            else:
+                draw_w = target_w
+        buf = BytesIO()
+        trimmed.save(buf, format='PNG')
+        buf.seek(0)
+        return buf, draw_w, draw_h
 
 
 def _strip_light_background(im, threshold=225, feather=40):
@@ -45,23 +104,37 @@ def _strip_light_background(im, threshold=225, feather=40):
     return PILImage.fromarray(arr.astype('uint8'), 'RGBA')
 
 
+def _crop_to_content(im):
+    """Crop an RGBA image to the bounding box of its non-transparent
+    pixels. A scanned signature often has a lot of blank paper margin
+    around the actual ink; without trimming that first, scaling the whole
+    canvas to fit its box leaves the visible signature tiny and shoved
+    into a corner instead of filling (and overlapping the stamp within)
+    its allotted space."""
+    bbox = im.getchannel('A').getbbox()
+    return im.crop(bbox) if bbox else im
+
+
 def _fit_image_flowable(path, max_w, max_h, strip_background=False):
     """Return a reportlab Image flowable scaled to fit within max_w/max_h,
     preserving aspect ratio (platypus Image doesn't do this on its own).
     strip_background=True clears a near-white paper background to
-    transparent, for scanned signatures that weren't pre-cleaned."""
+    transparent and crops to the remaining ink, for scanned signatures
+    that weren't pre-cleaned."""
     im = PILImage.open(path)
-    iw, ih = im.size
-    scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
 
     if strip_background:
-        cleaned = _strip_light_background(im)
+        cleaned = _crop_to_content(_strip_light_background(im))
         im.close()
+        iw, ih = cleaned.size
+        scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
         buf = BytesIO()
         cleaned.save(buf, format='PNG')
         buf.seek(0)
         return Image(buf, width=iw * scale, height=ih * scale)
 
+    iw, ih = im.size
+    scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
     im.close()
     return Image(path, width=iw * scale, height=ih * scale)
 
@@ -77,17 +150,25 @@ def _compose_signature_and_stamp(sig_path, stamp_path, box_w=170, box_h=88, rend
 
     def _load_scaled(path, max_w, max_h, strip_bg):
         im = PILImage.open(path)
-        im = _strip_light_background(im) if strip_bg else im.convert('RGBA')
+        im = _crop_to_content(_strip_light_background(im)) if strip_bg else im.convert('RGBA')
         iw, ih = im.size
         scale = min(max_w / iw, max_h / ih) if iw and ih else 1.0
         return im.resize((max(1, int(iw * scale)), max(1, int(ih * scale))), PILImage.LANCZOS)
 
     stamp_im = _load_scaled(stamp_path, px_w * 0.62, px_h * 0.95, strip_bg=False)
-    stamp_pos = (px_w - stamp_im.width - int(px_w * 0.03), (px_h - stamp_im.height) // 2)
-    canvas_im.alpha_composite(stamp_im, stamp_pos)
+    stamp_x0 = px_w - stamp_im.width - int(px_w * 0.03)
+    canvas_im.alpha_composite(stamp_im, (stamp_x0, (px_h - stamp_im.height) // 2))
 
-    sig_im = _load_scaled(sig_path, px_w * 0.8, px_h * 0.6, strip_bg=True)
-    canvas_im.alpha_composite(sig_im, (0, 0))
+    # Scale the signature generously, then anchor it by its RIGHT edge so
+    # it crosses a fixed distance into the stamp regardless of the
+    # signature's own aspect ratio -- anchoring at a fixed x=0 left a gap
+    # whenever a (typically landscape) signature wasn't wide enough on its
+    # own to reach the right-anchored stamp.
+    sig_im = _load_scaled(sig_path, px_w * 0.85, px_h * 0.8, strip_bg=True)
+    overlap = int(stamp_im.width * 0.3)
+    sig_x0 = max(0, stamp_x0 + overlap - sig_im.width)
+    sig_y0 = max(0, (px_h - sig_im.height) // 2 - int(px_h * 0.08))
+    canvas_im.alpha_composite(sig_im, (sig_x0, sig_y0))
 
     buf = BytesIO()
     canvas_im.save(buf, format='PNG')
@@ -96,8 +177,10 @@ def _compose_signature_and_stamp(sig_path, stamp_path, box_w=170, box_h=88, rend
 
 
 class _WarrantyLetterDocTemplate(BaseDocTemplate):
-    """Doc template that draws the header logo, footer banner, and (while
-    the letter isn't yet Approved) a DRAFT watermark on every page."""
+    """Doc template that draws the header logo and footer banner on every
+    page once the letter is Approved (kept off the Draft/Pending/Rejected
+    preview so it doesn't look like a finished, letterhead-branded letter
+    before it actually is one), and a DRAFT watermark until then."""
 
     def __init__(self, buf, company='junaid', status='Draft', **kwargs):
         self._settings = WarrantyLetterSettings.get_instance(company)
@@ -110,25 +193,27 @@ class _WarrantyLetterDocTemplate(BaseDocTemplate):
     def _draw_letterhead(self, c, doc):
         c.saveState()
 
-        if self._settings.header_logo and os.path.exists(self._settings.header_logo.path):
-            logo_w, logo_h = HEADER_LOGO_BOX
-            c.drawImage(
-                self._settings.header_logo.path,
-                PAGE_W - 40 - logo_w, PAGE_H - 40 - logo_h,
-                width=logo_w, height=logo_h,
-                preserveAspectRatio=True, anchor='n', mask='auto',
-            )
+        if self._status == 'Approved':
+            if self._settings.header_logo and os.path.exists(self._settings.header_logo.path):
+                logo_w, logo_h = HEADER_LOGO_BOX
+                c.drawImage(
+                    self._settings.header_logo.path,
+                    PAGE_W - 40 - logo_w, PAGE_H - 40 - logo_h,
+                    width=logo_w, height=logo_h,
+                    preserveAspectRatio=True, anchor='n', mask='auto',
+                )
 
-        if self._settings.footer_image and os.path.exists(self._settings.footer_image.path):
-            footer_w, footer_h = FOOTER_IMAGE_BOX
-            c.drawImage(
-                self._settings.footer_image.path,
-                (PAGE_W - footer_w) / 2, 15,
-                width=footer_w, height=footer_h,
-                preserveAspectRatio=True, anchor='s', mask='auto',
-            )
-
-        if self._status != 'Approved':
+            if self._settings.footer_image and os.path.exists(self._settings.footer_image.path):
+                footer_buf, footer_w, footer_h = _prepare_footer_image(
+                    self._settings.footer_image.path, FOOTER_IMAGE_TARGET_W, FOOTER_IMAGE_MAX_H,
+                )
+                c.drawImage(
+                    ImageReader(footer_buf),
+                    (PAGE_W - footer_w) / 2, 15,
+                    width=footer_w, height=footer_h,
+                    preserveAspectRatio=True, anchor='s', mask='auto',
+                )
+        else:
             c.setFont('Helvetica-Bold', 72)
             c.setFillColor(colors.Color(0.75, 0.75, 0.75, alpha=0.35))
             c.translate(PAGE_W / 2, PAGE_H / 2)
@@ -149,7 +234,7 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
         leftMargin=50,
         rightMargin=50,
         topMargin=90,     # room for header logo
-        bottomMargin=105,  # room for footer banner
+        bottomMargin=15 + FOOTER_IMAGE_MAX_H + 10,  # room for footer banner at its tallest, plus a gap
     )
 
     style_body = ParagraphStyle('WLBody', fontSize=10, fontName='Helvetica', leading=14, spaceAfter=4)
@@ -169,12 +254,7 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
     lbl_w, col_w = 120, 10
     val_w = doc.width - lbl_w - col_w
     label_rows = [
-        row for row in (
-            _lbl_row('Project Name', letter.project),
-            _lbl_row('Client', letter.client),
-            _lbl_row('Consultant', letter.consultant),
-            _lbl_row('Main Contractor', letter.main_contractor),
-        ) if row[2].text
+        _lbl_row(label, value) for label, value in letter.ordered_project_fields() if value
     ]
     label_tbl = Table(label_rows, colWidths=[lbl_w, col_w, val_w]) if label_rows else None
     if label_tbl:
@@ -224,18 +304,23 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
     # Signature and stamp overlap into one block (signature crossing over
     # the stamp, like ink signed across an already-stamped page), sitting
     # directly above the name -- rather than sitting in separate columns.
-    has_sig = bool(letter.signature_image and os.path.exists(letter.signature_image.path))
-    has_stamp = bool(letter.stamp_image and os.path.exists(letter.stamp_image.path))
+    # Each falls back to the company-wide default so an Approved letter
+    # auto-carries a signature/stamp without a manual per-letter upload;
+    # neither is drawn before Approved, even if a default is configured.
+    sig_field = letter.effective_signature_image() if letter.status == 'Approved' else None
+    stamp_field = letter.effective_stamp_image() if letter.status == 'Approved' else None
+    has_sig = bool(sig_field and os.path.exists(sig_field.path))
+    has_stamp = bool(stamp_field and os.path.exists(stamp_field.path))
 
     sign_stamp_flowable = None
     if has_sig and has_stamp:
         sign_stamp_flowable = _compose_signature_and_stamp(
-            letter.signature_image.path, letter.stamp_image.path,
+            sig_field.path, stamp_field.path,
         )
     elif has_sig:
-        sign_stamp_flowable = _fit_image_flowable(letter.signature_image.path, 130, 50, strip_background=True)
+        sign_stamp_flowable = _fit_image_flowable(sig_field.path, 130, 50, strip_background=True)
     elif has_stamp:
-        sign_stamp_flowable = _fit_image_flowable(letter.stamp_image.path, 90, 90)
+        sign_stamp_flowable = _fit_image_flowable(stamp_field.path, 90, 90)
     if sign_stamp_flowable:
         # Image flowables default to hAlign='CENTER'; this block sits
         # directly in the page flow (not inside a table cell), so without

@@ -4,6 +4,7 @@
 {% block title %}{% if letter %}Edit{% else %}New{% endif %} Warranty Letter{% endblock %}
 
 {% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <style>
     .items-tbl { width: 100%; border-collapse: collapse; font-size: .85rem; }
     .items-tbl th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: .4rem .5rem; }
@@ -18,6 +19,9 @@
     .add-col-row { display: flex; gap: .5rem; margin-top: .6rem; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
     @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+    .term-point-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+    .term-point-row .term-bullet { color: var(--faint); font-size: 1.1rem; line-height: 1; flex-shrink: 0; width: 14px; text-align: center; }
+    .term-point-row .input-x { flex: 1; }
 </style>
 {% endblock %}
 
@@ -71,23 +75,54 @@
         <div class="card-x mb-3">
             <div class="card-x-head"><span class="ic"><i class="fas fa-file-lines"></i></span><h2>Project Details</h2></div>
             <div class="card-x-body">
-                <div class="field-x">
-                    <label class="label-x">Project Name</label>
-                    <textarea name="project" class="input-x" rows="2">{{ letter.project|default:'' }}</textarea>
+                <div class="u-muted mb-2" style="font-size:.8rem;">
+                    <i class="fas fa-info-circle"></i>
+                    Drag <i class="fas fa-grip-vertical" style="font-size:.65rem;"></i> any field — including ones you add below — to reorder them, in any position.
                 </div>
-                <div class="two-col">
-                    <div class="field-x">
-                        <label class="label-x">Client</label>
-                        <input type="text" name="client" class="input-x" value="{{ letter.client|default:'' }}">
+                <div id="titleFieldsSortable">
+                    <div class="field-x sortable-field-row" data-order-type="fixed" data-field="project">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="label-x">Project Name</label>
+                            <textarea name="project" class="input-x" rows="2">{{ letter.project|default:'' }}</textarea>
+                        </div>
                     </div>
-                    <div class="field-x">
-                        <label class="label-x">Consultant</label>
-                        <input type="text" name="consultant" class="input-x" value="{{ letter.consultant|default:'' }}">
+                    <div class="field-x sortable-field-row" data-order-type="fixed" data-field="client">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="label-x">Client</label>
+                            <input type="text" name="client" class="input-x" value="{{ letter.client|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="field-x sortable-field-row" data-order-type="fixed" data-field="consultant">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="label-x">Consultant</label>
+                            <input type="text" name="consultant" class="input-x" value="{{ letter.consultant|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="field-x sortable-field-row" data-order-type="fixed" data-field="main_contractor">
+                        <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                        <div class="sortable-field-body">
+                            <label class="label-x">Main Contractor</label>
+                            <input type="text" name="main_contractor" class="input-x" value="{{ letter.main_contractor|default:'' }}">
+                        </div>
                     </div>
                 </div>
-                <div class="field-x">
-                    <label class="label-x">Main Contractor</label>
-                    <input type="text" name="main_contractor" class="input-x" value="{{ letter.main_contractor|default:'' }}">
+
+                <div class="field-x" style="margin-top:.5rem;">
+                    <label class="label-x">Additional Fields <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+                    <div class="add-custom-bar">
+                        <input type="text" id="customFieldLabelInput" placeholder="Field name (e.g. Tender No.)">
+                        <input type="text" id="customFieldValueInput" placeholder="Value">
+                        <button type="button" class="btn-add-custom" id="btnAddCustomField">
+                            <i class="fas fa-plus"></i> Add Field
+                        </button>
+                    </div>
+                    <div class="u-muted mt-1" style="font-size:.78rem;">
+                        New fields are added to the bottom of the list above and shown on the generated letter — drag them wherever you'd like, including between existing fields.
+                    </div>
+                    <input type="hidden" name="field_order_json" id="fieldOrderJson">
                 </div>
             </div>
         </div>
@@ -139,13 +174,20 @@
         </div>
         {{ items_data|json_script:"items-data" }}
         {{ item_columns|json_script:"item-columns-data" }}
+        {{ existing_field_order|json_script:"field-order-data" }}
 
         <div class="card-x mb-3">
-            <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
+            <div class="card-x-head u-spread">
+                <div class="u-row"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
+                <button type="button" class="btn-x sm" id="addTermBtn"><i class="fas fa-plus"></i> Add Point</button>
+            </div>
             <div class="card-x-body">
                 <div class="field-x">
-                    <label class="label-x">One bullet point per line</label>
-                    <textarea name="terms_text" id="termsText" class="input-x" rows="5">{{ default_terms_text|default:'' }}</textarea>
+                    <label class="label-x">Terms — one point per row</label>
+                    <div id="termsPointsList"></div>
+                    <div class="u-muted mt-1" style="font-size:.78rem;">
+                        Whatever you save here becomes the starting default for this company's next new warranty letter.
+                    </div>
                 </div>
             </div>
         </div>
@@ -179,6 +221,7 @@
 {% block extra_js %}
 <script>
     const DEFAULT_INTRO_TEMPLATE = "{{ default_intro_template|default:''|escapejs }}";
+    const EXISTING_TERMS_TEXT = "{{ default_terms_text|default:''|escapejs }}";
     const EXISTING_ITEMS = JSON.parse(document.getElementById('items-data').textContent);
 
     // ── Items table — tick/untick the given columns, or add new ones ────
@@ -209,6 +252,139 @@
 
     function escapeAttr(v) { return (v || '').replace(/"/g, '&quot;'); }
     function escapeHtml(v) { const d = document.createElement('div'); d.textContent = v || ''; return d.innerHTML; }
+
+    // ── Warranty Terms — add/remove points, persisted as one line each ──
+    const termsPointsList = document.getElementById('termsPointsList');
+
+    function addTermRow(text) {
+        const row = document.createElement('div');
+        row.className = 'term-point-row';
+        row.innerHTML = `
+            <span class="term-bullet">•</span>
+            <input type="text" class="input-x" value="${escapeAttr(text || '')}">
+            <button type="button" class="row-remove" title="Remove point"><i class="fas fa-trash"></i></button>
+        `;
+        row.querySelector('.row-remove').addEventListener('click', () => row.remove());
+        termsPointsList.appendChild(row);
+    }
+
+    const initialTermLines = EXISTING_TERMS_TEXT.split('\n').map(l => l.trim()).filter(Boolean);
+    if (initialTermLines.length) {
+        initialTermLines.forEach(addTermRow);
+    } else {
+        addTermRow('');
+    }
+
+    document.getElementById('addTermBtn').addEventListener('click', () => {
+        addTermRow('');
+        termsPointsList.lastElementChild.querySelector('input').focus();
+    });
+
+    function collectTermsText() {
+        const lines = [];
+        termsPointsList.querySelectorAll('.term-point-row input').forEach(inp => {
+            const v = inp.value.trim();
+            if (v) lines.push(v);
+        });
+        return lines.join('\n');
+    }
+
+    // ── Project-details field order (fixed + custom, freely interleaved) ──
+    // Drags real DOM nodes directly rather than a JS-array-driven re-render,
+    // since the fixed fields are live form inputs.
+    const EXISTING_FIELD_ORDER = JSON.parse(document.getElementById('field-order-data').textContent) || [];
+
+    function createCustomFieldRow(label, value) {
+        const row = document.createElement('div');
+        row.className = 'field-x sortable-field-row custom-field-row';
+        row.dataset.orderType = 'custom';
+        row.dataset.label = label;
+        row.dataset.value = value;
+        row.innerHTML = `
+            <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+            <div class="sortable-field-body">
+                <span class="custom-field-text">${escapeHtml(label)}: ${escapeHtml(value)}</span>
+                <button type="button" class="btn-remove-field" title="Remove"><i class="fas fa-times"></i></button>
+            </div>
+        `;
+        row.querySelector('.btn-remove-field').addEventListener('click', () => {
+            row.remove();
+            serializeFieldOrder();
+        });
+        return row;
+    }
+
+    function serializeFieldOrder() {
+        const container = document.getElementById('titleFieldsSortable');
+        const order = [];
+        container.querySelectorAll(':scope > .sortable-field-row').forEach(row => {
+            if (row.dataset.orderType === 'fixed') {
+                order.push({ type: 'fixed', key: row.dataset.field });
+            } else if (row.dataset.orderType === 'custom') {
+                order.push({ type: 'custom', label: row.dataset.label, value: row.dataset.value });
+            }
+        });
+        document.getElementById('fieldOrderJson').value = JSON.stringify(order);
+    }
+
+    (function applyExistingFieldOrder() {
+        const container = document.getElementById('titleFieldsSortable');
+        if (!container || !EXISTING_FIELD_ORDER.length) { serializeFieldOrder(); return; }
+
+        const fixedNodes = {};
+        container.querySelectorAll(':scope > [data-order-type="fixed"]').forEach(row => {
+            fixedNodes[row.dataset.field] = row;
+        });
+
+        const usedKeys = new Set();
+        const fragment = document.createDocumentFragment();
+        EXISTING_FIELD_ORDER.forEach(entry => {
+            if (!entry) return;
+            if (entry.type === 'fixed' && fixedNodes[entry.key]) {
+                fragment.appendChild(fixedNodes[entry.key]);
+                usedKeys.add(entry.key);
+            } else if (entry.type === 'custom' && entry.label && entry.value) {
+                fragment.appendChild(createCustomFieldRow(entry.label, entry.value));
+            }
+        });
+        // A fixed field missing from the saved order (e.g. the form gained
+        // one after this letter was last saved) must still show up.
+        Object.keys(fixedNodes).forEach(key => {
+            if (!usedKeys.has(key)) fragment.appendChild(fixedNodes[key]);
+        });
+
+        container.innerHTML = '';
+        container.appendChild(fragment);
+        serializeFieldOrder();
+    })();
+
+    Sortable.create(document.getElementById('titleFieldsSortable'), {
+        handle: '.drag-handle-field',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: serializeFieldOrder,
+    });
+
+    document.getElementById('btnAddCustomField').addEventListener('click', () => {
+        const labelInput = document.getElementById('customFieldLabelInput');
+        const valueInput = document.getElementById('customFieldValueInput');
+        const label = labelInput.value.trim();
+        const value = valueInput.value.trim();
+        if (!label || !value) { (label ? valueInput : labelInput).focus(); return; }
+        document.getElementById('titleFieldsSortable').appendChild(createCustomFieldRow(label, value));
+        labelInput.value = '';
+        valueInput.value = '';
+        serializeFieldOrder();
+        labelInput.focus();
+    });
+
+    document.getElementById('customFieldValueInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddCustomField').click(); }
+    });
+    document.getElementById('customFieldLabelInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('customFieldValueInput').focus(); }
+    });
 
     function slugifyKey(label) {
         const existing = ALL_COLUMNS.map(c => c.key);
@@ -354,6 +530,7 @@
         const fd = new FormData(form);
         fd.set('items_json', collectItemsJson());
         fd.set('columns_json', collectColumnsJson());
+        fd.set('terms_text', collectTermsText());
         if (submitNow) fd.set('submit_now', '1');
 
         const originalHtml = btn.innerHTML;

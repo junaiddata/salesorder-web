@@ -61,3 +61,52 @@
 }
 .confirm-dialog-icon.warn { background: var(--warn-50); color: var(--warn-700); box-shadow: 0 0 0 6px color-mix(in srgb, var(--warn) 8%, transparent); }
 .confirm-dialog-icon.primary { background: var(--primary-50); color: var(--primary); box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 8%, transparent); }
+
+/* =====================================================================
+   Project-details field reordering (fixed + custom, freely interleaved)
+   ===================================================================== */
+.sortable-field-row {
+    display: flex; align-items: flex-start; gap: .5rem;
+    border-radius: var(--r-lg); padding: .4rem .5rem; margin: 0 -.5rem 1rem;
+    transition: background var(--ease);
+}
+.sortable-field-row:hover { background: var(--surface-alt); }
+.sortable-field-row.sortable-ghost { opacity: .35; background: var(--primary-100); }
+.sortable-field-row.sortable-chosen { background: var(--primary-50); box-shadow: 0 2px 12px rgba(26,86,219,.15); z-index: 10; }
+.sortable-field-row:last-child { margin-bottom: 0; }
+
+.drag-handle-field {
+    color: var(--faint); cursor: grab; font-size: .9rem;
+    padding: .7rem .15rem 0 .15rem; flex-shrink: 0; transition: color var(--ease);
+}
+.drag-handle-field:hover { color: var(--primary); }
+.drag-handle-field:active { cursor: grabbing; }
+
+.sortable-field-body { flex: 1; min-width: 0; }
+
+.custom-field-row { border: 1.5px dashed #c4b5fd; background: #faf5ff; }
+.custom-field-row .sortable-field-body {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .5rem; padding: .4rem 0;
+}
+.custom-field-text { font-size: .85rem; font-weight: 600; color: #6d28d9; }
+.btn-remove-field {
+    background: none; border: none; cursor: pointer; font-size: .78rem;
+    padding: 4px 6px; border-radius: 5px; color: var(--faint); flex-shrink: 0;
+    transition: all var(--ease);
+}
+.btn-remove-field:hover { color: var(--danger); background: var(--danger-50); }
+
+.add-custom-bar { display: flex; gap: .5rem; margin-top: 1rem; flex-wrap: wrap; }
+.add-custom-bar input {
+    flex: 1; min-width: 140px; padding: .6rem .85rem; border: 2px solid var(--line);
+    border-radius: var(--r-lg); font-size: .85rem; font-family: inherit;
+    outline: none; transition: border-color var(--ease);
+}
+.add-custom-bar input:focus { border-color: var(--primary-300); }
+.btn-add-custom {
+    background: var(--primary); color: #fff; border: none; border-radius: var(--r-lg);
+    padding: .6rem 1.25rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: all var(--ease); display: flex; align-items: center; gap: .4rem;
+}
+.btn-add-custom:hover { background: var(--primary-700); transform: translateY(-1px); }

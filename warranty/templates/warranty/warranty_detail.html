@@ -122,19 +122,24 @@
     <div class="card-x mb-3">
         <div class="card-x-head u-spread">
             <div class="u-row"><span class="ic"><i class="fas fa-stamp"></i></span><h2>Signature &amp; Stamp</h2></div>
-            <button type="button" class="btn-x sm btn-primary-x" data-bs-toggle="modal" data-bs-target="#signStampModal"><i class="fas fa-pen-nib"></i> Attach</button>
+            <button type="button" class="btn-x sm btn-primary-x" data-bs-toggle="modal" data-bs-target="#signStampModal"><i class="fas fa-pen-nib"></i> Override</button>
         </div>
         <div class="card-x-body u-row" style="gap:1.5rem;flex-wrap:wrap;">
             <div>
                 <div class="label-x">Signature</div>
-                {% if letter.signature_image %}<img src="{{ letter.signature_image.url }}" class="sign-preview" alt="Signature">
-                {% else %}<span class="u-muted">Not attached</span>{% endif %}
+                {% if effective_signature_url %}<img src="{{ effective_signature_url }}" class="sign-preview" alt="Signature">
+                    {% if not letter.signature_image %}<div class="u-muted mt-1" style="font-size:.75rem;">Using company default</div>{% endif %}
+                {% else %}<span class="u-muted">Not set</span>{% endif %}
             </div>
             <div>
                 <div class="label-x">Stamp</div>
-                {% if letter.stamp_image %}<img src="{{ letter.stamp_image.url }}" class="sign-preview" alt="Stamp">
-                {% else %}<span class="u-muted">Not attached</span>{% endif %}
+                {% if effective_stamp_url %}<img src="{{ effective_stamp_url }}" class="sign-preview" alt="Stamp">
+                    {% if not letter.stamp_image %}<div class="u-muted mt-1" style="font-size:.75rem;">Using company default</div>{% endif %}
+                {% else %}<span class="u-muted">Not set</span>{% endif %}
             </div>
+        </div>
+        <div class="card-x-body u-muted" style="font-size:.8rem;padding-top:0;">
+            Auto-attached to the PDF from the company's default signature/stamp (set in Admin → Warranty Letter Settings). Use Override above to attach a different one for just this letter.
         </div>
     </div>
     {% endif %}
@@ -145,10 +150,9 @@
             <div class="detail-row"><span class="detail-label">Company</span><span class="detail-value">{{ letter.get_company_display }}</span></div>
             <div class="detail-row"><span class="detail-label">Ref No</span><span class="detail-value">{{ letter.ref_no|default:"—" }}</span></div>
             <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">{{ letter.letter_date|date:"d M Y" }}</span></div>
-            <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">{{ letter.project|default:"—" }}</span></div>
-            <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value">{{ letter.client|default:"—" }}</span></div>
-            <div class="detail-row"><span class="detail-label">Consultant</span><span class="detail-value">{{ letter.consultant|default:"—" }}</span></div>
-            <div class="detail-row"><span class="detail-label">Main Contractor</span><span class="detail-value">{{ letter.main_contractor|default:"—" }}</span></div>
+            {% for field_label, field_value in letter.ordered_project_fields %}
+            <div class="detail-row"><span class="detail-label">{{ field_label }}</span><span class="detail-value">{{ field_value|default:"—" }}</span></div>
+            {% endfor %}
             <div class="detail-row"><span class="detail-label">Brand</span><span class="detail-value">{{ letter.brand|default:"—" }}</span></div>
             <div class="detail-row"><span class="detail-label">ISO Standard</span><span class="detail-value">{{ letter.iso_standard|default:"—" }}</span></div>
             <div class="detail-row"><span class="detail-label">Intro Text</span><span class="detail-value">{{ letter.intro_text|default:"—" }}</span></div>

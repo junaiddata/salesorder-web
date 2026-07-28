@@ -8,7 +8,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings, default_item_columns
+from .models import (
+    WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings, default_item_columns,
+    FIXED_FIELD_KEYS,
+)
 from .pdf_builder import build_warranty_letter_pdf
 from . import services
 
@@ -44,6 +47,7 @@ def warranty_form(request, pk=None):
     letter_settings = WarrantyLetterSettings.get_instance(company)
     items_data = [it.data for it in (letter.items.all() if letter else [])]
     item_columns = (letter.item_columns if letter else None) or default_item_columns()
+    existing_field_order = (letter.field_order if letter else None) or []
 
     if not letter:
         # Prefill editable defaults for a brand-new letter.
@@ -60,6 +64,7 @@ def warranty_form(request, pk=None):
         'company': company,
         'items_data': items_data,
         'item_columns': item_columns,
+        'existing_field_order': existing_field_order,
         'default_signatory_name': default_signatory_name,
         'default_signatory_title': default_signatory_title,
         'default_terms_text': default_terms_text,
@@ -92,11 +97,46 @@ def warranty_save(request):
     letter.consultant = request.POST.get('consultant', '').strip()
     letter.main_contractor = request.POST.get('main_contractor', '').strip()
 
+    field_order_json = request.POST.get('field_order_json', '')
+    if field_order_json:
+        try:
+            field_order = json.loads(field_order_json)
+        except (ValueError, TypeError):
+            field_order = []
+        cleaned = []
+        for entry in field_order:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get('type') == 'fixed' and entry.get('key') in FIXED_FIELD_KEYS:
+                cleaned.append({'type': 'fixed', 'key': entry['key']})
+            elif entry.get('type') == 'custom':
+                label = (entry.get('label') or '').strip()
+                value = (entry.get('value') or '').strip()
+                if label and value:
+                    cleaned.append({'type': 'custom', 'label': label, 'value': value})
+        letter.field_order = cleaned
+    else:
+        letter.field_order = []
+
     letter.brand = request.POST.get('brand', '').strip()
     letter.iso_standard = request.POST.get('iso_standard', '').strip()
     letter.intro_text = request.POST.get('intro_text', '').strip()
 
     letter.terms_text = request.POST.get('terms_text', '').strip()
+    if letter.terms_text:
+        # Grow (never shrink) this company's remembered term points: append
+        # any newly-typed points that aren't in the master list yet, but
+        # keep every point the master already has even if this particular
+        # letter no longer includes it -- removing a point while drafting
+        # one letter must not erase it from what future new letters start
+        # pre-filled with.
+        terms_settings = WarrantyLetterSettings.get_instance(letter.company)
+        master_lines = [ln.strip() for ln in (terms_settings.default_terms_text or '').splitlines() if ln.strip()]
+        letter_lines = [ln.strip() for ln in letter.terms_text.splitlines() if ln.strip()]
+        new_lines = [ln for ln in letter_lines if ln not in master_lines]
+        if new_lines:
+            terms_settings.default_terms_text = '\n'.join(master_lines + new_lines)
+            terms_settings.save(update_fields=['default_terms_text'])
 
     letter.signatory_name = request.POST.get('signatory_name', '').strip()
     letter.signatory_title = request.POST.get('signatory_title', '').strip()
@@ -164,10 +204,14 @@ def warranty_save(request):
 @login_required
 def warranty_detail(request, pk):
     letter = get_object_or_404(WarrantyLetter, pk=pk)
+    sig_field = letter.effective_signature_image()
+    stamp_field = letter.effective_stamp_image()
     return render(request, 'warranty/warranty_detail.html', {
         'letter': letter,
         'items': letter.items.all(),
         'is_manager': _is_manager(request.user),
+        'effective_signature_url': sig_field.url if sig_field else '',
+        'effective_stamp_url': stamp_field.url if stamp_field else '',
     })
 
 
@@ -329,14 +373,23 @@ def warranty_generate_pdf(request, pk):
     ref_part = (letter.ref_no or str(letter.pk)).replace('/', '-')
     filename_dl = f"Warranty_{ref_part}.pdf"
 
+    def _no_cache(response):
+        # Browsers/PDF viewers happily cache a GET by URL; since the same
+        # preview/download URL can point at different bytes over time (the
+        # letter was edited, or the PDF layout logic changed), force a
+        # fresh fetch every time instead of silently showing stale content.
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        return response
+
     if not force_regenerate and letter.generated_pdf and letter.generated_pdf.name:
         try:
-            return FileResponse(
+            return _no_cache(FileResponse(
                 letter.generated_pdf.open('rb'),
                 content_type='application/pdf',
                 as_attachment=not inline,
                 filename=filename_dl,
-            )
+            ))
         except Exception:
             pass
 
@@ -344,24 +397,24 @@ def warranty_generate_pdf(request, pk):
     pdf_buf.seek(0)
 
     if inline:
-        return FileResponse(
+        return _no_cache(FileResponse(
             pdf_buf,
             content_type='application/pdf',
             as_attachment=False,
             filename=filename_dl,
-        )
+        ))
 
     stored_name = f"warranty_{letter.pk}.pdf"
     letter.generated_pdf.save(stored_name, ContentFile(pdf_buf.read()), save=True)
     letter.pdf_generated_at = timezone.now()
     letter.save(update_fields=['pdf_generated_at'])
 
-    return FileResponse(
+    return _no_cache(FileResponse(
         letter.generated_pdf.open('rb'),
         content_type='application/pdf',
         as_attachment=True,
         filename=filename_dl,
-    )
+    ))
 
 
 @login_required

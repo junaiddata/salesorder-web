@@ -33,6 +33,16 @@ def default_item_columns():
     ]
 
 
+# The project-details fields that are always present as real model fields
+# (as opposed to user-added custom fields, stored inline in field_order),
+# same "fixed" vs "custom" split used by submittal.Submittal.field_order.
+FIXED_FIELD_KEYS = ['project', 'client', 'consultant', 'main_contractor']
+FIXED_FIELD_LABELS = {
+    'project': 'Project Name', 'client': 'Client',
+    'consultant': 'Consultant', 'main_contractor': 'Main Contractor',
+}
+
+
 class WarrantyLetterSettings(models.Model):
     """
     One row per company (junaid/alabama). Admin-configurable letterhead
@@ -62,6 +72,16 @@ class WarrantyLetterSettings(models.Model):
     )
     default_signatory_name = models.CharField(max_length=255, blank=True, default='')
     default_signatory_title = models.CharField(max_length=255, blank=True, default='')
+    default_signature_image = models.ImageField(
+        upload_to=warranty_settings_asset_path, blank=True, null=True,
+        help_text="Auto-attached to every Approved letter's PDF that doesn't have its own "
+                  "signature image (set via the letter's Signature & Stamp panel)."
+    )
+    default_stamp_image = models.ImageField(
+        upload_to=warranty_settings_asset_path, blank=True, null=True,
+        help_text="Auto-attached to every Approved letter's PDF that doesn't have its own "
+                  "stamp image (set via the letter's Signature & Stamp panel)."
+    )
     default_intro_template = models.TextField(
         blank=True, default='',
         help_text="Copied into every new letter's editable Intro Text. "
@@ -110,6 +130,13 @@ class WarrantyLetter(models.Model):
     client = models.CharField(max_length=255, blank=True, default='')
     consultant = models.CharField(max_length=255, blank=True, default='')
     main_contractor = models.CharField(max_length=255, blank=True, default='')
+    field_order = models.JSONField(
+        default=list, blank=True,
+        help_text="Order (and any custom additions) of the project-details block shown on "
+                  "the generated letter: [{'type': 'fixed', 'key': 'project'}, "
+                  "{'type': 'custom', 'label': ..., 'value': ...}, ...]. "
+                  "Empty = default fixed order (project, client, consultant, main_contractor)."
+    )
 
     brand = models.CharField(
         max_length=255, blank=True, default='',
@@ -179,6 +206,43 @@ class WarrantyLetter(models.Model):
             self.generated_pdf.delete(save=False)
         self.generated_pdf = None
         self.pdf_generated_at = None
+
+    def effective_signature_image(self):
+        """This letter's own signature if one was attached, else the
+        company-wide default -- so an Approved letter auto-carries a
+        signature without requiring a manual per-letter upload."""
+        if self.signature_image:
+            return self.signature_image
+        return WarrantyLetterSettings.get_instance(self.company).default_signature_image or None
+
+    def effective_stamp_image(self):
+        if self.stamp_image:
+            return self.stamp_image
+        return WarrantyLetterSettings.get_instance(self.company).default_stamp_image or None
+
+    def ordered_project_fields(self):
+        """Build the ordered (label, value) list for the project-details
+        block shown on the generated letter and the detail page, honoring
+        field_order which may interleave user-added custom fields anywhere
+        among the fixed ones rather than only appending them at the end."""
+        order = self.field_order or []
+        if not order:
+            return [(FIXED_FIELD_LABELS[k], getattr(self, k, '') or '') for k in FIXED_FIELD_KEYS]
+
+        result = []
+        for entry in order:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get('type') == 'fixed':
+                key = entry.get('key')
+                if key in FIXED_FIELD_LABELS:
+                    result.append((FIXED_FIELD_LABELS[key], getattr(self, key, '') or ''))
+            elif entry.get('type') == 'custom':
+                label = (entry.get('label') or '').strip()
+                value = (entry.get('value') or '').strip()
+                if label and value:
+                    result.append((label, value))
+        return result
 
 
 class WarrantyLetterItem(models.Model):
