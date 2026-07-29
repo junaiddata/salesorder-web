@@ -29,7 +29,7 @@ from .models import WarrantyLetterSettings, default_item_columns
 
 PAGE_W, PAGE_H = A4
 
-HEADER_LOGO_BOX = (160, 55)   # (max width, max height)
+HEADER_LOGO_BOX = (260, 100)   # (max width, max height)
 FOOTER_IMAGE_TARGET_W = PAGE_W   # bleed fully edge-to-edge across the page width
 FOOTER_IMAGE_MAX_H = 110              # cap so a very tall banner can't eat into body content
 
@@ -233,7 +233,7 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
         pagesize=A4,
         leftMargin=50,
         rightMargin=50,
-        topMargin=90,     # room for header logo
+        topMargin=135,     # room for header logo
         bottomMargin=15 + FOOTER_IMAGE_MAX_H + 10,  # room for footer banner at its tallest, plus a gap
     )
 
