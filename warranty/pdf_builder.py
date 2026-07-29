@@ -30,7 +30,7 @@ from .models import WarrantyLetterSettings, default_item_columns
 PAGE_W, PAGE_H = A4
 
 HEADER_LOGO_BOX = (160, 55)   # (max width, max height)
-FOOTER_IMAGE_TARGET_W = PAGE_W - 60   # span (almost) the full page width
+FOOTER_IMAGE_TARGET_W = PAGE_W   # bleed fully edge-to-edge across the page width
 FOOTER_IMAGE_MAX_H = 110              # cap so a very tall banner can't eat into body content
 
 
