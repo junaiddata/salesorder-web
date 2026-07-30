@@ -40,6 +40,32 @@ def create_quotation(request):
             license_name = request.POST.get('license_name', 'JUNAID_MAIN').strip()
 
             # -------------------------
+            # 0b. Discount (percentage OR fixed amount — mutually exclusive)
+            # -------------------------
+            discount_type = (request.POST.get('discount_type') or '').strip().upper()
+            discount_value_raw = (request.POST.get('discount_value') or '').strip()
+
+            if discount_type not in ('PERCENT', 'AMOUNT'):
+                discount_type = None
+                discount_value = 0.0
+            else:
+                try:
+                    discount_value = float(discount_value_raw) if discount_value_raw else 0.0
+                except ValueError:
+                    messages.error(request, 'Invalid discount value.')
+                    return redirect('create_quotation')
+
+                if discount_value < 0:
+                    messages.error(request, 'Discount value cannot be negative.')
+                    return redirect('create_quotation')
+                if discount_type == 'PERCENT' and discount_value > 100:
+                    messages.error(request, 'Discount percentage cannot exceed 100%.')
+                    return redirect('create_quotation')
+                if discount_value == 0:
+                    # Nothing actually applied — treat as no discount.
+                    discount_type = None
+
+            # -------------------------
             # 1. Customer handling
             # -------------------------
             customer_id = request.POST.get('customer')
@@ -84,7 +110,10 @@ def create_quotation(request):
                 division=division,
                 remarks=remarks,
                 license_name=license_name,
-                customer_display_name=customer_display_name if customer_display_name else None
+                customer_display_name=customer_display_name if customer_display_name else None,
+                discount_type=discount_type,
+                discount_value=discount_value,
+                discount_approval_status='PENDING' if discount_type else 'NOT_REQUIRED',
             )
 
             # -------------------------
@@ -175,6 +204,17 @@ def create_quotation(request):
                     messages.error(request, f'Invalid data for item {i+1}: {str(e)}')
                     return redirect('create_quotation')
 
+            # Resolve discount against the subtotal (percentage OR fixed amount)
+            if discount_type == 'PERCENT':
+                discount_amount = total_amount * (discount_value / 100)
+            elif discount_type == 'AMOUNT':
+                if discount_value > total_amount:
+                    messages.error(request, 'Discount amount cannot exceed the quotation subtotal.')
+                    return redirect('create_quotation')
+                discount_amount = discount_value
+            else:
+                discount_amount = 0.0
+
             # Bulk insert quotation items
             QuotationItem.objects.bulk_create(quotation_items)
 
@@ -188,10 +228,14 @@ def create_quotation(request):
 
             # Save totals
             quotation.total_amount = total_amount
-            quotation.grand_total = total_amount # Add Tax logic here if needed
+            quotation.discount_amount = discount_amount
+            quotation.grand_total = total_amount - discount_amount # Add Tax logic here if needed
             quotation.save()
 
-            messages.success(request, f'Quotation {quotation.quotation_number} created successfully!')
+            if discount_type:
+                messages.success(request, f'Quotation {quotation.quotation_number} created successfully! Discount applied — awaiting manager approval.')
+            else:
+                messages.success(request, f'Quotation {quotation.quotation_number} created successfully!')
             return redirect('view_quotations')
 
         except Exception as e:
@@ -1420,13 +1464,35 @@ def view_quotation_details(request, quotation_id):
         total_margin = grand_total - total_cost
         margin_percent = (total_margin / grand_total * 100) if grand_total else 0.0
 
-    # Grand total with 5% VAT
-    vat_rate = 0.05
-    vat_amount = round(grand_total * vat_rate, 2)
-    grand_total_with_vat = round(grand_total + vat_amount, 2)
+    # Discount (percentage OR fixed amount), resolved live against the current item subtotal.
+    # Independent of the undercost-based `status` below — tracked via discount_approval_status.
+    if quotation.discount_type == 'PERCENT':
+        discount_amount = grand_total * (quotation.discount_value / 100)
+    elif quotation.discount_type == 'AMOUNT':
+        discount_amount = min(quotation.discount_value, grand_total)
+    else:
+        discount_amount = 0.0
 
-    # 🔹 Automatic approval if no undercost items
-    if not has_undercost_items and quotation.status != 'Approved':
+    if quotation.discount_amount != discount_amount:
+        quotation.discount_amount = discount_amount
+        quotation.save(update_fields=['discount_amount'])
+
+    net_after_discount = grand_total - discount_amount
+
+    # Grand total with 5% VAT (applied after discount)
+    vat_rate = 0.05
+    vat_amount = round(net_after_discount * vat_rate, 2)
+    grand_total_with_vat = round(net_after_discount + vat_amount, 2)
+
+    discount_pending = quotation.discount_approval_status == 'PENDING'
+    can_proceed = (quotation.status == 'Approved') and quotation.discount_approval_status in ('NOT_REQUIRED', 'APPROVED')
+
+    # A discount that hasn't been cleared by a manager pauses the automatic undercost approval below.
+    # Once a discount is approved (or there was never one), auto-approval behaves exactly as before.
+    discount_unresolved = bool(quotation.discount_type) and quotation.discount_approval_status in ('PENDING', 'REJECTED')
+
+    # 🔹 Automatic approval if no undercost items (suppressed while a discount is unresolved)
+    if not discount_unresolved and not has_undercost_items and quotation.status != 'Approved':
         quotation.status = 'Approved'
         quotation.save()
         messages.success(request, "Quotation auto-approved as all prices are above minimum selling price.")
@@ -1469,6 +1535,38 @@ def view_quotation_details(request, quotation_id):
                 messages.success(request, 'License name updated. The new name will appear on the next PDF export.')
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
+        elif action == 'approve_discount' and _is_manager_account(request.user):
+            quotation.discount_approval_status = 'APPROVED'
+            update_fields = ['discount_approval_status']
+
+            # Cascade: approving the discount is the only thing that was pausing auto-approval —
+            # if pricing is otherwise clean, auto-apply full approval in this same click.
+            if not has_undercost_items:
+                quotation.status = 'Approved'
+                update_fields.append('status')
+                messages.success(request, 'Discount approved — quotation auto-approved since all prices are above minimum selling price.')
+            else:
+                messages.success(request, 'Discount approved. Note: one or more items are still priced below cost, so the quotation itself still needs separate approval.')
+
+            quotation.save(update_fields=update_fields)
+            QuotationLog.objects.create(
+                quotation=quotation,
+                user=request.user if request.user.is_authenticated else None,
+                action="discount_approved",
+            )
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
+        elif action == 'reject_discount' and _is_manager_account(request.user):
+            quotation.discount_approval_status = 'REJECTED'
+            quotation.save(update_fields=['discount_approval_status'])
+            QuotationLog.objects.create(
+                quotation=quotation,
+                user=request.user if request.user.is_authenticated else None,
+                action="discount_rejected",
+            )
+            messages.warning(request, 'Discount rejected. Edit the quotation to adjust or remove the discount.')
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
         elif action == 'manager_change_division' and _is_manager_account(request.user):
             new_div = (request.POST.get('division') or '').strip().upper()
             if new_div not in ('JUNAID', 'ALABAMA'):
@@ -1489,6 +1587,10 @@ def view_quotation_details(request, quotation_id):
         "quotation": quotation,
         "quotation_items": quotation_items,
         "grand_total": grand_total,
+        "discount_amount": discount_amount,
+        "net_after_discount": net_after_discount,
+        "discount_pending": discount_pending,
+        "can_proceed": can_proceed,
         "vat_amount": vat_amount,
         "grand_total_with_vat": grand_total_with_vat,
         "has_undercost_items": has_undercost_items,
@@ -1518,9 +1620,17 @@ def convert_quotation_to_sales_order(request, quotation_id):
             f'This quotation has already been converted to Sales Order {quotation.converted_to_sales_order.order_number}.'
         )
         return redirect('view_sales_order_details', order_id=quotation.converted_to_sales_order.id)
-    
+
+    # Must clear BOTH gates: undercost-based `status` and, independently, any discount approval.
+    if quotation.status != 'Approved':
+        messages.error(request, 'Quotation must be approved before it can be converted to a sales order.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+    if quotation.discount_approval_status not in ('NOT_REQUIRED', 'APPROVED'):
+        messages.error(request, 'This quotation has a discount pending manager approval. It must be approved (or removed) before converting to a sales order.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
     quotation_items = quotation.items.all()
-    
+
     # Validate that quotation has items
     if not quotation_items.exists():
         messages.error(request, 'Cannot convert quotation with no items.')
@@ -1589,10 +1699,11 @@ def convert_quotation_to_sales_order(request, quotation_id):
                     defaults={'custom_price': price}
                 )
             
-            # Calculate totals
-            tax = round(0.05 * total_amount, 2)
+            # Calculate totals (carry over the approved quotation discount, if any)
+            net_amount = max(total_amount - quotation.discount_amount, 0.0)
+            tax = round(0.05 * net_amount, 2)
             sales_order.tax = tax
-            sales_order.total_amount = total_amount
+            sales_order.total_amount = net_amount
             sales_order.save()
             
             # Mark quotation as converted
@@ -1635,6 +1746,34 @@ def edit_quotation(request, quotation_id):
         quotation.salesman = salesman
         quotation.customer_display_name = customer_display_name if customer_display_name else None
         quotation.remarks = request.POST.get('remarks', '').strip() or None
+
+        # Discount (percentage OR fixed amount — mutually exclusive)
+        discount_type = (request.POST.get('discount_type') or '').strip().upper()
+        discount_value_raw = (request.POST.get('discount_value') or '').strip()
+
+        if discount_type not in ('PERCENT', 'AMOUNT'):
+            discount_type = None
+            discount_value = 0.0
+        else:
+            try:
+                discount_value = float(discount_value_raw) if discount_value_raw else 0.0
+            except ValueError:
+                messages.error(request, 'Invalid discount value.')
+                return redirect('edit_quotation', quotation_id=quotation.id)
+
+            if discount_value < 0:
+                messages.error(request, 'Discount value cannot be negative.')
+                return redirect('edit_quotation', quotation_id=quotation.id)
+            if discount_type == 'PERCENT' and discount_value > 100:
+                messages.error(request, 'Discount percentage cannot exceed 100%.')
+                return redirect('edit_quotation', quotation_id=quotation.id)
+            if discount_value == 0:
+                discount_type = None
+
+        discount_changed = (
+            discount_type != quotation.discount_type
+            or discount_value != quotation.discount_value
+        )
 
         # Get new items from POST
         item_ids = request.POST.getlist('item')  # dropdown selection
@@ -1692,19 +1831,50 @@ def edit_quotation(request, quotation_id):
 
         # Only proceed if we have valid items
         if quotation_items:
+            # Recalculate totals
+            total = sum(qi.line_total for qi in quotation_items)
+
+            # Resolve discount against the subtotal (before any destructive writes)
+            if discount_type == 'PERCENT':
+                discount_amount = total * (discount_value / 100)
+            elif discount_type == 'AMOUNT':
+                if discount_value > total:
+                    messages.error(request, 'Discount amount cannot exceed the quotation subtotal.')
+                    return redirect('edit_quotation', quotation_id=quotation.id)
+                discount_amount = discount_value
+            else:
+                discount_amount = 0.0
+
             # Remove old items
             quotation.items.all().delete()
-            
+
             # Bulk create new items
             QuotationItem.objects.bulk_create(quotation_items)
 
-            # Recalculate totals
-            total = sum(qi.line_total for qi in quotation_items)
             quotation.total_amount = total
-            quotation.grand_total = total
-            
-            # 🔥 Update status based on undercost items
-            if has_undercost_items:
+            quotation.discount_type = discount_type
+            quotation.discount_value = discount_value
+            quotation.discount_amount = discount_amount
+            quotation.grand_total = total - discount_amount
+
+            # Any change to the discount re-opens it for manager review (leaves a previously
+            # approved, unchanged discount alone).
+            if discount_changed:
+                quotation.discount_approval_status = 'PENDING' if discount_type else 'NOT_REQUIRED'
+
+            # A discount that hasn't been cleared by a manager pauses auto-approval below,
+            # regardless of undercost. Once approved (or there's no discount), the normal
+            # undercost-only logic decides `status` exactly as it always has.
+            discount_unresolved = bool(discount_type) and quotation.discount_approval_status in ('PENDING', 'REJECTED')
+
+            # 🔥 Update status based on undercost items (suppressed while discount is unresolved)
+            if discount_unresolved:
+                quotation.status = 'Pending'
+                if has_undercost_items:
+                    status_message = 'Quotation updated! Discount awaiting manager approval, and one or more items are undercost.'
+                else:
+                    status_message = 'Quotation updated! Discount awaiting manager approval — quotation will auto-approve once the discount is approved.'
+            elif has_undercost_items:
                 quotation.status = 'Pending'
                 status_message = 'Quotation updated! Status changed to Pending due to undercost items.'
             else:
@@ -1949,7 +2119,11 @@ class QuotationPDFTemplate(BaseDocTemplate):
 # ==========================================
 def export_quotation_to_pdf(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
-    
+
+    if quotation.discount_approval_status not in ('NOT_REQUIRED', 'APPROVED'):
+        messages.error(request, 'This quotation has a discount pending manager approval and cannot be exported yet.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
     # Setup Response
     response = HttpResponse(content_type='application/pdf')
     filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"
@@ -1976,6 +2150,11 @@ def export_quotation_to_excel(request, quotation_id):
     from openpyxl.utils import get_column_letter
 
     quotation = get_object_or_404(Quotation, id=quotation_id)
+
+    if quotation.discount_approval_status not in ('NOT_REQUIRED', 'APPROVED'):
+        messages.error(request, 'This quotation has a discount pending manager approval and cannot be exported yet.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
     quotation_items = quotation.items.select_related('item').all()
 
     wb = openpyxl.Workbook()

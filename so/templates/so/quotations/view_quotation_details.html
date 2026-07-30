@@ -618,9 +618,54 @@
                             AED {{ grand_total_with_vat|floatformat:2 }}
                         </span>
                     </div>
+                    {% if quotation.discount_type %}
+                    <div class="info-item">
+                        <span class="info-label">Discount</span>
+                        <span class="info-value">
+                            {% if quotation.discount_type == 'PERCENT' %}{{ quotation.discount_value|floatformat:2 }}%{% else %}AED {{ quotation.discount_value|floatformat:2 }}{% endif %}
+                            (AED {{ discount_amount|floatformat:2 }})
+                        </span>
+                        <span class="status-badge {% if quotation.discount_approval_status == 'APPROVED' %}success{% elif quotation.discount_approval_status == 'REJECTED' %}warning{% else %}info{% endif %}" style="width: fit-content;">
+                            {{ quotation.get_discount_approval_status_display }}
+                        </span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
+
+        {% if discount_pending %}
+        <div class="sap-card" style="margin-bottom: 24px; border: 1px solid #0a6ed1;">
+            <div class="sap-card-header" style="background: #e5f1fc;">
+                <h5 style="margin:0;"><i class="fas fa-percent"></i> Discount pending manager approval</h5>
+            </div>
+            <div class="sap-card-body">
+                <p class="text-muted small mb-3" style="margin:0 0 12px 0;">
+                    A discount of
+                    {% if quotation.discount_type == 'PERCENT' %}{{ quotation.discount_value|floatformat:2 }}%{% else %}AED {{ quotation.discount_value|floatformat:2 }}{% endif %}
+                    (AED {{ discount_amount|floatformat:2 }}) has been applied to this quotation. It cannot be converted to a sales order or exported until a manager approves or rejects the discount.
+                </p>
+                {% if is_manager %}
+                <form method="post" style="margin: 0; display: inline-block;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="approve_discount">
+                    <button type="submit" class="sap-button sap-button-success">
+                        <i class="fas fa-check"></i> Approve Discount
+                    </button>
+                </form>
+                <form method="post" style="margin: 0; display: inline-block;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reject_discount">
+                    <button type="submit" class="sap-button sap-button-secondary" style="border-color:#bb0000; color:#bb0000;">
+                        <i class="fas fa-times"></i> Reject Discount
+                    </button>
+                </form>
+                {% else %}
+                <p class="small" style="margin:0; color: var(--sap-gray-500);">Only a manager can approve or reject this discount.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
 
         {% if is_manager %}
         <div class="sap-card" style="margin-bottom: 24px; border: 1px solid #ffc107;">
@@ -781,6 +826,16 @@
                                 AED {{ grand_total|floatformat:2 }}
                             </td>
                         </tr>
+                        {% if discount_amount %}
+                        <tr class="table-total-row">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">
+                                Discount ({% if quotation.discount_type == 'PERCENT' %}{{ quotation.discount_value|floatformat:2 }}%{% else %}AED {{ quotation.discount_value|floatformat:2 }} flat{% endif %}):
+                            </td>
+                            <td style="text-align: right; color: var(--sap-error);">
+                                − AED {{ discount_amount|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% endif %}
                         <tr class="table-total-row">
                             <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">VAT (5%):</td>
                             <td style="text-align: right;">
@@ -868,12 +923,17 @@
                 </a>
            
             <!-- Convert to Sales Order Button -->
-            {% if quotation.status == 'Approved' and not quotation.converted_to_sales_order %}
-            <a href="{% url 'convert_quotation_to_sales_order' quotation.id %}" 
+            {% if can_proceed and not quotation.converted_to_sales_order %}
+            <a href="{% url 'convert_quotation_to_sales_order' quotation.id %}"
                class="sap-button sap-button-success"
                onclick="return confirm('Are you sure you want to convert this quotation to a sales order? This will create a new sales order with all items from this quotation.');">
                 <i class="fas fa-shopping-cart"></i>
                 Convert to Sales Order
+            </a>
+            {% elif discount_pending and not quotation.converted_to_sales_order %}
+            <a href="#" class="sap-button sap-button-secondary" style="opacity:0.6; cursor:not-allowed;" title="Discount pending manager approval">
+                <i class="fas fa-shopping-cart"></i>
+                Discount Pending Approval
             </a>
             {% elif quotation.converted_to_sales_order %}
             <a href="{% url 'view_sales_order_details' quotation.converted_to_sales_order.id %}" 
@@ -894,7 +954,7 @@
                 <i class="fas fa-print"></i>
                 Print Quotation
             </button>
-            {% if quotation.status == "Approved" %}
+            {% if can_proceed %}
             <a href="{% url 'export_quotation_to_pdf' quotation.id %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-file-pdf"></i>
                 Export to PDF
@@ -902,6 +962,11 @@
             <a href="{% url 'export_quotation_to_excel' quotation.id %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-file-excel"></i>
                 Export to Excel
+            </a>
+            {% elif discount_pending %}
+            <a href="#" class="sap-button sap-button-secondary" style="opacity:0.6; cursor:not-allowed;" title="Discount pending manager approval">
+                <i class="fas fa-file-pdf"></i>
+                Discount Pending Approval
             </a>
             {% else %}
             <a href="#" class="sap-button sap-button-secondary">

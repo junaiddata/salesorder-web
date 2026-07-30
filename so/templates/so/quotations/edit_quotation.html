@@ -245,6 +245,30 @@
                                   placeholder="Any additional notes or comments...">{{ quotation.remarks|default:'' }}</textarea>
                     </div>
 
+                    <div class="form-group">
+                        <label>Discount</label>
+                        {% if quotation.discount_approval_status == 'PENDING' %}
+                        <p class="help-text" style="color:#0a6ed1;">Current discount is awaiting manager approval.</p>
+                        {% elif quotation.discount_approval_status == 'REJECTED' %}
+                        <p class="help-text" style="color:#bb0000;">The previous discount was rejected by a manager.</p>
+                        {% endif %}
+                        <div style="display:flex; gap:16px; margin-bottom:10px;">
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="" onchange="toggleDiscountInput()" {% if not quotation.discount_type %}checked{% endif %}> No Discount
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="PERCENT" onchange="toggleDiscountInput()" {% if quotation.discount_type == 'PERCENT' %}checked{% endif %}> Percentage (%)
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="AMOUNT" onchange="toggleDiscountInput()" {% if quotation.discount_type == 'AMOUNT' %}checked{% endif %}> Fixed Amount (AED)
+                            </label>
+                        </div>
+                        <input type="number" name="discount_value" id="discount_value" step="0.01" min="0"
+                               placeholder="0.00" value="{% if quotation.discount_type %}{{ quotation.discount_value }}{% endif %}"
+                               {% if not quotation.discount_type %}disabled style="display:none;"{% endif %}>
+                        <p class="help-text">Changing the discount re-opens it for manager approval.</p>
+                    </div>
+
                     <!-- <div class="form-group">
                         <label for="valid_until">Valid Until</label>
                         <input type="date" id="valid_until" name="valid_until" value="{{ quotation.valid_until|date:'Y-m-d' }}">
@@ -353,9 +377,23 @@
     <script>
     var suppressCustomerPriceRefresh = false;
 
+    // ── Discount type toggle (percentage OR fixed amount) ──
+    function toggleDiscountInput() {
+        var type = $('input[name="discount_type"]:checked').val();
+        var input = $('#discount_value');
+        if (type === 'PERCENT' || type === 'AMOUNT') {
+            input.prop('disabled', false).prop('required', true).show();
+            input.attr('placeholder', type === 'PERCENT' ? 'e.g. 10 (%)' : 'e.g. 500 (AED)');
+            if (type === 'PERCENT') { input.attr('max', '100'); } else { input.removeAttr('max'); }
+        } else {
+            input.prop('disabled', true).prop('required', false).val('').hide();
+        }
+    }
+
     $(document).ready(function() {
         // Initialize Select2 for all searchable selects
         initializeSelect2();
+        toggleDiscountInput();
 
         $('#item-multiselect').select2({
             placeholder: "Search and select multiple items",

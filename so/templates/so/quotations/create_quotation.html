@@ -357,6 +357,24 @@
                     </div>
 
                     <div class="form-group">
+                        <label>Discount</label>
+                        <div style="display:flex; gap:16px; margin-bottom:10px;">
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="" checked onchange="toggleDiscountInput()"> No Discount
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="PERCENT" onchange="toggleDiscountInput()"> Percentage (%)
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="radio" name="discount_type" value="AMOUNT" onchange="toggleDiscountInput()"> Fixed Amount (AED)
+                            </label>
+                        </div>
+                        <input type="number" name="discount_value" id="discount_value" step="0.01" min="0"
+                               placeholder="0.00" disabled style="display:none;">
+                        <p class="help-text">Any discount added requires manager approval before the quotation can be converted to a sales order.</p>
+                    </div>
+
+                    <div class="form-group">
                         <label for="common_firm">Brand (select one or more):</label>
                         <select id="common_firm" name="common_firm" class="searchable-select" multiple="multiple">
                             <option value="All">All Firms</option>
@@ -499,6 +517,8 @@ function collectDraftData() {
         customer_text:     $customer.find('option:selected').text() || '',
         new_customer_name: $('#new_customer_name').val() || '',
         remarks:           $('#remarks').val() || '',
+        discount_type:     $('input[name="discount_type"]:checked').val() || '',
+        discount_value:    $('#discount_value').val() || '',
         common_firm:       getSelectedFirms(),
         location_lat:      $('#location_lat').val() || '',
         location_lng:      $('#location_lng').val() || '',
@@ -592,6 +612,8 @@ function showDraftBanner(draft) {
         details += '<strong>Display Name:</strong> ' + draft.new_customer_name + '<br>';
     if (draft.remarks)
         details += '<strong>Remarks:</strong> ' + draft.remarks.substring(0, 50) + (draft.remarks.length > 50 ? '…' : '') + '<br>';
+    if (draft.discount_type && draft.discount_value)
+        details += '<strong>Discount:</strong> ' + draft.discount_value + (draft.discount_type === 'PERCENT' ? '%' : ' AED') + '<br>';
     var filledItems = draft.items.filter(function(i) { return i.item_id; });
     details += '<strong>Items:</strong> ' + filledItems.length + ' item' + (filledItems.length !== 1 ? 's' : '');
     document.getElementById('draft-details').innerHTML = details || 'Partial quotation data';
@@ -655,6 +677,11 @@ async function restoreDraft(draft) {
         $('#remarks').val(draft.remarks || '');
         if (draft.location_lat) $('#location_lat').val(draft.location_lat);
         if (draft.location_lng) $('#location_lng').val(draft.location_lng);
+        if (draft.discount_type) {
+            $('input[name="discount_type"][value="' + draft.discount_type + '"]').prop('checked', true);
+            toggleDiscountInput();
+            $('#discount_value').val(draft.discount_value || '');
+        }
 
         // 3. Common firm
         if (draft.common_firm) {
@@ -733,8 +760,24 @@ async function restoreItemRow($row, itemData, commonFirm) {
 // ║                  MAIN FORM LOGIC                            ║
 // ╚══════════════════════════════════════════════════════════════╝
 
+// ── Discount type toggle (percentage OR fixed amount) ──
+function toggleDiscountInput() {
+    var type = $('input[name="discount_type"]:checked').val();
+    var input = $('#discount_value');
+    if (type === 'PERCENT' || type === 'AMOUNT') {
+        input.prop('disabled', false).prop('required', true).show();
+        input.attr('placeholder', type === 'PERCENT' ? 'e.g. 10 (%)' : 'e.g. 500 (AED)');
+        if (type === 'PERCENT') { input.attr('max', '100'); } else { input.removeAttr('max'); }
+    } else {
+        input.prop('disabled', true).prop('required', false).val('').hide();
+    }
+}
+
 $(document).ready(function() {
     initializeSelect2();
+    toggleDiscountInput();
+    $('input[name="discount_type"]').on('change', scheduleDraftSave);
+    $('#discount_value').on('input', scheduleDraftSave);
 
     // Multi-select (filtered by selected brands)
     $('#item-multiselect').select2({

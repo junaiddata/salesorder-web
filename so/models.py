@@ -370,6 +370,26 @@ class Quotation(models.Model):
     converted_to_sales_order = models.ForeignKey('SalesOrder', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='source_quotation', help_text="Sales order created from this quotation")
 
+    DISCOUNT_TYPE_CHOICES = (
+        ('PERCENT', 'Percentage'),
+        ('AMOUNT', 'Fixed Amount'),
+    )
+    DISCOUNT_APPROVAL_CHOICES = (
+        ('NOT_REQUIRED', 'Not Required'),
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    )
+
+    discount_type = models.CharField(max_length=10, choices=DISCOUNT_TYPE_CHOICES, blank=True, null=True,
+        help_text="Whether discount_value is a percentage or a fixed amount")
+    discount_value = models.FloatField(default=0.0,
+        help_text="Raw value entered by the salesman (e.g. 10 for 10%, or 500 for AED 500)")
+    discount_amount = models.FloatField(default=0.0,
+        help_text="Resolved currency value of the discount, computed from discount_type/discount_value against the subtotal")
+    discount_approval_status = models.CharField(max_length=20, choices=DISCOUNT_APPROVAL_CHOICES, default='NOT_REQUIRED',
+        help_text="Independent of `status` (which tracks undercost auto-approval). Any non-zero discount requires manager approval here.")
+
     def __str__(self):
         display_name = self.customer_display_name or self.customer.customer_name
         return f"Quotation {self.quotation_number} - {display_name}"
@@ -971,6 +991,8 @@ class QuotationLog(models.Model):
         ("created", "Created"),
         ("updated", "Updated"),
         ("deleted", "Deleted"),
+        ("discount_approved", "Discount Approved"),
+        ("discount_rejected", "Discount Rejected"),
     )
 
     quotation = models.ForeignKey(
