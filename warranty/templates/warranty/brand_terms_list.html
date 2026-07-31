@@ -1,0 +1,66 @@
+{% extends 'warranty/base.html' %}
+{% load static %}
+
+{% block title %}Brand Terms | Warranty Letters{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-list-check" style="opacity:.85"></i> Brand Terms</h1>
+            <p>Warranty Terms saved per brand — auto-filled into a new warranty letter's Terms box once that brand is entered.</p>
+            <div class="hero-actions">
+                <a href="{% url 'warranty:brand_terms_new' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> Add Brand Terms</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Brands <span class="count">({{ rows|length }})</span></h2>
+    </div>
+
+    {% if rows %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Brand</th>
+                    <th>Terms Preview</th>
+                    <th>Updated</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.brand }}</td>
+                    <td>{{ row.terms_text|striptags|truncatewords:15|default:"—" }}</td>
+                    <td>{{ row.updated_at|date:"d M Y" }}</td>
+                    <td class="actions">
+                        <a href="{% url 'warranty:brand_terms_edit' row.pk %}" class="btn-x sm" title="Edit"><i class="fas fa-pen"></i></a>
+                        <form method="post" action="{% url 'warranty:brand_terms_delete' row.pk %}" style="display:inline;"
+                              data-confirm="Delete saved warranty terms for '{{ row.brand }}'? This cannot be undone."
+                              data-confirm-title="Delete brand terms" data-confirm-ok-label="Delete">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x sm btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-list-check"></i></div>
+            <h3>No brand terms saved yet</h3>
+            <p>Save a brand's Warranty Terms here, or they'll be remembered automatically the first time that brand is used on a warranty letter.</p>
+            <a href="{% url 'warranty:brand_terms_new' %}" class="btn-x btn-primary-x lg"><i class="fas fa-plus"></i> Add Brand Terms</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -87,10 +87,6 @@ class WarrantyLetterSettings(models.Model):
         help_text="Copied into every new letter's editable Intro Text. "
                   "Supports {brand} and {iso_standard} placeholders."
     )
-    default_terms_text = models.TextField(
-        blank=True, default='',
-        help_text="Copied into every new letter's editable Terms. One bullet per line."
-    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -105,6 +101,26 @@ class WarrantyLetterSettings(models.Model):
         company = company if company in dict(cls.COMPANY_CHOICES) else 'junaid'
         obj, _ = cls.objects.get_or_create(company=company)
         return obj
+
+
+class WarrantyBrandTerms(models.Model):
+    """Remembers the last-used Warranty Terms per brand (e.g. Pegler, Crane)
+    rather than per company -- warranty language is a manufacturer/brand
+    thing, not a Junaid-vs-Alabama thing. Looked up by the warranty form's
+    Brand field to pre-fill new letters for a brand that's been used before."""
+    brand = models.CharField(max_length=255, unique=True)
+    terms_text = models.TextField(
+        blank=True, default='',
+        help_text="Rich text (bold/headings/paragraphs/bullet lists) stored as sanitized HTML."
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Warranty Brand Terms"
+        verbose_name_plural = "Warranty Brand Terms"
+
+    def __str__(self):
+        return self.brand
 
 
 class WarrantyLetter(models.Model):
@@ -150,7 +166,7 @@ class WarrantyLetter(models.Model):
 
     terms_text = models.TextField(
         blank=True, default='',
-        help_text="Warranty terms — one bullet point per line, any number of lines."
+        help_text="Warranty terms as sanitized rich-text HTML (bold/headings/paragraphs/bullet lists)."
     )
 
     item_columns = models.JSONField(

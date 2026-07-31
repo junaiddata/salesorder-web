@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import WarrantyLetterSettings, WarrantyLetter, WarrantyLetterItem
+from .models import WarrantyBrandTerms, WarrantyLetterSettings, WarrantyLetter, WarrantyLetterItem
 
 
 @admin.register(WarrantyLetterSettings)
@@ -8,6 +8,12 @@ class WarrantyLetterSettingsAdmin(admin.ModelAdmin):
     list_display = ('company', 'legal_company_name', 'ref_no_prefix', 'updated_at')
     # unique=True on `company` already caps this at one row per company
     # (junaid/alabama) -- no has_add_permission override needed.
+
+
+@admin.register(WarrantyBrandTerms)
+class WarrantyBrandTermsAdmin(admin.ModelAdmin):
+    list_display = ('brand', 'updated_at')
+    search_fields = ('brand',)
 
 
 class WarrantyLetterItemInline(admin.TabularInline):

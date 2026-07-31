@@ -4,14 +4,17 @@ Warranty Letter PDF Builder.
 Builds a single-page (typically) formal warranty letter with ReportLab:
 Ref No/Date, a centered title, a Project/Client/Consultant/Main Contractor
 label block, an intro sentence, an items table ending in "END OF LIST",
-warranty terms as a bullet list, and a sign-off block with the signature
-and stamp images placed inline once uploaded. Letterhead (header logo,
+warranty terms rendered from rich text (headings/paragraphs/bold/bullet
+lists), and a sign-off block with the signature and stamp images placed
+inline once uploaded. Letterhead (header logo,
 footer banner, DRAFT watermark while not yet Approved) is drawn on every
 page via a PageTemplate onPage callback, mirroring the pattern used for
 the Submittal app's internal warranty letter.
 """
 import os
+from html.parser import HTMLParser
 from io import BytesIO
+from xml.sax.saxutils import escape as xml_escape
 
 import numpy as np
 from PIL import Image as PILImage
@@ -32,6 +35,117 @@ PAGE_W, PAGE_H = A4
 HEADER_LOGO_BOX = (260, 100)   # (max width, max height)
 FOOTER_IMAGE_TARGET_W = PAGE_W   # bleed fully edge-to-edge across the page width
 FOOTER_IMAGE_MAX_H = 110              # cap so a very tall banner can't eat into body content
+
+# Inline tags the Warranty Terms editor can produce, mapped to the
+# ReportLab Paragraph mini-XML tag that renders them.
+_TERMS_INLINE_TAG_MAP = {'b': 'b', 'strong': 'b', 'i': 'i', 'em': 'i', 'u': 'u'}
+
+
+class _RichTextTree(HTMLParser):
+    """Parses the small allowlisted HTML the Warranty Terms rich-text editor
+    produces (p/div/h1-h3/ul/ol/li, plus b/strong/i/em/u/br inline) into a
+    simple nested node tree, so it can be converted into ReportLab flowables
+    below rather than rendered as a flat bullet list."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.root = {'tag': 'root', 'children': []}
+        self.stack = [self.root]
+
+    def handle_starttag(self, tag, attrs):
+        node = {'tag': tag, 'children': []}
+        self.stack[-1]['children'].append(node)
+        if tag != 'br':
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag, attrs):
+        self.stack[-1]['children'].append({'tag': tag, 'children': []})
+
+    def handle_endtag(self, tag):
+        if len(self.stack) > 1 and self.stack[-1]['tag'] == tag:
+            self.stack.pop()
+
+    def handle_data(self, data):
+        self.stack[-1]['children'].append({'tag': '#text', 'text': data})
+
+
+def _terms_inline_markup(nodes):
+    """Render a block node's inline children (text + b/i/u/br) into
+    ReportLab Paragraph mini-XML markup."""
+    out = []
+    for node in nodes:
+        tag = node['tag']
+        if tag == '#text':
+            out.append(xml_escape(node['text']))
+        elif tag == 'br':
+            out.append('<br/>')
+        elif tag in _TERMS_INLINE_TAG_MAP:
+            mapped = _TERMS_INLINE_TAG_MAP[tag]
+            out.append(f'<{mapped}>{_terms_inline_markup(node["children"])}</{mapped}>')
+        else:
+            # Unexpected nesting (e.g. a stray block tag inside inline
+            # content) -- flatten by rendering its children inline rather
+            # than silently dropping that text.
+            out.append(_terms_inline_markup(node['children']))
+    return ''.join(out)
+
+
+def _terms_flowables(html_text, style_body, style_heading):
+    """Convert the Warranty Terms rich-text HTML into ReportLab flowables:
+    headings/paragraphs become Paragraphs, ul/ol become a bulleted
+    ListFlowable. Falls back to treating a stray top-level text/inline run
+    as its own paragraph, in case the browser didn't wrap it in a block tag."""
+    if not (html_text or '').strip():
+        return []
+
+    tree = _RichTextTree()
+    tree.feed(html_text)
+    tree.close()
+
+    flowables = []
+    pending_inline = []
+
+    def flush_pending():
+        if pending_inline:
+            markup = _terms_inline_markup(pending_inline).strip()
+            if markup:
+                flowables.append(Paragraph(markup, style_body))
+            pending_inline.clear()
+
+    for node in tree.root['children']:
+        tag = node['tag']
+        if tag in ('h1', 'h2', 'h3'):
+            flush_pending()
+            markup = _terms_inline_markup(node['children']).strip()
+            if markup:
+                flowables.append(Paragraph(markup, style_heading))
+        elif tag in ('p', 'div'):
+            flush_pending()
+            markup = _terms_inline_markup(node['children']).strip()
+            if markup:
+                flowables.append(Paragraph(markup, style_body))
+        elif tag in ('ul', 'ol'):
+            flush_pending()
+            items = []
+            for li in node['children']:
+                if li['tag'] != 'li':
+                    continue
+                markup = _terms_inline_markup(li['children']).strip()
+                if markup:
+                    items.append(ListItem(Paragraph(markup, style_body), leftIndent=6))
+            if items:
+                flowables.append(ListFlowable(
+                    items, bulletType='bullet', start='circle',
+                    leftIndent=14, bulletFontSize=6,
+                ))
+        elif tag == '#text':
+            if node['text'].strip():
+                pending_inline.append(node)
+        else:
+            pending_inline.append(node)
+
+    flush_pending()
+    return flowables
 
 
 def _trim_side_borders(im, max_trim=10, threshold=195):
@@ -243,6 +357,9 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
         'WLTitle', fontSize=13, fontName='Helvetica-Bold',
         alignment=TA_CENTER, spaceBefore=6, spaceAfter=14, textColor=colors.black,
     )
+    style_terms_heading = ParagraphStyle(
+        'WLTermsHeading', parent=style_body_bold, fontSize=11, spaceBefore=6, spaceAfter=4,
+    )
     style_label = ParagraphStyle('WLLabel', fontSize=10, fontName='Helvetica-Bold', leading=14)
     style_label_val = ParagraphStyle('WLLabelVal', fontSize=10, fontName='Helvetica', leading=14)
     style_cell = ParagraphStyle('WLCell', fontSize=9, fontName='Helvetica', leading=11)
@@ -293,12 +410,8 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
 
-    # ── Warranty terms bullets ───────────────────────────────────────────
-    terms_lines = [ln.strip() for ln in (letter.terms_text or '').splitlines() if ln.strip()]
-    terms_list = ListFlowable(
-        [ListItem(Paragraph(line, style_body), leftIndent=6) for line in terms_lines],
-        bulletType='bullet', start='circle', leftIndent=14, bulletFontSize=6,
-    ) if terms_lines else None
+    # ── Warranty terms (rich text: headings/paragraphs/bullet lists) ────
+    terms_flowables = _terms_flowables(letter.terms_text, style_body, style_terms_heading)
 
     # ── Sign-off block ────────────────────────────────────────────────
     # Signature and stamp overlap into one block (signature crossing over
@@ -355,8 +468,8 @@ def build_warranty_letter_pdf(letter) -> BytesIO:
 
     elements += [items_tbl, Spacer(1, 12)]
 
-    if terms_list:
-        elements += [terms_list, Spacer(1, 16)]
+    if terms_flowables:
+        elements += terms_flowables + [Spacer(1, 16)]
 
     elements += [
         Paragraph('For,', style_body),

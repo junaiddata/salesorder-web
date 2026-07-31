@@ -9,8 +9,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import (
-    WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings, default_item_columns,
-    FIXED_FIELD_KEYS,
+    WarrantyBrandTerms, WarrantyLetter, WarrantyLetterItem, WarrantyLetterSettings,
+    default_item_columns, FIXED_FIELD_KEYS,
 )
 from .pdf_builder import build_warranty_letter_pdf
 from . import services
@@ -50,10 +50,13 @@ def warranty_form(request, pk=None):
     existing_field_order = (letter.field_order if letter else None) or []
 
     if not letter:
-        # Prefill editable defaults for a brand-new letter.
+        # Prefill editable defaults for a brand-new letter. Terms aren't
+        # prefilled here since they're looked up per-brand once the user
+        # picks a Brand (see the api_brand_terms fetch in the form's JS) --
+        # there's no brand chosen yet on a fresh form.
         default_signatory_name = letter_settings.default_signatory_name
         default_signatory_title = letter_settings.default_signatory_title
-        default_terms_text = letter_settings.default_terms_text
+        default_terms_text = ''
     else:
         default_signatory_name = letter.signatory_name
         default_signatory_title = letter.signatory_title
@@ -122,21 +125,10 @@ def warranty_save(request):
     letter.iso_standard = request.POST.get('iso_standard', '').strip()
     letter.intro_text = request.POST.get('intro_text', '').strip()
 
-    letter.terms_text = request.POST.get('terms_text', '').strip()
-    if letter.terms_text:
-        # Grow (never shrink) this company's remembered term points: append
-        # any newly-typed points that aren't in the master list yet, but
-        # keep every point the master already has even if this particular
-        # letter no longer includes it -- removing a point while drafting
-        # one letter must not erase it from what future new letters start
-        # pre-filled with.
-        terms_settings = WarrantyLetterSettings.get_instance(letter.company)
-        master_lines = [ln.strip() for ln in (terms_settings.default_terms_text or '').splitlines() if ln.strip()]
-        letter_lines = [ln.strip() for ln in letter.terms_text.splitlines() if ln.strip()]
-        new_lines = [ln for ln in letter_lines if ln not in master_lines]
-        if new_lines:
-            terms_settings.default_terms_text = '\n'.join(master_lines + new_lines)
-            terms_settings.save(update_fields=['default_terms_text'])
+    letter.terms_text = services.sanitize_rich_text(request.POST.get('terms_text', ''))
+    # Remember this letter's terms as the starting default for this brand's
+    # next new warranty letter (terms are brand-specific, not company-specific).
+    services.save_brand_terms(letter.brand, letter.terms_text)
 
     letter.signatory_name = request.POST.get('signatory_name', '').strip()
     letter.signatory_title = request.POST.get('signatory_title', '').strip()
@@ -424,3 +416,52 @@ def api_suggest_ref_no(request):
     if company not in dict(WarrantyLetter.COMPANY_CHOICES):
         company = 'junaid'
     return JsonResponse({'ref_no': services.suggest_ref_no(company)})
+
+
+@login_required
+@require_GET
+def api_brand_terms(request):
+    return JsonResponse({'terms_text': services.get_brand_terms(request.GET.get('brand', ''))})
+
+
+@login_required
+def warranty_brand_terms_list(request):
+    rows = WarrantyBrandTerms.objects.all().order_by('brand')
+    return render(request, 'warranty/brand_terms_list.html', {'rows': rows})
+
+
+@login_required
+def warranty_brand_terms_form(request, pk=None):
+    row = get_object_or_404(WarrantyBrandTerms, pk=pk) if pk else None
+
+    if request.method == 'POST':
+        brand = request.POST.get('brand', '').strip()
+        terms_text = services.sanitize_rich_text(request.POST.get('terms_text', ''))
+
+        if not brand:
+            messages.error(request, 'Brand name is required.')
+        else:
+            clash = WarrantyBrandTerms.objects.filter(brand__iexact=brand)
+            if row:
+                clash = clash.exclude(pk=row.pk)
+            if clash.exists():
+                messages.error(request, f'"{brand}" already has saved terms — edit that entry instead of creating a new one.')
+            else:
+                row = row or WarrantyBrandTerms()
+                row.brand = brand
+                row.terms_text = terms_text
+                row.save()
+                messages.success(request, f'Warranty terms for "{brand}" saved.')
+                return redirect('warranty:brand_terms_list')
+
+    return render(request, 'warranty/brand_terms_form.html', {'row': row})
+
+
+@login_required
+@require_POST
+def warranty_brand_terms_delete(request, pk):
+    row = get_object_or_404(WarrantyBrandTerms, pk=pk)
+    brand = row.brand
+    row.delete()
+    messages.success(request, f'Warranty terms for "{brand}" deleted.')
+    return redirect('warranty:brand_terms_list')

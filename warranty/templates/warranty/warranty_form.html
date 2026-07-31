@@ -19,10 +19,8 @@
     .add-col-row { display: flex; gap: .5rem; margin-top: .6rem; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
     @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
-    .term-point-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-    .term-point-row .term-bullet { color: var(--faint); font-size: 1.1rem; line-height: 1; flex-shrink: 0; width: 14px; text-align: center; }
-    .term-point-row .input-x { flex: 1; }
 </style>
+<script src="{% static 'warranty/js/terms-editor.js' %}"></script>
 {% endblock %}
 
 {% block body %}
@@ -177,16 +175,19 @@
         {{ existing_field_order|json_script:"field-order-data" }}
 
         <div class="card-x mb-3">
-            <div class="card-x-head u-spread">
-                <div class="u-row"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
-                <button type="button" class="btn-x sm" id="addTermBtn"><i class="fas fa-plus"></i> Add Point</button>
-            </div>
+            <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
             <div class="card-x-body">
                 <div class="field-x">
-                    <label class="label-x">Terms — one point per row</label>
-                    <div id="termsPointsList"></div>
+                    <label class="label-x">Terms</label>
+                    <div class="terms-toolbar">
+                        <button type="button" class="btn-x sm" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="heading" title="Heading"><i class="fas fa-heading"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="paragraph" title="Paragraph"><i class="fas fa-paragraph"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="list" title="Bullet points"><i class="fas fa-list-ul"></i></button>
+                    </div>
+                    <div id="termsEditor" class="input-x terms-editor" contenteditable="true"></div>
                     <div class="u-muted mt-1" style="font-size:.78rem;">
-                        Whatever you save here becomes the starting default for this company's next new warranty letter.
+                        Whatever you save here becomes the starting default for this brand's next new warranty letter.
                     </div>
                 </div>
             </div>
@@ -253,40 +254,13 @@
     function escapeAttr(v) { return (v || '').replace(/"/g, '&quot;'); }
     function escapeHtml(v) { const d = document.createElement('div'); d.textContent = v || ''; return d.innerHTML; }
 
-    // ── Warranty Terms — add/remove points, persisted as one line each ──
-    const termsPointsList = document.getElementById('termsPointsList');
-
-    function addTermRow(text) {
-        const row = document.createElement('div');
-        row.className = 'term-point-row';
-        row.innerHTML = `
-            <span class="term-bullet">•</span>
-            <input type="text" class="input-x" value="${escapeAttr(text || '')}">
-            <button type="button" class="row-remove" title="Remove point"><i class="fas fa-trash"></i></button>
-        `;
-        row.querySelector('.row-remove').addEventListener('click', () => row.remove());
-        termsPointsList.appendChild(row);
-    }
-
-    const initialTermLines = EXISTING_TERMS_TEXT.split('\n').map(l => l.trim()).filter(Boolean);
-    if (initialTermLines.length) {
-        initialTermLines.forEach(addTermRow);
-    } else {
-        addTermRow('');
-    }
-
-    document.getElementById('addTermBtn').addEventListener('click', () => {
-        addTermRow('');
-        termsPointsList.lastElementChild.querySelector('input').focus();
-    });
+    // ── Warranty Terms — single rich-text box (bold/heading/paragraph/list) ──
+    const termsEditor = document.getElementById('termsEditor');
+    termsEditor.innerHTML = EXISTING_TERMS_TEXT || '';
+    initTermsEditor(termsEditor, document.querySelector('.terms-toolbar'));
 
     function collectTermsText() {
-        const lines = [];
-        termsPointsList.querySelectorAll('.term-point-row input').forEach(inp => {
-            const v = inp.value.trim();
-            if (v) lines.push(v);
-        });
-        return lines.join('\n');
+        return termsEditor.innerHTML.trim();
     }
 
     // ── Project-details field order (fixed + custom, freely interleaved) ──
@@ -510,6 +484,20 @@
     }
     document.getElementById('brandInput').addEventListener('blur', autoFillIntro);
     document.getElementById('isoInput').addEventListener('blur', autoFillIntro);
+
+    // ── Warranty Terms auto-fill from this brand's last-saved terms ───
+    // Checked via textContent rather than innerHTML -- an empty contenteditable
+    // box commonly ends up holding a stray <br> (inserted by the browser the
+    // moment it's focused), which reads as non-empty to innerHTML.trim() and
+    // would otherwise block the auto-fill even though nothing was typed.
+    document.getElementById('brandInput').addEventListener('blur', () => {
+        const brand = document.getElementById('brandInput').value.trim();
+        if (!brand || termsEditor.textContent.trim()) return;
+        fetch(`/warranty/api/brand-terms/?brand=${encodeURIComponent(brand)}`)
+            .then(r => r.json())
+            .then(data => { if (data.terms_text) termsEditor.innerHTML = data.terms_text; })
+            .catch(err => console.error('Brand terms fetch failed:', err));
+    });
 
     // ── Ref No suggestion ────────────────────────────────────────────
     document.getElementById('suggestRefBtn').addEventListener('click', () => {

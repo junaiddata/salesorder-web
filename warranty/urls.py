@@ -19,4 +19,9 @@ urlpatterns = [
     path('<int:pk>/stamp/clear/', views.warranty_clear_stamp, name='clear_stamp'),
     path('<int:pk>/generate-pdf/', views.warranty_generate_pdf, name='generate_pdf'),
     path('api/suggest-ref-no/', views.api_suggest_ref_no, name='api_suggest_ref_no'),
+    path('api/brand-terms/', views.api_brand_terms, name='api_brand_terms'),
+    path('brand-terms/', views.warranty_brand_terms_list, name='brand_terms_list'),
+    path('brand-terms/new/', views.warranty_brand_terms_form, name='brand_terms_new'),
+    path('brand-terms/<int:pk>/edit/', views.warranty_brand_terms_form, name='brand_terms_edit'),
+    path('brand-terms/<int:pk>/delete/', views.warranty_brand_terms_delete, name='brand_terms_delete'),
 ]

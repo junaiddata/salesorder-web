@@ -34,6 +34,9 @@
                 <a href="{% url 'warranty:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
                     <i class="fas fa-plus-circle"></i> New Warranty Letter
                 </a>
+                <a href="{% url 'warranty:brand_terms_list' %}" class="app-nav-link {% if url_name == 'brand_terms_list' or url_name == 'brand_terms_new' or url_name == 'brand_terms_edit' %}active{% endif %}">
+                    <i class="fas fa-list-check"></i> Brand Terms
+                </a>
             </div>
             <div class="app-nav-right">
                 <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>

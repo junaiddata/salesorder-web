@@ -10,8 +10,11 @@
     .detail-row:last-child { border-bottom: none; }
     .detail-label { width: 180px; flex-shrink: 0; color: var(--muted); font-weight: 600; }
     .detail-value { color: var(--ink); white-space: pre-wrap; }
-    .terms-list { margin: 0; padding-left: 1.2rem; font-size: .88rem; }
-    .terms-list li { margin-bottom: .4rem; }
+    .terms-content { font-size: .88rem; }
+    .terms-content p, .terms-content div { margin: 0 0 .5em; }
+    .terms-content h1, .terms-content h2, .terms-content h3 { margin: .5em 0 .3em; font-size: 1.05em; }
+    .terms-content ul, .terms-content ol { margin: 0 0 .5em; padding-left: 1.3em; }
+    .terms-content li { margin-bottom: .3em; }
     .sign-preview { max-height: 90px; border: 1px solid var(--line-soft); border-radius: 6px; padding: 6px; background: #fff; }
 </style>
 {% endblock %}
@@ -181,9 +184,7 @@
     <div class="card-x mb-3">
         <div class="card-x-head"><span class="ic"><i class="fas fa-list-check"></i></span><h2>Warranty Terms</h2></div>
         <div class="card-x-body">
-            <ul class="terms-list">
-                {% for line in letter.terms_text.splitlines %}{% if line %}<li>{{ line }}</li>{% endif %}{% endfor %}
-            </ul>
+            <div class="terms-content">{{ letter.terms_text|safe }}</div>
         </div>
     </div>
     {% endif %}

@@ -2,6 +2,16 @@
 .text-danger { color: var(--danger); }
 
 /* =====================================================================
+   Warranty Terms rich-text editor (letter form + Brand Terms form)
+   ===================================================================== */
+.terms-toolbar { display: flex; gap: .4rem; margin-bottom: .5rem; }
+.terms-editor { min-height: 160px; line-height: 1.5; }
+.terms-editor:focus { border-color: var(--primary-300); box-shadow: 0 0 0 3px var(--primary-50); }
+.terms-editor p, .terms-editor div { margin: 0 0 .5em; }
+.terms-editor h1, .terms-editor h2, .terms-editor h3 { margin: .3em 0; font-size: 1.05em; }
+.terms-editor ul { margin: 0 0 .5em; padding-left: 1.4em; }
+
+/* =====================================================================
    Confirmation dialog — compact, centered, replaces the browser confirm()
    ===================================================================== */
 .confirm-dialog { max-width: 316px; margin-left: auto; margin-right: auto; }

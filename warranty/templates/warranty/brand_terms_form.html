@@ -1,0 +1,56 @@
+{% extends 'warranty/base.html' %}
+{% load static %}
+
+{% block title %}{% if row %}Edit{% else %}Add{% endif %} Brand Terms{% endblock %}
+
+{% block extra_css %}
+<script src="{% static 'warranty/js/terms-editor.js' %}"></script>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner">
+        <h1><i class="fas fa-list-check" style="opacity:.85"></i> {% if row %}Edit{% else %}Add{% endif %} Brand Terms</h1>
+        <p>Saved here, this brand's Warranty Terms auto-fill into any new warranty letter once that brand is entered.</p>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <form method="post" id="brandTermsForm">
+        {% csrf_token %}
+        <div class="card-x mb-3">
+            <div class="card-x-body">
+                <div class="field-x">
+                    <label class="label-x">Brand</label>
+                    <input type="text" name="brand" class="input-x" value="{{ row.brand|default:'' }}" placeholder="e.g. Pegler" required>
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Terms</label>
+                    <div class="terms-toolbar">
+                        <button type="button" class="btn-x sm" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="heading" title="Heading"><i class="fas fa-heading"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="paragraph" title="Paragraph"><i class="fas fa-paragraph"></i></button>
+                        <button type="button" class="btn-x sm" data-cmd="list" title="Bullet points"><i class="fas fa-list-ul"></i></button>
+                    </div>
+                    <div id="termsEditor" class="input-x terms-editor" contenteditable="true">{{ row.terms_text|default:''|safe }}</div>
+                    <input type="hidden" name="terms_text" id="termsTextInput">
+                </div>
+            </div>
+        </div>
+        <div class="u-row" style="justify-content:flex-end;">
+            <a href="{% url 'warranty:brand_terms_list' %}" class="btn-x">Cancel</a>
+            <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-floppy-disk"></i> Save</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const termsEditor = document.getElementById('termsEditor');
+    initTermsEditor(termsEditor, document.querySelector('.terms-toolbar'));
+    document.getElementById('brandTermsForm').addEventListener('submit', () => {
+        document.getElementById('termsTextInput').value = termsEditor.innerHTML.trim();
+    });
+</script>
+{% endblock %}
