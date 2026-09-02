@@ -532,7 +532,87 @@ _CLASSIFICATION_PROMPT = (
 )
 
 
+@beta_tool
+def submit_triage(is_simple: bool, reasoning: str) -> str:
+    """Record the triage verdict for whether this email is simple enough to
+    classify with a fast/cheap model, or complex enough to need the full
+    classification model. Call this exactly once.
+
+    Args:
+        is_simple: True ONLY for emails that are obviously not a real
+            enquiry needing careful reading -- e.g. an out-of-office
+            autoreply, a one-line acknowledgement/thank-you, a newsletter,
+            a delivery/read notification -- with no attachments and nothing
+            resembling an item list, pricing, brand/quantity detail, LPO,
+            or submittal request. False for anything with attachments, a
+            table/BOQ, multiple items, or any content that needs careful
+            reading to classify correctly. When unsure, choose False.
+        reasoning: One short sentence explaining the verdict.
+    """
+    return "Recorded"
+
+
+_TRIAGE_PROMPT = (
+    "You are triaging an inbox for a sales team that sells building "
+    "materials, electrical/plumbing supplies, and similar trade goods. "
+    "Before this email is properly classified, decide only whether it is "
+    "SIMPLE (obviously not a customer enquiry -- an autoreply, newsletter, "
+    "one-line acknowledgement, delivery notification, nothing to extract) "
+    "or COMPLEX (anything that could be a real RFQ, submittal request, or "
+    "LPO -- has attachments, an itemized list, pricing, or brand/quantity "
+    "detail, or just isn't obviously irrelevant). A wrong 'simple' verdict "
+    "means a real enquiry gets processed by a weaker model, so when unsure, "
+    "choose COMPLEX. Call submit_triage exactly once with your verdict."
+)
+
+
+def _triage_is_simple(email: dict, attachments: list) -> bool:
+    """Cheap pre-check (EMAILAGENT_TRIAGE_MODEL, text-only -- no attachment
+    content decoded) deciding whether classify_email can use the fast/cheap
+    model instead of EMAILAGENT_CLASSIFICATION_MODEL. Never raises; defaults
+    to False (route to the strong model) on any failure, timeout, or
+    inconclusive verdict -- a missed triage should never silently downgrade
+    a real enquiry."""
+    summary = (
+        f"From: {email.get('sender_name', '')} <{email.get('sender', '')}>\n"
+        f"Subject: {email.get('subject', '')}\n"
+        f"Attachments: {len(attachments)} "
+        f"({', '.join(a.get('filename', '') for a in attachments) or 'none'})\n\n"
+        f"Body:\n{email.get('body_text', '')[:2000]}"
+    )
+    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=settings.EMAILAGENT_CLAUDE_TIMEOUT_SECS)
+    captured = None
+    try:
+        runner = client.beta.messages.tool_runner(
+            model=settings.EMAILAGENT_TRIAGE_MODEL,
+            max_tokens=300,
+            thinking={"type": "disabled"},
+            tools=[submit_triage],
+            messages=[{"role": "user", "content": f"{_TRIAGE_PROMPT}\n\n{summary}"}],
+            max_iterations=2,
+        )
+        for message in runner:
+            for block in message.content:
+                if block.type == "tool_use" and block.name == "submit_triage":
+                    captured = block.input
+                    break
+            if captured is not None:
+                break
+    except anthropic.APIError as exc:
+        logger.warning(f"triage agent loop API error: {exc!r}")
+    except Exception:
+        logger.exception("triage agent loop unexpected failure")
+
+    if captured is None:
+        return False
+    return bool(captured.get("is_simple", False))
+
+
 def classify_email(email: dict, attachments: list) -> ClassificationResult:
+    is_simple = _triage_is_simple(email, attachments)
+    model_to_use = settings.EMAILAGENT_TRIAGE_MODEL if is_simple else settings.EMAILAGENT_CLASSIFICATION_MODEL
+    logger.info(f"classify_email triage: is_simple={is_simple}, model={model_to_use}")
+
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=settings.EMAILAGENT_CLAUDE_TIMEOUT_SECS)
     content = build_classification_content(email, attachments)
     content.insert(0, {"type": "text", "text": _CLASSIFICATION_PROMPT})
@@ -540,7 +620,7 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
     captured = None
     try:
         runner = client.beta.messages.tool_runner(
-            model=settings.EMAILAGENT_CLASSIFICATION_MODEL,
+            model=model_to_use,
             # A large multi-attachment BOQ (e.g. two ~60-row Excel sheets) can
             # need well over 4096 output tokens just to emit the "items" list
             # in the submit_classification tool call -- 4096 was observed to

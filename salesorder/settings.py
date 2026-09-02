@@ -250,6 +250,10 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 EMAILAGENT_CLASSIFICATION_MODEL = os.getenv('EMAILAGENT_CLASSIFICATION_MODEL', 'claude-sonnet-5')
+# Cheap/fast model used only for the triage pre-check in classify_email --
+# decides whether an email is obviously simple (no attachments, nothing to
+# extract) before spending EMAILAGENT_CLASSIFICATION_MODEL on it.
+EMAILAGENT_TRIAGE_MODEL = os.getenv('EMAILAGENT_TRIAGE_MODEL', 'claude-haiku-4-5-20251001')
 EMAILAGENT_CONFIDENCE_THRESHOLD = float(os.getenv('EMAILAGENT_CONFIDENCE_THRESHOLD', '0.75'))
 
 # The 'poll_gmail' management command wires its own file handler at module
