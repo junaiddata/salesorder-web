@@ -233,6 +233,7 @@ class ClassificationResult:
     lpo_total_vat: str = ''
     lpo_amount_in_words: str = ''
     lpo_items: list = field(default_factory=list)
+    model_used: str = ''
 
 
 _PDF_SPARSE_TEXT_CHARS = 200  # a PDF whose real content is a BOQ/item table
@@ -655,6 +656,7 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
             reasoning="Agent did not finalize a classification (ran out of iterations, refused, or errored).",
             items=[],
             attachment_sources={},
+            model_used=model_to_use,
         )
 
     attachment_sources = {a['filename']: a['source'] for a in captured.get('attachments', [])}
@@ -685,6 +687,7 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
         lpo_total_vat=captured.get("lpo_total_vat", "") or "",
         lpo_amount_in_words=captured.get("lpo_amount_in_words", "") or "",
         lpo_items=captured.get("lpo_items", []) or [],
+        model_used=model_to_use,
     )
 
 

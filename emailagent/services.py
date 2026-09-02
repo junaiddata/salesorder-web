@@ -213,7 +213,7 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
                 "requirement/BOQ that may have been missed."
             )
         classify_recorder.finish(
-            summary=f"category={result.category} confidence={result.confidence:.2f} items={len(result.items)}",
+            summary=f"category={result.category} confidence={result.confidence:.2f} items={len(result.items)} model={result.model_used}",
             issues=classify_issues,
         )
 
@@ -279,7 +279,7 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
             classification_confidence=result.confidence,
             classification_reasoning=result.reasoning,
             classified_at=timezone.now(),
-            classification_model=settings.EMAILAGENT_CLASSIFICATION_MODEL,
+            classification_model=result.model_used,
             submittal_brand=result.submittal_brand,
             submittal_project=result.submittal_project,
             submittal_client=result.submittal_client,
