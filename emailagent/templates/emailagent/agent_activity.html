@@ -1,0 +1,464 @@
+{% extends 'emailagent/base.html' %}
+{% load static emailagent_extras %}
+
+{% block title %}Agent Activity | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Overall status chip (the headline answer: "how did this enquiry go") ── */
+    .status-chip {
+        display: inline-flex; align-items: center; gap: .4rem; flex-shrink: 0;
+        padding: .38rem .85rem; border-radius: 999px; font-size: .8rem; font-weight: 700;
+        white-space: nowrap;
+    }
+    .status-chip.success { background: var(--success-50); color: var(--success-700); }
+    .status-chip.flagged { background: var(--warn-50); color: var(--warn-700); }
+    .status-chip.failed  { background: var(--accent-50); color: var(--accent); }
+
+    /* ── Stage stepper: one node per pipeline stage, connected by a line so
+       the sequence reads left-to-right at a glance instead of as a loose
+       row of same-weight pills. Node color carries the status; the icon
+       inside carries which agent ran. ── */
+    .stage-track { display: flex; align-items: flex-start; overflow-x: auto; padding: .3rem .1rem .2rem; }
+    .stage-node {
+        flex: 1 1 0; min-width: 96px; max-width: 130px;
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+        position: relative; padding-top: 2px;
+    }
+    .stage-node:not(:first-child)::before {
+        content: ''; position: absolute; top: 21px; right: 50%; width: 100%; height: 2px;
+        background: var(--line); z-index: 0;
+    }
+    .stage-node .stage-icon {
+        width: 40px; height: 40px; border-radius: 50%; z-index: 1;
+        display: flex; align-items: center; justify-content: center; font-size: 1rem;
+        background: var(--surface-alt); color: var(--muted); box-shadow: 0 0 0 3px var(--surface);
+        border: 1.5px solid var(--line);
+    }
+    .stage-node .stage-icon.success { background: var(--success-50); color: var(--success-700); border-color: var(--success-50); }
+    .stage-node .stage-icon.flagged { background: var(--warn-50); color: var(--warn-700); border-color: var(--warn-50); }
+    .stage-node .stage-icon.failed  { background: var(--accent-50); color: var(--accent); border-color: var(--accent-50); }
+    .stage-node .stage-badge {
+        position: absolute; top: 26px; left: 50%; margin-left: 8px;
+        width: 16px; height: 16px; border-radius: 50%; z-index: 2;
+        display: flex; align-items: center; justify-content: center; font-size: .55rem;
+        color: #fff; border: 2px solid var(--surface);
+    }
+    .stage-node .stage-badge.success { background: var(--success); }
+    .stage-node .stage-badge.flagged { background: var(--warn-700); }
+    .stage-node .stage-badge.failed  { background: var(--accent); }
+    .stage-node .stage-label {
+        font-size: .72rem; font-weight: 600; color: var(--body); margin-top: .5rem;
+        line-height: 1.2; max-width: 108px;
+    }
+    .stage-node .stage-time { font-size: .68rem; color: var(--faint); margin-top: .15rem; }
+    .stage-node.linked { text-decoration: none; cursor: pointer; }
+    .stage-node.linked:hover .stage-label { color: var(--primary); text-decoration: underline; }
+
+    .doc-card {
+        padding: 1.15rem 1.35rem; border-radius: var(--r-lg); border: 1px solid var(--line);
+        background: var(--surface); margin-bottom: .9rem; transition: box-shadow .15s ease, border-color .15s ease;
+    }
+    .doc-card:hover { box-shadow: var(--sh-md); border-color: var(--primary-100); }
+    .doc-card.worst-failed  { border-left: 3px solid var(--accent); }
+    .doc-card.worst-flagged { border-left: 3px solid var(--warn-700); }
+    .doc-card.worst-success { border-left: 3px solid var(--success); }
+    .doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: .85rem; flex-wrap: wrap; }
+    .doc-head-main { min-width: 0; }
+    .doc-subject { font-weight: 700; color: var(--ink); text-decoration: none; font-size: .95rem; display: inline-flex; align-items: center; gap: .5rem; }
+    .doc-subject:hover { text-decoration: underline; }
+    .doc-meta { font-size: .78rem; color: var(--muted); margin-top: .3rem; }
+    .doc-head-status { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; flex-shrink: 0; }
+    .doc-head-status .doc-ts { font-size: .74rem; color: var(--faint); white-space: nowrap; }
+
+    .doc-issues { margin-top: .9rem; }
+    .doc-issues summary.collapsible-summary { font-size: .82rem; padding: .5rem 1rem; }
+    .doc-issues .items-table-wrap { border: none; }
+    .doc-issues-list { display: flex; flex-direction: column; gap: .3rem; margin-top: .6rem; }
+
+    .filter-toolbar {
+        display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+        padding: .8rem 1.1rem; background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--r-lg); margin-bottom: 1.3rem;
+    }
+    .pill.sm { padding: .32rem .8rem; font-size: .8rem; font-family: inherit; cursor: pointer; }
+    .ft-toggle { display: flex; gap: .4rem; }
+    .ft-select { display: flex; align-items: center; gap: .45rem; }
+    .ft-select label {
+        font-size: .72rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--muted);
+    }
+    .ft-select select {
+        border: 1px solid var(--line); border-radius: 999px; padding: .32rem 1.7rem .32rem .8rem;
+        font-size: .82rem; background: var(--surface-alt); color: var(--body);
+        font-family: inherit; cursor: pointer;
+    }
+    /* One fused pill (icon + input + submit button) that always moves as a
+       single flex item -- never splits across lines when the toolbar wraps. */
+    .search-box {
+        display: flex; align-items: center; position: relative; margin-left: auto;
+        background: var(--surface-alt); border: 1px solid var(--line); border-radius: 999px;
+        flex: 0 0 auto;
+    }
+    .search-box input {
+        border: none; background: transparent; padding: .4rem .5rem .4rem 2.1rem;
+        font-size: .82rem; width: 200px; color: var(--body);
+    }
+    .search-box input:focus { outline: none; }
+    .search-box i.fa-magnifying-glass { position: absolute; left: 1.05rem; color: var(--muted); font-size: .78rem; pointer-events: none; }
+    .search-submit {
+        border: none; background: var(--primary); color: #fff; cursor: pointer;
+        width: 28px; height: 28px; margin: 2px 3px 2px 0; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: .7rem;
+    }
+    .search-submit:hover { filter: brightness(1.1); }
+
+    .legend { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin: -.6rem 0 1.1rem; }
+    .legend span { display: inline-flex; align-items: center; gap: .35rem; }
+    .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .legend .dot.success { background: var(--success); }
+    .legend .dot.flagged { background: var(--warn-700); }
+    .legend .dot.failed  { background: var(--accent); }
+
+    .truncate-note {
+        font-size: .8rem; color: var(--warn-700); background: var(--warn-50);
+        border: 1px solid transparent; border-radius: var(--r); padding: .6rem .9rem; margin-bottom: 1rem;
+        display: flex; align-items: center; gap: .5rem;
+    }
+
+    .stat-x-link { display: block; text-decoration: none; color: inherit; cursor: pointer; }
+    .stat-x-link.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-100); }
+
+    .page-bar { display: flex; align-items: center; justify-content: center; gap: .5rem; margin-top: 1.5rem; }
+    .page-bar a, .page-bar span {
+        padding: .45rem .85rem; border-radius: var(--r); border: 1px solid var(--line);
+        font-size: .82rem; text-decoration: none; color: var(--body);
+    }
+    .page-bar a:hover { background: var(--primary-50); border-color: var(--primary-100); }
+    .page-bar .current { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
+    .page-bar .disabled { opacity: .4; pointer-events: none; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-gauge-high" style="opacity:.85"></i> Agent Activity</h1>
+            <p>One place to see everything the pipeline has done -- classification, quotation drafting, unmatched-item rematch, brand recheck, quotations emailed to clients, submittal drafting (from an email or from a quotation), and submittals emailed to clients -- per enquiry, with status and timestamp for every stage. Purely observational: nothing here has edited an email, quotation or submittal, "Flagged" just means something is worth a human double-checking.</p>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="stat-grid" style="margin-bottom: 1rem;">
+        <a href="?{% qs_replace status='success' %}" class="stat-x stat-x-link {% if status_filter == 'success' %}active{% endif %}">
+            <span class="ic green"><i class="fas fa-circle-check"></i></span>
+            <div class="val">{{ total_counts.success }}</div>
+            <div class="lbl">Success</div>
+        </a>
+        <a href="?{% qs_replace status='flagged' %}" class="stat-x stat-x-link {% if status_filter == 'flagged' %}active{% endif %}">
+            <span class="ic amber"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="val">{{ total_counts.flagged }}</div>
+            <div class="lbl">Flagged for review</div>
+        </a>
+        <a href="?{% qs_replace status='failed' %}" class="stat-x stat-x-link {% if status_filter == 'failed' %}active{% endif %}">
+            <span class="ic red"><i class="fas fa-circle-xmark"></i></span>
+            <div class="val">{{ total_counts.failed }}</div>
+            <div class="lbl">Failed</div>
+        </a>
+    </div>
+    <div class="legend">
+        <span><span class="dot success"></span> Success -- nothing to check</span>
+        <span><span class="dot flagged"></span> Flagged -- worth a human double-checking (nothing auto-edited)</span>
+        <span><span class="dot failed"></span> Failed -- the step didn't complete</span>
+    </div>
+
+    <form class="filter-toolbar" method="get">
+        <div class="ft-toggle">
+            <a href="?{% qs_replace view='' %}" class="pill sm {% if view == 'document' %}active{% endif %}">By Enquiry</a>
+            <a href="?{% qs_replace view='log' %}" class="pill sm {% if view == 'log' %}active{% endif %}">Flat Log</a>
+        </div>
+
+        <div class="ft-select">
+            <label for="id-status-filter">Status</label>
+            <select name="status" id="id-status-filter" onchange="this.form.submit()">
+                <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+                <option value="flagged" {% if status_filter == 'flagged' %}selected{% endif %}>Flagged</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+            </select>
+        </div>
+
+        <div class="ft-select">
+            <label for="id-agent-filter">Agent</label>
+            <select name="agent" id="id-agent-filter" onchange="this.form.submit()">
+                <option value="" {% if not agent_filter %}selected{% endif %}>All agents</option>
+                {% for value, label in agent_choices %}
+                <option value="{{ value }}" {% if agent_filter == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="ft-select">
+            <label for="id-days-filter">Since</label>
+            <select name="days" id="id-days-filter" onchange="this.form.submit()">
+                <option value="7" {% if days_filter == '7' %}selected{% endif %}>7 days</option>
+                <option value="30" {% if days_filter == '30' %}selected{% endif %}>30 days</option>
+                <option value="90" {% if days_filter == '90' %}selected{% endif %}>90 days</option>
+                <option value="" {% if not days_filter %}selected{% endif %}>All time</option>
+            </select>
+        </div>
+
+        <div class="search-box">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="text" name="q" value="{{ query }}" placeholder="Search subject, sender, quotation #, submittal...">
+            <button type="submit" class="search-submit" aria-label="Search"><i class="fas fa-arrow-right"></i></button>
+        </div>
+
+        {% if view == 'log' %}<input type="hidden" name="view" value="log">{% endif %}
+    </form>
+
+    {% if truncated %}
+    <div class="truncate-note">
+        <i class="fas fa-triangle-exclamation"></i>
+        Showing the most recent {{ document_rows|length }} enquiries out of a larger set capped by
+        <code>EMAILAGENT_ACTIVITY_MAX_ROWS</code>. Narrow the date range above (or raise that setting in <code>.env</code>) to see further back.
+    </div>
+    {% endif %}
+
+    {% if view == 'document' %}
+        {% if document_rows %}
+        {% for doc in document_rows %}
+            <div class="doc-card worst-{{ doc.worst_status }}">
+                <div class="doc-head">
+                    <div class="doc-head-main">
+                        <a href="{% url 'emailagent:email_detail' doc.tracked_email.pk %}" class="doc-subject">
+                            <i class="fas fa-envelope" style="opacity:.5; font-size:.85em;"></i>
+                            {{ doc.tracked_email.subject|default:"(no subject)"|truncatechars:70 }}
+                        </a>
+                        <div class="doc-meta">{{ doc.tracked_email.sender_name|default:doc.tracked_email.sender }}</div>
+                    </div>
+                    <div class="doc-head-status">
+                        {% if doc.worst_status == 'success' %}
+                        <span class="status-chip success"><i class="fas fa-circle-check"></i> All clear</span>
+                        {% elif doc.worst_status == 'flagged' %}
+                        <span class="status-chip flagged"><i class="fas fa-triangle-exclamation"></i> Needs a look</span>
+                        {% else %}
+                        <span class="status-chip failed"><i class="fas fa-circle-xmark"></i> Failed</span>
+                        {% endif %}
+                        <span class="doc-ts">last activity {{ doc.latest|timesince }} ago &middot; {{ doc.latest|date:"d M Y, H:i" }}</span>
+                    </div>
+                </div>
+
+                <div class="stage-track">
+                    {% for stage in doc.stages %}
+                        <div class="stage-node" title="{% if stage.error %}{{ stage.error }}{% else %}{{ stage.summary }}{% endif %}{% for issue in stage.issues %}&#10;- {{ issue }}{% endfor %}">
+                            <span class="stage-icon {{ stage.status }}">
+                                <i class="fas
+                                    {% if stage.agent_name == 'classify_email' %}fa-magnifying-glass
+                                    {% elif stage.agent_name == 'draft_quotation' %}fa-file-pen
+                                    {% elif stage.agent_name == 'rematch_unmatched_items' %}fa-arrows-rotate
+                                    {% elif stage.agent_name == 'recheck_item_brand_matches' %}fa-tags
+                                    {% elif stage.agent_name == 'send_quotation_email' %}fa-paper-plane
+                                    {% elif stage.agent_name == 'draft_submittal' %}fa-file-circle-plus
+                                    {% elif stage.agent_name == 'send_submittal_email' %}fa-paper-plane
+                                    {% else %}fa-circle{% endif %}"></i>
+                            </span>
+                            <span class="stage-badge {{ stage.status }}">
+                                {% if stage.status == 'success' %}<i class="fas fa-check"></i>
+                                {% elif stage.status == 'flagged' %}<i class="fas fa-exclamation"></i>
+                                {% else %}<i class="fas fa-xmark"></i>{% endif %}
+                            </span>
+                            <span class="stage-label">{{ stage.get_agent_name_display }}</span>
+                            <span class="stage-time">{{ stage.created_at|date:"d M, H:i" }}</span>
+                        </div>
+                    {% endfor %}
+                    {% with resulting_quotation=doc.tracked_email.quotation_draft.quotation|default:doc.tracked_email.quotation_draft.merged_into %}
+                    {% if resulting_quotation %}
+                        {# .quotation is set when THIS email created a fresh quotation; .merged_into is set instead
+                           when this email was a same-thread follow-up whose change was merged into an EARLIER
+                           email's quotation (see quotation_agent.merge_followup_into_quotation) -- both count as
+                           "this email resulted in a quotation change" and should show a link here. #}
+                        <a href="{% url 'view_quotation_details' resulting_quotation.id %}" class="stage-node linked">
+                            <span class="stage-icon success"><i class="fas fa-file-invoice-dollar"></i></span>
+                            <span class="stage-badge success"><i class="fas fa-check"></i></span>
+                            <span class="stage-label">{{ resulting_quotation.quotation_number }}{% if doc.tracked_email.quotation_draft.status == 'merged' %} (merged){% endif %}</span>
+                        </a>
+                    {% endif %}
+                    {% endwith %}
+                    {% if doc.submittal %}
+                        <a href="{% url 'submittal:detail' doc.submittal.id %}" class="stage-node linked">
+                            <span class="stage-icon {% if doc.submittal.needs_verification %}flagged{% else %}success{% endif %}"><i class="fas fa-file-alt"></i></span>
+                            <span class="stage-badge {% if doc.submittal.needs_verification %}flagged{% else %}success{% endif %}">
+                                {% if doc.submittal.needs_verification %}<i class="fas fa-exclamation"></i>{% else %}<i class="fas fa-check"></i>{% endif %}
+                            </span>
+                            <span class="stage-label">Submittal{% if doc.submittal.needs_verification %} (needs review){% endif %}</span>
+                        </a>
+                    {% endif %}
+                </div>
+
+                {% if doc.issue_count %}
+                <details class="collapsible-section doc-issues" {% if doc.worst_status != 'success' %}open{% endif %}>
+                    <summary class="collapsible-summary">
+                        <i class="fas fa-chevron-right toggle-icon"></i>
+                        <i class="fas fa-clipboard-list"></i> Worth checking
+                        <span class="pkg-count">{{ doc.issue_count }}</span>
+                    </summary>
+                    <div class="doc-issues-list">
+                        {% for stage in doc.stages %}
+                            {% for issue in stage.issues %}
+                            <div class="item-note"><i class="fas fa-robot"></i> {{ stage.get_agent_name_display }}: {{ issue }}</div>
+                            {% endfor %}
+                            {% if stage.error %}
+                            <div class="item-note"><i class="fas fa-bug"></i> {{ stage.get_agent_name_display }}: {{ stage.error|truncatechars:160 }}</div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endif %}
+            </div>
+        {% endfor %}
+        {% else %}
+        <div class="card-x">
+            <div class="empty-x">
+                <div class="ic"><i class="fas fa-gauge-high"></i></div>
+                <h3>No agent activity{% if query or status_filter or agent_filter or days_filter %} matches these filters{% else %} yet{% endif %}</h3>
+                <p>{% if query or status_filter or agent_filter or days_filter %}Try clearing a filter above.{% else %}This fills in automatically as emails are classified and quotations are drafted.{% endif %}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if orphan_runs %}
+        <div class="sec-head" style="margin-top: 1.5rem;">
+            <h2>Not Tied to a Stored Email <span class="count">-- needs a look ({{ orphan_runs|length }})</span></h2>
+        </div>
+        <div class="tbl-x-wrap">
+            <table class="tbl-x">
+                <thead><tr><th>Agent</th><th>Related To</th><th>Status</th><th>Summary</th><th>When</th></tr></thead>
+                <tbody>
+                    {% for run in orphan_runs %}
+                    <tr>
+                        <td>{{ run.get_agent_name_display }}</td>
+                        <td>
+                            {% if run.quotation %}
+                                <a href="{% url 'view_quotation_details' run.quotation.id %}">{{ run.quotation.quotation_number }}</a>
+                            {% elif run.submittal %}
+                                <a href="{% url 'submittal:detail' run.submittal.id %}">{{ run.submittal.project|truncatechars:40 }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if run.status == 'success' %}<span class="chip-x green">Success</span>
+                            {% elif run.status == 'flagged' %}<span class="chip-x amber">Flagged</span>
+                            {% else %}<span class="chip-x red">Failed</span>{% endif %}
+                        </td>
+                        <td>{{ run.summary|default:run.error|default:"—" }}</td>
+                        <td>{{ run.created_at|date:"d M Y, H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if orphan_routine_total %}
+        <div class="sec-head" style="margin-top: 1.5rem;">
+            <h2>Not Tied to a Stored Email <span class="count">-- routine ({{ orphan_routine_total }})</span></h2>
+        </div>
+        <details class="collapsible-section">
+            <summary class="collapsible-summary">
+                <i class="fas fa-chevron-right toggle-icon"></i>
+                <i class="fas fa-filter"></i> Emails read and correctly filtered out as not relevant -- nothing saved, nothing to review
+                <span class="pkg-count">{{ orphan_routine_total }}</span>
+            </summary>
+            <div class="tbl-x-wrap">
+                <table class="tbl-x">
+                    <thead><tr><th>Date</th><th>Emails filtered out</th></tr></thead>
+                    <tbody>
+                        {% for day, count in orphan_routine_daily %}
+                        <tr><td>{{ day|date:"d M Y" }}</td><td>{{ count }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        {% endif %}
+
+    {% else %}
+    {% if runs %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Agent</th>
+                    <th>Related To</th>
+                    <th>Status</th>
+                    <th>Summary</th>
+                    <th>Issues</th>
+                    <th>Duration</th>
+                    <th>When</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>{{ run.get_agent_name_display }}</td>
+                    <td>
+                        {% if run.tracked_email %}
+                            <a href="{% url 'emailagent:email_detail' run.tracked_email.pk %}">{{ run.tracked_email.subject|default:"(no subject)"|truncatechars:40 }}</a>
+                        {% elif run.quotation %}
+                            <a href="{% url 'view_quotation_details' run.quotation.id %}">{{ run.quotation.quotation_number }}</a>
+                        {% elif run.submittal %}
+                            <a href="{% url 'submittal:detail' run.submittal.id %}">{{ run.submittal.project|truncatechars:40 }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if run.status == 'success' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Success</span>
+                        {% elif run.status == 'flagged' %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Flagged</span>
+                        {% else %}<span class="chip-x red"><i class="fas fa-circle-xmark"></i> Failed</span>{% endif %}
+                    </td>
+                    <td>{{ run.summary|default:"—" }}</td>
+                    <td>
+                        {% if run.error %}
+                            <div class="item-note"><i class="fas fa-bug"></i> {{ run.error|truncatechars:120 }}</div>
+                        {% endif %}
+                        {% for issue in run.issues %}
+                            <div class="item-note"><i class="fas fa-robot"></i> {{ issue }}</div>
+                        {% endfor %}
+                        {% if not run.error and not run.issues %}—{% endif %}
+                    </td>
+                    <td>{% if run.duration_ms %}{{ run.duration_ms }} ms{% else %}—{% endif %}</td>
+                    <td title="{{ run.created_at|date:'d M Y, H:i:s' }}">{{ run.created_at|timesince }} ago</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-gauge-high"></i></div>
+            <h3>No agent activity{% if query or status_filter or agent_filter or days_filter %} matches these filters{% else %} yet{% endif %}</h3>
+            <p>{% if query or status_filter or agent_filter or days_filter %}Try clearing a filter above.{% else %}This fills in automatically as emails are classified and quotations are drafted.{% endif %}</p>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="page-bar">
+        {% if page_obj.has_previous %}
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i> Prev</a>
+        {% else %}
+            <span class="disabled"><i class="fas fa-chevron-left"></i> Prev</span>
+        {% endif %}
+        <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.next_page_number }}">Next <i class="fas fa-chevron-right"></i></a>
+        {% else %}
+            <span class="disabled">Next <i class="fas fa-chevron-right"></i></span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

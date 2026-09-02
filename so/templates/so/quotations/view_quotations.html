@@ -117,6 +117,28 @@
             border-radius: 50px;
             font-weight: 500;
         }
+
+        .agent-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 0.28rem 0.65rem 0.28rem 0.55rem;
+            border-radius: 50px;
+            color: #fff;
+            background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+            box-shadow: 0 2px 8px rgba(67, 97, 238, 0.35);
+            vertical-align: middle;
+            line-height: 1;
+            cursor: default;
+        }
+
+        .agent-badge i {
+            font-size: 0.7rem;
+        }
         
         .badge-approved {
             background-color: rgba(40, 167, 69, 0.15);
@@ -891,6 +913,15 @@
         </div>
         {% endif %}
 
+        <div class="d-flex align-items-center me-3 mb-2 mb-lg-0">
+            <label for="sourceFilter" class="form-label mb-0 me-2 d-none d-sm-block">Source:</label>
+            <select class="form-select form-select-sm" id="sourceFilter" name="source">
+                <option value="All" {% if current_source == 'All' or not current_source %}selected{% endif %}>All</option>
+                <option value="agent" {% if current_source == 'agent' %}selected{% endif %}>🤖 Agent-made</option>
+                <option value="manual" {% if current_source == 'manual' %}selected{% endif %}>Manual</option>
+            </select>
+        </div>
+
         <div class="d-flex align-items-start me-3 mb-2 mb-lg-0">
             <label class="form-label mb-0 me-2 d-none d-sm-block pt-1">Firm:</label>
             <div class="multi-select firm-ms" id="inapp-firm-wrapper">
@@ -937,19 +968,19 @@
     <ul class="nav nav-tabs justify-content-md-start">
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'All' or not current_status %}active{% endif %}" 
-               href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">All Quotations</a>
+               href="?status=All{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}{% if current_source and current_source != 'All' %}&source={{ current_source }}{% endif %}">All Quotations</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'Approved' %}active{% endif %}" 
-               href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">Approved</a>
+               href="?status=Approved{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}{% if current_source and current_source != 'All' %}&source={{ current_source }}{% endif %}">Approved</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'On Hold' %}active{% endif %}" 
-               href="?status=On+Hold{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">On Hold</a>
+               href="?status=On+Hold{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}{% if current_source and current_source != 'All' %}&source={{ current_source }}{% endif %}">On Hold</a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if current_status == 'Pending' %}active{% endif %}" 
-               href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}">Pending</a>
+               href="?status=Pending{% if selected_salesman %}&salesman_filter={{ selected_salesman }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% for f in firm_selected %}&firm={{ f|urlencode }}{% endfor %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if division_lock %}&division={{ division_lock }}{% endif %}{% if current_source and current_source != 'All' %}&source={{ current_source }}{% endif %}">Pending</a>
         </li>
     </ul>
 </div>
@@ -992,7 +1023,7 @@
                 <span class="filter-loading-text">Loading…</span>
             </div>
             <div class="quotations-container" id="quotationsContainer">
-                {% include 'so/quotations/_quotations_results.html' with quotations=quotations current_status=current_status selected_salesman=selected_salesman selected_division=selected_division start_date=start_date end_date=end_date query_string=query_string %}
+                {% include 'so/quotations/_quotations_results.html' with quotations=quotations current_status=current_status selected_salesman=selected_salesman selected_division=selected_division current_source=current_source start_date=start_date end_date=end_date query_string=query_string %}
             </div>
         </div>
     </div>
@@ -1013,6 +1044,7 @@
     const statusHidden = document.getElementById('qStatusHidden');
     const searchHidden = document.getElementById('qSearchHidden');
     const divisionFilter = document.getElementById('divisionFilter');
+    const sourceFilter = document.getElementById('sourceFilter');
     const salesmanFilter = document.getElementById('salesmanFilter');
     const startDate = document.getElementById('startDate');
     const endDate = document.getElementById('endDate');
@@ -1032,6 +1064,7 @@
       params.set('end_date', endDate ? (endDate.value || '') : '');
       params.set('salesman_filter', salesmanFilter ? (salesmanFilter.value || '') : '');
       params.set('division', divisionFilter ? (divisionFilter.value || 'All') : 'All');
+      params.set('source', sourceFilter ? (sourceFilter.value || 'All') : 'All');
       params.set('q', searchInput ? (searchInput.value || '') : '');
       params.set('page', '1');
       const firmWrapper = document.getElementById('inapp-firm-wrapper');
@@ -1105,7 +1138,7 @@
       });
     }
 
-    [divisionFilter, salesmanFilter, startDate, endDate].filter(Boolean).forEach(el => {
+    [divisionFilter, sourceFilter, salesmanFilter, startDate, endDate].filter(Boolean).forEach(el => {
       el.addEventListener('change', () => loadQuotations(collectParams({ page: '1' })));
     });
 

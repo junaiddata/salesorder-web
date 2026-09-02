@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'alabama',
     'submittal',
     'warranty',
+    'emailagent',
 
     'django.contrib.humanize',
     
@@ -181,6 +182,136 @@ SAP_SYNC_DAYS_BACK = 3  # Default: fetch new orders + last 3 days = 4 days total
 # VPS API Configuration (for PC script to send data to VPS)
 VPS_BASE_URL = os.getenv('VPS_BASE_URL', 'https://salesorder.junaidworld.com')  # Production VPS URL
 VPS_API_KEY = os.getenv('VPS_API_KEY', 'test')  # Must match between PC script and VPS
+
+# ── Email Tracking & Classification Agent (Gmail + Claude) ──────────────
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+GMAIL_REFRESH_TOKEN = os.getenv('GMAIL_REFRESH_TOKEN', '')
+GMAIL_TOKEN_URI = 'https://oauth2.googleapis.com/token'
+GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+
+# Real-time push notifications (Gmail -> Google Cloud Pub/Sub -> our webhook)
+# instead of waiting for the next scheduled poll_gmail run. Set up via:
+#   python manage.py watch_gmail
+# GMAIL_PUBSUB_TOPIC: full topic name, e.g. projects/<gcp-project-id>/topics/gmail-inbox
+# GMAIL_PUSH_TOKEN: shared secret appended to the webhook URL as ?token=...
+#   so only our own Pub/Sub subscription can trigger it.
+GMAIL_PUBSUB_TOPIC = os.getenv('GMAIL_PUBSUB_TOPIC', '')
+GMAIL_PUSH_TOKEN = os.getenv('GMAIL_PUSH_TOKEN', '')
+
+# Second inbound source for the same agent -- a plain IMAP mailbox (e.g.
+# sales@junaid.ae), polled the same way as Gmail via poll_outlook (see
+# emailagent/outlook_client.py + management/commands/poll_outlook.py).
+OUTLOOK_IMAP_HOST = os.getenv('OUTLOOK_IMAP_HOST', '')
+OUTLOOK_IMAP_PORT = int(os.getenv('OUTLOOK_IMAP_PORT', '993'))
+OUTLOOK_IMAP_USER = os.getenv('OUTLOOK_IMAP_USER', '')
+OUTLOOK_IMAP_PASSWORD = os.getenv('OUTLOOK_IMAP_PASSWORD', '')
+OUTLOOK_IMAP_FOLDER = os.getenv('OUTLOOK_IMAP_FOLDER', 'INBOX')
+
+# Third inbound source, same agent -- another plain IMAP mailbox
+# (project@junaid.ae), SUBMITTAL-ONLY: classified the same as any other
+# mailbox, but emailagent.services.process_new_message never runs quotation
+# drafting or LPO processing for mail from this source, regardless of what
+# it classifies as (see poll_project_mailbox / the submittal_only param).
+# Host/port/folder default to the same values as the primary OUTLOOK_IMAP_*
+# mailbox since it's on the same hosting -- only the mailbox user/password
+# genuinely differ; override PROJECT_IMAP_HOST/PORT/FOLDER in .env if that
+# ever isn't true.
+PROJECT_IMAP_HOST = os.getenv('PROJECT_IMAP_HOST', OUTLOOK_IMAP_HOST)
+PROJECT_IMAP_PORT = int(os.getenv('PROJECT_IMAP_PORT', str(OUTLOOK_IMAP_PORT)))
+PROJECT_IMAP_USER = os.getenv('PROJECT_IMAP_USER', '')
+PROJECT_IMAP_PASSWORD = os.getenv('PROJECT_IMAP_PASSWORD', '')
+PROJECT_IMAP_FOLDER = os.getenv('PROJECT_IMAP_FOLDER', OUTLOOK_IMAP_FOLDER)
+
+# Fourth inbound source, same agent -- another plain IMAP mailbox,
+# SUBMITTAL-ONLY same as PROJECT_IMAP_* above (see poll_submittal_mailbox /
+# the submittal_only param). Host/port/folder default to the primary
+# OUTLOOK_IMAP_* mailbox's values; override in .env if this mailbox is
+# hosted elsewhere.
+SUBMITTAL_IMAP_HOST = os.getenv('SUBMITTAL_IMAP_HOST', OUTLOOK_IMAP_HOST)
+SUBMITTAL_IMAP_PORT = int(os.getenv('SUBMITTAL_IMAP_PORT', str(OUTLOOK_IMAP_PORT)))
+SUBMITTAL_IMAP_USER = os.getenv('SUBMITTAL_IMAP_USER', '')
+SUBMITTAL_IMAP_PASSWORD = os.getenv('SUBMITTAL_IMAP_PASSWORD', '')
+SUBMITTAL_IMAP_FOLDER = os.getenv('SUBMITTAL_IMAP_FOLDER', OUTLOOK_IMAP_FOLDER)
+
+# Outbound email (quotation "Send to Client" button) -- separate from the
+# GMAIL_* OAuth creds above, which are read-only and used only for the
+# inbound email-tracking agent. Sending uses plain SMTP with a Gmail App
+# Password (myaccount.google.com/apppasswords), configured in .env:
+#   EMAIL_HOST_USER=you@gmail.com
+#   EMAIL_HOST_PASSWORD=<16-char app password>
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+EMAILAGENT_CLASSIFICATION_MODEL = os.getenv('EMAILAGENT_CLASSIFICATION_MODEL', 'claude-sonnet-5')
+EMAILAGENT_CONFIDENCE_THRESHOLD = float(os.getenv('EMAILAGENT_CONFIDENCE_THRESHOLD', '0.75'))
+
+# The 'poll_gmail' management command wires its own file handler at module
+# import time, so manual runs already log to logs/poll_gmail.log. The
+# Pub/Sub webhook (emailagent/views.py:gmail_push_webhook) instead calls
+# services.poll_gmail() directly from a background thread, whose loggers
+# (emailagent.services, emailagent.gmail_client, ...) had no handler at all
+# -- push-triggered runs were completing (or failing) with zero record
+# anywhere. This routes all emailagent.* logging to its own file too.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'emailagent': {
+            'format': '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'emailagent_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'emailagent.log',
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'emailagent',
+        },
+    },
+    'loggers': {
+        'emailagent': {
+            'handlers': ['emailagent_file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+EMAILAGENT_MAX_ATTACHMENT_IMAGES = int(os.getenv('EMAILAGENT_MAX_ATTACHMENT_IMAGES', '10'))
+EMAILAGENT_MAX_ATTACHMENT_MB = int(os.getenv('EMAILAGENT_MAX_ATTACHMENT_MB', '20'))
+EMAILAGENT_AGENT_MAX_ITERATIONS = int(os.getenv('EMAILAGENT_AGENT_MAX_ITERATIONS', '6'))
+# Per-request bound on every Claude call the agent makes (classification,
+# quotation drafting, etc.) -- with no timeout set, the SDK's own default can
+# leave a single unusually large/slow request (e.g. an email with 10+ image
+# attachments) hanging far longer than is reasonable for an unattended
+# pipeline, silently blocking every message queued behind it.
+EMAILAGENT_CLAUDE_TIMEOUT_SECS = int(os.getenv('EMAILAGENT_CLAUDE_TIMEOUT_SECS', '180'))
+
+# Agent Activity dashboard (emailagent:agent_activity) -- tune these as
+# AgentRun volume grows, no code changes needed:
+#   PAGE_SIZE   how many rows (log view) / enquiries (by-enquiry view) per page
+#   MAX_ROWS    hard cap on rows pulled into the by-enquiry grouping pass --
+#               keeps that view fast regardless of total AgentRun table size;
+#               narrow the date-range filter on the page itself to see further back
+EMAILAGENT_ACTIVITY_PAGE_SIZE = int(os.getenv('EMAILAGENT_ACTIVITY_PAGE_SIZE', '20'))
+EMAILAGENT_ACTIVITY_MAX_ROWS = int(os.getenv('EMAILAGENT_ACTIVITY_MAX_ROWS', '2000'))
+
+# LPO agent (emailagent/lpo_agent.py) matching thresholds -- see its
+# find_matching_quotation() docstring for how these are used. Neither one
+# ever gates auto-CREATION of a Sales Order (only an exact, unique
+# quotation-number match does that); they only control which candidate
+# quotations get surfaced to a human on the "needs review" page.
+EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD = float(os.getenv('EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD', '0.8'))
+EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS = int(os.getenv('EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS', '180'))
 
 
 # Static files (CSS, JavaScript, Images)

@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Email Tracking Agent{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    <link rel="stylesheet" href="{% static 'emailagent/css/emailagent.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <nav class="app-nav" id="appNav">
+        <div class="app-nav-inner">
+            <a class="app-brand" href="{% url 'emailagent:review_queue' %}">
+                <span class="logo"><i class="fas fa-envelope-open-text"></i></span>
+                <span>
+                    <span class="name">Email Tracking Agent</span><br>
+                    <span class="sub">RFQ detection &amp; manual review</span>
+                </span>
+            </a>
+
+            <button class="app-nav-toggle" id="navToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+
+            {% with url_name=request.resolver_match.url_name %}
+            <div class="app-nav-links">
+                <a href="{% url 'emailagent:review_queue' %}" class="app-nav-link {% if url_name == 'review_queue' %}active{% endif %}">
+                    <i class="fas fa-inbox"></i> Review Queue
+                </a>
+                <a href="{% url 'emailagent:email_list' %}" class="app-nav-link {% if url_name == 'email_list' or url_name == 'email_detail' %}active{% endif %}">
+                    <i class="fas fa-list"></i> All Emails
+                </a>
+                <a href="{% url 'emailagent:quotation_draft_queue' %}" class="app-nav-link {% if url_name == 'quotation_draft_queue' or url_name == 'quotation_draft_review' %}active{% endif %}">
+                    <i class="fas fa-file-invoice-dollar"></i> Quotation Drafts
+                </a>
+                <a href="{% url 'emailagent:submittal_draft_queue' %}" class="app-nav-link {% if url_name == 'submittal_draft_queue' %}active{% endif %}">
+                    <i class="fas fa-file-circle-plus"></i> Submittal Drafts
+                </a>
+                <a href="{% url 'emailagent:lpo_request_queue' %}" class="app-nav-link {% if url_name == 'lpo_request_queue' or url_name == 'lpo_request_review' %}active{% endif %}">
+                    <i class="fas fa-file-contract"></i> LPO Requests
+                </a>
+                <a href="{% url 'emailagent:stock_shortage_report' %}" class="app-nav-link {% if url_name == 'stock_shortage_report' %}active{% endif %}">
+                    <i class="fas fa-triangle-exclamation"></i> Stock Shortages
+                </a>
+                <a href="{% url 'emailagent:agent_activity' %}" class="app-nav-link {% if url_name == 'agent_activity' %}active{% endif %}">
+                    <i class="fas fa-gauge-high"></i> Agent Activity
+                </a>
+            </div>
+            <div class="app-nav-right">
+                <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>
+            </div>
+            {% endwith %}
+        </div>
+    </nav>
+
+    {% if messages %}
+    <div class="flash-stack" id="flashStack">
+        {% for msg in messages %}
+        <div class="flash {{ msg.tags }}">
+            <span class="fic"><i class="fas fa-{% if 'success' in msg.tags %}circle-check{% elif 'error' in msg.tags or 'danger' in msg.tags %}circle-exclamation{% elif 'warning' in msg.tags %}triangle-exclamation{% else %}circle-info{% endif %}"></i></span>
+            <span>{{ msg }}</span>
+            <button class="close" onclick="this.parentElement.remove()" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('navToggle')?.addEventListener('click', function () {
+            document.getElementById('appNav').classList.toggle('open');
+        });
+        setTimeout(function () {
+            document.querySelectorAll('#flashStack .flash').forEach(function (f, i) {
+                setTimeout(function () { f.style.transition = 'opacity .4s'; f.style.opacity = '0'; setTimeout(function(){ f.remove(); }, 400); }, i * 120);
+            });
+        }, 5000);
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

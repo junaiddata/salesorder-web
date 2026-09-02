@@ -47,6 +47,15 @@
     .icon-btn.pdf:hover   { background: var(--success-50); color: var(--success-700); border-color:#bbf7d0; }
     .icon-btn.del:hover   { background: var(--danger-50); color: var(--danger); border-color:#fecaca; }
     @media (max-width:600px){ .sub-card .sactions { flex-wrap: wrap; } }
+
+    .agent-chip {
+        display: inline-flex; align-items: center; gap: .3rem;
+        font-size: .65rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+        padding: .28rem .6rem .28rem .5rem; border-radius: 50px; color: #fff;
+        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+        box-shadow: 0 2px 8px rgba(67,97,238,.35); vertical-align: middle; line-height: 1;
+    }
+    .chip-x.amber { background: var(--warn-50, #fff8e6); color: var(--warn-700, #856404); }
 </style>
 {% endblock %}
 
@@ -96,6 +105,12 @@
                 <button type="button" class="pill" data-company="junaid" onclick="setCompanyFilter('junaid', this)">Junaid</button>
                 <button type="button" class="pill" data-company="alabama" onclick="setCompanyFilter('alabama', this)">Alabama</button>
             </div>
+            <div class="pill-row" id="sourceTabs">
+                <button type="button" class="pill active" data-source="all" onclick="setSourceFilter('all', this)">All Sources</button>
+                <button type="button" class="pill" data-source="agent" onclick="setSourceFilter('agent', this)"><i class="fas fa-robot"></i> AI Agent</button>
+                <button type="button" class="pill" data-source="manual" onclick="setSourceFilter('manual', this)">Manual</button>
+                <button type="button" class="pill" data-source="needs_review" onclick="setSourceFilter('needs_review', this)">Needs Review</button>
+            </div>
             <div class="search-x" style="min-width:260px;">
                 <i class="fas fa-search"></i>
                 <input type="text" class="input-x" id="searchInput" placeholder="Search project, client or product…" oninput="filterCards(this.value)">
@@ -105,15 +120,17 @@
 
     <div id="submittalGrid">
         {% for s in submittals %}
-        <div class="sub-card" data-company="{{ s.company }}" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
+        <div class="sub-card" data-company="{{ s.company }}" data-source="{% if s.created_via == 'manual' %}manual{% else %}agent{% endif %}" data-needs-review="{% if s.needs_verification %}1{% else %}0{% endif %}" data-search="{{ s.project|lower }} {{ s.client|lower }} {{ s.product|lower }}">
             <span class="sic"><i class="fas fa-file-pdf"></i></span>
             <div class="meta">
                 <a href="{% url 'submittal:detail' s.pk %}" class="stitle">{{ s.project|truncatewords:14 }}</a>
                 <div class="smeta">
+                    {% if s.created_via != 'manual' %}<span class="agent-chip" title="Auto-drafted by the AI submittal agent"><i class="fas fa-robot"></i> Agent</span>{% endif %}
                     {% if s.client %}<span><i class="fas fa-building"></i>{{ s.client }}</span>{% endif %}
                     {% if s.product %}<span><i class="fas fa-box"></i>{{ s.product }}</span>{% endif %}
                     <span><i class="fas fa-calendar-alt"></i>{{ s.created_at|date:"d M Y" }}</span>
                     {% if s.company == 'alabama' %}<span class="chip-x" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-building"></i> Alabama</span>{% endif %}
+                    {% if s.needs_verification %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>{% elif s.status == 'verified' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Verified</span>{% elif s.status == 'sent' %}<span class="chip-x green"><i class="fas fa-paper-plane"></i> Sent</span>{% endif %}
                     {% if s.pdf_generated_at %}<span class="chip-x green"><i class="fas fa-circle-check"></i> PDF ready</span>{% endif %}
                 </div>
             </div>
@@ -151,10 +168,18 @@
 {% block extra_js %}
 <script>
 let currentCompanyFilter = 'all';
+let currentSourceFilter = 'all';
 
 function setCompanyFilter(company, btn) {
     currentCompanyFilter = company;
     document.querySelectorAll('#companyTabs .pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    filterCards(document.getElementById('searchInput').value);
+}
+
+function setSourceFilter(source, btn) {
+    currentSourceFilter = source;
+    document.querySelectorAll('#sourceTabs .pill').forEach(p => p.classList.remove('active'));
     if (btn) btn.classList.add('active');
     filterCards(document.getElementById('searchInput').value);
 }
@@ -166,7 +191,9 @@ function filterCards(q) {
     cards.forEach(c => {
         const matchesSearch = !term || c.dataset.search.includes(term);
         const matchesCompany = currentCompanyFilter === 'all' || c.dataset.company === currentCompanyFilter;
-        const match = matchesSearch && matchesCompany;
+        const matchesSource = currentSourceFilter === 'all'
+            || (currentSourceFilter === 'needs_review' ? c.dataset.needsReview === '1' : c.dataset.source === currentSourceFilter);
+        const match = matchesSearch && matchesCompany && matchesSource;
         c.style.display = match ? '' : 'none';
         if (match) visible++;
     });

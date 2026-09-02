@@ -1,3 +1,31 @@
+# name: Deploy CI/CD
+
+# on:
+#   push:
+#     branches: [ main ]
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: SSH & Deploy
+#         uses: appleboy/ssh-action@v1
+#         with:
+#           host: ${{ secrets.HOST }}
+#           username: root
+#           key: ${{ secrets.SSH_KEY }}
+#           port: 22
+#           script: |
+#             cd /var/www/salesorder-web2/salesorder
+#             git pull origin main
+#             source venv/bin/activate
+#             pip install -r requirements.txt
+#             python manage.py migrate
+#             python manage.py collectstatic --noinput
+#             systemctl restart salesorder.service
+#             systemctl reload nginx
+
+
 name: Deploy CI/CD
 
 on:
@@ -22,5 +50,6 @@ jobs:
             pip install -r requirements.txt
             python manage.py migrate
             python manage.py collectstatic --noinput
+            chown -R www-data:www-data /var/www/salesorder-web2/salesorder
             systemctl restart salesorder.service
             systemctl reload nginx

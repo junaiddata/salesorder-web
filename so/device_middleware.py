@@ -1,5 +1,6 @@
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.http import JsonResponse
 from .models import TrustedDevice
 
 class DeviceRestrictionMiddleware:
@@ -10,10 +11,15 @@ class DeviceRestrictionMiddleware:
         if not request.user.is_authenticated or request.path.startswith('/static/') or request.path.startswith('/media/'):
             return self.get_response(request)
 
+        # AJAX/fetch calls expect JSON back, not an HTML redirect to the
+        # device-registration pages — returning HTML there is what breaks
+        # callers like fetch(...).then(r => r.json()) with a JSON parse error.
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
         # Bypass device restriction for localhost and internal IPs
         host = request.get_host().lower()
         remote_addr = request.META.get('REMOTE_ADDR', '')
-        
+
         # Check if accessing from localhost or specific IP
         allowed_hosts = [
             'localhost',
@@ -21,7 +27,7 @@ class DeviceRestrictionMiddleware:
             '192.168.0.43',
             '192.168.0.45',
         ]
-        
+
         # Check hostname/port or IP address
         host_without_port = host.split(':')[0]
         if host_without_port in allowed_hosts or remote_addr in allowed_hosts:
@@ -45,17 +51,21 @@ class DeviceRestrictionMiddleware:
         if cookie_token:
             try:
                 device = TrustedDevice.objects.get(user=request.user, device_token=cookie_token)
-                
+
                 # ✅ CHECK 1: Is it approved?
                 if device.is_approved:
                     return self.get_response(request)
-                
+
                 # ❌ CHECK 2: Token exists but NOT approved yet
                 else:
+                    if is_ajax:
+                        return JsonResponse({'error': 'This device is awaiting approval.'}, status=403)
                     return redirect('device_pending')
 
             except TrustedDevice.DoesNotExist:
                 pass # Token in cookie is invalid/deleted from DB
 
         # No token found -> Go to register
+        if is_ajax:
+            return JsonResponse({'error': 'This device is not registered. Please reload the page and register it.'}, status=403)
         return redirect('register_device')

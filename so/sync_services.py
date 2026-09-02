@@ -305,109 +305,122 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
         so_numbers = [m['so_number'] for m in mapped_orders if m.get('so_number')]
         sync_stats['total_orders'] = len(so_numbers)
 
-        with transaction.atomic():
-            try:
-                existing_map = SAPSalesorder.objects.in_bulk(so_numbers, field_name="so_number")
-            except TypeError:
-                existing_map = {o.so_number: o for o in SAPSalesorder.objects.filter(so_number__in=so_numbers)}
+        # Process in small chunks, each in its own transaction, instead of one
+        # transaction covering the whole sync. A single multi-hundred-order
+        # transaction holds Postgres row locks on every synced order for the
+        # entire run (which can take several minutes), blocking unrelated web
+        # requests that touch the same rows (e.g. approving a sales order)
+        # until the whole sync commits. Committing per chunk releases those
+        # locks every few rows instead of every few minutes.
+        SYNC_CHUNK_SIZE = 50
+        orders_with_so = [m for m in mapped_orders if m.get('so_number')]
 
-            to_create = []
-            to_update = []
+        for chunk_start in range(0, len(orders_with_so), SYNC_CHUNK_SIZE):
+            chunk = orders_with_so[chunk_start:chunk_start + SYNC_CHUNK_SIZE]
+            chunk_so_numbers = [m['so_number'] for m in chunk]
 
-            for mapped in mapped_orders:
-                so_no = mapped.get('so_number')
-                if not so_no:
-                    continue
-
-                status_val = mapped.get('status', 'C')
-                defaults = {
-                    "posting_date": mapped.get('posting_date'),
-                    "customer_code": mapped.get('customer_code', ''),
-                    "customer_name": mapped.get('customer_name', ''),
-                    "bp_reference_no": mapped.get('bp_reference_no', ''),
-                    "salesman_name": mapped.get('salesman_name', ''),
-                    "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),
-                    "document_total": _dec2(mapped.get('document_total', 0)),
-                    "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
-                    "status": status_val,
-                    "vat_number": mapped.get('vat_number', '') or '',
-                    "customer_address": mapped.get('customer_address', '') or '',
-                    "customer_phone": mapped.get('customer_phone', '') or '',
-                    "closing_remarks": mapped.get('closing_remarks', '') or '',
-                    "sap_remarks": mapped.get('sap_remarks', '') or '',
-                    "is_sap_pi": mapped.get('is_sap_pi', False),
-                    "nf_ref": mapped.get('nf_ref', '') or '',
-                }
-                if mapped.get('internal_number'):
-                    defaults["internal_number"] = mapped.get('internal_number')
-                if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
-                    defaults["last_synced_at"] = datetime.now()
-                # When status is Closed, set approval_status to SO Closed/Completed
-                if status_val in ('C', 'CLOSED'):
-                    defaults["approval_status"] = 'SO Closed/Completed'
-
-                obj = existing_map.get(so_no)
-                if obj is None:
-                    to_create.append(SAPSalesorder(so_number=so_no, **defaults))
-                    sync_stats['created'] += 1
-                else:
-                    for k, v in defaults.items():
-                        setattr(obj, k, v)
-                    to_update.append(obj)
-                    sync_stats['updated'] += 1
-
-            if to_create:
-                SAPSalesorder.objects.bulk_create(to_create, batch_size=5000)
-            if to_update:
-                update_fields = [
-                    "posting_date", "customer_code", "customer_name", "bp_reference_no",
-                    "salesman_name", "discount_percentage", "document_total", "row_total_sum",
-                    "status", "vat_number", "customer_address", "customer_phone", "closing_remarks",
-                    "sap_remarks", "internal_number", "is_sap_pi", "nf_ref", "approval_status"
-                ]
-                if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
-                    update_fields.append("last_synced_at")
-                    for obj in to_update:
-                        obj.last_synced_at = datetime.now()
-                SAPSalesorder.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
-
-            order_id_map = dict(
-                SAPSalesorder.objects.filter(so_number__in=so_numbers).values_list("so_number", "id")
-            )
-            items_by_so = {}
-            for mapped in mapped_orders:
-                so_no = mapped.get('so_number')
-                if so_no:
-                    items_by_so[so_no] = mapped.get('items', [])
-            upsert_salesorder_items(order_id_map, items_by_so)
-
-            sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_orders)
-
-            previously_open_orders = SAPSalesorder.objects.filter(
-                status__in=['O', 'OPEN'],
-                so_number__isnull=False
-            ).exclude(so_number__in=api_so_numbers)
-
-            closed_count = 0
-            for order in previously_open_orders:
-                order.status = 'C'
-                order.approval_status = 'SO Closed/Completed'
-                order.save(update_fields=['status', 'approval_status'])
-                order.items.all().update(
-                    row_status='C',
-                    remaining_open_quantity=Decimal('0'),
-                    pending_amount=Decimal('0')
-                )
-                closed_count += 1
-            sync_stats['closed'] = closed_count
-
-            for mapped in mapped_orders:
-                so_no = mapped.get('so_number')
-                is_sap_pi = mapped.get('is_sap_pi', False)
-                sap_pi_lpo_date = mapped.get('sap_pi_lpo_date')
-                if not is_sap_pi or not so_no:
-                    continue
+            with transaction.atomic():
                 try:
+                    existing_map = SAPSalesorder.objects.in_bulk(chunk_so_numbers, field_name="so_number")
+                except TypeError:
+                    existing_map = {o.so_number: o for o in SAPSalesorder.objects.filter(so_number__in=chunk_so_numbers)}
+
+                to_create = []
+                to_update = []
+
+                for mapped in chunk:
+                    so_no = mapped.get('so_number')
+
+                    status_val = mapped.get('status', 'C')
+                    defaults = {
+                        "posting_date": mapped.get('posting_date'),
+                        "customer_code": mapped.get('customer_code', ''),
+                        "customer_name": mapped.get('customer_name', ''),
+                        "bp_reference_no": mapped.get('bp_reference_no', ''),
+                        "salesman_name": mapped.get('salesman_name', ''),
+                        "discount_percentage": _dec2(mapped.get('discount_percentage', 0)),
+                        "document_total": _dec2(mapped.get('document_total', 0)),
+                        "row_total_sum": _dec2(mapped.get('row_total_sum', 0)),
+                        "status": status_val,
+                        "vat_number": mapped.get('vat_number', '') or '',
+                        "customer_address": mapped.get('customer_address', '') or '',
+                        "customer_phone": mapped.get('customer_phone', '') or '',
+                        "closing_remarks": mapped.get('closing_remarks', '') or '',
+                        "sap_remarks": mapped.get('sap_remarks', '') or '',
+                        "is_sap_pi": mapped.get('is_sap_pi', False),
+                        "nf_ref": mapped.get('nf_ref', '') or '',
+                    }
+                    if mapped.get('internal_number'):
+                        defaults["internal_number"] = mapped.get('internal_number')
+                    if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
+                        defaults["last_synced_at"] = datetime.now()
+                    # When status is Closed, set approval_status to SO Closed/Completed
+                    if status_val in ('C', 'CLOSED'):
+                        defaults["approval_status"] = 'SO Closed/Completed'
+
+                    obj = existing_map.get(so_no)
+                    if obj is None:
+                        to_create.append(SAPSalesorder(so_number=so_no, **defaults))
+                        sync_stats['created'] += 1
+                    else:
+                        for k, v in defaults.items():
+                            setattr(obj, k, v)
+                        to_update.append(obj)
+                        sync_stats['updated'] += 1
+
+                if to_create:
+                    SAPSalesorder.objects.bulk_create(to_create, batch_size=5000)
+                if to_update:
+                    update_fields = [
+                        "posting_date", "customer_code", "customer_name", "bp_reference_no",
+                        "salesman_name", "discount_percentage", "document_total", "row_total_sum",
+                        "status", "vat_number", "customer_address", "customer_phone", "closing_remarks",
+                        "sap_remarks", "internal_number", "is_sap_pi", "nf_ref", "approval_status"
+                    ]
+                    if 'last_synced_at' in [f.name for f in SAPSalesorder._meta.get_fields()]:
+                        update_fields.append("last_synced_at")
+                        for obj in to_update:
+                            obj.last_synced_at = datetime.now()
+                    SAPSalesorder.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
+
+                order_id_map = dict(
+                    SAPSalesorder.objects.filter(so_number__in=chunk_so_numbers).values_list("so_number", "id")
+                )
+                items_by_so = {mapped['so_number']: mapped.get('items', []) for mapped in chunk}
+                upsert_salesorder_items(order_id_map, items_by_so)
+
+        sync_stats['total_items'] = sum(len(m.get('items', [])) for m in mapped_orders)
+
+        previously_open_orders = SAPSalesorder.objects.filter(
+            status__in=['O', 'OPEN'],
+            so_number__isnull=False
+        ).exclude(so_number__in=api_so_numbers)
+
+        closed_count = 0
+        for order in previously_open_orders:
+            try:
+                with transaction.atomic():
+                    order.status = 'C'
+                    order.approval_status = 'SO Closed/Completed'
+                    order.save(update_fields=['status', 'approval_status'])
+                    order.items.all().update(
+                        row_status='C',
+                        remaining_open_quantity=Decimal('0'),
+                        pending_amount=Decimal('0')
+                    )
+                closed_count += 1
+            except Exception as e:
+                log.error(f"Error closing stale order {order.so_number}: {e}")
+        sync_stats['closed'] = closed_count
+
+        for mapped in mapped_orders:
+            so_no = mapped.get('so_number')
+            is_sap_pi = mapped.get('is_sap_pi', False)
+            sap_pi_lpo_date = mapped.get('sap_pi_lpo_date')
+            if not is_sap_pi or not so_no:
+                continue
+            try:
+                with transaction.atomic():
                     salesorder = SAPSalesorder.objects.get(so_number=so_no)
                     desired_pi_number = f"{so_no}"
                     legacy_pi_number = f"{so_no}-SAP"
@@ -460,10 +473,10 @@ def sync_salesorders_core(days_back=3, specific_date=None, docnum=None, from_dat
                     ]
                     if pi_lines_to_create:
                         SAPProformaInvoiceLine.objects.bulk_create(pi_lines_to_create, batch_size=1000)
-                except SAPSalesorder.DoesNotExist:
-                    log.warning(f"Salesorder {so_no} not found when creating SAP PI")
-                except Exception as e:
-                    log.error(f"Error creating SAP PI for {so_no}: {e}")
+            except SAPSalesorder.DoesNotExist:
+                log.warning(f"Salesorder {so_no} not found when creating SAP PI")
+            except Exception as e:
+                log.error(f"Error creating SAP PI for {so_no}: {e}")
 
         for mapped in mapped_orders:
             customer_code = mapped.get('customer_code', '').strip()

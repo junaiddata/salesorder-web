@@ -13,6 +13,9 @@ urlpatterns = [
     path('<int:pk>/generate-pdf/', views.submittal_generate_pdf, name='generate_pdf'),
     path('<int:pk>/stamp/save/', views.submittal_save_stamp, name='save_stamp'),
     path('<int:pk>/stamp/clear/', views.submittal_clear_stamp, name='clear_stamp'),
+    path('<int:pk>/verify/', views.submittal_mark_verified, name='mark_verified'),
+    path('<int:pk>/send/', views.submittal_send_email, name='send_email'),
+    path('generate-from-quotation/<int:quotation_id>/', views.submittal_generate_from_quotation, name='generate_from_quotation'),
 
     # Admin panel
     path('admin/', views.admin_index, name='admin_index'),

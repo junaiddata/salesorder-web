@@ -4,7 +4,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Quotation, QuotationItem, Customer, Salesman, Items, CustomerPrice
 from .models import Quotation, QuotationItem, CustomerPrice, Customer, Items, Salesman, QuotationLog
-from .models import SalesOrder, OrderItem
 from .utils import get_client_ip, label_network
 from django.db.models import Q
 from .utils import parse_device_info
@@ -115,6 +114,15 @@ def create_quotation(request):
                 discount_value=discount_value,
                 discount_approval_status='PENDING' if discount_type else 'NOT_REQUIRED',
             )
+
+            # If this quotation was confirmed from an email-tracking agent
+            # draft, link it back so the draft shows as confirmed there too.
+            source_draft_id = request.POST.get('source_email_draft_id', '').strip()
+            if source_draft_id:
+                from emailagent.models import QuotationDraft
+                QuotationDraft.objects.filter(id=source_draft_id).update(
+                    status=QuotationDraft.STATUS_CONFIRMED, quotation=quotation,
+                )
 
             # -------------------------
             # 4. Logging Logic
@@ -375,7 +383,7 @@ def inapp_quotations_filtered_qs(request):
     division = request.GET.get('division', 'All')
     q = (request.GET.get('q') or '').strip()
 
-    quotations = Quotation.objects.all().select_related('customer', 'salesman')
+    quotations = Quotation.objects.all().select_related('customer', 'salesman', 'quotation_draft', 'additional_quotation_draft')
 
     if status and status != 'All':
         quotations = quotations.filter(status=status)
@@ -422,6 +430,20 @@ def inapp_quotations_filtered_qs(request):
             | Q(customer_display_name__icontains=q)
         )
 
+    source = (request.GET.get('source') or 'All').strip()
+    if source == 'agent':
+        # quotation_draft is the reverse OneToOne from emailagent.QuotationDraft
+        # -- only ever set on a Quotation the email agent itself created (see
+        # QuotationDraft.quotation in emailagent/models.py); a manually-built
+        # quotation never has one. Same signal the "Agent" badge already uses
+        # in _quotations_results.html. additional_quotation_draft is the same
+        # idea for a sibling quotation from a multi-attachment enquiry (see
+        # AdditionalQuotationDraft) -- also agent-made, just not the email's
+        # single "primary" draft.
+        quotations = quotations.filter(Q(quotation_draft__isnull=False) | Q(additional_quotation_draft__isnull=False)).distinct()
+    elif source == 'manual':
+        quotations = quotations.filter(quotation_draft__isnull=True, additional_quotation_draft__isnull=True)
+
     firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
     if firm_filter_list:
         q_firm = Q()
@@ -432,7 +454,8 @@ def inapp_quotations_filtered_qs(request):
             )
         quotations = quotations.filter(q_firm).distinct()
 
-    return quotations.order_by('-created_at')
+    from django.db.models import Count
+    return quotations.annotate(items_count=Count('items', distinct=True)).order_by('-created_at')
 
 
 def sap_quotations_filtered_qs_combined(request):
@@ -677,6 +700,7 @@ def view_quotations(request):
     page = request.GET.get('page', 1)
     status = request.GET.get('status', 'All')  # Default to 'All'
     division = request.GET.get('division', 'All')
+    source = request.GET.get('source', 'All')
     q = (request.GET.get('q') or '').strip()
 
     quotations = inapp_quotations_filtered_qs(request)
@@ -706,6 +730,8 @@ def view_quotations(request):
         query_params.append('salesman_filter=' + quote(sm))
     if division and division != 'All':
         query_params.append(f"division={division}")
+    if source and source != 'All':
+        query_params.append(f"source={source}")
     if q:
         query_params.append(f"q={q}")
     for f in request.GET.getlist('firm'):
@@ -734,6 +760,7 @@ def view_quotations(request):
         'end_date': end_date,
         'selected_division': division_lock or (division or 'All'),
         'division_lock': division_lock,
+        'current_source': source or 'All',
         'search_query': q,
         'query_string': query_string,
         'show_inapp_calendar': show_inapp_calendar,
@@ -770,6 +797,7 @@ def view_quotations_ajax(request):
     - start_date / end_date
     - salesman_filter
     - division: All | ALABAMA | JUNAID
+    - source: All | agent | manual
     - page
     """
     start_date = request.GET.get('start_date')
@@ -777,6 +805,7 @@ def view_quotations_ajax(request):
     page = request.GET.get('page', 1)
     status = request.GET.get('status', 'All')
     division = request.GET.get('division', 'All')
+    source = request.GET.get('source', 'All')
     q = (request.GET.get('q') or '').strip()
 
     quotations = inapp_quotations_filtered_qs(request)
@@ -800,6 +829,8 @@ def view_quotations_ajax(request):
         query_params.append('salesman_filter=' + quote(sm))
     if division and division != 'All':
         query_params.append(f"division={division}")
+    if source and source != 'All':
+        query_params.append(f"source={source}")
     if q:
         query_params.append(f"q={q}")
     for f in request.GET.getlist('firm'):
@@ -814,6 +845,7 @@ def view_quotations_ajax(request):
             'current_status': status or 'All',
             'selected_salesman': request.GET.get('salesman_filter'),
             'selected_division': division or 'All',
+            'current_source': source or 'All',
             'start_date': start_date,
             'end_date': end_date,
             'query_string': query_string,
@@ -1404,6 +1436,18 @@ from django.http import JsonResponse
 from django.contrib import messages
 from .models import Quotation, QuotationItem
 
+
+def _agent_draft_for_quotation(quotation):
+    """The emailagent draft that produced this quotation, whichever kind --
+    QuotationDraft (the email's normal, single PRIMARY draft) or
+    AdditionalQuotationDraft (a sibling quotation for one of several
+    distinct attachment scopes in the same enquiry, see that model's
+    docstring). None for a manually-built quotation. Both expose the same
+    tracked_email/reasoning/error attributes the callers below need, so
+    they don't have to care which kind it is."""
+    return getattr(quotation, 'quotation_draft', None) or getattr(quotation, 'additional_quotation_draft', None)
+
+
 def view_quotation_details(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
     quotation_items = quotation.items.all()
@@ -1427,6 +1471,7 @@ def view_quotation_details(request, quotation_id):
     total_margin = 0.0
     margin_percent = 0.0
     has_zero_cost_items = False
+    has_zero_stock_items = False
 
     for item in quotation_items:
         item.line_total = item.quantity * item.price
@@ -1434,10 +1479,22 @@ def view_quotation_details(request, quotation_id):
 
         # Check undercost
         if hasattr(item, "item") and item.item:
-            undercost_limit = item.item.item_cost   
+            undercost_limit = item.item.item_cost
             item.is_undercost = item.price < undercost_limit
             if item.is_undercost:
                 has_undercost_items = True
+
+            # Stock check -- a line quoted at 0 available stock (e.g. the
+            # email-tracking agent quoting a specifically-requested brand
+            # that's currently out of stock, see emailagent/quotation_agent.py)
+            # needs a human to confirm availability before this goes out, so
+            # it must never slip through the auto-approval below.
+            live_stock = item.item.total_available_stock
+            if live_stock is None:
+                live_stock = item.item.item_stock
+            item.is_out_of_stock = not live_stock or live_stock <= 0
+            if item.is_out_of_stock:
+                has_zero_stock_items = True
 
             # Margin per item (Admin only) - skip if cost is zero
             cost_val = float(item.item.item_cost or 0)
@@ -1452,6 +1509,7 @@ def view_quotation_details(request, quotation_id):
                 item.margin_pct = (item.line_margin / item.line_total * 100) if item.line_total else None
         else:
             item.is_undercost = False
+            item.is_out_of_stock = False
             item.line_cost = None
             item.line_margin = None
             item.margin_pct = None
@@ -1485,17 +1543,37 @@ def view_quotation_details(request, quotation_id):
     grand_total_with_vat = round(net_after_discount + vat_amount, 2)
 
     discount_pending = quotation.discount_approval_status == 'PENDING'
-    can_proceed = (quotation.status == 'Approved') and quotation.discount_approval_status in ('NOT_REQUIRED', 'APPROVED')
+
+    # An auto-drafted quotation the agent couldn't actually match any catalog
+    # items for (0 line items) -- only Edit/Back should be actionable until a
+    # person fixes it up, regardless of status (it may have auto-approved
+    # itself since an empty item list trivially has no undercost items).
+    is_incomplete_agent_quotation = bool(
+        _agent_draft_for_quotation(quotation) and not quotation_items
+    )
 
     # A discount that hasn't been cleared by a manager pauses the automatic undercost approval below.
     # Once a discount is approved (or there was never one), auto-approval behaves exactly as before.
     discount_unresolved = bool(quotation.discount_type) and quotation.discount_approval_status in ('PENDING', 'REJECTED')
 
-    # 🔹 Automatic approval if no undercost items (suppressed while a discount is unresolved)
-    if not discount_unresolved and not has_undercost_items and quotation.status != 'Approved':
+    # 🔹 Automatic approval if no undercost items (suppressed while a discount is unresolved,
+    # or while any line is quoted at 0 stock -- e.g. a brand the customer specifically
+    # requested that's currently unavailable; see has_zero_stock_items above).
+    # Requires at least one item -- an empty quotation trivially has "no
+    # undercost items" but that's nothing to approve, not a clean pass; it
+    # must stay Pending for a human to complete and review.
+    if (not discount_unresolved and not has_undercost_items and not has_zero_stock_items
+            and quotation_items and quotation.status != 'Approved'):
         quotation.status = 'Approved'
         quotation.save()
         messages.success(request, "Quotation auto-approved as all prices are above minimum selling price.")
+
+    # Computed AFTER the auto-approval block above (not before it) so that on
+    # the very first view of a quotation that qualifies for auto-approval,
+    # this reflects the status as it actually ends up in THIS request --
+    # not the pre-auto-approval value, which would wrongly hide Send
+    # Quotation until the next page load re-fetched the now-saved status.
+    can_proceed = (quotation.status == 'Approved') and quotation.discount_approval_status in ('NOT_REQUIRED', 'APPROVED')
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -1541,10 +1619,12 @@ def view_quotation_details(request, quotation_id):
 
             # Cascade: approving the discount is the only thing that was pausing auto-approval —
             # if pricing is otherwise clean, auto-apply full approval in this same click.
-            if not has_undercost_items:
+            if not has_undercost_items and not has_zero_stock_items:
                 quotation.status = 'Approved'
                 update_fields.append('status')
                 messages.success(request, 'Discount approved — quotation auto-approved since all prices are above minimum selling price.')
+            elif has_zero_stock_items:
+                messages.success(request, 'Discount approved. Note: one or more items are quoted at 0 stock, so the quotation itself still needs separate approval.')
             else:
                 messages.success(request, 'Discount approved. Note: one or more items are still priced below cost, so the quotation itself still needs separate approval.')
 
@@ -1583,6 +1663,33 @@ def view_quotation_details(request, quotation_id):
                 )
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
+    source_email = getattr(_agent_draft_for_quotation(quotation), 'tracked_email', None)
+
+    # Prefill the send-quotation modal from the RFQ email this quotation was
+    # drafted from (if any): client's address as To, anyone else the client
+    # cc'd/bcc'd as Cc -- so a salesman doesn't have to retype/hunt for them.
+    default_to_email = ''
+    default_cc_email = ''
+    if source_email:
+        default_to_email = (source_email.sender or '').strip()
+        our_address = (settings.EMAIL_HOST_USER or '').strip().lower()
+        seen = {default_to_email.lower(), our_address} if our_address else {default_to_email.lower()}
+        cc_addrs = []
+        for addr in list(source_email.cc_recipients or []) + list(source_email.bcc_recipients or []):
+            email_addr = (addr.get('email') or '').strip()
+            if email_addr and email_addr.lower() not in seen:
+                seen.add(email_addr.lower())
+                cc_addrs.append(email_addr)
+        default_cc_email = ', '.join(cc_addrs)
+
+    default_send_message = _build_default_send_message(quotation, source_email)
+    suggested_datasheets = _suggested_datasheets(quotation_items)
+
+    # If a submittal was already generated from this quotation, the button
+    # should take the user straight to it (View Submittal) instead of
+    # offering to generate a duplicate.
+    existing_submittal = quotation.generated_submittals.order_by('-created_at').first()
+
     return render(request, "so/quotations/view_quotation_details.html", {
         "quotation": quotation,
         "quotation_items": quotation_items,
@@ -1591,9 +1698,11 @@ def view_quotation_details(request, quotation_id):
         "net_after_discount": net_after_discount,
         "discount_pending": discount_pending,
         "can_proceed": can_proceed,
+        "is_incomplete_agent_quotation": is_incomplete_agent_quotation,
         "vat_amount": vat_amount,
         "grand_total_with_vat": grand_total_with_vat,
         "has_undercost_items": has_undercost_items,
+        "has_zero_stock_items": has_zero_stock_items,
         "is_admin": is_admin,
         "has_zero_cost_items": has_zero_cost_items,
         "total_cost": total_cost,
@@ -1601,6 +1710,13 @@ def view_quotation_details(request, quotation_id):
         "margin_percent": margin_percent,
         "is_manager": _is_manager_account(request.user),
         "back_url": back_url,
+        "source_email": source_email,
+        "agent_draft": _agent_draft_for_quotation(quotation),
+        "default_to_email": default_to_email,
+        "default_cc_email": default_cc_email,
+        "default_send_message": default_send_message,
+        "suggested_datasheets": suggested_datasheets,
+        "existing_submittal": existing_submittal,
     })
 
 
@@ -1610,117 +1726,38 @@ def convert_quotation_to_sales_order(request, quotation_id):
     """
     Convert a quotation to a sales order.
     Copies all quotation data (customer, salesman, items, prices) to create a new sales order.
+
+    Thin wrapper around so.quotation_conversion_service -- the actual
+    conversion logic lives there (shared with the LPO agent's auto-create
+    path, see emailagent/lpo_agent.py), so both callers behave identically.
     """
+    from . import quotation_conversion_service
+
     quotation = get_object_or_404(Quotation, id=quotation_id)
-    
-    # Check if already converted
+
     if quotation.converted_to_sales_order:
         messages.warning(
-            request, 
+            request,
             f'This quotation has already been converted to Sales Order {quotation.converted_to_sales_order.order_number}.'
         )
         return redirect('view_sales_order_details', order_id=quotation.converted_to_sales_order.id)
 
-    # Must clear BOTH gates: undercost-based `status` and, independently, any discount approval.
-    if quotation.status != 'Approved':
-        messages.error(request, 'Quotation must be approved before it can be converted to a sales order.')
-        return redirect('view_quotation_details', quotation_id=quotation_id)
-    if quotation.discount_approval_status not in ('NOT_REQUIRED', 'APPROVED'):
-        messages.error(request, 'This quotation has a discount pending manager approval. It must be approved (or removed) before converting to a sales order.')
+    eligible, reason = quotation_conversion_service.check_conversion_eligibility(quotation)
+    if not eligible:
+        messages.error(request, reason)
         return redirect('view_quotation_details', quotation_id=quotation_id)
 
-    quotation_items = quotation.items.all()
-
-    # Validate that quotation has items
-    if not quotation_items.exists():
-        messages.error(request, 'Cannot convert quotation with no items.')
-        return redirect('view_quotation_details', quotation_id=quotation_id)
-    
     try:
-        # Determine division (same logic as create_sales_order)
-        division = quotation.division  # Use quotation's division
-        if not division:
-            # Fallback to user-based division
-            division = 'JUNAID'  # Default
-            if request.user.is_authenticated and 'alabama' in request.user.username.lower():
-                division = 'ALABAMA'
-        
-        # Create the sales order
-        sales_order = SalesOrder.objects.create(
-            customer=quotation.customer,
-            division=division,
-            salesman=quotation.salesman,
-            remarks=quotation.remarks or '',
+        username = request.user.username if request.user.is_authenticated else None
+        sales_order = quotation_conversion_service.convert_quotation_to_sales_order(quotation, username=username)
+        messages.success(
+            request,
+            f'Quotation {quotation.quotation_number} successfully converted to Sales Order {sales_order.order_number}!'
         )
-        
-        # Process order items from quotation items
-        order_items = []
-        customer_price_updates = []
-        total_amount = 0.0
-        
-        for quotation_item in quotation_items:
-            if not quotation_item.item:
-                continue  # Skip items without valid item reference
-            
-            item = quotation_item.item
-            quantity = quotation_item.quantity
-            price = quotation_item.price
-            unit = quotation_item.unit if quotation_item.unit in ['pcs', 'ctn', 'roll'] else 'pcs'
-            
-            # Check if price is custom (differs from item default price)
-            is_custom_price = abs(float(price) - float(item.item_price)) > 0.01
-            
-            # Calculate line total
-            line_total = quantity * price
-            total_amount += line_total
-            
-            order_items.append(OrderItem(
-                order=sales_order,
-                item=item,
-                quantity=quantity,
-                price=price,
-                unit=unit,
-                is_custom_price=is_custom_price
-            ))
-            
-            # Track customer price updates if custom price
-            if is_custom_price:
-                customer_price_updates.append((quotation.customer, item, price))
-        
-        # Bulk create order items
-        if order_items:
-            OrderItem.objects.bulk_create(order_items)
-            
-            # Update customer prices for custom prices
-            for customer, item, price in customer_price_updates:
-                CustomerPrice.objects.update_or_create(
-                    customer=customer,
-                    item=item,
-                    defaults={'custom_price': price}
-                )
-            
-            # Calculate totals (carry over the approved quotation discount, if any)
-            net_amount = max(total_amount - quotation.discount_amount, 0.0)
-            tax = round(0.05 * net_amount, 2)
-            sales_order.tax = tax
-            sales_order.total_amount = net_amount
-            sales_order.save()
-            
-            # Mark quotation as converted
-            quotation.converted_to_sales_order = sales_order
-            quotation.save()
-            
-            messages.success(
-                request, 
-                f'Quotation {quotation.quotation_number} successfully converted to Sales Order {sales_order.order_number}!'
-            )
-            return redirect('view_sales_order_details', order_id=sales_order.id)
-        else:
-            # No valid items, delete the sales order
-            sales_order.delete()
-            messages.error(request, 'No valid items found in quotation to convert.')
-            return redirect('view_quotation_details', quotation_id=quotation_id)
-            
+        return redirect('view_sales_order_details', order_id=sales_order.id)
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect('view_quotation_details', quotation_id=quotation_id)
     except Exception as e:
         messages.error(request, f'An error occurred while converting quotation: {str(e)}')
         return redirect('view_quotation_details', quotation_id=quotation_id)
@@ -1924,6 +1961,7 @@ def edit_quotation(request, quotation_id):
         'salesmen': salesmen,
         'firms': firms,
         'quotation_items': quotation.items.all(),
+        'source_email': getattr(_agent_draft_for_quotation(quotation), 'tracked_email', None),
     })
 
 import os
@@ -2141,6 +2179,311 @@ def export_quotation_to_pdf(request, quotation_id):
     buffer.close()
     response.write(pdf_content)
     return response
+
+
+_DATASHEET_SUGGESTIONS_PER_ITEM = 3  # cap noise -- see docstring below
+
+
+def _suggested_datasheets(quotation_items):
+    """Best-effort datasheet suggestions from the Submittal module's material
+    library (submittal.models.SubmittalMaterial) for a quotation's items.
+
+    There is no shared key between so.Items and SubmittalMaterial -- catalog
+    item_code is our own internal SKU numbering, model_no is the
+    manufacturer's own model number, and SubmittalMaterial only covers 47
+    Pegler items as of writing -- so this is only ever a rough suggestion
+    (brand match + shared description keywords), capped to the top
+    _DATASHEET_SUGGESTIONS_PER_ITEM candidates per quotation item so one
+    generic item (e.g. "Gate Valve") doesn't flood the list with every
+    same-named model in the library. The caller must present these as
+    unchecked checkboxes for a human to confirm -- never auto-attach --
+    since a shared keyword (e.g. "pressure") can match an unrelated product
+    (a pressure gauge suggested for a pressure-reducing valve).
+    Returns a list of dicts sorted by (matched_item, -score)."""
+    import re
+    from submittal.models import SubmittalMaterial
+
+    materials = list(SubmittalMaterial.objects.exclude(technical_pdf='').select_related('brand'))
+    if not materials:
+        return []
+
+    stopwords = {'with', 'type', 'size', 'inch', 'inches'}
+
+    def keywords(text):
+        return {
+            w for w in re.findall(r'[a-zA-Z]+', (text or '').lower())
+            if len(w) >= 4 and w not in stopwords
+        }
+
+    suggestions = []
+    for qi in quotation_items:
+        item = getattr(qi, 'item', None)
+        if not item:
+            continue
+        item_brand = (item.item_firm or '').upper()
+        item_kw = keywords(item.item_description)
+        item_candidates = []
+        for material in materials:
+            brand_name = material.brand.name if material.brand_id else ''
+            brand_word = brand_name.upper().split()[0] if brand_name else ''
+            if not brand_word or brand_word not in item_brand:
+                continue
+            description = material.get('item_description', '')
+            overlap = item_kw & keywords(description)
+            if not overlap:
+                continue
+            item_candidates.append({
+                'material': material,
+                'description': description,
+                'matched_item': item.item_description,
+                'score': len(overlap),
+            })
+        item_candidates.sort(key=lambda s: -s['score'])
+        suggestions.extend(item_candidates[:_DATASHEET_SUGGESTIONS_PER_ITEM])
+    return suggestions
+
+
+def _default_brand_notice_items(source_email):
+    """Requirement items from the RFQ email a quotation was drafted from
+    (`source_email`) where the customer did NOT state a brand and the
+    quotation-drafting agent quoted our own standard/default brand for that
+    item's category instead (see DEFAULT_BRAND_NOTE_PREFIX in
+    emailagent/quotation_agent.py). Returns [(description, brand), ...] --
+    used to tell the client this happened when the quotation is emailed to
+    them, so nothing is silently substituted without their knowledge."""
+    if not source_email:
+        return []
+    from emailagent.quotation_agent import DEFAULT_BRAND_NOTE_PREFIX
+    return [
+        (item.description, item.matched_item.item_firm)
+        for item in source_email.items.select_related('matched_item').all()
+        if item.matched_item_id and DEFAULT_BRAND_NOTE_PREFIX in (item.match_notes or '')
+    ]
+
+
+def _unmatched_no_brand_items(source_email):
+    """Requirement items from the RFQ email a quotation was drafted from
+    (`source_email`) where the customer did NOT state a brand and the
+    quotation-drafting agent could not find any confident catalog match at
+    all (unlike _default_brand_notice_items above, there's no standard/default
+    brand for this item's category to fall back on) -- these items are left
+    off the quotation entirely (see the "Could not auto-match" note added to
+    quotation.remarks in emailagent/quotation_agent.py's draft_quotation).
+    Returns [description, ...] -- used to ask the client for a brand on these
+    when the quotation is emailed to them, so a silently-dropped line doesn't
+    go unnoticed."""
+    if not source_email:
+        return []
+    return [
+        item.description
+        for item in source_email.items.all()
+        if not item.matched_item_id and not (item.brand or '').strip()
+    ]
+
+
+def _build_default_send_message(quotation, source_email):
+    """The default text pre-filled into the "Send Quotation" email body --
+    shared between the modal prefill (view_quotation_details) and the
+    fallback used if a user submits the send form with the message left
+    blank (send_quotation_email), so both stay in sync. Automatically calls
+    out any item(s) quoted under our own default brand because the customer
+    didn't specify one (see _default_brand_notice_items above), and any
+    item(s) that couldn't be quoted at all for the same reason (see
+    _unmatched_no_brand_items above)."""
+    company = 'Alabama' if quotation.division == 'ALABAMA' else 'Junaid World'
+    display_name = quotation.customer_display_name or (quotation.customer.customer_name if quotation.customer_id else '')
+    date_str = quotation.quotation_date.strftime('%d-%m-%Y') if quotation.quotation_date else ''
+
+    lines = [f"Dear {display_name},", ""]
+    if source_email:
+        lines.append(f"Please find attached our quotation {quotation.quotation_number} in response to your enquiry.")
+    else:
+        lines.append(f"Please find attached our quotation {quotation.quotation_number}" + (f" dated {date_str}." if date_str else "."))
+
+    brand_items = _default_brand_notice_items(source_email)
+    if brand_items:
+        lines.append("")
+        lines.append(
+            "We would like to highlight that the brand was not specified in your enquiry for the following "
+            "item(s). As no specific brand was mentioned, we have provided the quotation based on our "
+            "currently available brand:"
+        )
+        lines.append("")
+        for description, brand in brand_items:
+            lines.append(f"{description}: {brand}")
+        lines.append("")
+        lines.append(
+            "Kindly review the quoted brand and let us know if you require any specific brand. If you would "
+            "like to change the brand, we can revise the quotation accordingly."
+        )
+
+    unmatched_items = _unmatched_no_brand_items(source_email)
+    if unmatched_items:
+        lines.append("")
+        lines.append(
+            "We would also like to highlight that no brand/manufacturer was specified in your enquiry for the "
+            "following item(s), and we could not identify a suitable match without one, so it has not been "
+            "included in the attached quotation -- kindly specify the brand you require so we can quote it "
+            "separately:"
+        )
+        lines.append("")
+        for description in unmatched_items:
+            lines.append(description)
+
+    lines += [
+        "",
+        "Should you have any questions or require any modifications to the quotation, please feel free to contact us.",
+        "",
+        f"Regards,\n{company}",
+    ]
+    return "\n".join(lines)
+
+
+def send_quotation_email(request, quotation_id):
+    """Manual "Send Quotation" action -- emails the quotation PDF to a
+    client-supplied address. Never triggered automatically; only fires when
+    a user submits the send form from view_quotation_details."""
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+
+    if request.method != 'POST':
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    can_proceed = (quotation.status == 'Approved') and quotation.discount_approval_status in ('NOT_REQUIRED', 'APPROVED')
+    if not can_proceed:
+        messages.error(request, 'This quotation must be approved (and any discount cleared) before it can be sent to the client.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    to_raw = request.POST.get('to_email', '').strip()
+    cc_raw = request.POST.get('cc_email', '').strip()
+    custom_message = request.POST.get('message', '').strip()
+
+    to_list = [e.strip() for e in to_raw.split(',') if e.strip()]
+    cc_list = [e.strip() for e in cc_raw.split(',') if e.strip()]
+
+    if not to_list:
+        messages.error(request, 'Please enter the client email address.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+    try:
+        for addr in to_list + cc_list:
+            validate_email(addr)
+    except ValidationError:
+        messages.error(request, 'One or more email addresses are invalid.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+        messages.error(request, 'Outbound email is not configured. Set EMAIL_HOST_USER / EMAIL_HOST_PASSWORD in .env.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    from emailagent import supervisor
+    from emailagent.models import AgentRun
+    source_email = getattr(_agent_draft_for_quotation(quotation), 'tracked_email', None)
+    send_recorder = supervisor.AgentRunRecorder(AgentRun.AGENT_SEND, tracked_email=source_email, quotation=quotation)
+
+    buffer = BytesIO()
+    if quotation.division == 'ALABAMA':
+        generate_alabama_quotation(buffer, quotation)
+    else:
+        generate_junaid_quotation(buffer, quotation)
+    pdf_content = buffer.getvalue()
+    buffer.close()
+
+    company = 'Alabama' if quotation.division == 'ALABAMA' else 'Junaid World'
+    subject = f"Quotation {quotation.quotation_number} from {company}"
+    body = custom_message or _build_default_send_message(quotation, source_email)
+    filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"
+
+    # This email is sent over plain SMTP, not through the watched Gmail
+    # account/API -- Gmail therefore has no record of it, so if the client
+    # replies, Gmail may assign that reply a brand-new thread_id instead of
+    # linking it to the original enquiry's thread (observed to cause a
+    # customer's brand-change reply to be treated as an unrelated new
+    # enquiry and quoted twice). Setting our own Message-ID here -- and
+    # saving it below -- lets emailagent/services.py recognize a reply to
+    # THIS email by its In-Reply-To/References headers even when Gmail's
+    # thread_id disagrees. Also chaining In-Reply-To/References to the
+    # original enquiry's own Message-ID (when known) gives mail clients a
+    # second, standard way to keep the conversation threaded on their end.
+    from email.utils import make_msgid
+    msgid_domain = (settings.DEFAULT_FROM_EMAIL or 'junaid.ae').split('@')[-1] or 'junaid.ae'
+    outbound_message_id = make_msgid(domain=msgid_domain)
+    email_headers = {'Message-ID': outbound_message_id}
+    if source_email:
+        orig_message_id = next(
+            (h.get('value') for h in (source_email.raw_headers or [])
+             if (h.get('name') or '').lower() == 'message-id' and h.get('value')),
+            '',
+        )
+        if orig_message_id:
+            email_headers['In-Reply-To'] = orig_message_id
+            email_headers['References'] = orig_message_id
+
+    from django.core.mail import EmailMessage
+    email = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=to_list,
+        cc=cc_list or None,
+        reply_to=[settings.DEFAULT_FROM_EMAIL],
+        headers=email_headers,
+    )
+    email.attach(filename, pdf_content, 'application/pdf')
+
+    # Datasheets suggested from the Submittal module's material library
+    # (checked by the user in the modal -- see _suggested_datasheets) plus
+    # any files manually attached, since not every brand/item has a
+    # datasheet in that library yet (only 47 Pegler materials are loaded as
+    # of writing) -- the manual upload is the reliable fallback.
+    extra_attachment_names = []
+    failed_datasheets = []
+    material_ids = request.POST.getlist('datasheet_material_ids')
+    if material_ids:
+        from submittal.models import SubmittalMaterial
+        for material in (SubmittalMaterial.objects.filter(id__in=material_ids)
+                          .exclude(technical_pdf='').select_related('brand')):
+            try:
+                with material.technical_pdf.open('rb') as f:
+                    datasheet_name = f"{material.brand.name}_{material.model_no}_Datasheet.pdf".replace(' ', '_')
+                    email.attach(datasheet_name, f.read(), 'application/pdf')
+                extra_attachment_names.append(datasheet_name)
+            except Exception:
+                failed_datasheets.append(f"{material.brand.name} {material.model_no}")
+
+    for uploaded in request.FILES.getlist('attachments'):
+        email.attach(uploaded.name, uploaded.read(), uploaded.content_type)
+        extra_attachment_names.append(uploaded.name)
+
+    if failed_datasheets:
+        messages.warning(
+            request,
+            f"Could not attach datasheet file(s) for: {', '.join(failed_datasheets)} (file missing on "
+            "server) -- sending the rest without them.",
+        )
+
+    try:
+        email.send(fail_silently=False)
+    except Exception as e:
+        send_recorder.fail(e)
+        send_recorder.finish()
+        messages.error(request, f'Failed to send quotation: {e}')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    from django.utils import timezone
+    quotation.emailed_to = to_raw
+    quotation.emailed_at = timezone.now()
+    quotation.emailed_message_id = outbound_message_id
+    quotation.save(update_fields=['emailed_to', 'emailed_at', 'emailed_message_id'])
+
+    send_recorder.finish(
+        summary=f"sent to {', '.join(to_list)}" + (f" (cc: {', '.join(cc_list)})" if cc_list else "") +
+                (f" with {len(extra_attachment_names)} extra attachment(s)" if extra_attachment_names else "") +
+                f" by {request.user.get_username()}",
+    )
+    messages.success(request, f'Quotation sent to {", ".join(to_list)}.')
+    return redirect('view_quotation_details', quotation_id=quotation_id)
 
 
 def export_quotation_to_excel(request, quotation_id):

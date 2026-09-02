@@ -1,0 +1,326 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}{{ email.subject|default:"(no subject)" }} | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page email-detail-page">
+    <a href="{% url 'emailagent:email_list' %}" class="back-link"><i class="fas fa-arrow-left"></i> All Emails</a>
+
+    <div class="card-x email-detail-card">
+        <div class="email-detail-header">
+            <div class="email-avatar">{{ email.sender_name|default:email.sender|slice:":1"|upper }}</div>
+            <div class="email-header-main">
+                <h1>{{ email.subject|default:"(no subject)" }}</h1>
+                <div class="email-header-badges">
+                    {% if email.status == 'rfq' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> RFQ / Enquiry</span>
+                    {% elif email.status == 'submittal' %}<span class="chip-x blue"><i class="fas fa-file-circle-plus"></i> Submittal Request</span>
+                    {% elif email.status == 'needs_review' %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                    {% elif email.status == 'not_relevant' %}<span class="chip-x gray">Not Relevant</span>
+                    {% else %}<span class="chip-x gray">Pending</span>{% endif %}
+                </div>
+            </div>
+
+            <div class="email-header-actions">
+                {% if email.source == 'gmail' %}
+                <a href="https://mail.google.com/mail/u/0/#all/{{ email.gmail_message_id }}" target="_blank" rel="noopener" class="btn-x" title="Open this email in Gmail">
+                    <i class="fas fa-arrow-up-right-from-square"></i> Open in Gmail
+                </a>
+                {% endif %}
+                {% if email.quotation_draft.status == 'confirmed' and email.quotation_draft.quotation %}
+                <a href="{% url 'view_quotation_details' email.quotation_draft.quotation.id %}" class="btn-x" title="View the quotation">
+                    <i class="fas fa-eye"></i> {{ email.quotation_draft.quotation.quotation_number }}
+                </a>
+                <a href="{% url 'edit_quotation' email.quotation_draft.quotation.id %}" class="btn-x btn-primary-x" title="Edit the quotation">
+                    <i class="fas fa-pen"></i> Edit Quotation
+                </a>
+                {% elif email.quotation_draft.status == 'merged' and email.quotation_draft.merged_into %}
+                <a href="{% url 'view_quotation_details' email.quotation_draft.merged_into.id %}" class="btn-x" title="This follow-up was merged into the original enquiry's quotation">
+                    <i class="fas fa-code-merge"></i> Merged into {{ email.quotation_draft.merged_into.quotation_number }}
+                </a>
+                <a href="{% url 'edit_quotation' email.quotation_draft.merged_into.id %}" class="btn-x btn-primary-x" title="Edit the quotation">
+                    <i class="fas fa-pen"></i> Edit Quotation
+                </a>
+                {% elif email.quotation_draft.status == 'pending' %}
+                <span class="chip-x amber"><i class="fas fa-spinner"></i> Drafting quotation...</span>
+                {% elif email.quotation_draft.status == 'failed' %}
+                <span class="chip-x gray" title="{{ email.quotation_draft.error }}"><i class="fas fa-triangle-exclamation"></i> Quotation drafting failed</span>
+                {% endif %}
+                {% for additional in email.additional_quotation_drafts.all %}
+                    {% if additional.quotation %}
+                    <a href="{% url 'view_quotation_details' additional.quotation.id %}" class="btn-x" title="Another scope of this enquiry ({{ additional.source_attachment }}) -- drafted as its own quotation">
+                        <i class="fas fa-eye"></i> {{ additional.quotation.quotation_number }}
+                    </a>
+                    <a href="{% url 'edit_quotation' additional.quotation.id %}" class="btn-x btn-primary-x" title="Edit the quotation">
+                        <i class="fas fa-pen"></i> Edit Quotation
+                    </a>
+                    {% elif additional.error %}
+                    <span class="chip-x gray" title="{{ additional.error }}"><i class="fas fa-triangle-exclamation"></i> {{ additional.source_attachment|truncatechars:30 }}: not quoted</span>
+                    {% endif %}
+                {% endfor %}
+                {% if email.status == 'needs_review' %}
+                <form method="post" action="{% url 'emailagent:review_confirm' email.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-check"></i> Confirm RFQ</button>
+                </form>
+                <form method="post" action="{% url 'emailagent:review_reject' email.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-x btn-danger-x"><i class="fas fa-xmark"></i> Reject</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="email-meta-grid">
+            <div class="email-meta-item">
+                <span class="label">From</span>
+                <span class="value">{{ email.sender_name|default:email.sender }} &lt;{{ email.sender }}&gt;</span>
+            </div>
+            <div class="email-meta-item">
+                <span class="label">To</span>
+                <span class="value">{% for r in email.to_recipients %}{{ r.email }}{% if not forloop.last %}, {% endif %}{% empty %}&mdash;{% endfor %}</span>
+            </div>
+            <div class="email-meta-item">
+                <span class="label">Cc</span>
+                <span class="value">{% for r in email.cc_recipients %}{{ r.email }}{% if not forloop.last %}, {% endif %}{% empty %}&mdash;{% endfor %}</span>
+            </div>
+            <div class="email-meta-item">
+                <span class="label">Date &amp; Time</span>
+                <span class="value"><i class="fas fa-clock"></i> {{ email.received_at|date:"d M Y" }} &middot; {{ email.received_at|date:"H:i" }}</span>
+            </div>
+        </div>
+
+        {% if email.submittal_draft %}
+        {% with additional_drafts=email.additional_submittal_drafts.all %}
+        <details class="collapsible-section">
+        <summary class="collapsible-summary">
+            <i class="fas fa-chevron-right toggle-icon"></i>
+            <i class="fas fa-file-circle-plus"></i>
+            <span>Submittal Packages</span>
+            <span class="pkg-count">{{ additional_drafts|length|add:1 }}</span>
+        </summary>
+        <div class="items-table-wrap">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Brand</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th class="actions">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ email.submittal_draft.matched_brand.name|default:"—" }}</td>
+                        <td>{% if email.submittal_draft.category %}<span class="category-chip">{{ email.submittal_draft.category }}</span>{% else %}—{% endif %}</td>
+                        <td>
+                            {% if email.submittal_draft.status == 'confirmed' and email.submittal_draft.submittal %}
+                                {% if email.submittal_draft.submittal.needs_verification %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                                {% else %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Ready</span>{% endif %}
+                            {% elif email.submittal_draft.status == 'pending' %}<span class="chip-x amber"><i class="fas fa-spinner"></i> Drafting...</span>
+                            {% elif email.submittal_draft.status == 'failed' %}<span class="chip-x gray" title="{{ email.submittal_draft.error }}"><i class="fas fa-triangle-exclamation"></i> Not drafted</span>
+                            {% endif %}
+                        </td>
+                        <td class="actions">
+                            {% if email.submittal_draft.submittal %}
+                            <a href="{% url 'submittal:detail' email.submittal_draft.submittal.id %}" class="btn-x sm" title="View this submittal"><i class="fas fa-eye"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% for additional in additional_drafts %}
+                    <tr>
+                        <td>{{ additional.brand|default:"—" }}</td>
+                        <td>{% if additional.category %}<span class="category-chip">{{ additional.category }}</span>{% else %}—{% endif %}</td>
+                        <td>
+                            {% if additional.submittal %}
+                                {% if additional.submittal.needs_verification %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                                {% else %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Ready</span>{% endif %}
+                            {% else %}<span class="chip-x gray" title="{{ additional.error }}"><i class="fas fa-triangle-exclamation"></i> Not drafted</span>{% endif %}
+                        </td>
+                        <td class="actions">
+                            {% if additional.submittal %}
+                            <a href="{% url 'submittal:detail' additional.submittal.id %}" class="btn-x sm" title="View this submittal"><i class="fas fa-eye"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        </details>
+        {% endwith %}
+        {% endif %}
+
+        {% if email.lpo_request %}
+        <h4 class="attachments-heading"><i class="fas fa-file-contract"></i> LPO Request</h4>
+        <div class="items-table-wrap">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>LPO #</th>
+                        <th>Customer (stated)</th>
+                        <th>Matched Quotation</th>
+                        <th>Status</th>
+                        <th class="actions">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ email.lpo_request.lpo_number|default:"—" }}</td>
+                        <td>{{ email.lpo_request.customer_name_stated|default:"—" }}</td>
+                        <td>
+                            {% if email.lpo_request.matched_quotation %}
+                            <a href="{% url 'view_quotation_details' email.lpo_request.matched_quotation.id %}">{{ email.lpo_request.matched_quotation.quotation_number }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if email.lpo_request.status == 'confirmed' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Sales Order Created</span>
+                            {% elif email.lpo_request.status == 'needs_review' %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                            {% elif email.lpo_request.status == 'dismissed' %}<span class="chip-x gray"><i class="fas fa-eye-slash"></i> Dismissed</span>
+                            {% elif email.lpo_request.status == 'failed' %}<span class="chip-x gray"><i class="fas fa-bug"></i> Failed</span>
+                            {% else %}<span class="chip-x amber"><i class="fas fa-spinner"></i> Processing</span>{% endif %}
+                        </td>
+                        <td class="actions">
+                            {% if email.lpo_request.status == 'confirmed' and email.lpo_request.sales_order %}
+                            <a href="{% url 'view_sales_order_details' email.lpo_request.sales_order.id %}" class="btn-x sm" title="View sales order"><i class="fas fa-eye"></i></a>
+                            {% else %}
+                            <a href="{% url 'emailagent:lpo_request_review' email.lpo_request.pk %}" class="btn-x sm" title="Review"><i class="fas fa-magnifying-glass"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if email.items.all %}
+        <h4 class="attachments-heading"><i class="fas fa-list-check"></i> Requirement Items ({{ email.items.count }})</h4>
+        <div class="items-table-wrap">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Description of the items</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th>Required Qty</th>
+                        <th>Units</th>
+                        <th>Quoted Qty</th>
+                        <th>Catalog Match</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in email.items.all %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>
+                            {{ item.description }}
+                            {% if item.notes %}<div class="item-note"><i class="fas fa-clock-rotate-left"></i> {{ item.notes }}</div>{% endif %}
+                        </td>
+                        <td>{% if item.category %}<span class="category-chip">{{ item.category }}</span>{% else %}—{% endif %}</td>
+                        <td>{{ item.brand|default:"—" }}</td>
+                        <td>{{ item.quantity|default:"—" }}</td>
+                        <td>{{ item.unit|default:"—" }}</td>
+                        <td>
+                            {% if item.matched_quantity is not None %}
+                                {{ item.matched_quantity }} {{ item.matched_unit }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.matched_item %}
+                                {{ item.matched_item.item_code }} &middot; {{ item.matched_item.item_firm|default:"—" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                            {% if item.match_notes %}<div class="item-note"><i class="fas fa-robot"></i> {{ item.match_notes }}</div>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if email.submittal_request_items.all %}
+        <h4 class="attachments-heading"><i class="fas fa-file-circle-plus"></i> Requested Submittal Items ({{ email.submittal_request_items.count }})</h4>
+        <p class="section-hint">Not every item the client asks about needs a submittal -- tick the ones that do, then generate. Items of the same brand are grouped into one submittal even if they cover different categories.</p>
+        <form method="post" action="{% url 'emailagent:submittal_draft_selected' email.pk %}">
+            {% csrf_token %}
+            <div class="items-table-wrap">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th class="select-col"><input type="checkbox" class="select-all-items" title="Select all"></th>
+                            <th>#</th>
+                            <th>Description of the items</th>
+                            <th>Category</th>
+                            <th>Brand</th>
+                            <th>Submittal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in email.submittal_request_items.all %}
+                        <tr>
+                            <td class="select-col">
+                                {% if not item.submittal_id %}
+                                <input type="checkbox" name="item_ids" value="{{ item.id }}" class="select-item-checkbox">
+                                {% endif %}
+                            </td>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ item.description }}</td>
+                            <td>{% if item.category %}<span class="category-chip">{{ item.category }}</span>{% else %}—{% endif %}</td>
+                            <td>{{ item.brand|default:"—" }}</td>
+                            <td>
+                                {% if item.submittal_id %}
+                                <a href="{% url 'submittal:detail' item.submittal_id %}" class="chip-x green" title="View the submittal this item was included in"><i class="fas fa-circle-check"></i> Drafted</a>
+                                {% else %}<span class="chip-x gray">Not drafted</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button type="submit" class="btn-x btn-primary-x submittal-generate-btn"><i class="fas fa-file-circle-plus"></i> Generate Submittal for Selected Items</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if thread_emails %}
+    <div class="card-x thread-panel">
+        <h4 class="attachments-heading"><i class="fas fa-reply-all"></i> Replied By ({{ thread_emails|length }})</h4>
+        <div class="thread-list">
+            {% for t in thread_emails %}
+            <div class="thread-item">
+                <div class="email-avatar sm">{{ t.sender_name|default:t.sender|slice:":1"|upper }}</div>
+                <div class="thread-item-main">
+                    <div class="thread-item-top">
+                        <span class="thread-item-sender">{{ t.sender_name|default:t.sender }} &lt;{{ t.sender }}&gt;</span>
+                        <span class="thread-item-date">{{ t.received_at|date:"d M Y, H:i" }}</span>
+                    </div>
+                </div>
+                <div class="thread-item-actions">
+                    <a href="{% url 'emailagent:email_detail' t.pk %}" class="btn-x sm" title="View details"><i class="fas fa-eye"></i></a>
+                    {% if t.source == 'gmail' %}
+                    <a href="https://mail.google.com/mail/u/0/#all/{{ t.gmail_message_id }}" target="_blank" rel="noopener" class="btn-x sm" title="Open in Gmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.select-all-items').forEach(function (master) {
+        var table = master.closest('table');
+        master.addEventListener('change', function () {
+            table.querySelectorAll('.select-item-checkbox').forEach(function (cb) { cb.checked = master.checked; });
+        });
+    });
+</script>
+{% endblock %}

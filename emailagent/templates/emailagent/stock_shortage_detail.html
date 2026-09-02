@@ -1,0 +1,134 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Stock Shortage Report | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tbl-x th.num, .tbl-x td.num { text-align: right; white-space: nowrap; }
+    .final-qty { font-weight: 700; color: var(--danger); }
+    .so-ref { color: var(--muted); font-size: .78rem; }
+    /* Group rows belonging to the same item visually -- override the default
+       per-physical-row nth-child zebra striping (from ui.css) since rowspan
+       groups don't align with it -- and stripe by item-group instead. */
+    .tbl-x.grouped tbody tr:nth-child(even) td { background: transparent; }
+    .tbl-x.grouped tbody tr.zebra-b td { background: var(--surface-alt); }
+    .tbl-x.grouped td.item-cell {
+        border-right: 2px solid var(--primary-100);
+        vertical-align: middle;
+        font-weight: 600;
+        color: var(--ink);
+    }
+    .tbl-x.grouped td.item-cell.item-code { font-weight: 700; color: var(--primary-700); }
+    /* Thick divider between one item's group of rows and the next -- the
+       actual "visible separation" so a new item is unmistakable at a
+       glance, not just a subtle background tint. */
+    .tbl-x.grouped tr.group-start td { border-top: 3px solid var(--primary-300); }
+    .tbl-x.grouped tr.group-start:first-child td { border-top: none; }
+    .tbl-x.grouped td { padding-top: .6rem; padding-bottom: .6rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-triangle-exclamation"></i> Stock Shortage Report</h1>
+            <p style="color:rgba(255,255,255,.85);margin-top:.4rem;">
+                The current consolidated picture across every LPO-sourced sales order still pending fulfilment --
+                always up to date as of the last recompute, not a point-in-time snapshot. A new LPO needing an
+                item already listed below simply adds into that item's row the next time this runs.
+            </p>
+            <p style="color:rgba(255,255,255,.7);margin-top:.5rem;font-size:.85rem;">
+                Last updated {{ report.updated_at|date:"d M Y, H:i" }}
+                {% if report.last_triggered_by %} — triggered by <a href="{% url 'view_sales_order_details' report.last_triggered_by.id %}" style="color:#fff;text-decoration:underline;">{{ report.last_triggered_by.order_number }}</a>{% endif %}
+            </p>
+        </div>
+        <form method="post" action="{% url 'emailagent:stock_shortage_report_refresh' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-x btn-light-x"><i class="fas fa-rotate"></i> Refresh</button>
+        </form>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+
+    {% if report.stock_api_error %}
+    <div class="notice-x danger" style="display:flex;gap:.8rem;align-items:flex-start;border-radius:var(--r-lg);padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:.87rem;background:var(--danger-50);border:1px solid #fecaca;color:#7f1d1d;">
+        <i class="fas fa-bug" style="margin-top:.1rem;"></i>
+        <div>
+            <strong>Some stock figures are unknown</strong> — a few items below have never had stock synced, so their available/final columns show "Unknown" rather than a number.
+            <br><span style="opacity:.85;">{{ report.stock_api_error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if report.lines %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x grouped">
+            <thead>
+                <tr>
+                    <th>Item Code</th><th>Brand</th><th>Description</th>
+                    <th>Customer</th><th>LPO</th>
+                    <th class="num">LPO Qty</th>
+                    <th class="num">Total Required Qty</th>
+                    <th class="num">Available Stock</th>
+                    <th class="num">Final Qty (To Procure)</th>
+                    <th class="num">LPO Sent to Supplier</th>
+                    <th class="num">Final Qty to Purchase</th>
+                    <th>Payment Terms</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in report.lines %}
+                {% cycle 'zebra-a' 'zebra-b' as item_zebra silent %}
+                {% with row_count=line.lpo_breakdown|length|default:1 %}
+                {% for entry in line.lpo_breakdown %}
+                <tr class="{{ item_zebra }}{% if forloop.first %} group-start{% endif %}">
+                    {% if forloop.first %}
+                    <td class="item-cell item-code" rowspan="{{ row_count }}">{{ line.item_code }}</td>
+                    <td class="item-cell" rowspan="{{ row_count }}">{{ line.brand|default:"—" }}</td>
+                    <td class="item-cell" rowspan="{{ row_count }}">{{ line.description }}</td>
+                    {% endif %}
+                    <td>{{ entry.customer_name|default:"—" }}</td>
+                    <td>{{ entry.lpo_number }} <span class="so-ref">(SO {{ entry.sales_order_number }})</span></td>
+                    <td class="num">{{ entry.quantity|floatformat:2 }}</td>
+                    {% if forloop.first %}
+                    <td class="num item-cell" rowspan="{{ row_count }}">{{ line.total_required_qty|floatformat:2 }}</td>
+                    <td class="num item-cell" rowspan="{{ row_count }}">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
+                    <td class="num final-qty item-cell" rowspan="{{ row_count }}">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td class="num item-cell" rowspan="{{ row_count }}">{{ line.already_ordered_qty|floatformat:2 }}</td>
+                    <td class="num final-qty item-cell" rowspan="{{ row_count }}">{% if line.final_purchase_qty is not None %}{{ line.final_purchase_qty|floatformat:2 }}{% else %}—{% endif %}</td>
+                    {% endif %}
+                    <td>{{ entry.payment_terms }}</td>
+                </tr>
+                {% empty %}
+                <tr class="{{ item_zebra }} group-start">
+                    <td class="item-cell item-code">{{ line.item_code }}</td>
+                    <td class="item-cell">{{ line.brand|default:"—" }}</td>
+                    <td class="item-cell">{{ line.description }}</td>
+                    <td colspan="3">—</td>
+                    <td class="num item-cell">{{ line.total_required_qty|floatformat:2 }}</td>
+                    <td class="num item-cell">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
+                    <td class="num final-qty item-cell">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td class="num item-cell">{{ line.already_ordered_qty|floatformat:2 }}</td>
+                    <td class="num final-qty item-cell">{% if line.final_purchase_qty is not None %}{{ line.final_purchase_qty|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td>—</td>
+                </tr>
+                {% endfor %}
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-circle-check"></i></div>
+            <h3>No shortages right now</h3>
+            <p>Every pending LPO-sourced sales order is currently covered by available stock.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

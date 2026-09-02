@@ -29,6 +29,90 @@
             --shadow-md: 0 5px 10px rgba(0,0,0,0.1);
         }
 
+        /* ── Toast notifications (replaces static Django message alerts) ── */
+        .toast-stack {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 380px;
+            max-width: calc(100vw - 32px);
+        }
+        .toast-card {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: #fff;
+            border-radius: 10px;
+            border-left: 4px solid var(--sap-info);
+            box-shadow: 0 12px 28px rgba(29,29,27,0.16), 0 2px 6px rgba(29,29,27,0.06);
+            padding: 13px 14px;
+            overflow: hidden;
+            opacity: 0;
+            animation: toastIn .38s cubic-bezier(.21,1.02,.73,1) forwards;
+        }
+        .toast-card.success { border-left-color: var(--sap-success); }
+        .toast-card.error   { border-left-color: var(--sap-error); }
+        .toast-card.warning { border-left-color: var(--sap-warning); }
+        .toast-card.info    { border-left-color: var(--sap-info); }
+
+        .toast-icon {
+            flex-shrink: 0;
+            width: 30px; height: 30px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; margin-top: 1px;
+        }
+        .toast-card.success .toast-icon { background: rgba(16,126,62,.12); color: var(--sap-success); }
+        .toast-card.error   .toast-icon { background: rgba(187,0,0,.10); color: var(--sap-error); }
+        .toast-card.warning .toast-icon { background: rgba(223,110,12,.12); color: var(--sap-warning); }
+        .toast-card.info    .toast-icon { background: rgba(0,87,184,.10); color: var(--sap-info); }
+
+        .toast-body { flex: 1; min-width: 0; padding-right: 4px; }
+        .toast-title {
+            font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+        .toast-card.success .toast-title { color: var(--sap-success); }
+        .toast-card.error   .toast-title { color: var(--sap-error); }
+        .toast-card.warning .toast-title { color: var(--sap-warning); }
+        .toast-card.info    .toast-title { color: var(--sap-info); }
+        .toast-msg { font-size: 13px; color: var(--sap-gray-700); line-height: 1.45; word-break: break-word; }
+
+        .toast-close {
+            flex-shrink: 0;
+            background: none; border: none; cursor: pointer;
+            color: var(--sap-gray-500); font-size: 12px; padding: 3px;
+            border-radius: 5px; transition: all .15s ease;
+        }
+        .toast-close:hover { background: var(--sap-gray-200); color: var(--sap-gray-900); }
+
+        .toast-progress {
+            position: absolute; left: 0; bottom: 0; height: 3px;
+            background: currentColor; opacity: .3;
+            animation: toastShrink 6s linear forwards;
+        }
+        .toast-card.success .toast-progress { color: var(--sap-success); }
+        .toast-card.error   .toast-progress { color: var(--sap-error); }
+        .toast-card.warning .toast-progress { color: var(--sap-warning); }
+        .toast-card.info    .toast-progress { color: var(--sap-info); }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(28px) scale(.97); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes toastShrink {
+            from { width: 100%; }
+            to   { width: 0%; }
+        }
+        @media (max-width: 480px) {
+            .toast-stack { left: 12px; right: 12px; top: 12px; width: auto; }
+        }
+
         * {
             box-sizing: border-box;
         }
@@ -119,6 +203,101 @@
             background-color: #e5f1fc;
             color: var(--sap-info);
             border: 1px solid #b3d9ff;
+        }
+
+        /* AI Agent banner */
+        .agent-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: linear-gradient(135deg, rgba(67, 97, 238, 0.07) 0%, rgba(114, 9, 183, 0.07) 100%);
+            border: 1px solid rgba(67, 97, 238, 0.18);
+            border-left: 4px solid #4361ee;
+            border-radius: 10px;
+            padding: 10px 16px;
+        }
+
+        .agent-banner .agent-banner-text {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .agent-banner-icon {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 14px;
+            background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+            box-shadow: 0 2px 8px rgba(67, 97, 238, 0.35);
+        }
+
+        .agent-banner-label {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #4361ee;
+            margin-bottom: 2px;
+        }
+
+        .agent-banner-detail {
+            font-size: 13px;
+            color: var(--sap-gray-900, #32363a);
+        }
+
+        .agent-banner .btn-view-email {
+            flex-shrink: 0;
+            border: 1px solid #4361ee;
+            color: #4361ee;
+            background: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .agent-banner .btn-view-email:hover {
+            background: #4361ee;
+            color: #fff;
+        }
+
+        .agent-issues-card {
+            background: #fff8e6;
+            border: 1px solid #ffeeba;
+            border-left: 4px solid var(--sap-warning);
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+
+        .agent-issues-header {
+            font-weight: 600;
+            font-size: 13px;
+            color: #856404;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .agent-issue-note {
+            font-size: 12.5px;
+            color: #6b5300;
+            padding: 5px 0;
+            line-height: 1.4;
+        }
+
+        .agent-issue-note + .agent-issue-note {
+            border-top: 1px dashed #ffe3a1;
         }
 
         /* SAP-style Cards */
@@ -540,11 +719,75 @@
         </nav>
 
         {% if messages %}
-        <div class="mb-3">
+        <div class="toast-stack" id="toastStack">
             {% for message in messages %}
-            <div class="alert {% if 'error' in message.tags %}alert-danger{% elif 'success' in message.tags %}alert-success{% elif 'warning' in message.tags %}alert-warning{% else %}alert-info{% endif %} mb-2 py-2 px-3 border-0 rounded" role="alert">{{ message }}</div>
+            <div class="toast-card {% if 'error' in message.tags or 'danger' in message.tags %}error{% elif 'success' in message.tags %}success{% elif 'warning' in message.tags %}warning{% else %}info{% endif %}"
+                 role="{% if 'error' in message.tags or 'danger' in message.tags or 'warning' in message.tags %}alert{% else %}status{% endif %}"
+                 style="animation-delay:{{ forloop.counter0 }}00ms;">
+                <span class="toast-icon">
+                    <i class="fas fa-{% if 'error' in message.tags or 'danger' in message.tags %}circle-exclamation{% elif 'success' in message.tags %}circle-check{% elif 'warning' in message.tags %}triangle-exclamation{% else %}circle-info{% endif %}"></i>
+                </span>
+                <div class="toast-body">
+                    <div class="toast-title">{% if 'error' in message.tags or 'danger' in message.tags %}Error{% elif 'success' in message.tags %}Success{% elif 'warning' in message.tags %}Warning{% else %}Notice{% endif %}</div>
+                    <div class="toast-msg">{{ message }}</div>
+                </div>
+                <button type="button" class="toast-close" onclick="window.dismissToast(this.closest('.toast-card'))" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+                <span class="toast-progress"></span>
+            </div>
             {% endfor %}
         </div>
+        <script>
+        (function () {
+            function dismissToast(el) {
+                if (!el || el.dataset.dismissing) return;
+                el.dataset.dismissing = '1';
+                var h = el.offsetHeight;
+                el.style.height = h + 'px';
+                el.style.overflow = 'hidden';
+                requestAnimationFrame(function () {
+                    el.style.transition = 'height .28s ease, opacity .28s ease, transform .28s ease, margin .28s ease';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateX(28px)';
+                    el.style.marginBottom = '0';
+                    el.style.height = '0px';
+                });
+                setTimeout(function () { el.remove(); }, 320);
+            }
+            window.dismissToast = dismissToast;
+            document.querySelectorAll('#toastStack .toast-card').forEach(function (el, i) {
+                setTimeout(function () { dismissToast(el); }, 6000 + i * 150);
+            });
+        })();
+        </script>
+        {% endif %}
+
+        {% if source_email %}
+        <div class="agent-banner mb-3">
+            <div class="agent-banner-text">
+                <span class="agent-banner-icon"><i class="fas fa-robot"></i></span>
+                <div>
+                    <span class="agent-banner-label">AI Agent</span>
+                    <div class="agent-banner-detail">Auto-created from RFQ: <strong>{{ source_email.subject|default:"(no subject)" }}</strong></div>
+                </div>
+            </div>
+            <a href="{% url 'emailagent:email_detail' source_email.pk %}" class="btn-view-email">View Email</a>
+        </div>
+        {% endif %}
+
+        {% if agent_draft %}
+            {% with draft_issues=agent_draft.unmatched_item_issues %}
+                {% if is_incomplete_agent_quotation or draft_issues %}
+                <div class="agent-issues-card mb-3">
+                    <div class="agent-issues-header"><i class="fas fa-triangle-exclamation"></i> Needs attention -- auto-drafted by the email agent</div>
+                    {% if is_incomplete_agent_quotation %}
+                        <div class="agent-issue-note">Quotation has ZERO items -- nothing could be auto-matched to the catalog; needs manual completion.</div>
+                    {% endif %}
+                    {% for issue in draft_issues %}
+                        <div class="agent-issue-note">{{ issue }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% endwith %}
         {% endif %}
 
         <!-- Page Header -->
@@ -601,6 +844,13 @@
                         <span class="info-label">Location</span>
                         <span class="info-value">{{ quotation.location|default:"Not specified" }}</span>
                     </div>
+                    {% if quotation.emailed_at %}
+                    <div class="info-item">
+                        <span class="info-label">Last Sent to Client</span>
+                        <span class="info-value">{{ quotation.emailed_to }}</span>
+                        <span style="font-size: 12px; color: var(--sap-gray-500);">on {{ quotation.emailed_at|date:"F j, Y g:i A" }}</span>
+                    </div>
+                    {% endif %}
                     <div class="info-item">
                         <span class="info-label">Salesman</span>
                         <span class="info-value">
@@ -754,6 +1004,11 @@
                     <i class="fas fa-exclamation-triangle"></i> One or more items are undercost!
                 </div>
                 {% endif %}
+                {% if has_zero_stock_items %}
+                <div style="padding: 10px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 5px; margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> One or more items are quoted at 0 stock — verify availability before approving.
+                </div>
+                {% endif %}
             </div>
             <div class="sap-card-body" style="padding: 0;">
                 <table class="sap-table">
@@ -787,8 +1042,15 @@
                             <td style="text-align: right;" data-label="DIP Stock">
                                 {% if item.item.dip_warehouse_stock is not None %}{{ item.item.dip_warehouse_stock|floatformat:0 }}{% else %}—{% endif %}
                             </td>
-                            <td style="text-align: right;" data-label="Total Stock">
+                            <td
+                                {% if item.is_out_of_stock %}
+                                    style="text-align: right; color: red; font-weight: bold;"
+                                {% else %}
+                                    style="text-align: right;"
+                                {% endif %}
+                                data-label="Total Stock">
                                 {% if item.item.total_available_stock is not None %}{{ item.item.total_available_stock|floatformat:0 }}{% else %}{{ item.item.item_stock|default:"—" }}{% endif %}
+                                {% if item.is_out_of_stock %}<i class="fas fa-triangle-exclamation" title="0 stock"></i>{% endif %}
                             </td>
 
                             <td 
@@ -892,6 +1154,7 @@
 
         <!-- Action Buttons -->
         <div class="action-area">
+            {% if not is_incomplete_agent_quotation %}
             {% if user.role.role == 'Admin' %}
                 {% if quotation.status != 'Approved' %}
                     <form method="POST" style="margin: 0; display: inline-block;">
@@ -913,15 +1176,22 @@
                     </form>
                 {% endif %}
             {% endif %}
-            
+            {% endif %}
+
             <!-- Edit Button -->
-            
-                <a href="{% url 'edit_quotation' quotation.id %}" 
+
+                <a href="{% url 'edit_quotation' quotation.id %}"
                 class="sap-button sap-button-secondary">
                     <i class="fas fa-edit"></i>
                     Edit Quotation
                 </a>
-           
+
+            {% if is_incomplete_agent_quotation %}
+            <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'view_quotations' %}{% endif %}" class="sap-button sap-button-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Back to Quotations
+            </a>
+            {% else %}
             <!-- Convert to Sales Order Button -->
             {% if can_proceed and not quotation.converted_to_sales_order %}
             <a href="{% url 'convert_quotation_to_sales_order' quotation.id %}"
@@ -936,7 +1206,7 @@
                 Discount Pending Approval
             </a>
             {% elif quotation.converted_to_sales_order %}
-            <a href="{% url 'view_sales_order_details' quotation.converted_to_sales_order.id %}" 
+            <a href="{% url 'view_sales_order_details' quotation.converted_to_sales_order.id %}"
                class="sap-button sap-button-secondary"
                style="opacity: 0.6; cursor: pointer; background-color: var(--sap-gray-300); color: var(--sap-gray-600);"
                title="Click to view Sales Order {{ quotation.converted_to_sales_order.order_number }}">
@@ -944,16 +1214,28 @@
                 Already Converted ({{ quotation.converted_to_sales_order.order_number }})
             </a>
             {% endif %}
-            
+
             <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'view_quotations' %}{% endif %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-arrow-left"></i>
                 Back to Quotations
             </a>
-            
+
             <button onclick="window.print()" class="sap-button sap-button-secondary">
                 <i class="fas fa-print"></i>
                 Print Quotation
             </button>
+            {% if existing_submittal %}
+            <a href="{% url 'submittal:detail' existing_submittal.pk %}" class="sap-button sap-button-secondary" title="A submittal has already been generated from this quotation">
+                <i class="fas fa-file-circle-check"></i>
+                View Submittal
+                {% if existing_submittal.needs_verification %}<span class="status-badge warning" style="margin-left:6px;">Needs Review</span>{% endif %}
+            </a>
+            {% else %}
+            <button type="button" class="sap-button sap-button-secondary" data-bs-toggle="modal" data-bs-target="#generateSubmittalModal">
+                <i class="fas fa-file-circle-plus"></i>
+                Generate Submittal
+            </button>
+            {% endif %}
             {% if can_proceed %}
             <a href="{% url 'export_quotation_to_pdf' quotation.id %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-file-pdf"></i>
@@ -963,6 +1245,10 @@
                 <i class="fas fa-file-excel"></i>
                 Export to Excel
             </a>
+            <button type="button" class="sap-button sap-button-primary" data-bs-toggle="modal" data-bs-target="#sendQuotationModal">
+                <i class="fas fa-paper-plane"></i>
+                Send Quotation
+            </button>
             {% elif discount_pending %}
             <a href="#" class="sap-button sap-button-secondary" style="opacity:0.6; cursor:not-allowed;" title="Discount pending manager approval">
                 <i class="fas fa-file-pdf"></i>
@@ -974,8 +1260,131 @@
                 Not approved to export
             </a>
             {% endif %}
+            {% endif %}
         </div>
     </div>
+
+    <!-- Generate Submittal Item-Selection Modal -->
+    <div class="modal fade" id="generateSubmittalModal" tabindex="-1" aria-labelledby="generateSubmittalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <form method="POST" action="{% url 'submittal:generate_from_quotation' quotation.id %}" id="generateSubmittalForm">
+                {% csrf_token %}
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="generateSubmittalModalLabel"><i class="fas fa-file-circle-plus"></i> Generate Material Submittal</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 10px;">
+                            Not every quoted item needs a submittal -- tick the ones from
+                            <strong>{{ quotation.quotation_number }}</strong> that do.
+                        </p>
+                        <div style="max-height: 320px; overflow-y: auto; border: 1px solid var(--sap-gray-200); border-radius: 8px; margin-bottom: 12px;">
+                            <table class="sap-table" style="margin-bottom: 0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px; text-align: center;"><input type="checkbox" id="submittalSelectAllItems" title="Select all"></th>
+                                        <th>Item Code</th>
+                                        <th>Item Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in quotation_items %}
+                                    <tr>
+                                        <td style="text-align: center;"><input type="checkbox" name="item_ids" value="{{ item.id }}" class="submittal-item-checkbox"></td>
+                                        <td>{{ item.item.item_code }}</td>
+                                        <td>{{ item.item.item_description }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:flex-start; background: var(--sap-blue-light); border: 1px solid rgba(10,110,209,0.18); border-radius: 8px; padding: 12px 14px;">
+                            <i class="fas fa-circle-info" style="color: var(--sap-info); margin-top: 2px;"></i>
+                            <span style="font-size: 13px; color: var(--sap-gray-700); line-height: 1.5;">
+                                You'll be able to review, correct and verify the draft before it's sent to the client -- nothing is emailed automatically.
+                            </span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="sap-button sap-button-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="sap-button sap-button-primary">
+                            <i class="fas fa-file-circle-plus"></i>
+                            Generate Submittal
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if can_proceed and quotation_items %}
+    <!-- Send Quotation Modal -->
+    <div class="modal fade" id="sendQuotationModal" tabindex="-1" aria-labelledby="sendQuotationModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form method="POST" action="{% url 'send_quotation_email' quotation.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="sendQuotationModalLabel"><i class="fas fa-paper-plane"></i> Send Quotation {{ quotation.quotation_number }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_to_email" class="form-label">Client Email <span style="color: var(--sap-error);">*</span></label>
+                            <input type="text" class="form-control" id="id_to_email" name="to_email" value="{{ default_to_email }}" placeholder="client@example.com" required>
+                            <div class="form-text">
+                                {% if default_to_email %}Auto-filled from the client's RFQ email -- edit if needed.{% else %}Separate multiple addresses with commas.{% endif %}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_cc_email" class="form-label">CC (optional)</label>
+                            <input type="text" class="form-control" id="id_cc_email" name="cc_email" value="{{ default_cc_email }}" placeholder="you@example.com">
+                            {% if default_cc_email %}<div class="form-text">Auto-filled from Cc/Bcc on the client's RFQ email.</div>{% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_message" class="form-label">Message (optional)</label>
+                            <textarea class="form-control" id="id_message" name="message" rows="8" placeholder="Dear {{ quotation.customer_display_name|default:quotation.customer.customer_name }},&#10;&#10;Please find attached our quotation {{ quotation.quotation_number }}...">{% if source_email %}{{ default_send_message }}{% endif %}</textarea>
+                            <div class="form-text">
+                                Leave blank to use the default message. The quotation PDF is attached automatically.
+                                {% if source_email %}Edit or remove the pre-filled text below before sending, including the default-brand note if present.{% endif %}
+                            </div>
+                        </div>
+                        {% if suggested_datasheets %}
+                        <div class="mb-3">
+                            <label class="form-label">Possible Datasheet Matches (from Submittal library)</label>
+                            {% for s in suggested_datasheets %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="datasheet_material_ids" value="{{ s.material.id }}" id="ds_{{ forloop.counter0 }}_{{ s.material.id }}">
+                                <label class="form-check-label" for="ds_{{ forloop.counter0 }}_{{ s.material.id }}">
+                                    {{ s.material.brand.name }} {{ s.material.model_no }} -- {{ s.description|default:"Datasheet" }}
+                                    <span style="color: var(--sap-text-secondary, #6c757d);">(possible match for: {{ s.matched_item|truncatechars:50 }})</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                            <div class="form-text">Rough matches only (brand + keyword overlap) -- verify each is actually the right model before checking it to attach.</div>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label for="id_attachments" class="form-label">Attach Datasheets / Other Documents (optional)</label>
+                            <input type="file" class="form-control" id="id_attachments" name="attachments" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+                            <div class="form-text">
+                                {% if suggested_datasheets %}Not every item has a datasheet in the Submittal library above -- attach any missing datasheet(s) manually here. {% else %}No datasheet was found in the Submittal library for this quotation's items -- attach any manually here. {% endif %}
+                                You can select multiple files at once.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="sap-button sap-button-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="sap-button sap-button-primary" id="sendQuotationSubmitBtn">
+                            <i class="fas fa-paper-plane"></i> Send
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1012,11 +1421,54 @@
             form.addEventListener('submit', function(e) {
                 const button = this.querySelector('button[type="submit"]');
                 if (button) {
+                    if (!button.dataset.origHtml) {
+                        button.dataset.origHtml = button.innerHTML;
+                    }
                     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
                     button.disabled = true;
                 }
             });
         });
+
+        // If the browser restores this page from its back/forward cache
+        // (e.g. clicking Back right after submitting the Generate Submittal
+        // or Send Quotation modal), the DOM comes back exactly as it was at
+        // the moment of navigating away -- not just a frozen "Processing..."
+        // button and a stuck modal backdrop, but potentially stale
+        // server-rendered state too (e.g. still showing "Generate Submittal"
+        // even though one was just created, since that button's state was
+        // decided by the server on the ORIGINAL page load). A full reload is
+        // the only way to guarantee everything reflects what's true now.
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+
+        // Generate Submittal modal -- select-all checkbox + require at
+        // least one item ticked before the form can be submitted.
+        (function () {
+            const selectAll = document.getElementById('submittalSelectAllItems');
+            const form = document.getElementById('generateSubmittalForm');
+            if (!selectAll || !form) return;
+            selectAll.addEventListener('change', function () {
+                form.querySelectorAll('.submittal-item-checkbox').forEach(function (cb) { cb.checked = selectAll.checked; });
+            });
+            form.addEventListener('submit', function (e) {
+                const anyChecked = form.querySelectorAll('.submittal-item-checkbox:checked').length > 0;
+                if (!anyChecked) {
+                    e.preventDefault();
+                    alert('Select at least one item before generating a submittal.');
+                    // Undo the generic "Processing..." spinner state applied by
+                    // the page-wide submit listener registered above this one.
+                    const button = form.querySelector('button[type="submit"]');
+                    if (button && button.dataset.origHtml) {
+                        button.innerHTML = button.dataset.origHtml;
+                        button.disabled = false;
+                    }
+                }
+            });
+        })();
 
         // Add tooltip functionality
         function addTooltip(element, text) {

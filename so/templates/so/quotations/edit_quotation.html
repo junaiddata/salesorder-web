@@ -200,7 +200,20 @@
         
         <div class="container">
             <h1>Edit Quotation</h1>
-            
+
+            {% if source_email %}
+            <div style="background:linear-gradient(135deg, rgba(67,97,238,0.07) 0%, rgba(114,9,183,0.07) 100%); border:1px solid rgba(67,97,238,0.18); border-left:4px solid #4361ee; border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="flex-shrink:0; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:15px; background:linear-gradient(135deg, #4361ee 0%, #7209b7 100%); box-shadow:0 2px 8px rgba(67,97,238,0.35);">&#129302;</span>
+                    <div>
+                        <span style="display:block; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#4361ee; margin-bottom:2px;">AI Agent</span>
+                        <span style="font-size:13px; color:#32363a;">Auto-created from RFQ: <strong>{{ source_email.subject|default:"(no subject)" }}</strong></span>
+                    </div>
+                </div>
+                <a href="{% url 'emailagent:email_detail' source_email.pk %}" class="btn" style="border:1px solid #4361ee; color:#4361ee; background:#fff; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none; white-space:nowrap;">View Email</a>
+            </div>
+            {% endif %}
+
             <form method="post" id="quotation-form">
                 {% csrf_token %}
                 <input type="hidden" name="quotation_id" value="{{ quotation.id }}">

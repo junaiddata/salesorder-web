@@ -1,0 +1,454 @@
+.review-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.review-card-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.review-card-thumbs img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, .1);
+}
+
+.review-card-thumbs .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .04);
+    font-size: .8rem;
+}
+
+.review-card-body-preview {
+    color: #555;
+    font-size: .9rem;
+    margin: 8px 0;
+}
+
+.review-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+tr.clickable-row {
+    cursor: pointer;
+}
+
+tr.clickable-row:hover {
+    background: rgba(0, 0, 0, .03);
+}
+
+/* ── Email detail page ────────────────────────────────────────────── */
+
+.email-detail-page {
+    max-width: 860px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #666;
+    text-decoration: none;
+    font-size: .9rem;
+    margin-bottom: 14px;
+}
+
+.back-link:hover {
+    color: #222;
+}
+
+.email-detail-card {
+    padding: 28px 30px;
+}
+
+.email-detail-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.email-avatar {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6a5acd, #4169e1);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.email-header-main {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+
+.email-header-main h1 {
+    font-size: 1.4rem;
+    margin: 0 0 8px;
+    word-break: break-word;
+}
+
+.email-header-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.confidence-pill {
+    background: rgba(0, 0, 0, .05);
+    color: #555;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+}
+
+.email-header-actions {
+    flex: 1 1 auto;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 220px;
+}
+
+.email-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px 24px;
+    background: rgba(0, 0, 0, .02);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+}
+
+.email-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.email-meta-item .label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #999;
+}
+
+.email-meta-item .value {
+    font-size: .9rem;
+    color: #333;
+    word-break: break-word;
+}
+
+.ai-reasoning-box {
+    display: flex;
+    gap: 12px;
+    background: #fff8e6;
+    border: 1px solid #f0e0b0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+
+.ai-reasoning-box i {
+    color: #b8860b;
+    margin-top: 2px;
+}
+
+.ai-reasoning-box .label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #a0790a;
+    margin-bottom: 4px;
+}
+
+.ai-reasoning-box p {
+    margin: 0;
+    color: #6b5310;
+    font-size: .88rem;
+}
+
+.email-body-panel {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: #333;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 8px;
+}
+
+.attachments-heading {
+    margin: 22px 0 10px;
+    font-size: .95rem;
+    color: #555;
+}
+
+.attachment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.attachment-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 8px;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 10px;
+    text-decoration: none;
+    color: #333;
+    transition: box-shadow .15s, transform .15s;
+}
+
+.attachment-card:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    transform: translateY(-2px);
+}
+
+.attachment-card img {
+    width: 100%;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.attachment-icon {
+    width: 100%;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 1.6rem;
+}
+
+.attachment-icon.pdf { background: #fde7e7; color: #c0392b; }
+.attachment-icon.excel { background: #e6f4ea; color: #217346; }
+.attachment-icon.generic { background: rgba(0, 0, 0, .05); color: #666; }
+
+.attachment-name {
+    font-size: .74rem;
+    text-align: center;
+    word-break: break-word;
+}
+
+/* ── Collapsible sections (e.g. Submittal Packages) ──────────────── */
+
+details.collapsible-section {
+    margin: 22px 0 10px;
+}
+details.collapsible-section > summary.collapsible-summary {
+    display: inline-flex;
+    list-style: none;
+    cursor: pointer;
+    align-items: center;
+    gap: 9px;
+    user-select: none;
+    padding: 9px 16px;
+    background: var(--primary-50, #eef3ff);
+    color: var(--primary-700, #002a85);
+    border: 1px solid var(--primary-100, #dbe4ff);
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: .9rem;
+    transition: background .15s ease, box-shadow .15s ease;
+}
+/* Suppress the browser's own native disclosure marker on <summary> --
+   changing `display` off `list-item` (done above) already removes it in
+   modern Chrome/Firefox/Safari, but the two selectors below cover older
+   engines that still render it. */
+details.collapsible-section > summary.collapsible-summary::-webkit-details-marker { display: none; }
+details.collapsible-section > summary.collapsible-summary::marker { content: ''; display: none; }
+details.collapsible-section > summary.collapsible-summary:hover {
+    background: var(--primary-100, #dbe4ff);
+    box-shadow: 0 2px 10px rgba(0, 51, 153, .12);
+}
+details.collapsible-section > summary.collapsible-summary:focus-visible {
+    outline: 2px solid var(--primary, #003399);
+    outline-offset: 2px;
+}
+details.collapsible-section > summary.collapsible-summary .toggle-icon {
+    font-size: .68rem;
+    transition: transform .18s ease;
+}
+details.collapsible-section[open] > summary.collapsible-summary .toggle-icon {
+    transform: rotate(90deg);
+}
+details.collapsible-section > summary.collapsible-summary .pkg-count {
+    background: var(--primary-700, #002a85);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 9px;
+    border-radius: 999px;
+}
+details.collapsible-section > .items-table-wrap {
+    margin-top: 10px;
+}
+
+/* ── Requirement items table ─────────────────────────────────────── */
+
+.items-table-wrap {
+    overflow-x: auto;
+    border: 1px solid rgba(0, 0, 0, .08);
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+
+.items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .88rem;
+}
+
+.items-table th {
+    background: #fff6cc;
+    color: #3a3000;
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.items-table td {
+    padding: 10px 14px;
+    border-top: 1px solid rgba(0, 0, 0, .06);
+    vertical-align: top;
+}
+
+.items-table tbody tr:nth-child(odd) {
+    background: rgba(0, 0, 0, .015);
+}
+
+.item-note {
+    margin-top: 4px;
+    font-size: .74rem;
+    color: #a0790a;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.category-chip {
+    display: inline-block;
+    background: #eef2ff;
+    color: #3b4fc4;
+    border: 1px solid #d6ddf7;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: .74rem;
+    font-weight: 500;
+    white-space: nowrap;
+    margin: 2px 3px 2px 0;
+}
+
+.section-hint {
+    margin: -4px 0 10px;
+    font-size: .82rem;
+    color: #777;
+}
+
+.select-col {
+    width: 34px;
+    text-align: center !important;
+}
+
+.submittal-generate-btn {
+    margin-top: 4px;
+}
+
+/* ── Thread panel ─────────────────────────────────────────────────── */
+
+.thread-panel {
+    margin-top: 18px;
+    padding: 24px 26px;
+}
+
+.thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.thread-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(0, 0, 0, .07);
+    border-radius: 10px;
+    color: inherit;
+    transition: box-shadow .15s;
+}
+
+.thread-item-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+}
+
+.thread-item:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .06);
+}
+
+.email-avatar.sm {
+    width: 32px;
+    height: 32px;
+    font-size: .85rem;
+    flex-shrink: 0;
+}
+
+.thread-item-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.thread-item-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.thread-item-sender {
+    font-weight: 600;
+    font-size: .88rem;
+    color: #222;
+}
+
+.thread-item-date {
+    font-size: .78rem;
+    color: #999;
+    white-space: nowrap;
+}
+
+.thread-item-snippet {
+    font-size: .84rem;
+    color: #666;
+}

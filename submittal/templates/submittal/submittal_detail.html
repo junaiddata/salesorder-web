@@ -55,6 +55,30 @@
     }
     @keyframes pdfBarSlide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
     .pdf-loading-sub { font-size: .76rem; color: #64748b; }
+
+    .agent-banner {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        background: linear-gradient(135deg, rgba(67,97,238,.07) 0%, rgba(114,9,183,.07) 100%);
+        border: 1px solid rgba(67,97,238,.18); border-left: 4px solid #4361ee;
+        border-radius: 10px; padding: 10px 16px; margin-bottom: .75rem; flex-wrap: wrap;
+    }
+    .agent-banner .agent-banner-text { display: flex; align-items: center; gap: 12px; }
+    .agent-banner-icon {
+        flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px;
+        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+        box-shadow: 0 2px 8px rgba(67,97,238,.35);
+    }
+    .agent-banner-label { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #4361ee; margin-bottom: 2px; }
+    .agent-banner-detail { font-size: 13px; color: var(--ink); }
+
+    .review-card {
+        background: #fff8e6; border: 1px solid #ffeeba; border-left: 4px solid #ffc107;
+        border-radius: 10px; padding: 12px 16px; margin-bottom: .75rem;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .review-card .review-text { font-size: 13px; color: #856404; }
+    .review-card .review-text strong { display: block; margin-bottom: 2px; }
 </style>
 {% endblock %}
 
@@ -70,6 +94,7 @@
             <span><i class="fas fa-calendar-alt"></i> Created {{ submittal.created_at|date:"d M Y" }}</span>
             {% if submittal.company == 'alabama' %}<span style="color:#fecaca;"><i class="fas fa-building-flag"></i> Alabama letterhead</span>{% endif %}
             {% if submittal.pdf_generated_at %}<span style="color:#a7f3d0;"><i class="fas fa-circle-check"></i> PDF generated {{ submittal.pdf_generated_at|date:"d M Y" }}</span>{% endif %}
+            {% if submittal.status == 'sent' %}<span style="color:#a7f3d0;"><i class="fas fa-paper-plane"></i> Sent to {{ submittal.emailed_to }} on {{ submittal.emailed_at|date:"d M Y" }}</span>{% endif %}
         </div>
         <div class="hero-actions">
             <button type="button" id="btnPreviewPdf" class="btn-x btn-light-x" data-pdf-url="{% url 'submittal:generate_pdf' submittal.pk %}?inline=1"><i class="fas fa-eye"></i> Preview</button>
@@ -81,8 +106,59 @@
             <button type="button" class="btn-x btn-ghost-x" data-bs-toggle="modal" data-bs-target="#stampModal">
                 <i class="fas fa-stamp"></i> {% if submittal.stamp %}Update Stamp{% else %}Add Stamp{% endif %}
             </button>
+            <button type="button" class="btn-x btn-light-x" data-bs-toggle="modal" data-bs-target="#sendSubmittalModal" style="background:#198754;border-color:#198754;">
+                <i class="fas fa-paper-plane"></i> Send Submittal
+            </button>
         </div>
     </div>
+</div>
+
+<div class="u-wrap-narrow u-page" style="padding-bottom:0;">
+{% if submittal.created_via != 'manual' %}
+<div class="agent-banner">
+    <div class="agent-banner-text">
+        <span class="agent-banner-icon"><i class="fas fa-robot"></i></span>
+        <div>
+            <span class="agent-banner-label">AI Agent</span>
+            <div class="agent-banner-detail">
+                {% if submittal.created_via == 'agent_quotation' %}
+                    Automatically generated from Quotation{% if submittal.source_quotation %} <strong>{{ submittal.source_quotation.quotation_number }}</strong>{% endif %}.
+                {% else %}
+                    Automatically generated from an incoming client email requesting material submittal approval.
+                {% endif %}
+                {% if submittal.draft_record.reasoning %} {{ submittal.draft_record.reasoning }}{% endif %}
+            </div>
+        </div>
+    </div>
+    {% if submittal.draft_record.tracked_email_id %}
+    <a href="{% url 'emailagent:email_detail' submittal.draft_record.tracked_email_id %}" class="btn-x btn-ghost-x" style="flex-shrink:0;"><i class="fas fa-envelope"></i> View Email</a>
+    {% elif submittal.source_quotation_id %}
+    <a href="{% url 'view_quotation_details' submittal.source_quotation_id %}" class="btn-x btn-ghost-x" style="flex-shrink:0;"><i class="fas fa-file-invoice"></i> View Quotation</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if submittal.needs_verification %}
+<div class="review-card">
+    <div class="review-text">
+        <strong><i class="fas fa-triangle-exclamation"></i> Pending Review</strong>
+        This submittal was generated automatically and has not yet been reviewed. Please check the title
+        page, materials and supporting documents below, use Edit to correct anything that needs
+        adjusting, then mark it Verified. Sending is disabled until this submittal has been verified.
+    </div>
+    <form method="post" action="{% url 'submittal:mark_verified' submittal.pk %}" style="flex-shrink:0;" onsubmit="return confirm('Confirm that you have reviewed this submittal and it is ready to be sent to the client?');">
+        {% csrf_token %}
+        <button type="submit" class="btn-x btn-light-x" style="background:#198754;border-color:#198754;"><i class="fas fa-check"></i> Mark Verified</button>
+    </form>
+</div>
+{% elif submittal.status == 'verified' %}
+<div class="review-card" style="background:#eafbea;border-color:#bbf7d0;border-left-color:#198754;">
+    <div class="review-text" style="color:#14532d;">
+        <strong><i class="fas fa-circle-check"></i> Verified</strong>
+        {% if submittal.verified_by %}Reviewed and verified by {{ submittal.verified_by.get_username }}{% if submittal.verified_at %} on {{ submittal.verified_at|date:"d M Y" }}{% endif %}. {% endif %}This submittal is ready to be sent to the client.
+    </div>
+</div>
+{% endif %}
 </div>
 
 <!-- PDF preparing overlay -->
@@ -143,6 +219,46 @@
                 {% endif %}
                 <button type="button" id="btnSaveStamp" class="btn-x btn-light-x"><i class="fas fa-check"></i> Save Stamp</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Send Submittal modal -->
+<div class="modal fade" id="sendSubmittalModal" tabindex="-1" aria-labelledby="sendSubmittalModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'submittal:send_email' submittal.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sendSubmittalModalLabel"><i class="fas fa-paper-plane"></i> Send Submittal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if submittal.needs_verification %}
+                    <div class="alert" style="background:#fff8e6;border:1px solid #ffeeba;color:#856404;font-size:.85rem;">
+                        This submittal has not been reviewed yet. Please mark it Verified (see the notice above) before sending it to the client.
+                    </div>
+                    {% elif not submittal.pdf_generated_at %}
+                    <div class="alert" style="background:#fff8e6;border:1px solid #ffeeba;color:#856404;font-size:.85rem;">
+                        No PDF has been generated for this submittal yet. Please use Preview or Download above to generate one before sending.
+                    </div>
+                    {% endif %}
+                    <p style="font-size:.83rem;color:var(--muted);margin-bottom:.9rem;">This will email the generated submittal PDF directly to the client or consultant.</p>
+                    <label for="id_sub_to_email" class="form-label" style="font-size:.85rem;font-weight:600;">Client / Consultant Email <span style="color:#dc3545;">*</span></label>
+                    <input type="text" class="form-control" id="id_sub_to_email" name="to_email" placeholder="client@example.com" required {% if submittal.needs_verification or not submittal.pdf_generated_at %}disabled{% endif %}>
+                    <div class="form-text" style="font-size:.75rem;">Separate multiple addresses with commas.</div>
+
+                    <label for="id_sub_cc_email" class="form-label mt-2" style="font-size:.85rem;font-weight:600;">CC (optional)</label>
+                    <input type="text" class="form-control" id="id_sub_cc_email" name="cc_email" placeholder="you@example.com" {% if submittal.needs_verification or not submittal.pdf_generated_at %}disabled{% endif %}>
+
+                    <label for="id_sub_message" class="form-label mt-2" style="font-size:.85rem;font-weight:600;">Message (optional)</label>
+                    <textarea class="form-control" id="id_sub_message" name="message" rows="4" placeholder="Leave blank to use the default message" {% if submittal.needs_verification or not submittal.pdf_generated_at %}disabled{% endif %}></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-x btn-ghost-x" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-x btn-light-x" style="background:#198754;border-color:#198754;" {% if submittal.needs_verification or not submittal.pdf_generated_at %}disabled{% endif %}><i class="fas fa-paper-plane"></i> Send</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

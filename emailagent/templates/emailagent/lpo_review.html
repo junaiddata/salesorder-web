@@ -1,0 +1,319 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}LPO {{ lpo_request.lpo_number|default:"Request" }} | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Hero ── */
+    .lpo-hero-back {
+        display: inline-flex; align-items: center; gap: .4rem;
+        color: rgba(255,255,255,.75); text-decoration: none;
+        font-size: .82rem; margin-bottom: 1rem;
+    }
+    .lpo-hero-back:hover { color: #fff; }
+    .lpo-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
+    .lpo-hero-top h1 { font-size: 1.5rem; word-break: break-word; }
+    .lpo-hero-subject { font-size: .95rem; color: rgba(255,255,255,.85); margin: 0 0 .5rem; max-width: 640px; }
+    .lpo-hero-meta { display: flex; gap: 1.25rem; flex-wrap: wrap; font-size: .82rem; color: rgba(255,255,255,.75); }
+    .lpo-hero-meta span { display: inline-flex; align-items: center; gap: .4rem; }
+    .status-pill {
+        display: inline-flex; align-items: center; gap: .5rem;
+        padding: .5rem 1rem; border-radius: 999px;
+        font-size: .85rem; font-weight: 700;
+        background: rgba(255,255,255,.14); color: #fff;
+        border: 1px solid rgba(255,255,255,.28); white-space: nowrap;
+    }
+    .status-pill.confirmed { background: rgba(5,150,105,.28); border-color: rgba(167,243,208,.5); }
+    .status-pill.needs_review { background: rgba(217,119,6,.28); border-color: rgba(253,230,138,.5); }
+    .status-pill.dismissed { background: rgba(255,255,255,.1); }
+    .status-pill.failed { background: rgba(220,38,38,.28); border-color: rgba(254,202,202,.5); }
+
+    /* ── Notice banners ── */
+    .notice-x {
+        display: flex; align-items: flex-start; gap: .8rem;
+        border-radius: var(--r-lg); padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+        font-size: .87rem; line-height: 1.55;
+    }
+    .notice-x i.notice-ic { font-size: 1.05rem; margin-top: .1rem; }
+    .notice-x .notice-actions { display: flex; gap: .6rem; margin-top: .6rem; flex-wrap: wrap; }
+    .notice-x.success { background: var(--success-50); border: 1px solid #bbf7d0; color: #14532d; }
+    .notice-x.success i.notice-ic { color: var(--success); }
+    .notice-x.gray { background: var(--surface-alt); border: 1px solid var(--line); color: var(--body); }
+    .notice-x.gray i.notice-ic { color: var(--muted); }
+    .notice-x.danger { background: var(--danger-50); border: 1px solid #fecaca; color: #7f1d1d; }
+    .notice-x.danger i.notice-ic { color: var(--danger); }
+
+    .tbl-x th.num, .tbl-x td.num { text-align: right; }
+
+    /* ── LPO totals footer ── */
+    .totals-bar {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap;
+        margin-top: 1rem; padding: 1rem 1.1rem;
+        background: var(--surface-alt); border: 1px solid var(--line); border-radius: var(--r);
+    }
+    .totals-words { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: .3rem; }
+    .totals-mini { flex: 0 0 auto; border-collapse: collapse; font-size: .85rem; }
+    .totals-mini td { padding: .3rem .5rem; color: var(--body); }
+    .totals-mini td:first-child { color: var(--muted); padding-right: 1.5rem; }
+    .totals-mini td.num { text-align: right; font-weight: 600; color: var(--ink); white-space: nowrap; }
+    .totals-mini tr.grand td { border-top: 1px solid var(--line); padding-top: .5rem; font-weight: 700; }
+    .totals-mini tr.grand td.num { color: var(--primary-700); }
+
+    /* ── Key/value grid ── */
+    .kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.1rem 1.75rem; }
+    .kv-item { min-width: 0; }
+    .kv-item .kv-label { display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin-bottom: .3rem; }
+    .kv-item .kv-value { font-size: .92rem; color: var(--ink); font-weight: 500; word-break: break-word; }
+    .kv-item .kv-value.muted { color: var(--faint); font-weight: 400; }
+    .kv-item .kv-value.amount { font-weight: 700; color: var(--primary-700); }
+
+    /* ── Reasoning box ── */
+    .reason-box {
+        display: flex; gap: .7rem; align-items: flex-start;
+        background: var(--warn-50); border: 1px solid #fde68a; border-radius: var(--r);
+        padding: .9rem 1.1rem; font-size: .85rem; color: var(--warn-700); line-height: 1.55;
+    }
+    .reason-box i { margin-top: .15rem; color: var(--warn); }
+
+    /* ── Candidate quotation picker ── */
+    .cand-row { cursor: pointer; }
+    .cand-row:hover td { background: var(--primary-50); }
+    .cand-row.picked td { background: var(--primary-50); }
+    .cand-radio { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+    .manual-qid-box {
+        background: var(--surface-alt); border: 1px dashed var(--line); border-radius: var(--r);
+        padding: 1rem 1.1rem; margin-bottom: 1rem;
+    }
+    .manual-qid-box p { margin: 0 0 .6rem; font-size: .85rem; color: var(--muted); }
+
+    .action-footer {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+        margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft);
+    }
+    .action-footer .dismiss-inline { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+    .action-footer .input-x { width: auto; min-width: 240px; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner">
+        <a href="{% url 'emailagent:lpo_request_queue' %}" class="lpo-hero-back"><i class="fas fa-arrow-left"></i> All LPO Requests</a>
+        <div class="lpo-hero-top">
+            <div>
+                <h1><i class="fas fa-file-contract"></i> {{ lpo_request.lpo_number|default:"LPO Request" }}</h1>
+                <p class="lpo-hero-subject">{{ lpo_request.tracked_email.subject|default:"(no subject)" }}</p>
+                <div class="lpo-hero-meta">
+                    <span><i class="fas fa-user"></i> {{ lpo_request.tracked_email.sender_name|default:lpo_request.tracked_email.sender }} &lt;{{ lpo_request.tracked_email.sender }}&gt;</span>
+                    <span><i class="fas fa-calendar"></i> {{ lpo_request.tracked_email.received_at|date:"d M Y, H:i" }}</span>
+                </div>
+            </div>
+            {% if lpo_request.status == 'confirmed' %}<span class="status-pill confirmed"><i class="fas fa-circle-check"></i> Sales Order Created</span>
+            {% elif lpo_request.status == 'needs_review' %}<span class="status-pill needs_review"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+            {% elif lpo_request.status == 'dismissed' %}<span class="status-pill dismissed"><i class="fas fa-eye-slash"></i> Dismissed</span>
+            {% elif lpo_request.status == 'failed' %}<span class="status-pill failed"><i class="fas fa-bug"></i> Failed</span>
+            {% else %}<span class="status-pill">{{ lpo_request.get_status_display }}</span>{% endif %}
+        </div>
+        <div class="hero-actions">
+            {% if lpo_request.source_attachment %}
+            <a href="{% url 'emailagent:attachment_download' lpo_request.source_attachment.pk %}" target="_blank" rel="noopener" class="btn-x btn-light-x"><i class="fas fa-file-pdf"></i> View Source LPO PDF</a>
+            {% endif %}
+            {% if lpo_request.status == 'confirmed' and lpo_request.sales_order %}
+            <a href="{% url 'view_sales_order_details' lpo_request.sales_order.id %}" class="btn-x btn-ghost-x"><i class="fas fa-eye"></i> View Sales Order {{ lpo_request.sales_order.order_number }}</a>
+            {% if lpo_request.matched_quotation %}<a href="{% url 'view_quotation_details' lpo_request.matched_quotation.id %}" class="btn-x btn-ghost-x"><i class="fas fa-file-invoice-dollar"></i> View Quotation {{ lpo_request.matched_quotation.quotation_number }}</a>{% endif %}
+            {% elif lpo_request.status == 'needs_review' or lpo_request.status == 'failed' %}
+            <form method="post" action="{% url 'emailagent:lpo_request_recheck_match' lpo_request.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-x btn-ghost-x" title="Re-run matching against the current quotations -- useful if the matching quotation was only created/approved after this LPO first arrived."><i class="fas fa-rotate"></i> Re-check Match</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap-narrow u-page">
+
+    {% if lpo_request.status == 'dismissed' %}
+    <div class="notice-x gray">
+        <i class="fas fa-eye-slash notice-ic"></i>
+        <div>
+            <strong>Dismissed</strong> — marked reviewed with no action needed by {{ lpo_request.dismissed_by.username|default:"—" }} on {{ lpo_request.dismissed_at|date:"d M Y, H:i" }}.
+            {% if lpo_request.dismiss_reason %}<br>Reason: {{ lpo_request.dismiss_reason }}{% endif %}
+        </div>
+    </div>
+    {% elif lpo_request.status == 'failed' and lpo_request.error %}
+    <div class="notice-x danger">
+        <i class="fas fa-bug notice-ic"></i>
+        <div><strong>Processing failed</strong><br>{{ lpo_request.error }}</div>
+    </div>
+    {% elif lpo_request.status == 'confirmed' %}
+    <div class="notice-x success">
+        <i class="fas fa-circle-check notice-ic"></i>
+        <div>
+            {% if lpo_request.sales_order.created_via == 'agent_lpo' %}
+            <strong><i class="fas fa-robot"></i> Auto-created by the LPO agent</strong> — matched to a single, confident quotation with no human involved.
+            {% elif lpo_request.reviewed_by %}
+            <strong>Sales order created</strong> — manually matched and converted by {{ lpo_request.reviewed_by.username }} on {{ lpo_request.reviewed_at|date:"d M Y, H:i" }}.
+            {% else %}
+            <strong>Sales order created</strong> — this LPO was matched and converted successfully.
+            {% endif %}
+            <div class="notice-actions">
+                {% if lpo_request.sales_order %}<a href="{% url 'view_sales_order_details' lpo_request.sales_order.id %}" class="btn-x sm btn-success-x"><i class="fas fa-eye"></i> View Sales Order {{ lpo_request.sales_order.order_number }}</a>{% endif %}
+                {% if lpo_request.matched_quotation %}<a href="{% url 'view_quotation_details' lpo_request.matched_quotation.id %}" class="btn-x sm"><i class="fas fa-file-invoice-dollar"></i> View Quotation {{ lpo_request.matched_quotation.quotation_number }}</a>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% if stock_shortage_report and stock_shortage_report.lines %}
+    <div class="notice-x danger">
+        <i class="fas fa-triangle-exclamation notice-ic"></i>
+        <div>
+            <strong>Stock shortage detected</strong> — {{ stock_shortage_report.lines|length }} item(s) can't be fully covered by current stock across all pending LPO orders (not necessarily this one specifically -- the report is consolidated).
+            <div class="notice-actions">
+                <a href="{% url 'emailagent:stock_shortage_report' %}" class="btn-x sm btn-danger-x"><i class="fas fa-magnifying-glass"></i> View Consolidated Report</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-file-lines ic"></i><h2>Extracted Details</h2></div>
+        <div class="card-x-body">
+            <div class="kv-grid">
+                <div class="kv-item"><span class="kv-label">LPO Number</span><span class="kv-value {% if not lpo_request.lpo_number %}muted{% endif %}">{{ lpo_request.lpo_number|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">LPO Date</span><span class="kv-value {% if not lpo_request.lpo_date %}muted{% endif %}">{{ lpo_request.lpo_date|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Customer (stated)</span><span class="kv-value {% if not lpo_request.customer_name_stated %}muted{% endif %}">{{ lpo_request.customer_name_stated|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Referenced Quotation</span><span class="kv-value {% if not lpo_request.referenced_quotation_number %}muted{% endif %}">{{ lpo_request.referenced_quotation_number|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Delivery Terms</span><span class="kv-value {% if not lpo_request.delivery_terms %}muted{% endif %}">{{ lpo_request.delivery_terms|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Payment Terms</span><span class="kv-value {% if not lpo_request.payment_terms %}muted{% endif %}">{{ lpo_request.payment_terms|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Total Amount</span><span class="kv-value {% if lpo_request.total_amount %}amount{% else %}muted{% endif %}">{% if lpo_request.total_amount %}AED {{ lpo_request.total_amount|floatformat:2 }}{% else %}—{% endif %}</span></div>
+            </div>
+        </div>
+    </div>
+
+    {% if lpo_request.items.all %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-list-check ic"></i><h2>LPO Line Items <span class="count">({{ lpo_request.items.count }})</span></h2></div>
+        <div class="card-x-body" style="padding:1rem;">
+            <div class="tbl-x-wrap" style="border:none;">
+                <table class="tbl-x">
+                    <thead>
+                        <tr>
+                            <th>#</th><th>Item</th><th>Description</th><th>Quantity</th><th>UOM</th>
+                            <th class="num">Price (Excl. VAT)</th><th class="num">Discount %</th>
+                            <th class="num">VAT Amount</th><th class="num">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in lpo_request.items.all %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ item.description }}</td>
+                            <td>{{ item.extra_description|default:"—" }}</td>
+                            <td>{{ item.quantity|default:"—" }}</td>
+                            <td>{{ item.unit|default:"—" }}</td>
+                            <td class="num">{% if item.price %}{{ item.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td class="num">{{ item.discount_percent|default:"—" }}</td>
+                            <td class="num">{% if item.vat_amount %}{{ item.vat_amount|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td class="num">{% if item.amount %}{{ item.amount|floatformat:2 }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if lpo_request.amount_in_words or lpo_request.total_discount or lpo_request.total_excl_vat or lpo_request.total_vat or lpo_request.total_amount %}
+            <div class="totals-bar">
+                <div class="totals-words">
+                    <span class="kv-label">Amount in Words</span>
+                    <span class="kv-value {% if not lpo_request.amount_in_words %}muted{% endif %}">{{ lpo_request.amount_in_words|default:"—" }}</span>
+                </div>
+                <table class="totals-mini">
+                    <tr><td>Total Discount, (AED)</td><td class="num">{% if lpo_request.total_discount %}{{ lpo_request.total_discount|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+                    <tr><td>Total (Excl. VAT), (AED)</td><td class="num">{% if lpo_request.total_excl_vat %}{{ lpo_request.total_excl_vat|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+                    <tr><td>Total VAT, (AED)</td><td class="num">{% if lpo_request.total_vat %}{{ lpo_request.total_vat|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+                    <tr class="grand"><td>Total (Incl. VAT), (AED)</td><td class="num">{% if lpo_request.total_amount %}{{ lpo_request.total_amount|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-magnifying-glass ic"></i><h2>Matching</h2></div>
+        <div class="card-x-body">
+            <div class="reason-box">
+                <i class="fas fa-circle-info"></i>
+                <span>{{ lpo_request.match_reasoning|default:"No matching reasoning recorded." }}</span>
+            </div>
+        </div>
+    </div>
+
+    {% if lpo_request.status != 'confirmed' and lpo_request.status != 'dismissed' %}
+    <div class="card-x mb-3">
+        <div class="card-x-head"><i class="fas fa-check-double ic"></i><h2>Confirm Match &amp; Create Sales Order</h2></div>
+        <div class="card-x-body">
+            <form method="post" action="{% url 'emailagent:lpo_request_convert' lpo_request.pk %}" id="convertForm">
+                {% csrf_token %}
+                {% if lpo_request.candidate_quotations.all %}
+                <p class="section-hint" style="margin-top:0;">Pick the quotation this LPO confirms, then create the sales order.</p>
+                <div class="tbl-x-wrap">
+                    <table class="tbl-x">
+                        <thead>
+                            <tr><th class="select-col"></th><th>Quotation</th><th>Customer</th><th>Status</th><th>Grand Total</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for q in lpo_request.candidate_quotations.all %}
+                            <tr class="cand-row {% if lpo_request.matched_quotation_id == q.id %}picked{% endif %}">
+                                <td class="select-col"><input type="radio" name="quotation_id" class="cand-radio" value="{{ q.id }}" {% if lpo_request.matched_quotation_id == q.id %}checked{% endif %}></td>
+                                <td><a href="{% url 'view_quotation_details' q.id %}" target="_blank" rel="noopener">{{ q.quotation_number }}</a></td>
+                                <td>{{ q.customer_display_name|default:q.customer.customer_name }}</td>
+                                <td>{{ q.status }}</td>
+                                <td>{{ q.grand_total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="manual-qid-box">
+                    <p><i class="fas fa-triangle-exclamation" style="color:var(--warn);"></i> No candidates were found automatically. Open the quotation you believe this LPO confirms, note its ID from the URL, and enter it below.</p>
+                    <label class="label-x" for="manualQid">Quotation ID</label>
+                    <input type="number" name="quotation_id" id="manualQid" class="input-x" style="max-width:200px;">
+                </div>
+                {% endif %}
+                <div class="action-footer">
+                    <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-check"></i> Create Sales Order from Selected Quotation</button>
+                </div>
+            </form>
+
+            <form method="post" action="{% url 'emailagent:lpo_request_dismiss' lpo_request.pk %}" style="margin-top:1rem;">
+                {% csrf_token %}
+                <div class="action-footer" style="margin-top:0; padding-top:1rem;">
+                    <div class="dismiss-inline">
+                        <input type="text" name="dismiss_reason" placeholder="Optional reason (e.g. duplicate PO)" class="input-x">
+                        <button type="submit" class="btn-x btn-danger-x"><i class="fas fa-eye-slash"></i> Mark Reviewed — No Action Needed</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.cand-row').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (e.target.tagName === 'A') return;
+            var radio = row.querySelector('.cand-radio');
+            if (!radio) return;
+            radio.checked = true;
+            document.querySelectorAll('.cand-row').forEach(function (r) { r.classList.remove('picked'); });
+            row.classList.add('picked');
+        });
+    });
+</script>
+{% endblock %}

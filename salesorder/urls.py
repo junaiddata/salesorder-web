@@ -28,4 +28,5 @@ urlpatterns = [
     path('businesscards/', include('businesscards.urls')),
     path('submittal/', include('submittal.urls')),
     path('warranty/', include('warranty.urls')),
+    path('emailagent/', include('emailagent.urls')),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

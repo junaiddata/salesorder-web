@@ -207,6 +207,20 @@ class SalesOrder(models.Model):
 
     location = models.CharField(max_length=100, blank=True, null=True)  # new field
 
+    CREATED_VIA_MANUAL = 'manual'
+    CREATED_VIA_AGENT_LPO = 'agent_lpo'
+    CREATED_VIA_CHOICES = (
+        (CREATED_VIA_MANUAL, 'Manual'),
+        (CREATED_VIA_AGENT_LPO, 'LPO Agent (Auto)'),
+    )
+    created_via = models.CharField(
+        max_length=20, choices=CREATED_VIA_CHOICES, default=CREATED_VIA_MANUAL,
+        help_text="'agent_lpo' when emailagent.lpo_agent auto-created this order from an unambiguous "
+                  "LPO-to-quotation match with no human involved -- 'manual' for every other path "
+                  "(the quotation page's Convert button, or a human picking a candidate on the LPO "
+                  "review page). See so.quotation_conversion_service.convert_quotation_to_sales_order.",
+    )
+
     def __str__(self):
         return f"Order {self.id} - {self.customer.customer_name} " 
 
@@ -369,6 +383,17 @@ class Quotation(models.Model):
         help_text="Optional display name for walk-in/CASH customers")
     converted_to_sales_order = models.ForeignKey('SalesOrder', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='source_quotation', help_text="Sales order created from this quotation")
+
+    emailed_to = models.CharField(max_length=500, blank=True, null=True,
+        help_text="Comma-separated recipient address(es) the quotation PDF was last emailed to")
+    emailed_at = models.DateTimeField(blank=True, null=True,
+        help_text="When the quotation was last sent to the client via the Send Quotation button")
+    emailed_message_id = models.CharField(max_length=255, blank=True, null=True,
+        help_text="Message-ID header of the last 'Send Quotation' email. Lets a customer's reply be "
+                   "matched back to this quotation (via its In-Reply-To/References headers) even when "
+                   "Gmail assigns the reply a different thread_id than the original enquiry -- e.g. "
+                   "because this email was sent via SMTP rather than through the watched Gmail "
+                   "account, so Gmail has no record of it belonging to that thread.")
 
     DISCOUNT_TYPE_CHOICES = (
         ('PERCENT', 'Percentage'),

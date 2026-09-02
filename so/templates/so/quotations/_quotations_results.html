@@ -10,7 +10,18 @@
         
         <div class="d-flex justify-content-between align-items-start mb-3">
           <div>
-            <h5 class="mb-1">Quotation #{{ quotation.quotation_number }}</h5>
+            <h5 class="mb-1">
+              Quotation #{{ quotation.quotation_number }}
+              {% if quotation.quotation_draft %}
+                <span class="agent-badge ms-1" title="Auto-created by the email tracking agent">
+                  <i class="fas fa-robot"></i> Agent
+                </span>
+              {% elif quotation.additional_quotation_draft %}
+                <span class="agent-badge ms-1" title="Auto-created by the email tracking agent -- one of multiple scopes/attachments from the same enquiry">
+                  <i class="fas fa-robot"></i> Agent
+                </span>
+              {% endif %}
+            </h5>
             <span class="quotation-date">{{ quotation.quotation_date|date:"M d, Y" }}</span>
           </div>
           <span class="status-badge status-{{ quotation.id }}
@@ -37,7 +48,7 @@
             <a href="{% url 'view_quotation_details' quotation.id %}" class="btn btn-sm btn-outline-secondary">
               <i class="fas fa-eye"></i>
             </a>
-            {% if quotation.status == "Pending" %}
+            {% if quotation.quotation_draft or quotation.additional_quotation_draft or quotation.status == "Pending" %}
               <a href="{% url 'edit_quotation' quotation.id %}" class="btn btn-sm btn-outline-primary edit-btn ms-1">
                 <i class="fas fa-edit me-1"></i>Edit
               </a>
@@ -111,6 +122,11 @@
         {% endif %}
         {% if selected_division and selected_division != 'All' %}
           <span class="badge bg-secondary ms-2">{{ selected_division }}</span>
+        {% endif %}
+        {% if current_source == 'agent' %}
+          <span class="badge ms-2" style="background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);"><i class="fas fa-robot"></i> Agent-made</span>
+        {% elif current_source == 'manual' %}
+          <span class="badge bg-dark ms-2">Manual</span>
         {% endif %}
       </small>
     </div>

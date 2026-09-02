@@ -1,0 +1,78 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}LPO Requests | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-contract" style="opacity:.85"></i> LPO Requests</h1>
+            <p>Client Purchase Orders (LPOs) the agent has detected in email. An exact, unmistakable reference to an already-Approved quotation auto-creates the Sales Order; everything else needs a human to match/confirm it below.</p>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All LPO Requests <span class="count">({{ lpo_requests|length }})</span></h2>
+    </div>
+
+    {% if lpo_requests %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>From</th>
+                    <th>LPO #</th>
+                    <th>Customer (stated)</th>
+                    <th>Matched Quotation</th>
+                    <th>Status</th>
+                    <th>Received</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lpo in lpo_requests %}
+                <tr title="{{ lpo.match_reasoning }}">
+                    <td><a href="{% url 'emailagent:email_detail' lpo.tracked_email.pk %}">{{ lpo.tracked_email.subject|default:"(no subject)"|truncatechars:50 }}</a></td>
+                    <td>{{ lpo.tracked_email.sender_name|default:lpo.tracked_email.sender|truncatechars:28 }}</td>
+                    <td>{{ lpo.lpo_number|default:"—" }}</td>
+                    <td>{{ lpo.customer_name_stated|default:"—"|truncatechars:28 }}</td>
+                    <td>
+                        {% if lpo.matched_quotation %}
+                            <a href="{% url 'view_quotation_details' lpo.matched_quotation.id %}">{{ lpo.matched_quotation.quotation_number }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if lpo.status == 'confirmed' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> SO Created</span>
+                        {% elif lpo.status == 'needs_review' %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                        {% elif lpo.status == 'pending' %}<span class="chip-x amber"><i class="fas fa-spinner"></i> Processing</span>
+                        {% elif lpo.status == 'dismissed' %}<span class="chip-x gray"><i class="fas fa-eye-slash"></i> Dismissed</span>
+                        {% elif lpo.status == 'failed' %}<span class="chip-x gray"><i class="fas fa-bug"></i> Failed</span>
+                        {% else %}<span class="chip-x gray">{{ lpo.get_status_display }}</span>{% endif %}
+                    </td>
+                    <td>{{ lpo.tracked_email.received_at|date:"d M Y, H:i" }}</td>
+                    <td class="actions">
+                        <a href="{% url 'emailagent:lpo_request_review' lpo.pk %}" class="btn-x sm {% if lpo.status != 'confirmed' %}btn-primary-x{% endif %}" title="View extracted LPO details"><i class="fas fa-magnifying-glass"></i> {% if lpo.status == 'confirmed' %}Details{% else %}Review{% endif %}</a>
+                        {% if lpo.status == 'confirmed' and lpo.sales_order %}
+                        <a href="{% url 'view_sales_order_details' lpo.sales_order.id %}" class="btn-x sm" title="View sales order"><i class="fas fa-eye"></i></a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-file-contract"></i></div>
+            <h3>No LPO requests yet</h3>
+            <p>An LPO request is created automatically when the agent detects a client's Purchase Order PDF in a tracked email.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

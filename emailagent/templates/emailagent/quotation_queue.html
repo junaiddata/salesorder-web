@@ -1,0 +1,102 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Quotation Drafts | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-invoice-dollar" style="opacity:.85"></i> Auto-Created Quotations</h1>
+            <p>Quotations the agent has automatically created from confirmed RFQ emails. Open one to edit it normally -- change matched items, customer, salesman, etc.</p>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Drafts <span class="count">({{ drafts|length }})</span></h2>
+    </div>
+
+    {% if drafts %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>From</th>
+                    <th>Customer</th>
+                    <th>Quotation</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Received</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for draft in drafts %}
+                <tr title="{{ draft.reasoning }}">
+                    <td><a href="{% url 'emailagent:email_detail' draft.tracked_email.pk %}">{{ draft.tracked_email.subject|default:"(no subject)"|truncatechars:55 }}</a></td>
+                    <td>{{ draft.tracked_email.sender_name|default:draft.tracked_email.sender|truncatechars:30 }}</td>
+                    <td>
+                        {% if draft.matched_customer %}
+                            <span class="chip-x green">{{ draft.matched_customer.customer_name|truncatechars:28 }}</span>
+                        {% elif draft.customer_guess %}
+                            <span class="chip-x amber">Walk-in: {{ draft.customer_guess|truncatechars:22 }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.quotation %}{{ draft.quotation.quotation_number }}
+                        {% elif draft.merged_into %}<a href="{% url 'edit_quotation' draft.merged_into.id %}">{{ draft.merged_into.quotation_number }}</a> (merged)
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.status == 'confirmed' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Created</span>
+                        {% elif draft.status == 'pending' %}<span class="chip-x amber"><i class="fas fa-spinner"></i> Drafting</span>
+                        {% elif draft.status == 'failed' %}<span class="chip-x gray"><i class="fas fa-triangle-exclamation"></i> Failed</span>
+                        {% elif draft.status == 'merged' %}<span class="chip-x green"><i class="fas fa-code-merge"></i> Merged</span>
+                        {% else %}<span class="chip-x gray">{{ draft.get_status_display }}</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.status == 'failed' %}
+                            <div class="item-note"><i class="fas fa-bug"></i> {{ draft.error }}</div>
+                        {% endif %}
+                        {% if draft.is_empty_quotation %}
+                            <div class="item-note"><i class="fas fa-triangle-exclamation"></i> Quotation has ZERO items -- nothing could be auto-matched; needs manual completion.</div>
+                        {% endif %}
+                        {% for issue in draft.unmatched_item_issues %}
+                            <div class="item-note"><i class="fas fa-triangle-exclamation"></i> {{ issue }}</div>
+                        {% endfor %}
+                        {% if not draft.matched_customer %}
+                            <div class="item-note"><i class="fas fa-user"></i> No confident customer match -- quoted as walk-in{% if draft.customer_guess %} ({{ draft.customer_guess }}){% endif %}.</div>
+                        {% endif %}
+                        {% if draft.status == 'confirmed' and not draft.is_empty_quotation and not draft.unmatched_item_issues and draft.matched_customer %}—{% endif %}
+                    </td>
+                    <td>{{ draft.tracked_email.received_at|date:"d M Y, H:i" }}</td>
+                    <td class="actions">
+                        {% if draft.status == 'confirmed' and draft.quotation %}
+                        <a href="{% url 'view_quotation_details' draft.quotation.id %}" class="btn-x sm" title="View quotation"><i class="fas fa-eye"></i></a>
+                        <a href="{% url 'edit_quotation' draft.quotation.id %}" class="btn-x sm btn-primary-x" title="Edit quotation"><i class="fas fa-pen"></i> Edit</a>
+                        {% elif draft.status == 'merged' and draft.merged_into %}
+                        <a href="{% url 'view_quotation_details' draft.merged_into.id %}" class="btn-x sm" title="View merged-into quotation"><i class="fas fa-eye"></i></a>
+                        <a href="{% url 'edit_quotation' draft.merged_into.id %}" class="btn-x sm btn-primary-x" title="Edit merged-into quotation"><i class="fas fa-pen"></i> Edit</a>
+                        {% else %}
+                        <a href="{% url 'emailagent:quotation_draft_review' draft.pk %}" class="btn-x sm" title="View status"><i class="fas fa-eye"></i></a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h3>No quotations yet</h3>
+            <p>A quotation is created automatically as soon as an email is confirmed as an RFQ.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

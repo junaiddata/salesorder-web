@@ -1,0 +1,79 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Review Queue | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-inbox" style="opacity:.85"></i> Manual Review Queue</h1>
+            <p>Emails the classifier couldn't confidently place as an RFQ or as irrelevant. Open one to read the full message, or confirm/reject directly from the table.</p>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>Needs Review <span class="count">({{ emails|length }})</span></h2>
+    </div>
+
+    {% if emails %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>From</th>
+                    <th>Attachments</th>
+                    <th>Confidence</th>
+                    <th>Received</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for email in emails %}
+                <tr class="clickable-row" data-href="{% url 'emailagent:email_detail' email.pk %}" title="{{ email.classification_reasoning }}">
+                    <td>{{ email.subject|default:"(no subject)"|truncatechars:60 }}</td>
+                    <td>{{ email.sender_name|default:email.sender|truncatechars:30 }}</td>
+                    <td>{{ email.attachments.count }}</td>
+                    <td>{{ email.classification_confidence|default:"—" }}</td>
+                    <td>{{ email.received_at|date:"d M Y, H:i" }}</td>
+                    <td class="actions">
+                        <a href="{% url 'emailagent:email_detail' email.pk %}" class="btn-x sm" title="Open full message"><i class="fas fa-eye"></i></a>
+                        <form method="post" action="{% url 'emailagent:review_confirm' email.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x sm btn-primary-x" title="Confirm RFQ"><i class="fas fa-check"></i></button>
+                        </form>
+                        <form method="post" action="{% url 'emailagent:review_reject' email.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x sm btn-danger-x" title="Reject"><i class="fas fa-xmark"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-inbox"></i></div>
+            <h3>Nothing needs review</h3>
+            <p>Every tracked email has been confidently classified.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('tr.clickable-row').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (e.target.closest('a, button, form')) return;
+            window.location = row.dataset.href;
+        });
+    });
+</script>
+{% endblock %}

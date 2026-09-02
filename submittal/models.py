@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 import os
 
 from .storage_backends import generated_pdf_storage
@@ -303,6 +304,56 @@ class Submittal(models.Model):
                   "(title page, dividers, materials table, index, compliance statement)."
     )
 
+    SOURCE_MANUAL = 'manual'
+    SOURCE_AGENT_EMAIL = 'agent_email'
+    SOURCE_AGENT_QUOTATION = 'agent_quotation'
+    SOURCE_CHOICES = [
+        (SOURCE_MANUAL, 'Manual'),
+        (SOURCE_AGENT_EMAIL, 'AI Agent (from email)'),
+        (SOURCE_AGENT_QUOTATION, 'AI Agent (from quotation)'),
+    ]
+    created_via = models.CharField(
+        max_length=20, choices=SOURCE_CHOICES, default=SOURCE_MANUAL, db_index=True,
+        help_text="Who/what created this submittal -- drives the 'AI Agent' badge/filter on the "
+                  "dashboard and whether Send requires verification first (see status).",
+    )
+    source_quotation = models.ForeignKey(
+        'so.Quotation', on_delete=models.SET_NULL, null=True, blank=True, related_name='generated_submittals',
+        help_text="Set when this submittal was auto-generated from a Quotation's line items "
+                  "(created_via=agent_quotation).",
+    )
+
+    STATUS_DRAFT = 'draft'
+    STATUS_NEEDS_REVIEW = 'needs_review'
+    STATUS_VERIFIED = 'verified'
+    STATUS_SENT = 'sent'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_NEEDS_REVIEW, 'Needs Review'),
+        (STATUS_VERIFIED, 'Verified'),
+        (STATUS_SENT, 'Sent'),
+    ]
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True,
+        help_text="Agent-created submittals start at 'needs_review' -- a human must open it, correct "
+                  "anything the agent got wrong, and mark it Verified before it can be emailed to a "
+                  "client (see Submittal.send_requires_verification). Manually-built submittals stay "
+                  "'draft' and can be sent freely, same as before this field existed.",
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+
+    emailed_to = models.CharField(max_length=500, blank=True, null=True,
+        help_text="Comma-separated recipient address(es) the submittal PDF was last emailed to")
+    emailed_at = models.DateTimeField(blank=True, null=True,
+        help_text="When the submittal was last sent via the Send Submittal button")
+    emailed_message_id = models.CharField(max_length=255, blank=True, null=True,
+        help_text="Message-ID header of the last 'Send Submittal' email -- lets a reply be matched "
+                  "back to this submittal even if Gmail assigns it a different thread (same fallback "
+                  "used for quotations, see Quotation.emailed_message_id).")
+
     # Section 1 - Title Page
     project = models.TextField(blank=True, default='', help_text="Project name/description")
     client = models.CharField(max_length=255, blank=True, default='')
@@ -418,6 +469,17 @@ class Submittal(models.Model):
 
     def __str__(self):
         return f"Submittal: {self.project[:60]} ({self.created_at:%Y-%m-%d})" if self.created_at else f"Submittal: {self.project[:60]}"
+
+    def needs_verification(self):
+        """True if this is an agent-created submittal a human hasn't reviewed
+        yet -- used to gate the Send action and to show the review banner."""
+        return self.created_via != self.SOURCE_MANUAL and self.status not in (self.STATUS_VERIFIED, self.STATUS_SENT)
+
+    def mark_verified(self, user):
+        self.status = self.STATUS_VERIFIED
+        self.verified_at = timezone.now()
+        self.verified_by = user
+        self.save(update_fields=['status', 'verified_at', 'verified_by'])
 
 
 class SubmittalSectionUpload(models.Model):

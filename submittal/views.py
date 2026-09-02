@@ -1078,3 +1078,281 @@ def admin_company_docs(request):
         'trade_license_name': _basename(docs.trade_license_pdf),
         'index_standard_name': _basename(docs.index_standard_pdf),
     })
+
+
+@require_POST
+@login_required
+def submittal_generate_from_quotation(request, quotation_id):
+    """'Generate Submittal' action on a Quotation's detail page -- drafts a
+    Submittal from a human-chosen subset of that quotation's line items
+    (ticked in the Generate Submittal modal; see
+    emailagent.submittal_agent.draft_submittal_from_quotation), always
+    landing in STATUS_NEEDS_REVIEW for a human to check/correct before it
+    can be sent. Never raises back to the caller -- a failure is shown as a
+    message and the user stays on the quotation page."""
+    from django.db.models import Q
+    from django.utils import timezone as dj_timezone
+    from so.models import Quotation
+    from emailagent import submittal_agent
+    from emailagent.models import AgentRun, SubmittalDraft, TrackedEmail
+    from emailagent.supervisor import AgentRunRecorder
+
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+
+    item_ids = request.POST.getlist('item_ids')
+    if not item_ids:
+        messages.warning(request, 'Select at least one item before generating a submittal.')
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    # Idempotency guard -- the quotation page hides this button once a
+    # submittal exists (showing "View Submittal" instead), but that's only a
+    # UI-level check: a direct/duplicate POST (double-click, a stale cached
+    # page, or the endpoint hit again before the page reflects the first
+    # one) must not be allowed to draft a second submittal for the same
+    # quotation. Send the user straight to the existing one instead.
+    existing_submittal = Submittal.objects.filter(source_quotation=quotation).order_by('-created_at').first()
+    if existing_submittal:
+        messages.info(request, f'A submittal was already generated from {quotation.quotation_number} -- showing that one.')
+        return redirect('submittal:detail', pk=existing_submittal.pk)
+
+    # Attribute this run to the enquiry thread the quotation came from (its
+    # original RFQ email, the latest same-thread follow-up that got merged
+    # into it -- see quotation_agent.merge_followup_into_quotation -- or,
+    # for a multi-attachment enquiry, the email an ADDITIONAL-scope
+    # quotation was drafted for -- see AdditionalQuotationDraft). Also used
+    # just below to find sibling quotations from the same enquiry.
+    source_email = (TrackedEmail.objects
+                     .filter(Q(quotation_draft__quotation=quotation)
+                             | Q(quotation_draft__merged_into=quotation)
+                             | Q(additional_quotation_drafts__quotation=quotation))
+                     .order_by('-received_at')
+                     .first())
+
+    recorder = AgentRunRecorder(AgentRun.AGENT_DRAFT_SUBMITTAL, tracked_email=source_email, quotation=quotation)
+
+    # A multi-attachment enquiry gets a SEPARATE quotation per attachment/
+    # scope on purpose (different pricing/quantities per building), but the
+    # same brand's items appearing in more than one of those sibling
+    # quotations should still land on ONE shared submittal, not a duplicate
+    # per quotation. Check the selected items' brand against every sibling
+    # quotation's already-generated submittal before drafting a new one.
+    if source_email:
+        sibling_ids = submittal_agent.sibling_quotation_ids(source_email) - {quotation.id}
+        if sibling_ids:
+            hints, top_brand_name = submittal_agent.quotation_item_hints(quotation, item_ids)
+            prelim_brand, prelim_matched, _ = submittal_agent.match_submittal_materials(top_brand_name, hints)
+            shared = None
+            if prelim_brand:
+                shared = (Submittal.objects
+                          .filter(source_quotation_id__in=sibling_ids, title_brand_id=prelim_brand.id)
+                          .exclude(created_via=Submittal.SOURCE_MANUAL)
+                          .order_by('-created_at')
+                          .first())
+            if shared:
+                existing_material_ids = set(shared.materials.values_list('id', flat=True))
+                new_materials = [m for m in prelim_matched if m.id not in existing_material_ids]
+                if new_materials:
+                    shared.materials.add(*new_materials)
+                recorder.finish(
+                    summary=f"merged {len(prelim_matched)} item(s) (brand {prelim_brand.name}) into submittal "
+                            f"already generated from a sibling quotation of the same enquiry",
+                    submittal=shared,
+                )
+                messages.success(
+                    request,
+                    f"{quotation.quotation_number} shares brand '{prelim_brand.name}' with another quotation from "
+                    "this enquiry -- its items were added to that existing submittal instead of creating a "
+                    "duplicate. Please review it before sending.",
+                )
+                return redirect('submittal:detail', pk=shared.pk)
+
+    try:
+        submittal, reasoning = submittal_agent.draft_submittal_from_quotation(quotation, item_ids=item_ids)
+    except Exception as exc:
+        recorder.fail(exc)
+        recorder.finish()
+        messages.error(
+            request,
+            f'We were unable to generate a submittal for {quotation.quotation_number} due to an '
+            f'unexpected error ({exc}). Please try again, or create the submittal manually.',
+        )
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    if not submittal:
+        # `reasoning` is the agent's own technical explanation (kept in full
+        # on the AgentRun for diagnosis) -- the on-screen message stays
+        # focused on what the user needs to know and do next.
+        recorder.fail(reasoning)
+        recorder.finish()
+        messages.error(
+            request,
+            f"We could not automatically generate a submittal for {quotation.quotation_number} because "
+            f"{reasoning}. You're welcome to create the submittal manually in the meantime.",
+        )
+        return redirect('view_quotation_details', quotation_id=quotation_id)
+
+    SubmittalDraft.objects.create(
+        source_quotation=quotation,
+        status=SubmittalDraft.STATUS_CONFIRMED,
+        matched_brand=submittal.title_brand,
+        reasoning=reasoning,
+        generated_at=dj_timezone.now(),
+        submittal=submittal,
+    )
+    recorder.finish(summary=reasoning[:500], submittal=submittal)
+    messages.success(
+        request,
+        f"A draft submittal has been generated from {quotation.quotation_number}. Please review the "
+        "title page, materials and documents, then mark it Verified before sending it to the client.",
+    )
+    # Land on the review page (not the manual wizard) -- the agent has
+    # already filled everything in, so the human's job is just to verify
+    # and send. Edit is still one click away from there if a correction is
+    # genuinely needed.
+    return redirect('submittal:detail', pk=submittal.pk)
+
+
+@require_POST
+@login_required
+def submittal_mark_verified(request, pk):
+    """Human-verification action for an agent-created submittal (see
+    Submittal.needs_verification) -- required before Send Submittal is
+    allowed. Manually-built submittals never need this."""
+    submittal = get_object_or_404(Submittal, pk=pk)
+    submittal.mark_verified(request.user)
+    messages.success(
+        request,
+        'This submittal has been marked as verified and is now ready to be sent to the client.',
+    )
+    return redirect('submittal:detail', pk=submittal.pk)
+
+
+@require_POST
+@login_required
+def submittal_send_email(request, pk):
+    """Emails the already-generated submittal PDF to a client-supplied
+    address -- mirrors so/views_quotation.py's send_quotation_email
+    (including the outbound Message-ID threading fix, so a reply to this
+    email can be linked back to it even if Gmail assigns a different
+    thread_id). Requires the PDF to already be generated (Preview/Download
+    at least once first) and, for agent-created submittals, requires
+    Submittal.needs_verification() to be False first."""
+    submittal = get_object_or_404(Submittal, pk=pk)
+
+    if submittal.needs_verification():
+        messages.error(
+            request,
+            'This submittal was auto-drafted by the AI agent and has not been reviewed yet. Please check '
+            'its details and mark it Verified before sending it to the client.',
+        )
+        return redirect('submittal:detail', pk=pk)
+
+    if not submittal.generated_pdf or not submittal.generated_pdf.name:
+        messages.error(
+            request,
+            'Please generate the submittal PDF first (use Preview or Download above), then try sending it again.',
+        )
+        return redirect('submittal:detail', pk=pk)
+
+    to_raw = request.POST.get('to_email', '').strip()
+    cc_raw = request.POST.get('cc_email', '').strip()
+    custom_message = request.POST.get('message', '').strip()
+    to_list = [e.strip() for e in to_raw.split(',') if e.strip()]
+    cc_list = [e.strip() for e in cc_raw.split(',') if e.strip()]
+
+    if not to_list:
+        messages.error(request, 'Please enter at least one recipient email address before sending.')
+        return redirect('submittal:detail', pk=pk)
+
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+    try:
+        for addr in to_list + cc_list:
+            validate_email(addr)
+    except ValidationError:
+        messages.error(request, 'One or more of the email addresses entered appear to be invalid. Please check and try again.')
+        return redirect('submittal:detail', pk=pk)
+
+    from django.conf import settings as dj_settings
+    if not dj_settings.EMAIL_HOST_USER or not dj_settings.EMAIL_HOST_PASSWORD:
+        messages.error(
+            request,
+            'Outbound email has not been configured for this system yet. Please contact your administrator '
+            '(EMAIL_HOST_USER / EMAIL_HOST_PASSWORD need to be set) before submittals can be emailed.',
+        )
+        return redirect('submittal:detail', pk=pk)
+
+    from emailagent import supervisor
+    from emailagent.models import AgentRun
+    source_email = getattr(getattr(submittal, 'draft_record', None), 'tracked_email', None)
+    send_recorder = supervisor.AgentRunRecorder(AgentRun.AGENT_SEND_SUBMITTAL, tracked_email=source_email, submittal=submittal)
+
+    subject = f"Material Submittal -- {submittal.project[:150]}"
+    body = custom_message or (
+        f"Dear {submittal.client or 'Sir/Madam'},\n\n"
+        f"Please find attached our material submittal for your review and approval"
+        f"{f' ({submittal.product})' if submittal.product else ''}.\n\n"
+        "Should you have any questions or require any modifications, please feel free to contact us.\n\n"
+        "Regards"
+    )
+    filename = f"Submittal_{submittal.pk}_{submittal.project[:30].replace(' ', '_')}.pdf"
+
+    # Same threading fix as send_quotation_email -- see so/views_quotation.py
+    # for the full rationale (this email is sent over plain SMTP, not through
+    # the watched Gmail account, so Gmail has no record of it on its own).
+    from email.utils import make_msgid
+    msgid_domain = (dj_settings.DEFAULT_FROM_EMAIL or 'junaid.ae').split('@')[-1] or 'junaid.ae'
+    outbound_message_id = make_msgid(domain=msgid_domain)
+    email_headers = {'Message-ID': outbound_message_id}
+    if source_email:
+        orig_message_id = next(
+            (h.get('value') for h in (source_email.raw_headers or [])
+             if (h.get('name') or '').lower() == 'message-id' and h.get('value')),
+            '',
+        )
+        if orig_message_id:
+            email_headers['In-Reply-To'] = orig_message_id
+            email_headers['References'] = orig_message_id
+
+    from django.core.mail import EmailMessage
+    email = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=dj_settings.DEFAULT_FROM_EMAIL,
+        to=to_list,
+        cc=cc_list or None,
+        reply_to=[dj_settings.DEFAULT_FROM_EMAIL],
+        headers=email_headers,
+    )
+    with submittal.generated_pdf.open('rb') as f:
+        email.attach(filename, f.read(), 'application/pdf')
+
+    try:
+        email.send(fail_silently=False)
+    except Exception as e:
+        send_recorder.fail(e)
+        send_recorder.finish()
+        messages.error(
+            request,
+            f"The submittal could not be sent due to an email delivery error ({e}). Please verify the "
+            "recipient address and try again, or contact your administrator if the issue continues.",
+        )
+        return redirect('submittal:detail', pk=pk)
+
+    submittal.emailed_to = to_raw
+    submittal.emailed_at = timezone.now()
+    submittal.emailed_message_id = outbound_message_id
+    submittal.status = Submittal.STATUS_SENT
+    submittal.save(update_fields=['emailed_to', 'emailed_at', 'emailed_message_id', 'status'])
+
+    send_recorder.finish(
+        summary=f"sent to {', '.join(to_list)}" + (f" (cc: {', '.join(cc_list)})" if cc_list else "") +
+                f" by {request.user.get_username()}",
+        submittal=submittal,
+    )
+    cc_suffix = f" (cc: {', '.join(cc_list)})" if cc_list else ''
+    messages.success(
+        request,
+        f"The submittal for {submittal.project} has been emailed to {', '.join(to_list)}{cc_suffix}.",
+    )
+    return redirect('submittal:detail', pk=pk)

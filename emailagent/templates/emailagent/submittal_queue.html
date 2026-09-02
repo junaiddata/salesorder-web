@@ -1,0 +1,95 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Submittal Drafts | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-circle-plus" style="opacity:.85"></i> Auto-Drafted Submittals</h1>
+            <p>Material submittals the agent has automatically drafted -- either from an email requesting submittal/technical approval, or via the "Generate Submittal" action on a quotation. Every one starts as Needs Review; open it to check the brand, materials and documents, correct anything wrong, then mark it Verified before it's sent to the client.</p>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Drafts <span class="count">({{ drafts|length }})</span></h2>
+    </div>
+
+    {% if drafts %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Client</th>
+                    <th>Brand</th>
+                    <th>Submittal</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Created</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for draft in drafts %}
+                <tr title="{{ draft.reasoning }}">
+                    <td>
+                        {% if draft.tracked_email %}
+                            <a href="{% url 'emailagent:email_detail' draft.tracked_email.pk %}"><i class="fas fa-envelope" style="opacity:.6;"></i> {{ draft.tracked_email.subject|default:"(no subject)"|truncatechars:50 }}</a>
+                        {% elif draft.source_quotation %}
+                            <a href="{% url 'view_quotation_details' draft.source_quotation.id %}"><i class="fas fa-file-invoice-dollar" style="opacity:.6;"></i> From {{ draft.source_quotation.quotation_number }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.tracked_email %}{{ draft.tracked_email.sender_name|default:draft.tracked_email.sender|truncatechars:30 }}
+                        {% elif draft.source_quotation %}{{ draft.source_quotation.customer_display_name|default:draft.source_quotation.customer.customer_name|truncatechars:30 }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.matched_brand %}<span class="chip-x green">{{ draft.matched_brand.name }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.submittal %}<a href="{% url 'submittal:detail' draft.submittal.id %}">{{ draft.submittal.project|truncatechars:35 }}</a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.status == 'confirmed' and draft.submittal.needs_verification %}<span class="chip-x amber"><i class="fas fa-triangle-exclamation"></i> Needs Review</span>
+                        {% elif draft.status == 'confirmed' %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Created</span>
+                        {% elif draft.status == 'pending' %}<span class="chip-x amber"><i class="fas fa-spinner"></i> Drafting</span>
+                        {% elif draft.status == 'failed' %}<span class="chip-x gray"><i class="fas fa-triangle-exclamation"></i> Failed</span>
+                        {% else %}<span class="chip-x gray">{{ draft.get_status_display }}</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.status == 'failed' %}
+                            <div class="item-note"><i class="fas fa-bug"></i> {{ draft.error }}</div>
+                        {% elif draft.status == 'confirmed' and draft.submittal.needs_verification %}
+                            <div class="item-note"><i class="fas fa-triangle-exclamation"></i> Not yet reviewed -- verify before sending.</div>
+                        {% elif draft.status == 'confirmed' %}—{% endif %}
+                    </td>
+                    <td>{{ draft.created_at|date:"d M Y, H:i" }}</td>
+                    <td class="actions">
+                        {% if draft.submittal %}
+                        <a href="{% url 'submittal:detail' draft.submittal.id %}" class="btn-x sm" title="View submittal"><i class="fas fa-eye"></i></a>
+                        <a href="{% url 'submittal:edit' draft.submittal.id %}" class="btn-x sm btn-primary-x" title="Edit submittal"><i class="fas fa-pen"></i> Edit</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-file-circle-plus"></i></div>
+            <h3>No submittals drafted yet</h3>
+            <p>A submittal is drafted automatically when an email asks for material submittal/approval, or when someone clicks "Generate Submittal" on a quotation.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

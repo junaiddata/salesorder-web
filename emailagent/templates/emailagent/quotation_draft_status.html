@@ -1,0 +1,39 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Quotation Draft | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <a href="{% url 'emailagent:email_detail' draft.tracked_email.pk %}" class="back-link"><i class="fas fa-arrow-left"></i> Back to Email</a>
+
+    <div class="card-x">
+        <h1 style="margin-bottom:4px;">{{ draft.tracked_email.subject|default:"(no subject)" }}</h1>
+        <p style="color:#8a8f98; margin-bottom:20px;">
+            From {{ draft.tracked_email.sender_name|default:draft.tracked_email.sender }}
+            &lt;{{ draft.tracked_email.sender }}&gt; &middot; {{ draft.tracked_email.received_at|date:"d M Y, H:i" }}
+        </p>
+
+        {% if draft.status == 'pending' %}
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-spinner"></i></div>
+            <h3>Still drafting</h3>
+            <p>The agent hasn't finished matching this enquiry to the catalog yet -- refresh in a moment.</p>
+        </div>
+        {% elif draft.status == 'failed' %}
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-triangle-exclamation"></i></div>
+            <h3>{% if draft.error %}Could not merge into the earlier quotation{% else %}Drafting failed{% endif %}</h3>
+            <p>{{ draft.error }}</p>
+            <p style="margin-top:8px;"><a href="{% url 'create_quotation' %}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> Create Quotation Manually</a></p>
+        </div>
+        {% elif draft.status == 'merged' %}
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-code-merge"></i></div>
+            <h3>Merged into an earlier quotation</h3>
+            <p>This follow-up email was merged into the quotation from an earlier email in the same thread instead of creating a new one.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

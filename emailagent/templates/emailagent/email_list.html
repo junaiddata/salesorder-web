@@ -1,0 +1,92 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}All Emails | Email Tracking Agent{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Tracked Emails <span class="count">({{ emails|length }})</span></h2>
+        <div class="pill-row">
+            <a href="?" class="pill {% if not status_filter %}active{% endif %}">All</a>
+            <a href="?status=rfq" class="pill {% if status_filter == 'rfq' %}active{% endif %}">RFQ</a>
+            <a href="?status=submittal" class="pill {% if status_filter == 'submittal' %}active{% endif %}">Submittal</a>
+            <a href="?status=needs_review" class="pill {% if status_filter == 'needs_review' %}active{% endif %}">Needs Review</a>
+        </div>
+    </div>
+
+    {% if emails %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>From</th>
+                    <th>Categories</th>
+                    <th>Status</th>
+                    <th>Confidence</th>
+                    <th>Extraction Notes</th>
+                    <th>Received</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in emails %}
+                <tr class="clickable-row" data-href="{% url 'emailagent:email_detail' e.pk %}">
+                    <td>{{ e.subject|default:"(no subject)"|truncatewords:10 }}</td>
+                    <td>{{ e.sender }}</td>
+                    <td>
+                        {% for c in e.categories %}<span class="category-chip">{{ c }}</span>{% endfor %}
+                        {% if not e.categories %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if e.status == 'rfq' %}<span class="chip-x green">RFQ</span>
+                        {% elif e.status == 'submittal' %}<span class="chip-x blue">Submittal</span>
+                        {% elif e.status == 'needs_review' %}<span class="chip-x amber">Needs Review</span>
+                        {% elif e.status == 'not_relevant' %}<span class="chip-x gray">Not Relevant</span>
+                        {% else %}<span class="chip-x gray">Pending</span>{% endif %}
+                    </td>
+                    <td>{{ e.classification_confidence|default:"—" }}</td>
+                    <td>
+                        {% with issues=e.extraction_issues %}
+                            {% for issue in issues %}
+                                <div class="item-note"><i class="fas fa-triangle-exclamation"></i> {{ issue }}</div>
+                            {% endfor %}
+                            {% if not issues %}—{% endif %}
+                        {% endwith %}
+                    </td>
+                    <td>{{ e.received_at|date:"d M Y H:i" }}</td>
+                    <td class="actions">
+                        <a href="{% url 'emailagent:email_detail' e.pk %}" class="btn-x sm" title="View"><i class="fas fa-eye"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-envelope-open-text"></i></div>
+            {% if status_filter %}
+            <h3>No emails match this filter</h3>
+            {% else %}
+            <h3>No emails tracked yet</h3>
+            <p>Run <code>python manage.py poll_gmail</code> to pull in new mail.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('tr.clickable-row').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (e.target.closest('a, button, form')) return;
+            window.location = row.dataset.href;
+        });
+    });
+</script>
+{% endblock %}
