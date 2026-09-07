@@ -54,24 +54,76 @@ def get_available_stock(item):
     return float(item.total_available_stock)
 
 
+#: Cumulative "LPO Sent to Supplier" tracking starts here -- fixed, not a
+#: rolling "June of the current year". Purchase orders placed before this
+#: date are old enough to already be closed/received in the normal course
+#: of business, so counting them would just mix stale, already-fulfilled
+#: POs into what's meant to be a running total of what's been sent since
+#: this tracking point.
+ALREADY_ORDERED_TRACKING_START = "2026-06-01"
+
+
 def _already_ordered_from_supplier(item_codes):
-    """Total quantity still outstanding on OPEN purchase orders we've placed
-    with OUR OWN suppliers (so.models.SAPPurchaseOrderItem) for each of
-    `item_codes` -- NOT to be confused with a customer's LPO to us
-    (so.models.LPORequest / the "LPO" column already on this report), which
-    is the opposite direction. That table is synced locally ahead of time
-    by the PC-side `sync_purchaseorders_api` management command reading
-    SAP's own Purchase Order API (so.api_client.SAPAPIClient) -- so, like
-    get_available_stock above, this is a local DB read, never a live HTTP
-    call, keeping this module's no-blocking-external-call guarantee (see
-    module docstring) intact even though it now also reflects procurement
-    state.
+    """Purchase-order-wise breakdown of quantity placed on purchase orders
+    we've sent to OUR OWN suppliers (so.models.SAPPurchaseOrderItem) for
+    each of `item_codes` since ALREADY_ORDERED_TRACKING_START -- NOT to be
+    confused with a customer's LPO to us (so.models.LPORequest / the "LPO"
+    column already on this report), which is the opposite direction. That
+    table is synced locally ahead of time by the PC-side
+    `sync_purchaseorders_api` management command reading SAP's own Purchase
+    Order API (so.api_client.SAPAPIClient) -- so, like get_available_stock
+    above, this is a local DB read, never a live HTTP call, keeping this
+    module's no-blocking-external-call guarantee (see module docstring)
+    intact even though it now also reflects procurement state.
+
+    Deliberately includes EVERY line placed since the tracking start date --
+    open or already closed/received -- so the total only ever grows as new
+    POs go out, rather than dropping back down once a PO is fulfilled (which
+    is what filtering on open row_status alone would do). Returns
+    {item_code: [{'po_number', 'posting_date', 'quantity'}, ...]} sorted
+    newest-first; an item with no PO lines in the window is simply absent
+    (treat as an empty list / 0 total)."""
+    from so.models import SAPPurchaseOrderItem
+
+    codes = [c for c in item_codes if c]
+    if not codes:
+        return {}
+    rows = (SAPPurchaseOrderItem.objects
+            .filter(item_no__in=codes,
+                    purchaseorder__posting_date__gte=ALREADY_ORDERED_TRACKING_START)
+            .select_related('purchaseorder')
+            .order_by('item_no', '-purchaseorder__posting_date'))
+    breakdown_by_code = {}
+    for row in rows:
+        posting_date = row.purchaseorder.posting_date
+        breakdown_by_code.setdefault(row.item_no, []).append({
+            'po_number': row.purchaseorder.po_number,
+            # isoformat string, not a raw date -- report.lines is a JSONField
+            # (StockShortageReport.lines) and json.dumps can't serialize a
+            # datetime.date, which silently failed report.save() inside
+            # recompute()'s broad except-and-log (the report just never
+            # updated) until this was caught and fixed.
+            'posting_date': posting_date.isoformat() if posting_date else None,
+            'quantity': float(row.quantity),
+        })
+    return breakdown_by_code
+
+
+def _open_ordered_from_supplier(item_codes):
+    """Quantity still OUTSTANDING (not yet received) on purchase orders we've
+    placed with our own suppliers -- used only to net against `final_qty`
+    when deriving `final_purchase_qty` (how much MORE still needs to be
+    newly ordered). Kept separate from _already_ordered_from_supplier's
+    cumulative-since-June "LPO Sent to Supplier" display figure: that one
+    includes already-received POs, and netting the shortfall against those
+    too would double count -- a received PO's quantity already lowered the
+    shortfall via Items.total_available_stock, so subtracting it again here
+    would understate what's really still left to order.
 
     Uses remaining_open_quantity when set, else the line's own quantity --
     same definition so/purchase_stock_requirement_views.py uses for what it
-    calls "LPO given" (open POs), for consistency across the app. Returns
-    {item_code: qty}; an item with no open PO lines is simply absent (treat
-    as 0)."""
+    calls "LPO given" (open POs). Returns {item_code: qty}; an item with no
+    open PO lines is simply absent (treat as 0)."""
     from django.db.models import F, Sum, Value
     from django.db.models import DecimalField as _DecimalField
     from django.db.models.functions import Coalesce
@@ -150,9 +202,9 @@ def recompute(triggered_by=None):
                     })
                     entry['quantity'] += order_item.quantity
 
-        already_ordered_by_code = _already_ordered_from_supplier(
-            [bucket['item'].item_code for bucket in required_by_item.values()]
-        )
+        item_codes = [bucket['item'].item_code for bucket in required_by_item.values()]
+        already_ordered_breakdown_by_code = _already_ordered_from_supplier(item_codes)
+        open_ordered_by_code = _open_ordered_from_supplier(item_codes)
 
         lines = []
         any_unknown = False
@@ -160,7 +212,9 @@ def recompute(triggered_by=None):
             item = bucket['item']
             required_qty = bucket['qty']
             available_qty = get_available_stock(item)
-            already_ordered_qty = already_ordered_by_code.get(item.item_code, 0.0)
+            already_ordered_breakdown = already_ordered_breakdown_by_code.get(item.item_code, [])
+            already_ordered_qty = sum(entry['quantity'] for entry in already_ordered_breakdown)
+            open_ordered_qty = open_ordered_by_code.get(item.item_code, 0.0)
 
             if available_qty is None:
                 # Never synced -- list it anyway (rather than dropping it)
@@ -174,10 +228,15 @@ def recompute(triggered_by=None):
                 if final_qty <= 0:
                     continue  # fully covered by stock -- not a shortage
                 # What's still genuinely left to place a NEW supplier order
-                # for, after also netting out what's already outstanding on
-                # an existing supplier PO -- e.g. shortfall 200, 100 already
-                # on order -> only 100 more actually needs ordering.
-                final_purchase_qty = max(final_qty - already_ordered_qty, 0.0)
+                # for, after also netting out what's still OUTSTANDING on
+                # an existing supplier PO -- e.g. shortfall 200, 100 still
+                # open on order -> only 100 more actually needs ordering.
+                # Nets against open_ordered_qty (not the cumulative-since-
+                # June already_ordered_qty below): a received PO already
+                # lowered final_qty via available_qty, so netting the
+                # shortfall against it a second time here would double
+                # count and understate what's really still left to order.
+                final_purchase_qty = max(final_qty - open_ordered_qty, 0.0)
 
             lines.append({
                 'item_code': item.item_code,
@@ -187,6 +246,7 @@ def recompute(triggered_by=None):
                 'available_qty': available_qty,
                 'final_qty': final_qty,
                 'already_ordered_qty': already_ordered_qty,
+                'already_ordered_breakdown': already_ordered_breakdown,
                 'final_purchase_qty': final_purchase_qty,
                 'lpo_breakdown': sorted(
                     lpo_breakdown.get(item_id, {}).values(), key=lambda e: -e['quantity'],

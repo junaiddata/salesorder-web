@@ -1,18 +1,46 @@
 {% extends 'emailagent/base.html' %}
-{% load static %}
+{% load static emailagent_extras %}
 
 {% block title %}All Emails | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-box {
+        display: flex; align-items: center; position: relative; margin-left: auto;
+        background: var(--surface-alt); border: 1px solid var(--line); border-radius: 999px;
+        flex: 0 0 auto;
+    }
+    .search-box input {
+        border: none; background: transparent; padding: .4rem .5rem .4rem 2.1rem;
+        font-size: .82rem; width: 220px; color: var(--body);
+    }
+    .search-box input:focus { outline: none; }
+    .search-box i.fa-magnifying-glass { position: absolute; left: 1.05rem; color: var(--muted); font-size: .78rem; pointer-events: none; }
+    .search-submit {
+        border: none; background: var(--primary); color: #fff; cursor: pointer;
+        width: 28px; height: 28px; margin: 2px 3px 2px 0; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: .7rem;
+    }
+    .search-submit:hover { filter: brightness(1.1); }
+</style>
+{% endblock %}
 
 {% block body %}
 <div class="u-wrap u-page">
     <div class="sec-head">
-        <h2>All Tracked Emails <span class="count">({{ emails|length }})</span></h2>
-        <div class="pill-row">
-            <a href="?" class="pill {% if not status_filter %}active{% endif %}">All</a>
-            <a href="?status=rfq" class="pill {% if status_filter == 'rfq' %}active{% endif %}">RFQ</a>
-            <a href="?status=submittal" class="pill {% if status_filter == 'submittal' %}active{% endif %}">Submittal</a>
-            <a href="?status=needs_review" class="pill {% if status_filter == 'needs_review' %}active{% endif %}">Needs Review</a>
-        </div>
+        <h2>All Tracked Emails <span class="count">({{ total_count }})</span></h2>
+        <form method="get" class="pill-row" style="align-items:center;">
+            <a href="?{% qs_replace status='' %}" class="pill {% if not status_filter %}active{% endif %}">All</a>
+            <a href="?{% qs_replace status='rfq' %}" class="pill {% if status_filter == 'rfq' %}active{% endif %}">RFQ</a>
+            <a href="?{% qs_replace status='submittal' %}" class="pill {% if status_filter == 'submittal' %}active{% endif %}">Submittal</a>
+            <a href="?{% qs_replace status='needs_review' %}" class="pill {% if status_filter == 'needs_review' %}active{% endif %}">Needs Review</a>
+            <div class="search-box">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="text" name="q" id="id-email-search" value="{{ search_query }}" placeholder="Search by mail id...">
+                <button type="submit" class="search-submit" aria-label="Search"><i class="fas fa-arrow-right"></i></button>
+            </div>
+            {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+        </form>
     </div>
 
     {% if emails %}
@@ -64,11 +92,30 @@
             </tbody>
         </table>
     </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="page-bar">
+        {% if page_obj.has_previous %}
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page=1"><i class="fas fa-angles-left"></i> First</a>
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i> Prev</a>
+        {% else %}
+            <span class="disabled"><i class="fas fa-angles-left"></i> First</span>
+            <span class="disabled"><i class="fas fa-chevron-left"></i> Prev</span>
+        {% endif %}
+        <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.next_page_number }}">Next <i class="fas fa-chevron-right"></i></a>
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.paginator.num_pages }}">Last <i class="fas fa-angles-right"></i></a>
+        {% else %}
+            <span class="disabled">Next <i class="fas fa-chevron-right"></i></span>
+            <span class="disabled">Last <i class="fas fa-angles-right"></i></span>
+        {% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <div class="card-x">
         <div class="empty-x">
             <div class="ic"><i class="fas fa-envelope-open-text"></i></div>
-            {% if status_filter %}
+            {% if status_filter or search_query %}
             <h3>No emails match this filter</h3>
             {% else %}
             <h3>No emails tracked yet</h3>
@@ -88,5 +135,15 @@
             window.location = row.dataset.href;
         });
     });
+
+    // Clearing the search box (backspace/delete to empty, or the native
+    // "x" clear button) drops the q filter and shows all emails again --
+    // without this, an emptied box just sits there until Enter is pressed.
+    var searchInput = document.getElementById('id-email-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            if (searchInput.value === '') searchInput.form.submit();
+        });
+    }
 </script>
 {% endblock %}

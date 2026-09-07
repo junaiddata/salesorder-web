@@ -30,18 +30,20 @@ class TrackedEmail(models.Model):
 
     SOURCE_GMAIL = 'gmail'
     SOURCE_OUTLOOK = 'outlook'
-    # Third IMAP mailbox (project@junaid.ae) -- submittal-only: classified
-    # normally like any other source, but emailagent.services.process_new_message
-    # never runs quotation drafting or LPO processing for it regardless of
-    # what it classifies as (see that function's submittal_only param).
-    # Kept as its own `source` value, not a flag on SOURCE_OUTLOOK, so this
-    # mailbox's messages stay clearly distinguishable from the primary
-    # sales@junaid.ae mailbox everywhere `source` is already shown/filtered.
+    # Third IMAP mailbox (project@junaid.ae) -- classified normally like any
+    # other source, and a genuine RFQ here DOES get a quotation drafted; only
+    # LPO/Sales-Order processing is always skipped for it (see
+    # emailagent.services.process_new_message's allow_quotation/allow_lpo
+    # params, and poll_project_mailbox). Kept as its own `source` value, not
+    # a flag on SOURCE_OUTLOOK, so this mailbox's messages stay clearly
+    # distinguishable from the primary sales@junaid.ae mailbox everywhere
+    # `source` is already shown/filtered.
     SOURCE_PROJECT = 'project'
-    # Fourth IMAP mailbox -- submittal-only, same treatment as SOURCE_PROJECT
-    # above (see poll_submittal_mailbox / process_new_message's submittal_only
-    # param). Kept as its own source value for the same reason SOURCE_PROJECT
-    # is: distinguishable everywhere `source` is shown/filtered.
+    # Fourth IMAP mailbox -- fully submittal-only, unlike SOURCE_PROJECT
+    # above: neither quotation drafting nor LPO processing ever runs for it
+    # (see poll_submittal_mailbox / process_new_message's allow_quotation/
+    # allow_lpo params). Kept as its own source value for the same reason
+    # SOURCE_PROJECT is: distinguishable everywhere `source` is shown/filtered.
     SOURCE_SUBMITTAL = 'submittal'
     SOURCE_CHOICES = [
         (SOURCE_GMAIL, 'Gmail'),
@@ -56,6 +58,13 @@ class TrackedEmail(models.Model):
     gmail_message_id = models.CharField(max_length=255, unique=True, db_index=True)
     thread_id = models.CharField(max_length=255, db_index=True, blank=True, default='')
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_GMAIL, db_index=True)
+    # IMAP UID for the three IMAP-sourced mailboxes (outlook/project/submittal)
+    # -- blank for Gmail. On this mail host (Zimbra), the IMAP UID doubles as
+    # Zimbra's own internal item id, so views.open_webmail can deep-link
+    # straight to this exact message instead of just opening the inbox.
+    # Never populated retroactively -- blank on any email tracked before this
+    # field existed.
+    imap_uid = models.CharField(max_length=32, blank=True, default='')
 
     sender = models.CharField(max_length=320)
     sender_name = models.CharField(max_length=255, blank=True, default='')

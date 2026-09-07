@@ -1,0 +1,19 @@
+{% if line.already_ordered_breakdown %}
+<div class="po-card">
+    {% for po in line.already_ordered_breakdown %}
+    <div>
+        <div class="po-row">
+            <span class="po-chip"><i class="fas fa-file-invoice"></i>{{ po.po_number }}</span>
+            <span class="po-qty">{{ po.quantity|floatformat:2 }}</span>
+        </div>
+        <div class="po-bar"><span style="width: {% widthratio po.quantity line.already_ordered_qty 100 %}%;"></span></div>
+    </div>
+    {% endfor %}
+    <div class="po-card-total">
+        <span class="lbl">Total</span>
+        <span class="val">{{ line.already_ordered_qty|floatformat:2 }}</span>
+    </div>
+</div>
+{% else %}
+<span class="po-empty">0.00</span>
+{% endif %}

@@ -1,12 +1,12 @@
 """
 Periodic management command: poll the separate project@junaid.ae IMAP
-mailbox, classify new emails, and store them -- SUBMITTAL-ONLY, meaning
-quotation drafting and LPO processing never run for anything from this
-mailbox regardless of how it classifies (see
-emailagent/services.py:poll_project_mailbox / process_new_message's
-submittal_only param). Otherwise mirrors poll_outlook.py exactly -- same
-IMAP mechanics (emailagent/outlook_client.py), just a separate mailbox and
-its own UID watermark.
+mailbox, classify new emails, and store them. A genuine RFQ from this
+mailbox DOES get a quotation drafted, same as any other source; only LPO/
+Sales-Order processing never runs for it, regardless of how it classifies
+(see emailagent/services.py:poll_project_mailbox / process_new_message's
+allow_quotation/allow_lpo params). Otherwise mirrors poll_outlook.py exactly
+-- same IMAP mechanics (emailagent/outlook_client.py), just a separate
+mailbox and its own UID watermark.
 
 Usage:
     python manage.py poll_project
@@ -45,7 +45,7 @@ logger.addHandler(console_handler)
 
 
 class Command(BaseCommand):
-    help = 'Poll the project@junaid.ae IMAP mailbox for new emails (submittal-only -- no quotation/LPO processing)'
+    help = 'Poll the project@junaid.ae IMAP mailbox for new emails (RFQs get a quotation drafted; no LPO/Sales-Order processing)'
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true',
@@ -61,7 +61,7 @@ class Command(BaseCommand):
         run_start = datetime.now()
 
         logger.info('=' * 70)
-        logger.info('Project Mailbox Poll (Email Tracking Agent -- submittal-only)')
+        logger.info('Project Mailbox Poll (Email Tracking Agent -- quotations drafted, LPO processing off)')
         logger.info('=' * 70)
         logger.info(f'Started at: {run_start.strftime("%Y-%m-%d %H:%M:%S")}')
         logger.info(f'Dry run: {dry_run}')

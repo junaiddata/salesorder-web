@@ -133,7 +133,7 @@ def _build_attachment_payloads(service, gmail_message_id, parsed_attachments):
 
 
 def process_new_message(service, message_id, dry_run=False, client=gmail_client, source=TrackedEmail.SOURCE_GMAIL,
-                         submittal_only=False):
+                         allow_quotation=True, allow_lpo=True):
     """Returns a summary dict, or None if the message was already tracked
     (real run only -- dry runs always classify since nothing is persisted).
 
@@ -147,18 +147,62 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
     has actually been parsed -- so the dedup check happens after parsing,
     not before.
 
-    `submittal_only=True` (used for the separate project@junaid.ae mailbox --
-    see poll_project_mailbox) still classifies and stores the email exactly
-    like any other source -- an RFQ or LPO from that mailbox is still
-    tracked/visible -- it just never triggers quotation drafting or LPO
-    processing for it, regardless of what it classifies as. SubmittalRequestItem
-    extraction and storage happen unconditionally either way (same as today),
-    since that was never gated on `status` in the first place."""
+    `allow_quotation`/`allow_lpo` gate quotation drafting and LPO/Sales-Order
+    processing independently of each other and of `status` -- classification
+    and storage (including EnquiryItem/SubmittalRequestItem extraction) always
+    happen regardless of either flag, since those were never gated on
+    `status` in the first place. Used by poll_project_mailbox (RFQs from
+    project@junaid.ae DO get a quotation drafted, same as any other source,
+    but that mailbox must never auto-create a real Sales Order/PO -- so
+    allow_quotation=True, allow_lpo=False) and poll_submittal_mailbox
+    (submittal-only: allow_quotation=False, allow_lpo=False -- an RFQ or LPO
+    from that mailbox is still tracked/visible, it just never triggers either
+    step)."""
     raw = client.fetch_message(service, message_id)
     parsed = client.parse_message(raw)
 
-    if not dry_run and TrackedEmail.objects.filter(gmail_message_id=parsed['gmail_message_id']).exists():
-        return None
+    if (parsed['sender'] or '').strip().lower() in settings.EMAILAGENT_IGNORED_SENDER_EMAILS:
+        # Supplier mail (e.g. Cosmoplast, Georg Fischer), not a customer --
+        # never tracked as an enquiry regardless of source mailbox. Skipped
+        # before the dedup check / classification call since there's nothing
+        # to look up or spend on.
+        return None if not dry_run else {
+            'gmail_message_id': parsed['gmail_message_id'],
+            'subject': parsed['subject'],
+            'sender': parsed['sender'],
+            'category': None,
+            'confidence': None,
+            'reasoning': 'Ignored sender (supplier mailbox, not a customer).',
+            'status': None,
+            'stored': False,
+            'item_count': 0,
+            'attachment_sources': {},
+        }
+
+    if not dry_run:
+        existing = TrackedEmail.objects.filter(gmail_message_id=parsed['gmail_message_id']).first()
+        if existing:
+            # Backfills imap_uid on emails tracked before that field existed
+            # (see TrackedEmail.imap_uid / views.open_webmail), whenever a
+            # re-poll happens to touch them again -- cheap since it's before
+            # attachment fetching/classification, and harmless to run every
+            # time (only writes when the value actually changed). Gated on
+            # `source` matching: the same Message-ID can legitimately arrive
+            # in more than one mailbox (e.g. CC'd to both sales@ and the
+            # project/submittal mailbox), and each Zimbra account has its
+            # own independent item-id numbering -- an imap_uid is only
+            # meaningful under the credentials of the mailbox that actually
+            # produced it, so a re-poll from a DIFFERENT mailbox than the
+            # one that first created this row must never overwrite it (that
+            # would point views.open_webmail at the wrong account's item
+            # namespace -- a real, observed failure mode, see the 404 in
+            # TrackedEmail 545's history: backfilled from the outlook
+            # mailbox onto a row created by the submittal mailbox poller).
+            new_uid = parsed.get('imap_uid', '')
+            if new_uid and source == existing.source and existing.imap_uid != new_uid:
+                existing.imap_uid = new_uid
+                existing.save(update_fields=['imap_uid'])
+            return None
 
     attachment_payloads = _build_attachment_payloads(service, parsed['gmail_message_id'], parsed['attachments'])
 
@@ -232,9 +276,24 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
     # no native thread_id (see _find_tracked_email_by_reply_headers).
     reply_quotation = None if dry_run else _find_quotation_by_reply_headers(parsed['raw_headers'])
     reply_tracked_email = None if dry_run else _find_tracked_email_by_reply_headers(parsed['raw_headers'])
+    # A THIRD way to recognize "this belongs to an already-tracked enquiry,
+    # not a new one" -- for a reminder that arrives as a brand-new email
+    # (not a reply, so no thread_id/In-Reply-To/References link at all) but
+    # repeats the same requirement the classifier already recognized via
+    # search_similar_enquiries (see tools.py) and named explicitly via
+    # submit_classification's duplicate_of_tracked_email_id. Guarded by a DB
+    # lookup rather than trusted blindly, so a hallucinated/stale id just
+    # falls back to today's behavior (content_match_tracked_email stays
+    # None) instead of ever raising or mis-linking.
+    content_match_tracked_email = None
+    if not dry_run and result.duplicate_of_tracked_email_id:
+        content_match_tracked_email = TrackedEmail.objects.filter(
+            id=result.duplicate_of_tracked_email_id,
+        ).first()
     is_thread_continuation = not dry_run and bool(
         (parsed['thread_id'] and TrackedEmail.objects.filter(thread_id=parsed['thread_id']).exists())
         or reply_tracked_email
+        or content_match_tracked_email
     )
     if (is_thread_continuation or reply_quotation) and status in (TrackedEmail.STATUS_NOT_RELEVANT, TrackedEmail.STATUS_NEEDS_REVIEW):
         status = TrackedEmail.STATUS_RFQ
@@ -263,6 +322,7 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
         tracked_email = TrackedEmail.objects.create(
             gmail_message_id=parsed['gmail_message_id'],
             thread_id=parsed['thread_id'],
+            imap_uid=parsed.get('imap_uid', ''),
             source=source,
             sender=parsed['sender'],
             sender_name=parsed['sender_name'],
@@ -345,7 +405,7 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
     # which needs the original is_lpo/lpo_* fields and runs after that block.
     classification_result = result
 
-    if status == TrackedEmail.STATUS_RFQ and not submittal_only:
+    if status == TrackedEmail.STATUS_RFQ and allow_quotation:
         # Outside the transaction above -- this calls out to Claude, and
         # shouldn't hold the enquiry's DB transaction open while it does.
         # Best-effort: draft_quotation/merge_followup_into_quotation never
@@ -369,7 +429,10 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
             # followed by one with the real BOQ, or a content-first email
             # followed by a brand/qty correction) resolve to the same
             # original enquiry either way, not just when Gmail's own
-            # threading happens to catch it.
+            # threading happens to catch it. Also covers a reminder that
+            # arrived as a brand-new email with no thread/reply link at all,
+            # via content_match_tracked_email (the classifier's own
+            # duplicate_of_tracked_email_id, see above).
             thread_filter = Q()
             if tracked_email.thread_id:
                 thread_filter |= Q(thread_id=tracked_email.thread_id)
@@ -377,6 +440,10 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
                 thread_filter |= Q(id=reply_tracked_email.id)
                 if reply_tracked_email.thread_id:
                     thread_filter |= Q(thread_id=reply_tracked_email.thread_id)
+            if content_match_tracked_email:
+                thread_filter |= Q(id=content_match_tracked_email.id)
+                if content_match_tracked_email.thread_id:
+                    thread_filter |= Q(thread_id=content_match_tracked_email.thread_id)
             if thread_filter:
                 original = (TrackedEmail.objects
                             .filter(thread_filter)
@@ -422,7 +489,7 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
     # emailagent.views.submittal_draft_selected /
     # submittal_agent.draft_submittals_for_selected_items.
 
-    if classification_result.is_lpo and not submittal_only:
+    if classification_result.is_lpo and allow_lpo:
         # Unconditional on is_lpo, not on `status` -- same principle as the
         # EnquiryItem/SubmittalRequestItem persistence above: an LPO's data
         # must be captured even when the email's overall status ends up
@@ -430,8 +497,8 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
         # thread as a PO confirmation). Outside the transaction above since
         # this can write a real SalesOrder -- never raises, failures are
         # recorded on the LPORequest itself.
-        # (submittal_only mailboxes never process LPOs either -- see this
-        # function's docstring.)
+        # (project@junaid.ae and the submittal mailbox both pass
+        # allow_lpo=False -- see this function's docstring.)
         lpo_recorder = supervisor.AgentRunRecorder(AgentRun.AGENT_PROCESS_LPO, tracked_email=tracked_email)
         try:
             lpo_agent.process_lpo(tracked_email, classification_result)
@@ -534,12 +601,17 @@ def poll_outlook(dry_run=False, max_results=None):
 
 def poll_project_mailbox(dry_run=False, max_results=None):
     """Same role as poll_outlook() but for the separate project@junaid.ae
-    IMAP mailbox -- submittal-only (see process_new_message's submittal_only
-    param: this mailbox's mail is classified and stored exactly like any
-    other source, it just never triggers quotation drafting or LPO
-    processing). Uses its own PROJECT_IMAP_* credentials and its own UID
-    watermark (EmailAgentSyncState.last_project_uid) so it advances
-    independently of the primary Outlook mailbox's polling position."""
+    IMAP mailbox. Mail here is classified and stored exactly like any other
+    source, and a genuine RFQ DOES get a quotation drafted (allow_quotation=
+    True) -- this mailbox mainly receives submittal/technical-approval mail,
+    but real quotation requests do land here too (mis-sent, CC'd, or a client
+    using the wrong address), and those must not get stuck with requirements
+    extracted but no quotation. LPO/Sales-Order processing stays OFF
+    (allow_lpo=False) regardless: this mailbox must never auto-create a real
+    Sales Order. See process_new_message's allow_quotation/allow_lpo params.
+    Uses its own PROJECT_IMAP_* credentials and its own UID watermark
+    (EmailAgentSyncState.last_project_uid) so it advances independently of
+    the primary Outlook mailbox's polling position."""
     conn = outlook_client.build_connection(
         host=settings.PROJECT_IMAP_HOST, port=settings.PROJECT_IMAP_PORT,
         user=settings.PROJECT_IMAP_USER, password=settings.PROJECT_IMAP_PASSWORD,
@@ -561,7 +633,7 @@ def poll_project_mailbox(dry_run=False, max_results=None):
             try:
                 result = process_new_message(conn, uid, dry_run=dry_run,
                                               client=outlook_client, source=TrackedEmail.SOURCE_PROJECT,
-                                              submittal_only=True)
+                                              allow_quotation=True, allow_lpo=False)
                 if result is None:
                     stats['skipped'] += 1
                 else:
@@ -585,7 +657,9 @@ def poll_project_mailbox(dry_run=False, max_results=None):
 
 def poll_submittal_mailbox(dry_run=False, max_results=None):
     """Same role as poll_project_mailbox() but for the fourth, separate
-    SUBMITTAL_IMAP_* mailbox -- submittal-only. Uses its own credentials and
+    SUBMITTAL_IMAP_* mailbox -- fully submittal-only, unlike project@junaid.ae:
+    neither quotation drafting nor LPO processing ever runs for this mailbox
+    (allow_quotation=False, allow_lpo=False). Uses its own credentials and
     its own UID watermark (EmailAgentSyncState.last_submittal_uid) so it
     advances independently of every other mailbox's polling position."""
     conn = outlook_client.build_connection(
@@ -609,7 +683,7 @@ def poll_submittal_mailbox(dry_run=False, max_results=None):
             try:
                 result = process_new_message(conn, uid, dry_run=dry_run,
                                               client=outlook_client, source=TrackedEmail.SOURCE_SUBMITTAL,
-                                              submittal_only=True)
+                                              allow_quotation=False, allow_lpo=False)
                 if result is None:
                     stats['skipped'] += 1
                 else:

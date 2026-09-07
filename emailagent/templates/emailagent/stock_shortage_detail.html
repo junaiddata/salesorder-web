@@ -26,6 +26,56 @@
     .tbl-x.grouped tr.group-start td { border-top: 3px solid var(--primary-300); }
     .tbl-x.grouped tr.group-start:first-child td { border-top: none; }
     .tbl-x.grouped td { padding-top: .6rem; padding-bottom: .6rem; }
+    /* Per-purchase-order breakdown inside the "LPO Sent to Supplier" cell --
+       a compact card of PO chips, each with a proportional contribution bar
+       against the running total, instead of one opaque number. */
+    .po-breakdown-cell { vertical-align: top !important; white-space: normal; }
+    .po-card {
+        display: flex; flex-direction: column; gap: .3rem;
+        background: var(--surface-alt); border: 1px solid var(--line);
+        border-radius: var(--r); padding: .5rem .55rem; min-width: 150px;
+        text-align: left;
+    }
+    .po-row {
+        display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+    }
+    .po-chip {
+        display: inline-flex; align-items: center; gap: .3rem;
+        background: var(--primary-50); color: var(--primary-700);
+        border-radius: 999px; padding: .12rem .55rem .12rem .45rem;
+        font-size: .72rem; font-weight: 600; letter-spacing: .01em;
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .po-chip i { font-size: .62rem; opacity: .75; }
+    .po-qty {
+        font-size: .82rem; font-weight: 700; color: var(--ink);
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .po-bar {
+        height: 4px; border-radius: 999px; background: var(--primary-100);
+        overflow: hidden;
+    }
+    .po-bar > span {
+        display: block; height: 100%; border-radius: 999px;
+        background: linear-gradient(90deg, var(--primary-300), var(--primary));
+    }
+    .po-card-total {
+        display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+        margin-top: .15rem; padding-top: .4rem; border-top: 1px dashed var(--primary-100);
+    }
+    .po-card-total .lbl {
+        font-size: .68rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .05em; color: var(--muted);
+    }
+    .po-card-total .val {
+        font-size: .92rem; font-weight: 800; color: var(--primary-700);
+        font-variant-numeric: tabular-nums;
+    }
+    .po-empty {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 40px; padding: .15rem .5rem; border-radius: 999px;
+        background: var(--surface-alt); color: var(--muted); font-size: .78rem;
+    }
 </style>
 {% endblock %}
 
@@ -44,10 +94,14 @@
                 {% if report.last_triggered_by %} — triggered by <a href="{% url 'view_sales_order_details' report.last_triggered_by.id %}" style="color:#fff;text-decoration:underline;">{{ report.last_triggered_by.order_number }}</a>{% endif %}
             </p>
         </div>
-        <form method="post" action="{% url 'emailagent:stock_shortage_report_refresh' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn-x btn-light-x"><i class="fas fa-rotate"></i> Refresh</button>
-        </form>
+        <div style="display:flex;gap:.5rem;">
+            <a href="{% url 'emailagent:stock_shortage_export_excel' %}" class="btn-x btn-light-x"><i class="fas fa-file-excel"></i> Export Excel</a>
+            <a href="{% url 'emailagent:stock_shortage_export_pdf' %}" class="btn-x btn-light-x"><i class="fas fa-file-pdf"></i> Export PDF</a>
+            <form method="post" action="{% url 'emailagent:stock_shortage_report_refresh' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-x btn-light-x"><i class="fas fa-rotate"></i> Refresh</button>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -97,7 +151,9 @@
                     <td class="num item-cell" rowspan="{{ row_count }}">{{ line.total_required_qty|floatformat:2 }}</td>
                     <td class="num item-cell" rowspan="{{ row_count }}">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
                     <td class="num final-qty item-cell" rowspan="{{ row_count }}">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
-                    <td class="num item-cell" rowspan="{{ row_count }}">{{ line.already_ordered_qty|floatformat:2 }}</td>
+                    <td class="num item-cell po-breakdown-cell" rowspan="{{ row_count }}">
+                        {% include 'emailagent/_po_breakdown_cell.html' %}
+                    </td>
                     <td class="num final-qty item-cell" rowspan="{{ row_count }}">{% if line.final_purchase_qty is not None %}{{ line.final_purchase_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     {% endif %}
                     <td>{{ entry.payment_terms }}</td>
@@ -111,7 +167,9 @@
                     <td class="num item-cell">{{ line.total_required_qty|floatformat:2 }}</td>
                     <td class="num item-cell">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
                     <td class="num final-qty item-cell">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
-                    <td class="num item-cell">{{ line.already_ordered_qty|floatformat:2 }}</td>
+                    <td class="num item-cell po-breakdown-cell">
+                        {% include 'emailagent/_po_breakdown_cell.html' %}
+                    </td>
                     <td class="num final-qty item-cell">{% if line.final_purchase_qty is not None %}{{ line.final_purchase_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td>—</td>
                 </tr>

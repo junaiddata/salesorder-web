@@ -87,6 +87,7 @@ def submit_classification(
     lpo_total_vat: str = "",
     lpo_amount_in_words: str = "",
     lpo_items: list[LPOClassificationItem] = [],
+    duplicate_of_tracked_email_id: int = 0,
 ) -> str:
     """Record your final RFQ classification for this email. Call this exactly
     once, when you are done reasoning (and have used search_similar_enquiries
@@ -201,6 +202,22 @@ def submit_classification(
             discount_percent (the line's discount %, e.g. "3"), vat_amount
             (the line's VAT amount, if broken out per line), and amount
             (the line's total/extended amount).
+        duplicate_of_tracked_email_id: If you called search_similar_enquiries
+            and one of the results it returned (cited there as
+            "[tracked_email_id=NNN]") is clearly the SAME underlying
+            requirement being resent -- e.g. this email is a "reminder" /
+            "soft reminder" / "following up" re-send of an enquiry already
+            tracked from the same sender, with the same or near-identical
+            item list -- set this to that NNN so it can be linked back to
+            the original instead of drafting a second, duplicate quotation
+            for the same requirement. Only set this for a genuine repeat of
+            the SAME requirement (same items/scope) from the SAME sender --
+            never for a merely similar-looking but actually different
+            enquiry, and never just because search_similar_enquiries
+            returned a result (only when you're confident it's the same
+            request being reminded about). 0 (default) if you didn't call
+            search_similar_enquiries, found nothing, or this is a genuinely
+            new/different requirement.
     """
     return "Recorded"
 
@@ -233,6 +250,7 @@ class ClassificationResult:
     lpo_total_vat: str = ''
     lpo_amount_in_words: str = ''
     lpo_items: list = field(default_factory=list)
+    duplicate_of_tracked_email_id: int = 0
     model_used: str = ''
 
 
@@ -527,7 +545,11 @@ _CLASSIFICATION_PROMPT = (
     "this looks like a duplicate or a reminder of an enquiry already tracked from "
     "the same sender) and lookup_item_master (to verify/correct an item's brand, "
     "category, or check its current stock/price against the real catalog) as many "
-    "times as useful. When you are done, call submit_classification exactly once "
+    "times as useful. If search_similar_enquiries confirms this is genuinely the "
+    "SAME requirement being resent (a reminder/follow-up repeating the same items, "
+    "not just a similar-looking different enquiry), set duplicate_of_tracked_email_id "
+    "to the matching result's tracked_email_id -- see that argument's own description "
+    "for the exact bar. When you are done, call submit_classification exactly once "
     "with your final answer -- that is the only way to record a result; do not "
     "just describe your answer in text."
 )
@@ -687,6 +709,7 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
         lpo_total_vat=captured.get("lpo_total_vat", "") or "",
         lpo_amount_in_words=captured.get("lpo_amount_in_words", "") or "",
         lpo_items=captured.get("lpo_items", []) or [],
+        duplicate_of_tracked_email_id=int(captured.get("duplicate_of_tracked_email_id") or 0),
         model_used=model_to_use,
     )
 

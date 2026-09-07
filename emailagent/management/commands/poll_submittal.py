@@ -4,7 +4,7 @@ mailbox, classify new emails, and store them -- SUBMITTAL-ONLY, meaning
 quotation drafting and LPO processing never run for anything from this
 mailbox regardless of how it classifies (see
 emailagent/services.py:poll_submittal_mailbox / process_new_message's
-submittal_only param). Otherwise mirrors poll_project.py exactly -- same
+allow_quotation/allow_lpo params). Otherwise mirrors poll_project.py exactly -- same
 IMAP mechanics (emailagent/outlook_client.py), just a separate mailbox and
 its own UID watermark.
 

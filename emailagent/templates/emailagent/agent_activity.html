@@ -128,15 +128,6 @@
 
     .stat-x-link { display: block; text-decoration: none; color: inherit; cursor: pointer; }
     .stat-x-link.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-100); }
-
-    .page-bar { display: flex; align-items: center; justify-content: center; gap: .5rem; margin-top: 1.5rem; }
-    .page-bar a, .page-bar span {
-        padding: .45rem .85rem; border-radius: var(--r); border: 1px solid var(--line);
-        font-size: .82rem; text-decoration: none; color: var(--body);
-    }
-    .page-bar a:hover { background: var(--primary-50); border-color: var(--primary-100); }
-    .page-bar .current { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
-    .page-bar .disabled { opacity: .4; pointer-events: none; }
 </style>
 {% endblock %}
 
@@ -448,15 +439,19 @@
     {% if page_obj and page_obj.paginator.num_pages > 1 %}
     <div class="page-bar">
         {% if page_obj.has_previous %}
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page=1"><i class="fas fa-angles-left"></i> First</a>
             <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i> Prev</a>
         {% else %}
+            <span class="disabled"><i class="fas fa-angles-left"></i> First</span>
             <span class="disabled"><i class="fas fa-chevron-left"></i> Prev</span>
         {% endif %}
         <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
             <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.next_page_number }}">Next <i class="fas fa-chevron-right"></i></a>
+            <a href="?{{ base_query }}{% if base_query %}&{% endif %}page={{ page_obj.paginator.num_pages }}">Last <i class="fas fa-angles-right"></i></a>
         {% else %}
             <span class="disabled">Next <i class="fas fa-chevron-right"></i></span>
+            <span class="disabled">Last <i class="fas fa-angles-right"></i></span>
         {% endif %}
     </div>
     {% endif %}

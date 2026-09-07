@@ -261,6 +261,7 @@ def parse_message(raw_message: dict) -> dict:
     return {
         'gmail_message_id': raw_message['id'],
         'thread_id': raw_message.get('threadId', ''),
+        'imap_uid': '',  # Gmail has its own deep link (see email_detail.html) -- unused here.
         'sender': sender,
         'sender_name': sender_name,
         'to': _parse_addresses(_header_value(headers, 'To')),

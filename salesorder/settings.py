@@ -209,11 +209,11 @@ OUTLOOK_IMAP_PASSWORD = os.getenv('OUTLOOK_IMAP_PASSWORD', '')
 OUTLOOK_IMAP_FOLDER = os.getenv('OUTLOOK_IMAP_FOLDER', 'INBOX')
 
 # Third inbound source, same agent -- another plain IMAP mailbox
-# (project@junaid.ae), SUBMITTAL-ONLY: classified the same as any other
-# mailbox, but emailagent.services.process_new_message never runs quotation
-# drafting or LPO processing for mail from this source, regardless of what
-# it classifies as (see poll_project_mailbox / the submittal_only param).
-# Host/port/folder default to the same values as the primary OUTLOOK_IMAP_*
+# (project@junaid.ae), classified the same as any other mailbox; a genuine
+# RFQ from this source DOES get a quotation drafted, same as any other
+# source -- only LPO/Sales-Order processing is always skipped for it (see
+# poll_project_mailbox / process_new_message's allow_quotation/allow_lpo
+# params). Host/port/folder default to the same values as the primary OUTLOOK_IMAP_*
 # mailbox since it's on the same hosting -- only the mailbox user/password
 # genuinely differ; override PROJECT_IMAP_HOST/PORT/FOLDER in .env if that
 # ever isn't true.
@@ -224,8 +224,9 @@ PROJECT_IMAP_PASSWORD = os.getenv('PROJECT_IMAP_PASSWORD', '')
 PROJECT_IMAP_FOLDER = os.getenv('PROJECT_IMAP_FOLDER', OUTLOOK_IMAP_FOLDER)
 
 # Fourth inbound source, same agent -- another plain IMAP mailbox,
-# SUBMITTAL-ONLY same as PROJECT_IMAP_* above (see poll_submittal_mailbox /
-# the submittal_only param). Host/port/folder default to the primary
+# fully SUBMITTAL-ONLY (unlike PROJECT_IMAP_* above): neither quotation
+# drafting nor LPO processing ever runs for it (see poll_submittal_mailbox /
+# process_new_message's allow_quotation/allow_lpo params). Host/port/folder default to the primary
 # OUTLOOK_IMAP_* mailbox's values; override in .env if this mailbox is
 # hosted elsewhere.
 SUBMITTAL_IMAP_HOST = os.getenv('SUBMITTAL_IMAP_HOST', OUTLOOK_IMAP_HOST)
@@ -309,6 +310,14 @@ EMAILAGENT_CLAUDE_TIMEOUT_SECS = int(os.getenv('EMAILAGENT_CLAUDE_TIMEOUT_SECS',
 EMAILAGENT_ACTIVITY_PAGE_SIZE = int(os.getenv('EMAILAGENT_ACTIVITY_PAGE_SIZE', '20'))
 EMAILAGENT_ACTIVITY_MAX_ROWS = int(os.getenv('EMAILAGENT_ACTIVITY_MAX_ROWS', '2000'))
 
+# Rows per page on the other emailagent list/queue pages (All Emails, LPO
+# Requests, Quotation Drafts, Submittal Drafts) -- separate from
+# EMAILAGENT_ACTIVITY_PAGE_SIZE since that dashboard's rows are much denser.
+EMAILAGENT_LIST_PAGE_SIZE = int(os.getenv('EMAILAGENT_LIST_PAGE_SIZE', '15'))
+# Review Queue rows are read closely (subject/sender/reasoning) rather than
+# skimmed, so it gets its own, smaller page size for easier reading.
+EMAILAGENT_REVIEW_PAGE_SIZE = int(os.getenv('EMAILAGENT_REVIEW_PAGE_SIZE', '10'))
+
 # LPO agent (emailagent/lpo_agent.py) matching thresholds -- see its
 # find_matching_quotation() docstring for how these are used. Neither one
 # ever gates auto-CREATION of a Sales Order (only an exact, unique
@@ -316,6 +325,19 @@ EMAILAGENT_ACTIVITY_MAX_ROWS = int(os.getenv('EMAILAGENT_ACTIVITY_MAX_ROWS', '20
 # quotations get surfaced to a human on the "needs review" page.
 EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD = float(os.getenv('EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD', '0.8'))
 EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS = int(os.getenv('EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS', '180'))
+
+# Sender addresses that must never be tracked as customer enquiries, on
+# either mailbox (Gmail or Outlook -- see services.process_new_message).
+# These are our own suppliers' mail IDs (Cosmoplast, Georg Fischer, ...),
+# not customers -- their mail happens to land in the same watched inbox but
+# should never create a TrackedEmail/enquiry. Comma-separated, case-insensitive.
+EMAILAGENT_IGNORED_SENDER_EMAILS = {
+    e.strip().lower() for e in os.getenv(
+        'EMAILAGENT_IGNORED_SENDER_EMAILS',
+        'ibrahim.ali@cosmoplast.com,rabie@cosmoplast.com,'
+        'lorena.lorenzo@georgfischer.com,mohamed.zohdy@georgfischer.com',
+    ).split(',') if e.strip()
+}
 
 
 # Static files (CSS, JavaScript, Images)

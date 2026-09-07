@@ -215,6 +215,11 @@ def parse_message(msg, mailbox_user=None) -> dict:
         # services._find_quotation_by_reply_headers, which works off
         # standard email headers regardless of provider.
         'thread_id': '',
+        # Zimbra's IMAP UID is also its internal item id -- stored so
+        # views.open_webmail can deep-link straight to this exact message
+        # via Zimbra's REST content servlet instead of just opening the
+        # inbox (see that view's docstring).
+        'imap_uid': uid,
         'sender': sender,
         'sender_name': sender_name,
         'to': _parse_addresses(_decode_mime_words(msg.get('To', ''))),

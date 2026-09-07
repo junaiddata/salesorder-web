@@ -209,16 +209,22 @@ class SalesOrder(models.Model):
 
     CREATED_VIA_MANUAL = 'manual'
     CREATED_VIA_AGENT_LPO = 'agent_lpo'
+    CREATED_VIA_AGENT_LPO_DIRECT = 'agent_lpo_direct'
     CREATED_VIA_CHOICES = (
         (CREATED_VIA_MANUAL, 'Manual'),
-        (CREATED_VIA_AGENT_LPO, 'LPO Agent (Auto)'),
+        (CREATED_VIA_AGENT_LPO, 'LPO Agent (Auto, from Quotation)'),
+        (CREATED_VIA_AGENT_LPO_DIRECT, 'LPO Agent (Auto, direct from LPO)'),
     )
     created_via = models.CharField(
         max_length=20, choices=CREATED_VIA_CHOICES, default=CREATED_VIA_MANUAL,
         help_text="'agent_lpo' when emailagent.lpo_agent auto-created this order from an unambiguous "
-                  "LPO-to-quotation match with no human involved -- 'manual' for every other path "
-                  "(the quotation page's Convert button, or a human picking a candidate on the LPO "
-                  "review page). See so.quotation_conversion_service.convert_quotation_to_sales_order.",
+                  "LPO-to-quotation match with no human involved. 'agent_lpo_direct' when it instead "
+                  "auto-created straight from the LPO's own extracted items with NO quotation at all "
+                  "(see emailagent.lpo_agent.build_sales_order_directly_from_lpo) -- worth knowing "
+                  "apart from 'agent_lpo' since its items/pricing were never vetted via a quotation. "
+                  "'manual' for every other path (the quotation page's Convert button, or a human "
+                  "picking a candidate on the LPO review page). See "
+                  "so.quotation_conversion_service.convert_quotation_to_sales_order.",
     )
 
     def __str__(self):

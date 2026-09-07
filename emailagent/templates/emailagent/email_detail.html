@@ -26,6 +26,10 @@
                 <a href="https://mail.google.com/mail/u/0/#all/{{ email.gmail_message_id }}" target="_blank" rel="noopener" class="btn-x" title="Open this email in Gmail">
                     <i class="fas fa-arrow-up-right-from-square"></i> Open in Gmail
                 </a>
+                {% else %}
+                <a href="{% url 'emailagent:open_webmail' email.pk %}" target="_blank" rel="noopener" class="btn-x" title="Open this exact email in webmail">
+                    <i class="fas fa-arrow-up-right-from-square"></i> Open in Webmail
+                </a>
                 {% endif %}
                 {% if email.quotation_draft.status == 'confirmed' and email.quotation_draft.quotation %}
                 <a href="{% url 'view_quotation_details' email.quotation_draft.quotation.id %}" class="btn-x" title="View the quotation">
@@ -287,6 +291,29 @@
         {% endif %}
     </div>
 
+    {% if reminder_history %}
+    <div class="card-x thread-panel">
+        <h4 class="attachments-heading"><i class="fas fa-bell"></i> Reminders Received ({{ reminder_history|length }})</h4>
+        <p class="section-hint">This enquiry's requirement was resent/followed-up on {{ reminder_history|length }} time{{ reminder_history|length|pluralize }} after the original -- each one was linked back here instead of drafting a separate quotation.</p>
+        <div class="thread-list">
+            {% for r in reminder_history %}
+            <div class="thread-item">
+                <div class="email-avatar sm"><i class="fas fa-bell"></i></div>
+                <div class="thread-item-main">
+                    <div class="thread-item-top">
+                        <span class="thread-item-sender">{{ r.tracked_email.subject|default:"(no subject)"|truncatechars:60 }}</span>
+                        <span class="thread-item-date">{{ r.tracked_email.received_at|date:"d M Y, H:i" }}</span>
+                    </div>
+                </div>
+                <div class="thread-item-actions">
+                    <a href="{% url 'emailagent:email_detail' r.tracked_email.pk %}" class="btn-x sm" title="View this reminder email"><i class="fas fa-eye"></i></a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if thread_emails %}
     <div class="card-x thread-panel">
         <h4 class="attachments-heading"><i class="fas fa-reply-all"></i> Replied By ({{ thread_emails|length }})</h4>
@@ -304,6 +331,8 @@
                     <a href="{% url 'emailagent:email_detail' t.pk %}" class="btn-x sm" title="View details"><i class="fas fa-eye"></i></a>
                     {% if t.source == 'gmail' %}
                     <a href="https://mail.google.com/mail/u/0/#all/{{ t.gmail_message_id }}" target="_blank" rel="noopener" class="btn-x sm" title="Open in Gmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                    {% else %}
+                    <a href="{% url 'emailagent:open_webmail' t.pk %}" target="_blank" rel="noopener" class="btn-x sm" title="Open this exact email in webmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
                     {% endif %}
                 </div>
             </div>

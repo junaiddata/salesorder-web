@@ -1,3 +1,24 @@
+/* Widens the shared .u-wrap (submittal/ui.css, max-width: 1140px) for the
+   Email Agent section only -- this file loads after ui.css and only on
+   emailagent/base.html pages, so it doesn't affect the submittal/SO apps
+   that reuse the same class. Review/Email/Quotation/Submittal/LPO queue
+   tables have too many columns to fit 1140px without horizontal scroll. */
+.u-wrap {
+    max-width: 1600px;
+}
+
+/* ── Pagination bar (Review Queue, All Emails, LPO Requests, Quotation
+   Drafts, Submittal Drafts, Agent Activity) ─────────────────────────── */
+
+.page-bar { display: flex; align-items: center; justify-content: center; gap: .5rem; margin-top: 1.5rem; }
+.page-bar a, .page-bar span {
+    padding: .45rem .85rem; border-radius: var(--r); border: 1px solid var(--line);
+    font-size: .82rem; text-decoration: none; color: var(--body);
+}
+.page-bar a:hover { background: var(--primary-50); border-color: var(--primary-100); }
+.page-bar .current { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
+.page-bar .disabled { opacity: .4; pointer-events: none; }
+
 .review-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -319,12 +340,46 @@ details.collapsible-section > .items-table-wrap {
     border: 1px solid rgba(0, 0, 0, .08);
     border-radius: 10px;
     margin-bottom: 8px;
+    /* The real scrolling still happens here (and the box still responds to
+       trackpad/shift-wheel scrolling), but its own native scrollbar is
+       hidden -- the .items-table-wrap-top-scroll strip above it (synced
+       via base.html's script) is the only visible scrollbar, so there
+       isn't a redundant one at the bottom too. */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* legacy Edge/IE */
+}
+
+.items-table-wrap::-webkit-scrollbar {
+    /* !important: submittal/ui.css sets a global `::-webkit-scrollbar { height: 9px }`
+       (a site-wide custom scrollbar style) that otherwise still paints a
+       visible thumb here despite this selector's higher specificity --
+       confirmed by a real rendered screenshot showing it survive without
+       !important. */
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .items-table {
     width: 100%;
     border-collapse: collapse;
     font-size: .88rem;
+}
+
+/* A second, thin horizontal scrollbar placed ABOVE each .items-table-wrap
+   box (see base.html's script), synced to the real one below via JS --
+   native scrollbars can't actually be repositioned with CSS alone (a
+   transform:rotateX flip was tried and confirmed NOT to move Chrome's
+   native scrollbar), so this is a real proxy scrollbar instead. */
+.items-table-wrap-top-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 16px;
+    margin-bottom: 6px;
+}
+
+.items-table-wrap-top-scroll > div {
+    height: 1px;
 }
 
 .items-table th {

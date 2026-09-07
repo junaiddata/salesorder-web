@@ -8,7 +8,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.core.paginator import Paginator
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -27,7 +28,13 @@ def review_queue(request):
               .filter(status=TrackedEmail.STATUS_NEEDS_REVIEW)
               .prefetch_related('attachments')
               .order_by('-received_at'))
-    return render(request, 'emailagent/review.html', {'emails': emails})
+    paginator = Paginator(emails, settings.EMAILAGENT_REVIEW_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'emailagent/review.html', {
+        'emails': page_obj,
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+    })
 
 
 @login_required
@@ -71,9 +78,23 @@ def email_list(request):
     status_filter = request.GET.get('status', '')
     if status_filter in dict(TrackedEmail.STATUS_CHOICES):
         emails = emails.filter(status=status_filter)
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        emails = emails.filter(sender__icontains=search_query)
+    paginator = Paginator(emails, settings.EMAILAGENT_LIST_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    base_params = []
+    if status_filter:
+        base_params.append(f'status={status_filter}')
+    if search_query:
+        base_params.append(f'q={search_query}')
     return render(request, 'emailagent/email_list.html', {
-        'emails': emails,
+        'emails': page_obj,
+        'page_obj': page_obj,
+        'total_count': paginator.count,
         'status_filter': status_filter,
+        'search_query': search_query,
+        'base_query': '&'.join(base_params),
     })
 
 
@@ -81,7 +102,10 @@ def email_list(request):
 def email_detail(request, pk):
     tracked_email = get_object_or_404(
         TrackedEmail.objects
-        .select_related('lpo_request', 'lpo_request__matched_quotation', 'lpo_request__sales_order')
+        .select_related(
+            'lpo_request', 'lpo_request__matched_quotation', 'lpo_request__sales_order',
+            'quotation_draft', 'quotation_draft__quotation', 'quotation_draft__merged_into',
+        )
         .prefetch_related(
             'attachments', 'items', 'submittal_request_items',
             'lpo_request__items', 'lpo_request__candidate_quotations',
@@ -94,10 +118,73 @@ def email_detail(request, pk):
                           .filter(thread_id=tracked_email.thread_id)
                           .exclude(pk=tracked_email.pk)
                           .order_by('received_at'))
+
+    # Every reminder/follow-up ever merged into the SAME quotation this
+    # email's own draft belongs to -- whether this email is the one that
+    # owns that quotation directly (draft.quotation set) or is itself one
+    # of the merged follow-ups (draft.merged_into set). Read via
+    # QuotationDraft.merged_into's related_name='merged_drafts' (see
+    # models.py), so this covers a reminder linked by Gmail thread_id, by
+    # reply headers, OR by content-match (duplicate_of_tracked_email_id) --
+    # unlike `thread_emails` above, which only ever sees Gmail's thread_id.
+    # Read-only: never creates or changes anything, purely a display of
+    # merges that already happened.
+    reminder_history = []
+    draft = getattr(tracked_email, 'quotation_draft', None)
+    if draft:
+        effective_quotation = draft.quotation or draft.merged_into
+        if effective_quotation:
+            reminder_history = (
+                effective_quotation.merged_drafts
+                .exclude(tracked_email_id=tracked_email.id)
+                .select_related('tracked_email')
+                .order_by('tracked_email__received_at')
+            )
+
     return render(request, 'emailagent/email_detail.html', {
         'email': tracked_email,
         'thread_emails': thread_emails,
+        'reminder_history': reminder_history,
     })
+
+
+@login_required
+def open_webmail(request, pk):
+    """"Open in Webmail" button on the email detail page, for the three
+    IMAP-sourced mailboxes (Gmail has its own working deep link already --
+    see the template; this view is never linked to for source=gmail).
+    Authenticates fresh via Zimbra's own SOAP AuthRequest API (see
+    zimbra_client.py) using the same credentials outlook_client.py already
+    uses over IMAP for this mailbox, then redirects straight to that
+    message's content via Zimbra's REST content servlet -- landing already
+    logged in, on the exact email, with no clicks inside Zimbra itself.
+
+    Falls back to the plain webmail login page if the email predates
+    imap_uid being captured, or if the Zimbra auth call fails for any
+    reason (rotated password, Zimbra unreachable, etc.) -- an inbox a
+    human can search themselves is strictly better than a broken redirect.
+    """
+    from . import zimbra_client
+
+    tracked_email = get_object_or_404(TrackedEmail, pk=pk)
+
+    creds_by_source = {
+        TrackedEmail.SOURCE_OUTLOOK: (settings.OUTLOOK_IMAP_USER, settings.OUTLOOK_IMAP_PASSWORD),
+        TrackedEmail.SOURCE_PROJECT: (settings.PROJECT_IMAP_USER, settings.PROJECT_IMAP_PASSWORD),
+        TrackedEmail.SOURCE_SUBMITTAL: (settings.SUBMITTAL_IMAP_USER, settings.SUBMITTAL_IMAP_PASSWORD),
+    }
+    username, password = creds_by_source.get(tracked_email.source, (None, None))
+
+    if not (tracked_email.imap_uid and username and password):
+        return redirect(zimbra_client.WEBMAIL_BASE + '/')
+
+    try:
+        auth_token = zimbra_client.get_auth_token(username, password)
+    except RuntimeError as exc:
+        logger.warning("open_webmail: Zimbra auth failed for TrackedEmail %s: %s", pk, exc)
+        return redirect(zimbra_client.WEBMAIL_BASE + '/')
+
+    return redirect(zimbra_client.message_url(auth_token, tracked_email.imap_uid))
 
 
 @login_required
@@ -165,7 +252,13 @@ def lpo_request_queue(request):
     lpo_requests = (LPORequest.objects
                      .select_related('tracked_email', 'matched_quotation', 'sales_order')
                      .order_by('-created_at'))
-    return render(request, 'emailagent/lpo_queue.html', {'lpo_requests': lpo_requests})
+    paginator = Paginator(lpo_requests, settings.EMAILAGENT_LIST_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'emailagent/lpo_queue.html', {
+        'lpo_requests': page_obj,
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+    })
 
 
 @login_required
@@ -390,9 +483,26 @@ def quotation_draft_queue(request):
     drafts = (QuotationDraft.objects
               .select_related('tracked_email', 'matched_customer', 'quotation', 'merged_into')
               .exclude(status=QuotationDraft.STATUS_MERGED)
-              .prefetch_related('tracked_email__items', 'quotation__items')
+              .prefetch_related(
+                  'tracked_email__items', 'quotation__items',
+                  # Every reminder/follow-up merged into this row's own
+                  # quotation, so the template can show a "N reminder(s)
+                  # received" note without an extra query per row. Ordered
+                  # oldest-first so the template's "last received" can just
+                  # take the final item in the (already-prefetched) list.
+                  Prefetch(
+                      'quotation__merged_drafts',
+                      queryset=QuotationDraft.objects.select_related('tracked_email').order_by('tracked_email__received_at'),
+                  ),
+              )
               .order_by('-tracked_email__received_at'))
-    return render(request, 'emailagent/quotation_queue.html', {'drafts': drafts})
+    paginator = Paginator(drafts, settings.EMAILAGENT_LIST_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'emailagent/quotation_queue.html', {
+        'drafts': page_obj,
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+    })
 
 
 @login_required
@@ -423,7 +533,13 @@ def submittal_draft_queue(request):
               .select_related('tracked_email', 'source_quotation', 'source_quotation__customer',
                                'matched_brand', 'submittal')
               .order_by('-created_at'))
-    return render(request, 'emailagent/submittal_queue.html', {'drafts': drafts})
+    paginator = Paginator(drafts, settings.EMAILAGENT_LIST_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'emailagent/submittal_queue.html', {
+        'drafts': page_obj,
+        'page_obj': page_obj,
+        'total_count': paginator.count,
+    })
 
 
 _STATUS_RANK = {AgentRun.STATUS_FAILED: 2, AgentRun.STATUS_FLAGGED: 1, AgentRun.STATUS_SUCCESS: 0}
@@ -452,8 +568,6 @@ def agent_activity(request):
     / EMAILAGENT_ACTIVITY_MAX_ROWS (settings.py / .env) -- as the AgentRun
     table grows, narrowing the date range keeps this page fast without
     needing a code change."""
-    from django.core.paginator import Paginator
-
     runs = AgentRun.objects.select_related('tracked_email', 'quotation', 'submittal').all()
 
     agent_filter = request.GET.get('agent', '')

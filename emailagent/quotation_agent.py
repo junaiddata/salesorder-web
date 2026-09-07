@@ -621,34 +621,26 @@ def draft_quotation(tracked_email) -> None:
                 stock = candidate.total_available_stock
                 if stock is None:
                     stock = candidate.item_stock
-                if stock and stock > 0:
-                    matched_item = candidate
-                elif enquiry_item.brand.strip():
-                    # The customer specifically asked for this brand -- quote
-                    # it anyway even at 0 stock rather than silently dropping
-                    # the line, so nothing they explicitly requested goes
-                    # missing from the quotation. view_quotation_details
-                    # (so/views_quotation.py) checks live stock on every
-                    # quoted item and keeps the quotation Pending -- it is
-                    # never auto-approved while one is at 0 stock -- so a
-                    # human confirms availability before approving/sending.
-                    matched_item = candidate
-                    zero_stock_item = candidate
-                else:
+                # Always quote the best catalog match found, even at 0 stock,
+                # rather than silently dropping the line -- regardless of
+                # whether a specific brand was requested. view_quotation_details
+                # (so/views_quotation.py) checks live stock on every quoted item
+                # and keeps the quotation Pending -- it is never auto-approved
+                # while one is at 0 stock -- so a human confirms availability
+                # before approving/sending.
+                matched_item = candidate
+                if not stock or stock <= 0:
                     zero_stock_item = candidate
         enquiry_item.matched_item = matched_item
         enquiry_item.matched_price = matched_item.item_price if matched_item else None
         enquiry_item.matched_unit = match.get('unit') if match.get('unit') in ('pcs', 'ctn', 'roll') else 'pcs'
         agent_notes = ''
         zero_stock_note = ''
-        if zero_stock_item and matched_item:
+        if zero_stock_item:
             zero_stock_note = (
-                f"Requested brand ({enquiry_item.brand}) item {zero_stock_item.item_code} is currently 0 "
-                "stock -- quoted anyway since that brand was specifically requested; verify availability "
-                "before approving."
+                f"Catalog match {zero_stock_item.item_code} is currently 0 stock -- quoted anyway; "
+                "verify availability before approving."
             )
-        elif zero_stock_item:
-            zero_stock_note = f"Catalog match {zero_stock_item.item_code} is out of stock (0 available) -- not added to the quotation."
         else:
             agent_notes = match.get('notes', '') or ('' if matched_item else 'No confident catalog match.')
         default_brand_note = (
@@ -1114,13 +1106,11 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
         stock = candidate.total_available_stock
         if stock is None:
             stock = candidate.item_stock
-        if (not stock or stock <= 0) and not enquiry_item.brand.strip():
-            # No stock and no specific brand was requested -- skip rather
-            # than quote something the customer didn't ask for by name.
-            # When a brand WAS requested, fall through and quote it anyway
-            # (see the matching rule in draft_quotation above) so a
-            # brand-specific request never silently disappears.
-            continue
+        # Always quote the best match found, even at 0 stock, rather than
+        # skipping it -- regardless of brand (see the matching rule in
+        # draft_quotation above). view_quotation_details keeps the quotation
+        # Pending while any line is at 0 stock, so a human confirms
+        # availability before approving/sending.
 
         # A genuine brand switch on an already-matched line (as opposed to a
         # first-time match, or a same-brand item-code swap) -- flagged so the
@@ -1158,8 +1148,8 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             total_delta += line_total
 
         zero_stock_note = (
-            f"Requested brand ({enquiry_item.brand}) item {candidate.item_code} is currently 0 stock -- "
-            "quoted anyway since that brand was specifically requested; verify availability before approving."
+            f"Catalog match {candidate.item_code} is currently 0 stock -- quoted anyway; "
+            "verify availability before approving."
         ) if (not stock or stock <= 0) else ''
         default_brand_note = (
             f"{DEFAULT_BRAND_NOTE_PREFIX} ({candidate.item_firm})."

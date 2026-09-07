@@ -70,8 +70,8 @@ def search_similar_enquiries(client_email: str, keywords: str = "") -> str:
         lines = ["Recent enquiries that might be related:"]
         for e in matches[:5]:
             lines.append(
-                f"- \"{e.subject or '(no subject)'}\" received {e.received_at:%Y-%m-%d %H:%M}, "
-                f"status={e.status}, {e.items.count()} item(s)"
+                f"- [tracked_email_id={e.id}] \"{e.subject or '(no subject)'}\" received "
+                f"{e.received_at:%Y-%m-%d %H:%M}, status={e.status}, {e.items.count()} item(s)"
             )
         return "\n".join(lines)
     except Exception as exc:

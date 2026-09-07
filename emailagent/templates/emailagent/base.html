@@ -81,6 +81,49 @@
                 setTimeout(function () { f.style.transition = 'opacity .4s'; f.style.opacity = '0'; setTimeout(function(){ f.remove(); }, 400); }, i * 120);
             });
         }, 5000);
+
+        // A wide .items-table-wrap (requirement/LPO/submittal item tables)
+        // only gets a horizontal scrollbar along its bottom edge -- a
+        // native scrollbar's position can't be moved with CSS alone (a
+        // transform:rotateX flip was tried and confirmed, via a real
+        // rendered screenshot, to NOT relocate Chrome's native scrollbar).
+        // This adds a second, thin scrollbar ABOVE each such box instead,
+        // kept in sync with the real one so dragging either one scrolls
+        // both -- a proxy scrollbar, not a CSS trick.
+        function initTopScrollbars() {
+            document.querySelectorAll('.items-table-wrap').forEach(function (wrap) {
+                if (wrap.dataset.topScrollReady) return;
+                if (wrap.scrollWidth <= wrap.clientWidth) return; // nothing to scroll
+                wrap.dataset.topScrollReady = '1';
+
+                var topScroll = document.createElement('div');
+                topScroll.className = 'items-table-wrap-top-scroll';
+                var spacer = document.createElement('div');
+                spacer.style.width = wrap.scrollWidth + 'px';
+                topScroll.appendChild(spacer);
+                wrap.parentNode.insertBefore(topScroll, wrap);
+
+                var syncing = false;
+                topScroll.addEventListener('scroll', function () {
+                    if (syncing) return;
+                    syncing = true; wrap.scrollLeft = topScroll.scrollLeft; syncing = false;
+                });
+                wrap.addEventListener('scroll', function () {
+                    if (syncing) return;
+                    syncing = true; topScroll.scrollLeft = wrap.scrollLeft; syncing = false;
+                });
+            });
+        }
+        document.addEventListener('DOMContentLoaded', initTopScrollbars);
+        window.addEventListener('load', initTopScrollbars); // catches width changes once images/fonts finish
+        window.addEventListener('resize', function () {
+            document.querySelectorAll('.items-table-wrap[data-top-scroll-ready]').forEach(function (wrap) {
+                var topScroll = wrap.previousElementSibling;
+                if (topScroll && topScroll.classList.contains('items-table-wrap-top-scroll')) {
+                    topScroll.firstElementChild.style.width = wrap.scrollWidth + 'px';
+                }
+            });
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

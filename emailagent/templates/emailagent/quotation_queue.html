@@ -15,7 +15,7 @@
 
 <div class="u-wrap u-page">
     <div class="sec-head">
-        <h2>All Drafts <span class="count">({{ drafts|length }})</span></h2>
+        <h2>All Drafts <span class="count">({{ total_count }})</span></h2>
     </div>
 
     {% if drafts %}
@@ -70,7 +70,15 @@
                         {% if not draft.matched_customer %}
                             <div class="item-note"><i class="fas fa-user"></i> No confident customer match -- quoted as walk-in{% if draft.customer_guess %} ({{ draft.customer_guess }}){% endif %}.</div>
                         {% endif %}
-                        {% if draft.status == 'confirmed' and not draft.is_empty_quotation and not draft.unmatched_item_issues and draft.matched_customer %}—{% endif %}
+                        {% with reminders=draft.quotation.merged_drafts.all %}
+                        {% if reminders %}
+                            <div class="item-note">
+                                <i class="fas fa-bell"></i> {{ reminders|length }} reminder{{ reminders|length|pluralize }} received -- last
+                                {% for r in reminders %}{% if forloop.last %}{{ r.tracked_email.received_at|date:"d M Y" }}{% endif %}{% endfor %}.
+                            </div>
+                        {% endif %}
+                        {% if draft.status == 'confirmed' and not draft.is_empty_quotation and not draft.unmatched_item_issues and draft.matched_customer and not reminders %}—{% endif %}
+                        {% endwith %}
                     </td>
                     <td>{{ draft.tracked_email.received_at|date:"d M Y, H:i" }}</td>
                     <td class="actions">
@@ -89,6 +97,25 @@
             </tbody>
         </table>
     </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="page-bar">
+        {% if page_obj.has_previous %}
+            <a href="?page=1"><i class="fas fa-angles-left"></i> First</a>
+            <a href="?page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i> Prev</a>
+        {% else %}
+            <span class="disabled"><i class="fas fa-angles-left"></i> First</span>
+            <span class="disabled"><i class="fas fa-chevron-left"></i> Prev</span>
+        {% endif %}
+        <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">Next <i class="fas fa-chevron-right"></i></a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">Last <i class="fas fa-angles-right"></i></a>
+        {% else %}
+            <span class="disabled">Next <i class="fas fa-chevron-right"></i></span>
+            <span class="disabled">Last <i class="fas fa-angles-right"></i></span>
+        {% endif %}
+    </div>
+    {% endif %}
     {% else %}
     <div class="card-x">
         <div class="empty-x">
