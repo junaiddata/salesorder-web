@@ -138,16 +138,35 @@
     }
 
     .filters-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 16px;
-      padding: 20px;
+      padding: 20px 20px 0;
+      align-items: end;
     }
 
-    @media (min-width: 1024px) {
-      .filters-grid {
-        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr 1fr auto;
-      }
+    .field {
+      flex: 0 1 140px;
+      min-width: 0;
+    }
+
+    .field-search { flex: 1 1 220px; }
+    .field-wide { flex: 0 1 230px; }
+    .field-date { flex: 0 1 165px; flex-shrink: 0; min-width: 165px; }
+    .field-narrow { flex: 0 1 120px; }
+    .field-page { flex: 0 1 110px; }
+
+    .filters-break {
+      flex-basis: 100%;
+      width: 0;
+    }
+
+    .filters-actions {
+      display: flex;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px 20px 20px;
     }
 
     .field label {
@@ -865,42 +884,60 @@
 
     <!-- Filters -->
     <div class="card filters-card">
-      <form id="filters" class="filters-grid" method="get">
+      <form id="filters" method="get">
         <input type="hidden" name="approval_status" value="{{ filters.approval_status }}">
         <input type="hidden" name="store" id="store-input" value="{{ filters.store }}">
-        <div class="field">
+        <div class="filters-grid">
+        <div class="field field-search">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="SO No, Customer, Salesman, LPO Ref...">
         </div>
 
-        <div class="field">
+        <div class="field field-wide">
           <label>Salesman</label>
-          <div class="multi-select" id="salesman-wrapper">
-            <div class="select-box" id="salesman-trigger">
-              <span id="salesman-text">All Salesmen</span>
+          <div class="multi-select firm-ms" id="salesman-wrapper">
+            <div class="select-box" id="salesman-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+              <span class="select-box-text placeholder" id="salesman-display">All Salesmen</span>
+              <button type="button" class="select-box-clear" id="salesman-clear" title="Clear all" aria-label="Clear selection">
+                <i class="fas fa-times"></i>
+              </button>
+              <i class="fas fa-chevron-down select-box-chevron"></i>
             </div>
-            <div class="options-container" id="salesman-options">
-              {% for s in salesmen %}
-                <label class="option-label">
+            <div class="options-container" id="salesman-options" role="listbox" aria-label="Select salesmen">
+              <div class="options-header">
+                <div class="options-search-wrap">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="salesman-search" class="options-search" placeholder="Search salesmen…" autocomplete="off" aria-label="Search salesmen">
+                </div>
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" id="salesman-select-all">Select All</button>
+                  <button type="button" class="options-action-btn danger" id="salesman-clear-all">Clear All</button>
+                </div>
+              </div>
+              <div class="options-list" id="salesman-options-list" role="group">
+                {% for s in salesmen %}
+                <label class="option-label" data-value="{{ s }}" role="option">
                   <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
-                  {{ s }}
+                  <span class="option-text">{{ s }}</span>
                 </label>
-              {% endfor %}
+                {% endfor %}
+              </div>
+              <div class="options-empty" id="salesman-no-results" style="display:none;">No salesmen found</div>
             </div>
           </div>
         </div>
 
-        <div class="field">
+        <div class="field field-date">
           <label>Start Date</label>
           <input class="input" type="date" name="start" value="{{ filters.start }}">
         </div>
 
-        <div class="field">
+        <div class="field field-date">
           <label>End Date</label>
           <input class="input" type="date" name="end" value="{{ filters.end }}">
         </div>
 
-        <div class="field">
+        <div class="field field-narrow">
           <label>Status</label>
           <select class="select" name="status">
             <option value="">All</option>
@@ -909,7 +946,7 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field field-narrow">
           <label>Amount Range</label>
           <select class="select" name="total">
             <option value="">All</option>
@@ -922,7 +959,9 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="filters-break"></div>
+
+        <div class="field field-narrow">
           <label>Remarks</label>
           <select class="select" name="remarks">
             <option value="">All</option>
@@ -931,7 +970,7 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field field-wide">
           <label>Firm / manufacturer</label>
           <div class="multi-select firm-ms" id="so-firm-wrapper">
             <div class="select-box" id="so-firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
@@ -965,12 +1004,13 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field field-page">
           <label>Per Page</label>
           <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
         </div>
+        </div>
 
-        <div class="field" style="align-self:end; display:flex; gap:8px;">
+        <div class="filters-actions">
           <a href="{% url 'salesorder_list' %}" class="btn btn-secondary" id="clear-filters-btn" style="text-decoration:none;" onclick="sessionStorage.removeItem('so_list_filters');">Clear</a>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
@@ -1246,70 +1286,29 @@
     }
   });
 
-  // Multi-Select
+  // Searchable multi-select (used for both Salesman and Firm/manufacturer)
   document.addEventListener("DOMContentLoaded", function() {
-    const wrapper = document.getElementById('salesman-wrapper');
-    const trigger = document.getElementById('salesman-trigger');
-    const options = document.getElementById('salesman-options');
-    const textSpan = document.getElementById('salesman-text');
-    const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
-
-    trigger.addEventListener('click', e => {
-      e.stopPropagation();
-      options.classList.toggle('active');
-    });
-
-    options.addEventListener('click', e => e.stopPropagation());
-
-    function updateLabel() {
-      const checked = Array.from(getCheckboxes()).filter(c => c.checked);
-      if (checked.length === 0) {
-        textSpan.textContent = "All Salesmen";
-        textSpan.style.opacity = "0.6";
-      } else if (checked.length === 1) {
-        textSpan.textContent = checked[0].value;
-        textSpan.style.opacity = "1";
-      } else {
-        textSpan.textContent = `${checked.length} Selected`;
-        textSpan.style.opacity = "1";
-      }
-    }
-
-    updateLabel();
-
-    getCheckboxes().forEach(box => {
-      box.addEventListener('change', function() {
-        updateLabel();
-        document.getElementById('filters').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-      });
-    });
-
-    document.addEventListener('click', e => {
-      if (!wrapper.contains(e.target)) options.classList.remove('active');
-    });
-  });
-
-  document.addEventListener("DOMContentLoaded", function() {
-    (function() {
-      var firmWrapper = document.getElementById('so-firm-wrapper');
-      var firmTrigger = document.getElementById('so-firm-trigger');
-      var firmOptions = document.getElementById('so-firm-options');
-      var firmList = document.getElementById('so-firm-options-list');
-      var firmDisplay = document.getElementById('so-firm-display');
-      var firmSearch = document.getElementById('so-firm-search');
-      var firmClearBtn = document.getElementById('so-firm-clear');
-      var firmSelectAll = document.getElementById('so-firm-select-all');
-      var firmClearAll = document.getElementById('so-firm-clear-all');
-      var firmNoResults = document.getElementById('so-firm-no-results');
-      if (!firmWrapper || !firmTrigger || !firmOptions || !firmList) return;
+    function initSearchableMultiSelect(opts) {
+      var wrapper = document.getElementById(opts.wrapperId);
+      var trigger = document.getElementById(opts.triggerId);
+      var options = document.getElementById(opts.optionsId);
+      var list = document.getElementById(opts.listId);
+      var display = document.getElementById(opts.displayId);
+      var search = document.getElementById(opts.searchId);
+      var clearBtn = document.getElementById(opts.clearId);
+      var selectAllBtn = document.getElementById(opts.selectAllId);
+      var clearAllBtn = document.getElementById(opts.clearAllId);
+      var noResults = document.getElementById(opts.noResultsId);
+      var placeholder = opts.placeholder;
+      if (!wrapper || !trigger || !options || !list) return;
 
       var filtersForm = document.getElementById('filters');
 
       function getCheckboxes() {
-        return firmList.querySelectorAll('input[type="checkbox"]');
+        return list.querySelectorAll('input[type="checkbox"]');
       }
       function getLabels() {
-        return Array.from(firmList.querySelectorAll('.option-label'));
+        return Array.from(list.querySelectorAll('.option-label'));
       }
       function getVisibleLabels() {
         return getLabels().filter(function(l) { return !l.classList.contains('option-hidden'); });
@@ -1326,26 +1325,26 @@
         var frag = document.createDocumentFragment();
         checked.forEach(function(l) { frag.appendChild(l); });
         unchecked.forEach(function(l) { frag.appendChild(l); });
-        firmList.appendChild(frag);
+        list.appendChild(frag);
       }
       function updateDisplay() {
         var boxes = Array.from(getCheckboxes());
         var checked = boxes.filter(function(c) { return c.checked; });
         var count = checked.length;
-        if (firmClearBtn) firmClearBtn.classList.toggle('visible', count > 0);
+        if (clearBtn) clearBtn.classList.toggle('visible', count > 0);
         if (count === 0) {
-          firmDisplay.className = 'select-box-text placeholder';
-          firmDisplay.textContent = 'Select firm(s)…';
+          display.className = 'select-box-text placeholder';
+          display.textContent = placeholder;
         } else if (count === 1) {
-          firmDisplay.className = 'select-box-text';
-          firmDisplay.innerHTML = '';
+          display.className = 'select-box-text';
+          display.innerHTML = '';
           var badge = document.createElement('span');
           badge.className = 'select-badge';
           badge.textContent = checked[0].value;
-          firmDisplay.appendChild(badge);
+          display.appendChild(badge);
         } else if (count <= 2) {
-          firmDisplay.className = 'select-box-text';
-          firmDisplay.innerHTML = '';
+          display.className = 'select-box-text';
+          display.innerHTML = '';
           var container = document.createElement('span');
           container.className = 'select-box-badges';
           checked.forEach(function(cb) {
@@ -1354,10 +1353,10 @@
             b.textContent = cb.value;
             container.appendChild(b);
           });
-          firmDisplay.appendChild(container);
+          display.appendChild(container);
         } else {
-          firmDisplay.className = 'select-box-text';
-          firmDisplay.innerHTML = '';
+          display.className = 'select-box-text';
+          display.innerHTML = '';
           var container = document.createElement('span');
           container.className = 'select-box-badges';
           var badge = document.createElement('span');
@@ -1368,7 +1367,7 @@
           more.className = 'select-badge-count';
           more.textContent = '+' + (count - 1) + ' more';
           container.appendChild(more);
-          firmDisplay.appendChild(container);
+          display.appendChild(container);
         }
       }
       function triggerFilterReload() {
@@ -1377,41 +1376,41 @@
         }
       }
       function openDropdown() {
-        firmOptions.classList.add('active');
-        firmTrigger.classList.add('active');
-        firmTrigger.setAttribute('aria-expanded', 'true');
+        options.classList.add('active');
+        trigger.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
         sortLabels();
-        setTimeout(function() { if (firmSearch) firmSearch.focus(); }, 50);
+        setTimeout(function() { if (search) search.focus(); }, 50);
       }
       function closeDropdown() {
-        firmOptions.classList.remove('active');
-        firmTrigger.classList.remove('active');
-        firmTrigger.setAttribute('aria-expanded', 'false');
-        if (firmSearch) firmSearch.value = '';
+        options.classList.remove('active');
+        trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (search) search.value = '';
         getLabels().forEach(function(l) { l.classList.remove('option-hidden'); });
-        if (firmNoResults) firmNoResults.style.display = 'none';
+        if (noResults) noResults.style.display = 'none';
       }
       function toggleDropdown() {
-        if (firmOptions.classList.contains('active')) closeDropdown();
+        if (options.classList.contains('active')) closeDropdown();
         else openDropdown();
       }
-      firmTrigger.addEventListener('click', function(e) {
+      trigger.addEventListener('click', function(e) {
         if (e.target.closest('.select-box-clear')) return;
         e.preventDefault();
         e.stopPropagation();
         toggleDropdown();
       });
-      firmTrigger.addEventListener('keydown', function(e) {
+      trigger.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           toggleDropdown();
         }
       });
-      firmOptions.addEventListener('click', function(e) {
+      options.addEventListener('click', function(e) {
         e.stopPropagation();
       });
-      if (firmClearBtn) {
-        firmClearBtn.addEventListener('click', function(e) {
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
           getCheckboxes().forEach(function(cb) { cb.checked = false; });
@@ -1419,8 +1418,8 @@
           triggerFilterReload();
         });
       }
-      if (firmSelectAll) {
-        firmSelectAll.addEventListener('click', function() {
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
           getVisibleLabels().forEach(function(l) {
             var cb = l.querySelector('input[type="checkbox"]');
             if (cb) cb.checked = true;
@@ -1430,22 +1429,22 @@
           triggerFilterReload();
         });
       }
-      if (firmClearAll) {
-        firmClearAll.addEventListener('click', function() {
+      if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', function() {
           getCheckboxes().forEach(function(cb) { cb.checked = false; });
           updateDisplay();
           sortLabels();
           triggerFilterReload();
         });
       }
-      firmList.addEventListener('change', function(e) {
+      list.addEventListener('change', function(e) {
         if (e.target.type === 'checkbox') {
           updateDisplay();
           triggerFilterReload();
         }
       });
-      if (firmSearch) {
-        firmSearch.addEventListener('input', function() {
+      if (search) {
+        search.addEventListener('input', function() {
           var term = this.value.toLowerCase().trim();
           var labels = getLabels();
           var visibleCount = 0;
@@ -1457,18 +1456,46 @@
             label.classList.toggle('option-hidden', !match);
             if (match) visibleCount++;
           });
-          if (firmNoResults) firmNoResults.style.display = visibleCount === 0 ? 'block' : 'none';
+          if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
         });
-        firmSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+        search.addEventListener('click', function(e) { e.stopPropagation(); });
       }
       document.addEventListener('click', function(e) {
-        if (!firmWrapper.contains(e.target)) closeDropdown();
+        if (!wrapper.contains(e.target)) closeDropdown();
       });
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') closeDropdown();
       });
       updateDisplay();
-    })();
+    }
+
+    initSearchableMultiSelect({
+      wrapperId: 'salesman-wrapper',
+      triggerId: 'salesman-trigger',
+      optionsId: 'salesman-options',
+      listId: 'salesman-options-list',
+      displayId: 'salesman-display',
+      searchId: 'salesman-search',
+      clearId: 'salesman-clear',
+      selectAllId: 'salesman-select-all',
+      clearAllId: 'salesman-clear-all',
+      noResultsId: 'salesman-no-results',
+      placeholder: 'All Salesmen',
+    });
+
+    initSearchableMultiSelect({
+      wrapperId: 'so-firm-wrapper',
+      triggerId: 'so-firm-trigger',
+      optionsId: 'so-firm-options',
+      listId: 'so-firm-options-list',
+      displayId: 'so-firm-display',
+      searchId: 'so-firm-search',
+      clearId: 'so-firm-clear',
+      selectAllId: 'so-firm-select-all',
+      clearAllId: 'so-firm-clear-all',
+      noResultsId: 'so-firm-no-results',
+      placeholder: 'Select firm(s)…',
+    });
   });
 
   // Remark: click to toggle full text
