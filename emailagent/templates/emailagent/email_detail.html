@@ -27,7 +27,7 @@
                     <i class="fas fa-arrow-up-right-from-square"></i> Open in Gmail
                 </a>
                 {% else %}
-                <a href="{% url 'emailagent:open_webmail' email.pk %}" target="_blank" rel="noopener" class="btn-x" title="Open this exact email in webmail">
+                <a href="{% url 'emailagent:open_webmail' email.pk %}" target="_blank" rel="noopener" class="btn-x" title="Open this mailbox's Inbox in webmail">
                     <i class="fas fa-arrow-up-right-from-square"></i> Open in Webmail
                 </a>
                 {% endif %}
@@ -78,7 +78,7 @@
         <div class="email-meta-grid">
             <div class="email-meta-item">
                 <span class="label">From</span>
-                <span class="value">{{ email.sender_name|default:email.sender }} &lt;{{ email.sender }}&gt;</span>
+                <span class="value">{{ email.sender_name|default:email.sender }} {{ email.sender }}</span>
             </div>
             <div class="email-meta-item">
                 <span class="label">To</span>
@@ -332,7 +332,7 @@
                     {% if t.source == 'gmail' %}
                     <a href="https://mail.google.com/mail/u/0/#all/{{ t.gmail_message_id }}" target="_blank" rel="noopener" class="btn-x sm" title="Open in Gmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
                     {% else %}
-                    <a href="{% url 'emailagent:open_webmail' t.pk %}" target="_blank" rel="noopener" class="btn-x sm" title="Open this exact email in webmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                    <a href="{% url 'emailagent:open_webmail' t.pk %}" target="_blank" rel="noopener" class="btn-x sm" title="Open this mailbox's Inbox in webmail"><i class="fas fa-arrow-up-right-from-square"></i></a>
                     {% endif %}
                 </div>
             </div>

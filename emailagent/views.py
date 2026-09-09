@@ -156,13 +156,14 @@ def open_webmail(request, pk):
     Authenticates fresh via Zimbra's own SOAP AuthRequest API (see
     zimbra_client.py) using the same credentials outlook_client.py already
     uses over IMAP for this mailbox, then redirects straight to that
-    message's content via Zimbra's REST content servlet -- landing already
-    logged in, on the exact email, with no clicks inside Zimbra itself.
+    mailbox's own Inbox -- landing already logged in, on the mail list,
+    with no separate login step inside Zimbra itself.
 
-    Falls back to the plain webmail login page if the email predates
-    imap_uid being captured, or if the Zimbra auth call fails for any
+    Falls back to the plain webmail login page if this source has no IMAP
+    credentials configured, or if the Zimbra auth call fails for any
     reason (rotated password, Zimbra unreachable, etc.) -- an inbox a
-    human can search themselves is strictly better than a broken redirect.
+    human can log into themselves is strictly better than a broken
+    redirect.
     """
     from . import zimbra_client
 
@@ -175,7 +176,7 @@ def open_webmail(request, pk):
     }
     username, password = creds_by_source.get(tracked_email.source, (None, None))
 
-    if not (tracked_email.imap_uid and username and password):
+    if not (username and password):
         return redirect(zimbra_client.WEBMAIL_BASE + '/')
 
     try:
@@ -184,7 +185,7 @@ def open_webmail(request, pk):
         logger.warning("open_webmail: Zimbra auth failed for TrackedEmail %s: %s", pk, exc)
         return redirect(zimbra_client.WEBMAIL_BASE + '/')
 
-    return redirect(zimbra_client.message_url(auth_token, tracked_email.imap_uid))
+    return redirect(zimbra_client.inbox_url(auth_token))
 
 
 @login_required
@@ -389,15 +390,26 @@ def lpo_request_recheck_match(request, pk):
         return redirect('emailagent:lpo_request_review', pk=pk)
 
     if lpo_request.status == LPORequest.STATUS_CONFIRMED:
+        # A re-check can confirm WITHOUT a matching quotation: when no usable
+        # candidate is found, match_and_maybe_convert falls back to building
+        # the order straight from the LPO's own items
+        # (build_sales_order_directly_from_lpo), leaving matched_quotation
+        # None. Dereferencing it unguarded here raised AttributeError on that
+        # path -- a 500 shown to the user even though the Sales Order had in
+        # fact been created. Mirrors supervisor.evaluate_lpo, which already
+        # guards the same field this way.
+        quotation_number = (lpo_request.matched_quotation.quotation_number
+                            if lpo_request.matched_quotation_id else '—')
         recorder.finish(
-            summary=(f"lpo={lpo_request.lpo_number or '—'} matched={lpo_request.matched_quotation.quotation_number} "
+            summary=(f"lpo={lpo_request.lpo_number or '—'} matched={quotation_number} "
                       f"sales_order={lpo_request.sales_order.order_number} (auto, re-checked)"),
             quotation=lpo_request.matched_quotation, sales_order=lpo_request.sales_order,
         )
         messages.success(
             request,
-            f'Match found -- auto-created Sales Order {lpo_request.sales_order.order_number} from '
-            f'{lpo_request.matched_quotation.quotation_number}.',
+            f'Match found -- auto-created Sales Order {lpo_request.sales_order.order_number} '
+            + (f'from {quotation_number}.' if lpo_request.matched_quotation_id
+               else "directly from the LPO's own items."),
         )
     else:
         recorder.finish(

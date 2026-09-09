@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from so.models import Quotation, QuotationItem, Customer, Items
 from emailagent.models import AdditionalQuotationDraft, QuotationDraft
 
-from emailagent.tools import lookup_customer, lookup_item_master
+from emailagent.tools import PIPE_SIZE_MM_TO_INCH_TEXT, lookup_customer, lookup_item_master
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +150,11 @@ _ITEM_MATCH_RETRY_RULES = (
     "-- it means try again differently. Vary each retry: first the requirement "
     "as given, then just the core noun/category (e.g. \"floor drain\" instead "
     "of the full sentence), then the size converted to the other unit system "
-    "(mm<->inch: 25mm=1in, 50mm=2in, 100mm=4in, 150mm=6in, 200mm=8in), then the "
+    f"(mm<->inch, catalog-verified -- NOT the generic mm/25.4 chart: {PIPE_SIZE_MM_TO_INCH_TEXT}), "
+    "then the "
     "brand alone. Only after exhausting these should you leave item_code empty "
     "-- never pick a loosely related item just to fill it in, and never stop "
-    "after a single search per item. Items with 0 stock are never added to the "
-    "quotation regardless of what you pick, so when lookup_item_master shows "
+    "after a single search per item. When lookup_item_master shows "
     "more than one reasonable candidate, prefer one with stock > 0 over an "
     "otherwise-equal match that shows stock=0.\n\n"
     "Pipe-fitting items are especially prone to trade-name mismatches between "
@@ -353,6 +353,45 @@ _LENGTH_UNIT_RE = re.compile(
 # diameter/size), so take that one.
 _CATALOG_LENGTH_RE = re.compile(r'(\d+(?:\.\d+)?)\s*MTR', re.IGNORECASE)
 
+# Fixed per-piece pipe lengths (meters), one entry per pipe standard/product
+# line, taken from the company's own pipe-length reference sheet -- checked
+# ahead of _CATALOG_LENGTH_RE below (rather than falling straight to it)
+# because these specific families' own item_description text is either
+# missing the length entirely, or (for BSEN1329) occasionally states a
+# different figure than the sheet's fixed standard length for that family.
+# Each entry is (predicate(description_upper, item_firm) -> bool, meters);
+# checked in order, first match wins. Every predicate below was confirmed
+# against the real so.Items rows it's meant to match:
+#   - UPVC High-Pressure (BS3505/BSEN3505/BSEN1452/SCH80 "CL-E"/Class E) --
+#     6m, both Cosmoplast (item_firm='COSMO - HP PIPES') and GF
+#     (item_firm='GF-HP'). Every GF-HP row and several COSMO - HP PIPES
+#     rows have NO length at all in their description (e.g. "PVC HP GF
+#     PIPE 8", "PVC HP COSMO PIPE 6 CLASS E BSEN1452"). Restricted to
+#     these two firms -- other HP-branded lines we stock (e.g. Atlas's
+#     "PVC HP MPI PIPE ... X5.8MTR") are NOT 6m.
+#   - UPVC BSEN1329 (Cosmoplast) -- 5.8m. Most rows already say "X5.8
+#     MTR", but a handful say "X6MTR" or "X4 MTR" instead (e.g. items
+#     200425, 269502/269507) -- trusted as 5.8m uniformly per the
+#     reference sheet rather than those inconsistent outliers.
+#   - mUPVC BS5255/BS-5255 -- 4m (all brands; catalog rows already say
+#     "X4MTR", this mainly guards a future row that doesn't).
+#   - PPR SDR6 PN20 -- 4m, Cosmoplast (item_firm='COSMO - PPR PIPES', e.g.
+#     "PPR COSMO PIPE 90MM SDR6 PN20" -- no row in this line states a
+#     length at all) and Raktherm's equivalent line, which is named
+#     differently: "SDR 6" (with a space, no "PN20" at all; item_firm=
+#     'RAKTHERM PPR PIPES', e.g. "PPR RAKtherm PIPE 40MM SDR 6"). NOT
+#     matched against Cosmoplast's many OTHER PPR lines we also stock at
+#     other pressure ratings (PN16/PN25, SDR7.4/SDR5, Faser/Fiber
+#     Composite, AL/PE, STABI, ...), which the reference sheet doesn't
+#     cover and aren't necessarily 4m.
+_FIXED_PIPE_LENGTHS_METERS = (
+    (lambda desc, firm: firm in ('GF-HP', 'COSMO - HP PIPES') and 'PIPE' in desc, 6.0),
+    (lambda desc, firm: 'BSEN1329' in desc, 5.8),
+    (lambda desc, firm: 'BS5255' in desc or 'BS-5255' in desc, 4.0),
+    (lambda desc, firm: 'SDR6' in desc and 'PN20' in desc, 4.0),
+    (lambda desc, firm: firm == 'RAKTHERM PPR PIPES' and 'SDR 6' in desc, 4.0),
+)
+
 
 def _is_length_unit(raw_unit) -> bool:
     token = (raw_unit or '').strip().lower().rstrip('.')
@@ -360,12 +399,25 @@ def _is_length_unit(raw_unit) -> bool:
 
 
 def _catalog_length_per_unit(matched_item):
-    """Best-effort per-piece/per-roll length (in meters) parsed from the
-    catalog item's own description. None if it can't be determined -- callers
-    must not guess a conversion factor in that case."""
+    """Best-effort per-piece/per-roll length (in meters) for `matched_item`.
+    None if it can't be determined -- callers must not guess a conversion
+    factor in that case.
+
+    Checks the fixed reference lengths first (see
+    _FIXED_PIPE_LENGTHS_METERS above), since those families' own
+    description text is unreliable/absent/inconsistent for this; otherwise
+    falls back to parsing the length out of the description itself, which
+    is fine for other pipe families not on that list (e.g. "PIPE
+    6X6MTR")."""
     if not matched_item or not matched_item.item_description:
         return None
-    matches = _CATALOG_LENGTH_RE.findall(matched_item.item_description)
+    description = matched_item.item_description
+    description_upper = description.upper()
+    firm = matched_item.item_firm or ''
+    for predicate, meters in _FIXED_PIPE_LENGTHS_METERS:
+        if predicate(description_upper, firm):
+            return meters
+    matches = _CATALOG_LENGTH_RE.findall(description)
     if not matches:
         return None
     try:
@@ -634,15 +686,19 @@ def draft_quotation(tracked_email) -> None:
         enquiry_item.matched_item = matched_item
         enquiry_item.matched_price = matched_item.item_price if matched_item else None
         enquiry_item.matched_unit = match.get('unit') if match.get('unit') in ('pcs', 'ctn', 'roll') else 'pcs'
-        agent_notes = ''
+        # The agent's own per-line note is kept whatever the stock position:
+        # it previously only survived when stock was fine, so exactly the
+        # lines needing the most scrutiny (0 stock) lost warnings like
+        # "brand differs from requested" and showed only the stock notice.
+        # build_match_notes truncates the agent's free text, never the fixed
+        # markers, so keeping both is safe within match_notes' 255 chars.
+        agent_notes = match.get('notes', '') or ('' if matched_item else 'No confident catalog match.')
         zero_stock_note = ''
         if zero_stock_item:
             zero_stock_note = (
                 f"Catalog match {zero_stock_item.item_code} is currently 0 stock -- quoted anyway; "
                 "verify availability before approving."
             )
-        else:
-            agent_notes = match.get('notes', '') or ('' if matched_item else 'No confident catalog match.')
         default_brand_note = (
             # Python-authored (not the agent's own words) so it's reliably
             # detectable later -- see DEFAULT_BRAND_NOTE_PREFIX -- when the

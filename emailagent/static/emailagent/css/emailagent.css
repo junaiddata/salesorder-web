@@ -72,8 +72,13 @@ tr.clickable-row:hover {
 
 /* ── Email detail page ────────────────────────────────────────────── */
 
+/* Matches the 1600px every other Email Agent page already gets from .u-wrap
+   above -- this page carries the same wide tables (Requirement Items has 8
+   columns, plus the quotation/LPO tables below it), and the old 860px cap
+   left them scrolling sideways inside the card while the rest of the section
+   had room to spare. */
 .email-detail-page {
-    max-width: 860px;
+    max-width: 1600px;
 }
 
 .back-link {

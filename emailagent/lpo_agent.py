@@ -124,9 +124,23 @@ def find_matching_quotation(lpo_request):
                     matched_lines += 1
             item_score = (matched_lines / len(lpo_item_tokens)) if lpo_item_tokens else 0.0
 
+            # Compared like-for-like: Quotation.grand_total is stored EXCL.
+            # VAT (see so/views_quotation.py, which adds the 5% only when
+            # displaying/printing), so the LPO's own excl-VAT total is the
+            # right counterpart. This used to compare it against
+            # LPORequest.total_amount, which is the total INCL. VAT -- a
+            # genuinely matching quotation then differed by the whole 5%,
+            # far outside this 2% tolerance, so the bonus never applied when
+            # it should have (and could apply to an unrelated quotation
+            # whose excl-VAT total happened to equal this LPO's incl-VAT one).
+            # Falls back to deriving it from the incl-VAT figure when the LPO
+            # didn't break the excl-VAT line out separately.
+            lpo_excl_vat = lpo_request.total_excl_vat
+            if not lpo_excl_vat and lpo_request.total_amount:
+                lpo_excl_vat = lpo_request.total_amount / 1.05
             amount_bonus = 0.0
-            if lpo_request.total_amount and q.grand_total:
-                if abs(lpo_request.total_amount - q.grand_total) <= 0.02 * q.grand_total:
+            if lpo_excl_vat and q.grand_total:
+                if abs(lpo_excl_vat - q.grand_total) <= 0.02 * q.grand_total:
                     amount_bonus = 0.1
 
             score = min(1.0, item_score + amount_bonus)
@@ -163,6 +177,13 @@ _ITEM_MATCH_MIN_TOKENS = 2
 # little signal to match against the 10k+ item catalog safely -- treated as
 # unmatched rather than guessing.
 
+_ITEM_MATCH_SCAN_LIMIT = 2000
+# Upper bound on rows _match_catalog_item will examine after narrowing, set
+# well above any legitimate narrowing (the widest measured on this catalog is
+# ~350 rows) so it acts purely as a safety stop. Hitting it means the line was
+# too vague to narrow usefully, which is treated as "no confident match"
+# rather than matching against an arbitrary subset.
+
 
 def _match_catalog_item(description):
     """Best-effort match of one LPO line's free-text description to a real
@@ -188,8 +209,26 @@ def _match_catalog_item(description):
     for token in narrowing_tokens:
         candidates_qs = candidates_qs.filter(item_description__icontains=token)
 
+    # Every row the narrowing left is examined -- no arbitrary window. A
+    # two-word narrowing routinely exceeds 200 rows on this catalog
+    # (measured: "pipe"+"upvc" 212, "valve"+"brass" 254, "elbow"+"pvc" 346),
+    # and the old unordered [:200] slice both hid the correct item and, worse,
+    # could leave exactly one OTHER superset row inside that arbitrary window
+    # -- which then passed the "unique match" test and went onto a real Sales
+    # Order that nobody reviews. Ordering is fixed so the same LPO line always
+    # resolves the same way. The subset test below is what actually decides a
+    # match, so this only bounds a pathological narrowing, and reaching the
+    # bound means "too vague to be sure" -- which must not auto-create.
+    candidates = list(candidates_qs.order_by('item_code')[:_ITEM_MATCH_SCAN_LIMIT])
+    if len(candidates) >= _ITEM_MATCH_SCAN_LIMIT:
+        logger.warning(
+            f"_match_catalog_item: {description!r} narrowed to {_ITEM_MATCH_SCAN_LIMIT}+ candidates "
+            "-- too broad to match safely, leaving unmatched for human review."
+        )
+        return None
+
     matches = [
-        item for item in candidates_qs[:200]
+        item for item in candidates
         if hint_tokens <= _tokens(item.item_description)
     ]
     return matches[0] if len(matches) == 1 else None
@@ -229,7 +268,7 @@ def build_sales_order_directly_from_lpo(lpo_request):
     having skipped quotation review entirely."""
     from django.db import transaction
 
-    from emailagent.quotation_agent import _parse_quantity, _resolve_price
+    from emailagent.quotation_agent import _is_length_unit, _parse_quantity, _resolve_price
     from so.models import OrderItem, SalesOrder
 
     customer = _resolve_single_customer(lpo_request.customer_name_stated)
@@ -242,6 +281,43 @@ def build_sales_order_directly_from_lpo(lpo_request):
     lpo_items = list(lpo_request.items.all())
     if not lpo_items:
         return None, "No line items were extracted from this LPO."
+
+    # A line ordered in METERS cannot be turned into a piece count here
+    # without the same catalog-length conversion quotations use -- and unlike
+    # a quotation, nothing on this path is reviewed before it becomes a real
+    # order. Left unconverted (as it was), "24 MTR" of 6m pipe silently
+    # became 24 pieces = 144 m, six times what the customer ordered. Rather
+    # than convert unreviewed, these go to a human, consistent with this
+    # function's all-or-nothing contract. Ordinary count units are unaffected.
+    length_unit_lines = [
+        f"{item.description[:60]} ({item.quantity} {item.unit})"
+        for item in lpo_items if _is_length_unit(item.unit)
+    ]
+    if length_unit_lines:
+        return None, (
+            "Line(s) are ordered by length, not piece count, so the quantity needs converting "
+            "against each item's per-piece length before an order can be raised: "
+            + "; ".join(length_unit_lines[:10])
+        )
+
+    # _parse_quantity falls back to 1 for anything it can't read ("", "TBD",
+    # "as required"). That is a reasonable default on the quotation path,
+    # where a person checks the figure -- here it would put a silent
+    # quantity of 1 on a real order, so an unreadable quantity is escalated
+    # instead of defaulted.
+    unreadable_quantities = []
+    for item in lpo_items:
+        try:
+            if float(str(item.quantity).strip()) > 0:
+                continue
+        except (TypeError, ValueError, AttributeError):
+            pass
+        unreadable_quantities.append(f"{item.description[:60]} (quantity: '{item.quantity}')")
+    if unreadable_quantities:
+        return None, (
+            "Line(s) have no usable quantity, so the order cannot be raised automatically: "
+            + "; ".join(unreadable_quantities[:10])
+        )
 
     resolved = []
     unmatched_descriptions = []

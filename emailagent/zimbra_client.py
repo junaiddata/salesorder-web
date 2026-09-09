@@ -1,11 +1,8 @@
 """webmail.emailapps.net (Zimbra) deep-link helper -- used only by
-views.open_webmail to jump straight to one already-fetched message's
-original content instead of just opening the inbox. Zimbra's classic web
-client never puts the open message's identity in the browser URL during
-normal use (clicking through the inbox always shows the same #1 fragment),
-so there is no link a human could ever copy out of it either -- this
-authenticates fresh via Zimbra's own SOAP AuthRequest API instead, using
-the same mailbox credentials outlook_client.py already uses over IMAP.
+views.open_webmail to land straight on the mailbox's own Inbox, already
+logged in, instead of the plain login page. Authenticates fresh via
+Zimbra's own SOAP AuthRequest API, using the same mailbox credentials
+outlook_client.py already uses over IMAP.
 """
 import logging
 from urllib.parse import quote
@@ -46,31 +43,29 @@ def get_auth_token(username: str, password: str) -> str:
     return token
 
 
-def message_url(auth_token: str, imap_uid: str) -> str:
-    """Direct link to one message's original content. `id` is Zimbra's own
-    internal item id, which on this host is the same value as the IMAP UID
-    (see outlook_client.parse_message's `imap_uid`). `auth=qp` tells Zimbra
-    to read the auth token from the query string rather than requiring a
+def inbox_url(auth_token: str) -> str:
+    """Auto-authenticated link straight into the real Modern web client,
+    landing on this mailbox's own Inbox already logged in -- confirmed by
+    hand (via a live request using this app's own configured mailbox
+    credentials): the plain root URL with `auth=qp&zauthtoken=` set on it
+    returns Zimbra's actual app shell (not the login form -- no
+    login_csrf/zLoginForm present), WITH real ZM_AUTH_TOKEN/JSESSIONID/
+    cookiesession1 cookies in the response, and the account's own address
+    and a "Sign Out" link visible in the page. `auth=qp` tells Zimbra to
+    read the auth token from the query string rather than requiring a
     pre-existing session cookie, so this one URL is self-authenticating --
     no separate login step happens in the browser at all.
 
-    Deliberately the /service/home/~/ REST content servlet, NOT
-    /h/printmessage (Zimbra's "Print" view) -- confirmed by hand that
-    /h/printmessage 500s with auth=qp (it's a different, JSP-based app
-    that doesn't accept the query-string token the way the REST servlet
-    does), so it can only ever be opened by someone already holding a
-    Zimbra session cookie, which defeats the point here. This REST
-    servlet is the one endpoint confirmed to accept auth=qp -- the
-    tradeoff is it always returns the message's raw RFC822 source (every
-    MIME header/boundary included) rather than a rendered view; `view=`
-    does not control that despite the name (both `text` and `html` were
-    tried and returned byte-identical output). The rendered body and any
-    attachments are shown on our own email_detail.html page instead
-    (body_html/body_text and the Attachments section), which is why this
-    link exists mainly as a "verify against the source mailbox" option
-    rather than the primary way to read the email."""
-    return (
-        f'{WEBMAIL_BASE}/service/home/~/'
-        f'?auth=qp&zauthtoken={quote(auth_token, safe="")}'
-        f'&id={quote(str(imap_uid), safe="")}'
-    )
+    Two things were tried and confirmed NOT to work before landing on
+    this, both against this exact server:
+      - The /service/home/~/ REST content servlet (auth=qp DOES work
+        there) pointed at the Inbox *folder* instead of one message id --
+        returns an empty 200 response by default, and "No HTML formatter
+        available for item" with `&fmt=html` added. That servlet is only
+        good for one exact message's raw RFC822 source (see git history),
+        never a rendered listing.
+      - /h/search (Zimbra's classic-client search/mail-list URL on other
+        deployments) -- 404s outright; this server has no classic client
+        installed, Modern-only.
+    """
+    return f'{WEBMAIL_BASE}/?auth=qp&zauthtoken={quote(auth_token, safe="")}'

@@ -60,10 +60,11 @@ class TrackedEmail(models.Model):
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_GMAIL, db_index=True)
     # IMAP UID for the three IMAP-sourced mailboxes (outlook/project/submittal)
     # -- blank for Gmail. On this mail host (Zimbra), the IMAP UID doubles as
-    # Zimbra's own internal item id, so views.open_webmail can deep-link
-    # straight to this exact message instead of just opening the inbox.
-    # Never populated retroactively -- blank on any email tracked before this
-    # field existed.
+    # Zimbra's own internal item id. Not currently used by views.open_webmail
+    # (which just lands on the mailbox's Inbox rather than deep-linking to
+    # one message), but kept as a stable per-message identifier on this host
+    # for any future use. Never populated retroactively -- blank on any
+    # email tracked before this field existed.
     imap_uid = models.CharField(max_length=32, blank=True, default='')
 
     sender = models.CharField(max_length=320)
