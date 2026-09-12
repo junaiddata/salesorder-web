@@ -15,11 +15,23 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import BaseModel
 from so.models import Quotation, QuotationItem, Customer, Items
-from emailagent.models import AdditionalQuotationDraft, QuotationDraft
+from emailagent.models import (
+    AdditionalQuotationDraft, EnquiryItem, EnquiryItemSuggestion, QuotationDraft,
+)
 
 from emailagent.tools import PIPE_SIZE_MM_TO_INCH_TEXT, lookup_customer, lookup_item_master
 
 logger = logging.getLogger(__name__)
+
+
+class SuggestedSubstitute(BaseModel):
+    """One near-miss stand-in for a requirement line the agent is leaving
+    unquoted. Each carries its OWN reason, because that is exactly what the
+    reviewer chooses between -- "one size under" vs "one size over" are
+    different trade-offs, and flattening them into a single sentence is what
+    makes a list of options unreadable."""
+    item_code: str = ""
+    reason: str = ""
 
 
 class MatchedItem(BaseModel):
@@ -28,6 +40,20 @@ class MatchedItem(BaseModel):
     unit: str = ""
     notes: str = ""
     default_brand_applied: bool = False
+    # Only meaningful on submit_quotation_draft: the extra catalog codes a
+    # SIZE-RANGE requirement line ("15mm to 50mm") expands into, beyond the
+    # one already in item_code. draft_quotation writes each of these out as
+    # its own EnquiryItem/quotation line -- see _expand_size_range_matches.
+    # The re-match flows ignore it: they hand their results back to callers
+    # that only update lines which already exist and cannot create new ones.
+    additional_item_codes: list[str] = []
+    # Catalog items that are CLOSE to this requirement but not close enough to
+    # quote unasked -- recorded (never quoted) so the quotation screen can
+    # offer the reviewer a one-click "add this instead" per option. A list
+    # because one requirement often has several plausible stand-ins and
+    # choosing between them is the reviewer's call. Only read when item_code
+    # is empty; see EnquiryItemSuggestion.
+    suggested_substitutes: list[SuggestedSubstitute] = []
 
 
 # Set (in Python, not by the agent) on an EnquiryItem's match_notes whenever
@@ -44,6 +70,21 @@ DEFAULT_BRAND_NOTE_PREFIX = "No brand specified by customer -- quoted our standa
 # rolled up into the quotation's remarks for a human to see at a glance why
 # the brand changed, without having to reopen the original email thread.
 BRAND_CHANGE_NOTE_PREFIX = "Customer requested brand change"
+
+# Same idea again, for the third case -- this EnquiryItem was not extracted
+# from the customer's email at all: it was created by expanding another line's
+# SIZE RANGE ("15mm to 50mm") into one line per size, see
+# _expand_size_range_matches. A fixed, code-authored marker so a reviewer can
+# tell at a glance which lines the customer wrote and which we derived.
+RANGE_EXPANSION_NOTE_PREFIX = "Size-range expansion of the line above -- verify size/qty"
+
+# And once more, for a line a REVIEWER put on the quotation by accepting the
+# agent's near-miss substitute (EnquiryItem.suggested_item) from the quotation
+# screen -- see so/views_quotation.py::_add_suggested_item. Fixed and
+# code-authored so the "Send Quotation" step can reliably find these lines and
+# disclose the substitution to the client, exactly as it already does for a
+# defaulted brand.
+SUBSTITUTE_ACCEPTED_NOTE_PREFIX = "Substitute accepted by reviewer"
 
 _MATCH_NOTES_MAX_LEN = 255  # EnquiryItem.match_notes is a CharField(max_length=255)
 
@@ -98,6 +139,19 @@ def submit_quotation_draft(
             for its category (see the default-brand table below) -- False
             whenever the customer stated their own brand, or no standard
             default applies to this item's category.
+            additional_item_codes is ONLY for a requirement line that asked
+            for a SIZE RANGE (see the size-range rules below): leave it empty
+            for an ordinary single-size line, and for a range set it to the
+            codes of every size in the range OTHER than the one already in
+            item_code, in ascending size order. Each one is written out as
+            its own quotation line, so never list the same physical size
+            twice -- a size written in millimetres and the same size written
+            in inches are one size, not two.
+            suggested_substitutes is read ONLY when item_code is empty:
+            it records the near-miss item(s) a reviewer may want to accept
+            instead, best first, each with its own reason (see the
+            near-miss rules below). It never puts anything on the
+            quotation by itself.
         matched_customer_id: The id of an existing customer found via
             lookup_customer that this enquiry is really for, or 0 if none
             of the candidates are a confident match.
@@ -130,7 +184,13 @@ def submit_item_rematch(items: list[MatchedItem], reasoning: str) -> str:
             default_brand_applied=True when this item's requirement did NOT
             state a brand and you matched it to our standard default brand
             for its category (see the default-brand table below) -- False
-            otherwise.
+            otherwise. additional_item_codes is ignored here -- this flow can
+            only update the lines already listed above, it cannot add new
+            ones. If one of them asks for a size RANGE, put the best single
+            size in item_code and name the remaining sizes in notes so a
+            reviewer can add them by hand. suggested_substitutes is
+            likewise not recorded from this flow -- describe any near-miss
+            in notes instead.
         reasoning: One or two sentences on the item-matching decisions,
             including anything uncertain.
     """
@@ -157,6 +217,61 @@ _ITEM_MATCH_RETRY_RULES = (
     "after a single search per item. When lookup_item_master shows "
     "more than one reasonable candidate, prefer one with stock > 0 over an "
     "otherwise-equal match that shows stock=0.\n\n"
+    "When you do end up leaving item_code empty, check one more thing before "
+    "moving on: did any of your searches turn up an item that is the RIGHT "
+    "PRODUCT but differs in one specific, nameable way -- the right pipe in "
+    "the wrong colour, a different fixed length, a different joint type, a "
+    "brand we stock instead of the one asked for, the next size up or down? "
+    "If so, add it to suggested_substitutes -- its code, plus what differs "
+    "from what was asked for in plain words (e.g. \"grey 4m instead of red "
+    "5.8m push-fit\"). This does NOT quote it: the line stays unquoted "
+    "exactly as it would have been, and a human reviewer decides whether the "
+    "substitute is acceptable and adds it with one click.\n\n"
+    "suggested_substitutes is a LIST because a requirement often has more "
+    "than one reasonable stand-in, and choosing between them is the "
+    "reviewer's job, not yours -- a 125mm clamp we don't carry sits between "
+    "the 4\" (113-118mm) and the 6\" (168-172mm) that we do, and which one is "
+    "acceptable depends on the job, so OFFER BOTH rather than guessing. Give "
+    "each one its own reason naming what makes it different from the "
+    "requirement and from the other options (\"one size under, 113-118mm\" / "
+    "\"one size over, 168-172mm\") -- that difference is the whole basis for "
+    "the reviewer's choice. Order them best first, and keep the list to the "
+    "genuinely plausible ones: at most three, and one is perfectly normal. "
+    "Never pad it out with everything a search returned -- three good options "
+    "help, ten make the reviewer do your job again.\n\n"
+    "None of this is a shortcut around matching properly: only ever fill it "
+    "in for a line you are ALREADY leaving unquoted, never as an easier "
+    "alternative to finding the real match, and never for an item you would "
+    "have been willing to quote outright (that one belongs in item_code). "
+    "Leave the list empty when nothing you saw was close enough to be worth a "
+    "reviewer's time -- a random item from the same category is worse than no "
+    "suggestion at all.\n\n"
+    "A requirement line often names a SIZE RANGE rather than a single size -- "
+    "\"15mm to 50mm\", \"15-50mm\", \"1/2\\\" to 2\\\"\", \"from 20mm up to "
+    "110mm\". That is a request for EVERY size we carry BETWEEN AND INCLUDING "
+    "those two bounds -- not just the first size written, and not just the "
+    "two ends. Read it as a range whenever two sizes are joined by to / till "
+    "/ up to / - / ~ and the smaller one comes first. A fitting whose own "
+    "name legitimately carries two sizes at once -- a reducer, reducing bush, "
+    "reducing tee, adaptor (\"reducer 50x32\") -- is ONE item, not a range. "
+    "Work out which sizes actually exist by searching size by size: step "
+    "through that product family's nominal sizes (e.g. 15, 20, 25, 32, 40, "
+    "50mm) and run a SEPARATE lookup_item_master for each one with the size "
+    "included in the search terms -- the catalog is the only authority on "
+    "which sizes we stock, so never assume a size does or does not exist "
+    "without searching for it. Quote one catalog item per size you find, and "
+    "use notes to say which sizes the range covered and which of them had no "
+    "match.\n\n"
+    "NORMALIZE UNITS BEFORE MATCHING -- for a range and for a single size "
+    "alike: the customer's unit system and the catalog's are frequently "
+    "different, and the same physical size written two ways is ONE item, "
+    "never two. Convert with the catalog-verified table above (NOT the "
+    "generic mm/25.4 chart) -- so a \"4 inch to 8 inch\" UPVC BSEN1329 range "
+    "means the 110mm, 160mm and 200mm rows, and a \"110mm\" line and a \"4 "
+    "inch\" line of the same fitting are the same size, so quoting both as "
+    "separate lines is a duplicate. Decide whether a catalog size falls "
+    "inside a range only after converting both bounds and the candidate size "
+    "to the same unit.\n\n"
     "Pipe-fitting items are especially prone to trade-name mismatches between "
     "what the customer wrote and what the catalog SKU description says -- if a "
     "search for the customer's term comes back weak or empty, retry with its "
@@ -170,25 +285,52 @@ _ITEM_MATCH_RETRY_RULES = (
     "  cap = plug (threaded cap = threaded plug)\n"
     "  clip = clamp\n"
     "  double tee = cross tee\n"
+    "  Y / wye / Y-branch / Y-junction = YEE\n"
     "  double yee = cross yee\n"
     "  free socket / slipper socket = repair socket\n"
     "  air vent = vent cowl\n"
     "  door socket / access socket = access pipe\n"
     "This list is not exhaustive -- apply the same customer-wording-vs-SKU-"
     "wording reasoning to other CPVC/UPVC/PPR fitting terms not listed here.\n\n"
-    "Brand names get shortened/informal treatment the same way -- notably "
-    "\"Cosmo\" always means the catalog brand \"COSMOPLAST\" (there is no "
-    "separate \"Cosmo\" brand); search and compare against COSMOPLAST items "
-    "when a requirement says Cosmo. Apply the same reasoning to other obvious "
-    "brand shorthands you recognize.\n\n"
+    "Brand names get shortened/informal treatment the same way, and it is the "
+    "CATALOG's spelling you have to search for, not the customer's. For "
+    "Cosmoplast the catalog's brand token is \"COSMO\" -- every one of their "
+    "items records its brand that way (\"COSMO - UPVC FITTINGS\", \"COSMO - "
+    "PPR FITTINGS\", \"COSMO - HP FITTINGS\", \"COSMO - PEX FITTINGS\", "
+    "\"COSMO - HDPE\", and so on). So whether the requirement says \"Cosmo\" "
+    "OR \"Cosmoplast\", search \"COSMO\": it finds items spelled either way, "
+    "because the longer word contains it. Do NOT search \"COSMOPLAST\" -- only "
+    "about 20 rows in the whole catalog spell it out in full (mostly PEX "
+    "items), and because that makes it a rare, highly-distinctive term it "
+    "outweighs every other word in your search, pushing those same 20 "
+    "unrelated rows to the top and burying the item you actually wanted. Apply "
+    "the same reasoning to other brand shorthands you recognize -- search the "
+    "form the catalog itself uses.\n\n"
+    "COSMO's UPVC drainage fittings come in two joint types, written into the "
+    "description: SS (solvent socket) and RR (rubber ring). For an END CAP or "
+    "an ACCESS PLUG in Cosmo/Cosmoplast, default to the SS row whenever the "
+    "customer has not said which they want -- that is our standard for these "
+    "two fittings, and it is what we actually stock (the RR end caps are "
+    "almost all at 0 stock, while the SS sizes carry hundreds of pieces each). "
+    "Quote the RR row only when the customer explicitly asks for RR, or for a "
+    "rubber-ring/push-fit joint. To find these, write the search in the "
+    "catalog's own word order WITH the joint type and size included -- \"cosmo "
+    "end cap ss 4\", \"cosmo access plug ss 6\" -- because that exact wording "
+    "appears as a run inside the description (\"UPVC COSMO END CAP SS 4 "
+    "GREY\") and a whole-phrase hit outranks everything else. Do not drop the "
+    "\"ss\" or the size to make the search looser: scoring ignores terms under "
+    "three letters, so \"cosmo end cap 4\" scores \"cosmo\"/\"end\"/\"cap\" "
+    "only, matches 1,600+ rows tied at the same score, and returns them in "
+    "arbitrary order -- the size and joint type do nothing unless the phrase "
+    "matches as a whole.\n\n"
     "Brand-specific naming can also differ for the exact same fitting type -- "
     "e.g. a PEX elbow/tee with a wall-mounting box: RAKTHERM, JOMIX, VESBO, and "
-    "PILSA all name it \"...WITH BOX...\", but COSMOPLAST's catalog calls the "
+    "PILSA all name it \"...WITH BOX...\", but COSMO's catalog calls the "
     "equivalent fitting \"SANITARY (elbow/tee)\" or \"...W/NECK\" instead -- it "
     "never uses the word \"box\". If a requirement needs a boxed/wall-mount "
-    "fitting in Cosmo/Cosmoplast and a \"box\" search only turns up other "
+    "fitting in COSMO and a \"box\" search only turns up other "
     "brands, retry with \"sanitary\" and \"w/neck\" before concluding "
-    "Cosmoplast has no equivalent. Treat this as an example of a general "
+    "COSMO has no equivalent. Treat this as an example of a general "
     "pattern -- a brand having no result for the customer's literal wording "
     "does not mean that brand lacks the product, only that its catalog "
     "description uses different terminology for it.\n\n"
@@ -221,7 +363,9 @@ _ITEM_MATCH_RETRY_RULES = (
     "quotation can flag to the client that no brand was specified and our "
     "standard brand was used instead:\n"
     "  Pipes & Fittings (PVC/PPR/CPVC pipes, elbows, tees, sockets, unions, "
-    "reducers, etc.) -> COSMOPLAST\n"
+    "reducers, etc.) -> COSMOPLAST (search the catalog brand token \"COSMO\", "
+    "which is how every Cosmoplast item is recorded -- e.g. \"COSMO - UPVC "
+    "FITTINGS\")\n"
     "  Water Heaters -> ARISTON (the \"ARISTON - ITALY\" catalog brand "
     "specifically -- not the ARISTON-CHINA/BANGLADESH/OLD/SOLAR variants)\n"
     "  Valves (gate/ball/check/angle/pressure-reducing, etc.) -> PEGLER\n"
@@ -296,12 +440,18 @@ def _build_draft_content(tracked_email, enquiry_items) -> list:
         f"Subject: {tracked_email.subject}",
         f"Body:\n{tracked_email.body_text}",
         "",
-        "Requirement items (index | description | category | brand | quantity | unit | notes):",
+        "Requirement items (index | description | category | brand | quantity | unit "
+        "| notes | size range, on the lines that ask for one):",
     ]
     for i, item in enumerate(enquiry_items):
+        # A range stated in free text is easy to skim past, so it is pulled
+        # out here and stated as its own column rather than left for the
+        # agent to notice inside the description -- see detect_size_range.
+        range_hint = _size_range_hint(item.description)
         lines.append(
             f"{i} | {item.description} | {item.category} | {item.brand} | "
             f"{item.quantity} | {item.unit} | {item.notes}"
+            + (f" | {range_hint}" if range_hint else "")
         )
     return [{"type": "text", "text": "\n".join(lines)}]
 
@@ -317,14 +467,20 @@ WALKIN_CUSTOMER_NAME = 'DEBIT CUSTOMER ( CASH )'
 AUTO_DRAFT_MARKER = 'Auto-drafted by the email tracking agent'
 
 
-def _resolve_price(pricing_customer, item):
-    """pricing_customer is None for walk-in quotes -- CustomerPrice is
-    specific to a real customer, so it's only consulted when we matched one."""
-    if pricing_customer:
-        from so.models import CustomerPrice
-        custom = CustomerPrice.objects.filter(customer=pricing_customer, item=item).first()
-        if custom:
-            return custom.custom_price
+def _resolve_price(item):
+    """Agent-drafted quotations always quote the catalog price -- item_price,
+    synced from the stock API's minimum_selling_price (see
+    so/management/commands/import_items2.py).
+
+    Deliberately does NOT consult CustomerPrice, even when the enquiry was
+    matched to a real customer. Those rows are still written and still shown
+    on the manual screens as a "previous price" reference, but using one here
+    made the agent quote a rate that could be arbitrarily old: converting a
+    quotation writes any hand-edited price straight back to CustomerPrice
+    (so/quotation_conversion_service.py), so a one-off discount would silently
+    re-apply to every later draft for that customer and never refresh when the
+    stock API price moved. The reviewer applies a negotiated price if it should
+    apply; the draft states list."""
     return item.item_price
 
 
@@ -468,6 +624,257 @@ def _resolve_quantity(raw_quantity, raw_unit, matched_item):
     return base_qty, note
 
 
+# Customers routinely put a whole SIZE RANGE on one requirement line ("PPR
+# pipe 15mm to 50mm", "ball valve 1/2\" - 2\""), meaning every size we carry
+# between the two bounds rather than a single item. The agent is told to
+# expand those (see _ITEM_MATCH_RETRY_RULES) and reports the extra sizes it
+# found in MatchedItem.additional_item_codes; the range is ALSO detected here
+# so it can be stated explicitly on the item line the agent is shown, instead
+# of depending on it spotting the range inside a free-text description.
+
+# One size written as a plain number (50, 1.5), a fraction (1/2) or a mixed
+# number (1-1/4, 1 1/4). The mixed form comes first so "1-1/4" reads as a
+# single size and not as a 1-to-4 range.
+_SIZE_TOKEN = r'(?:\d{1,4}\s*[-\s]\s*\d/\d|\d/\d|\d{1,4}(?:\.\d+)?)'
+_SIZE_UNIT = r'(?:mm|millimet(?:er|re)s?|milimet(?:er|re)s?|inch(?:es)?|in\b|"|”|″)'
+_RANGE_JOINER = r'(?:\s*(?:up\s*to|upto|to|till|until|through|thru)\s*|\s*[-–—~]\s*)'
+_SIZE_RANGE_RE = re.compile(
+    r'(?P<low>' + _SIZE_TOKEN + r')\s*(?P<low_unit>' + _SIZE_UNIT + r')?'
+    + _RANGE_JOINER
+    + r'(?P<high>' + _SIZE_TOKEN + r')\s*(?P<high_unit>' + _SIZE_UNIT + r')?',
+    re.IGNORECASE,
+)
+
+# Fittings whose own name legitimately carries two sizes at once -- a
+# "reducing bush 50-32", a "reducer 2\" x 1\"" -- are ONE item, never a range,
+# so they are excluded outright rather than left to the low<high check (which
+# only catches the large-to-small spelling).
+_TWO_SIZE_FITTING_RE = re.compile(
+    r'reduc|bush|adapt|transition|unequal|step\s*-?\s*down', re.IGNORECASE)
+
+# A range expanding into more extra lines than this is far likelier to be a
+# misread than a real requirement -- our widest families carry well under 20
+# sizes -- so it is capped rather than writing dozens of bogus lines into a
+# quotation someone then has to clean up by hand.
+_MAX_RANGE_EXPANSION_LINES = 20
+
+
+def _size_token_value(token):
+    """Numeric value of one size token -- "50" -> 50.0, "1/2" -> 0.5,
+    "1-1/4"/"1 1/4" -> 1.25. None when it can't be read. Used only to order
+    the two bounds against each other, never to convert between units."""
+    text = re.sub(r'\s*-\s*', '-', (token or '').strip())
+    text = re.sub(r'\s+', '-', text)
+    mixed = re.fullmatch(r'(\d+)-(\d+)/(\d+)', text)
+    if mixed:
+        whole, numerator, denominator = (int(g) for g in mixed.groups())
+        return whole + numerator / denominator if denominator else None
+    fraction = re.fullmatch(r'(\d+)/(\d+)', text)
+    if fraction:
+        numerator, denominator = int(fraction.group(1)), int(fraction.group(2))
+        return numerator / denominator if denominator else None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _normalize_size_unit(raw):
+    """'mm' for any millimetre spelling, 'inch' for any inch spelling
+    (including a bare " or ”), '' when no unit was written."""
+    if not raw:
+        return ''
+    raw = raw.strip().lower()
+    if raw.startswith('mm') or 'millim' in raw or 'milim' in raw:
+        return 'mm'
+    return 'inch'
+
+
+def detect_size_range(description):
+    """Reads a size RANGE out of a requirement line's description -- "15mm to
+    50mm", "15-50mm", "1/2\" to 2\"", "from 20mm up to 110mm".
+
+    Returns (low_text, high_text, unit) with each bound exactly as the
+    customer wrote it and unit 'mm' or 'inch', or None when the line names a
+    single size. Deliberately conservative -- a unit has to appear on at least
+    one bound (so "Class 150-300" and "PN 10-16" are not ranges) and the
+    smaller size has to come first (so a "50-32" reducing fitting isn't read
+    as 32-to-50)."""
+    if not description:
+        return None
+    if _TWO_SIZE_FITTING_RE.search(description):
+        return None
+    for match in _SIZE_RANGE_RE.finditer(description):
+        unit = _normalize_size_unit(match.group('high_unit') or match.group('low_unit'))
+        if not unit:
+            continue
+        low = _size_token_value(match.group('low'))
+        high = _size_token_value(match.group('high'))
+        if low is None or high is None or low >= high:
+            continue
+        return match.group('low').strip(), match.group('high').strip(), unit
+    return None
+
+
+def _size_range_hint(description):
+    """The size-range column shown to the agent for one requirement line --
+    '' for an ordinary single-size line."""
+    detected = detect_size_range(description)
+    if not detected:
+        return ''
+    low, high, unit = detected
+    return (
+        f"SIZE RANGE {low} {unit} to {high} {unit} -- quote EVERY catalog size "
+        f"in this range, inclusive, as its own line (smallest in item_code, "
+        f"the rest in additional_item_codes)"
+    )
+
+
+def _stock_and_price_notes(candidate):
+    """The fixed, code-authored warnings for a catalog match that is out of
+    stock or priced at 0.00 -- returns (stock_note, price_note), either ''
+    when it doesn't apply. Shared by the ordinary one-line-per-requirement
+    path and the size-range expansion path so an expanded line warns exactly
+    like a customer-written one.
+
+    total_available_stock (synced from stock.junaidworld.com's total_stock) is
+    the true across-warehouse figure -- falls back to item_stock (DIP warehouse
+    only) if that sync hasn't populated it for this item yet. A 0-stock or
+    0-price match is still quoted (dropping the line would hide the
+    requirement); these notes are what tell the reviewer to check it."""
+    if not candidate:
+        return '', ''
+    stock = candidate.total_available_stock
+    if stock is None:
+        stock = candidate.item_stock
+    stock_note = ''
+    if not stock or stock <= 0:
+        stock_note = (
+            f"Catalog match {candidate.item_code} is currently 0 stock -- quoted anyway; "
+            "verify availability before approving."
+        )
+    price_note = ''
+    if not candidate.item_price:
+        price_note = (
+            f"Catalog price for {candidate.item_code} is 0.00 in the stock app -- "
+            "quoted at 0.00; set the price before sending."
+        )
+    return stock_note, price_note
+
+
+# More options than this on one line stops being a choice and becomes a
+# second search for the reviewer to do -- the prompt asks for the plausible
+# ones, best first, and this is the backstop if it ignores that.
+_MAX_SUGGESTED_SUBSTITUTES = 3
+
+
+def _record_suggested_substitutes(enquiry_item, suggestions):
+    """Stores the agent's near-miss stand-ins for one unquoted requirement
+    line as EnquiryItemSuggestion rows, in the order it ranked them.
+
+    Resolving each code against the catalog HERE -- rather than leaving it in
+    prose for something downstream to parse -- is what makes the reviewer's
+    Add buttons exact: a code that doesn't resolve is dropped on the spot and
+    simply never offered, so a button can only ever act on an item that really
+    exists. Replaces any suggestions already on the line, so re-running the
+    draft can't accumulate stale options."""
+    enquiry_item.suggestions.all().delete()
+    if not suggestions:
+        return
+
+    seen = set()
+    rows = []
+    for entry in suggestions:
+        if not isinstance(entry, dict):
+            continue
+        code = (entry.get('item_code') or '').strip()
+        if not code or code in seen:
+            continue
+        candidate = Items.objects.filter(item_code=code).first()
+        if not candidate:
+            continue
+        seen.add(code)
+        rows.append(EnquiryItemSuggestion(
+            enquiry_item=enquiry_item,
+            item=candidate,
+            reason=(entry.get('reason') or '').strip()[:255],
+            order=len(rows),
+        ))
+        if len(rows) >= _MAX_SUGGESTED_SUBSTITUTES:
+            break
+    EnquiryItemSuggestion.objects.bulk_create(rows)
+
+
+def _expand_size_range_matches(tracked_email, enquiry_items, expansions):
+    """Materializes the extra sizes the agent returned for a SIZE-RANGE
+    requirement line (MatchedItem.additional_item_codes) as real EnquiryItem
+    rows, so a "15mm to 50mm" line is quoted as one line per size instead of
+    one line for one size.
+
+    `expansions` maps an index into `enquiry_items` to that line's extra
+    catalog codes. Each new row copies its parent's category / brand /
+    quantity / unit / source_attachment -- so scope grouping
+    (_group_items_by_scope) and quantity conversion (_resolve_quantity) treat
+    it exactly like the parent -- and is saved already matched, since
+    _build_quotation_from_matched_items only looks at matched_item.
+
+    Returns the full item list in display order, each parent immediately
+    followed by its extra sizes, with `order` renumbered across the result so
+    EnquiryItem.Meta.ordering reproduces that order on later reads."""
+    if not expansions:
+        return enquiry_items
+
+    expanded = []
+    for index, enquiry_item in enumerate(enquiry_items):
+        expanded.append(enquiry_item)
+        codes = expansions.get(index) or []
+        if not codes:
+            continue
+        # The parent's own code turning up in additional_item_codes is a slip
+        # rather than a request for two identical lines, so it is dropped here
+        # instead of trusting the agent not to repeat it.
+        seen = {enquiry_item.matched_item.item_code} if enquiry_item.matched_item_id else set()
+        added = 0
+        for code in codes[:_MAX_RANGE_EXPANSION_LINES]:
+            code = (code or '').strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            candidate = Items.objects.filter(item_code=code).first()
+            if not candidate:
+                continue
+            stock_note, price_note = _stock_and_price_notes(candidate)
+            expanded.append(EnquiryItem.objects.create(
+                tracked_email=tracked_email,
+                description=f"{enquiry_item.description} -- {candidate.item_description}",
+                category=enquiry_item.category,
+                brand=enquiry_item.brand,
+                quantity=enquiry_item.quantity,
+                unit=enquiry_item.unit,
+                notes=enquiry_item.notes,
+                source_attachment=enquiry_item.source_attachment,
+                matched_item=candidate,
+                matched_price=candidate.item_price,
+                matched_unit=enquiry_item.matched_unit or 'pcs',
+                match_notes=build_match_notes(
+                    RANGE_EXPANSION_NOTE_PREFIX, stock_note, price_note,
+                ),
+            ))
+            added += 1
+        if added:
+            enquiry_item.match_notes = build_match_notes(
+                enquiry_item.match_notes,
+                f"Size range -- expanded into {added + 1} lines, one per size",
+            )
+            enquiry_item.save(update_fields=['match_notes'])
+
+    for position, item in enumerate(expanded):
+        if item.order != position:
+            item.order = position
+            item.save(update_fields=['order'])
+    return expanded
+
+
 def _group_items_by_scope(enquiry_items):
     """Groups `enquiry_items` by EnquiryItem.source_attachment, preserving
     first-seen order -- see EnquiryItem.source_attachment and
@@ -536,7 +943,7 @@ def _build_quotation_from_matched_items(tracked_email, enquiry_items, quotation_
             continue
         matched_items_count += 1
         qty, qty_note = _resolve_quantity(enquiry_item.quantity, enquiry_item.unit, enquiry_item.matched_item)
-        price = _resolve_price(matched_customer, enquiry_item.matched_item)
+        price = _resolve_price(enquiry_item.matched_item)
         line_total = qty * price
         total_amount += line_total
         quotation_items.append(QuotationItem(
@@ -575,6 +982,16 @@ def _build_quotation_from_matched_items(tracked_email, enquiry_items, quotation_
         quotation.remarks += (
             "\n\n⚠ Unit/quantity conversions applied -- please verify before approving: "
             + "; ".join(quantity_conversion_notes)
+        )
+    range_expanded = sum(
+        1 for item in enquiry_items
+        if item.matched_item and RANGE_EXPANSION_NOTE_PREFIX in item.match_notes
+    )
+    if range_expanded:
+        quotation.remarks += (
+            f"\n\n⚠ {range_expanded} line(s) were added automatically to cover a requested "
+            "SIZE RANGE -- each is one size of a range the customer asked for on a single line. "
+            "Check the sizes and the per-size quantities before approving."
         )
     quotation.total_amount = total_amount
     quotation.grand_total = total_amount
@@ -656,23 +1073,18 @@ def draft_quotation(tracked_email) -> None:
         matched_customer = Customer.objects.filter(id=customer_id).first()
 
     items_by_index = {item.get('enquiry_item_index'): item for item in captured.get('items', [])}
+    # index in enquiry_items -> the extra catalog codes that line's SIZE RANGE
+    # covers; applied after this loop, since it appends new EnquiryItems.
+    range_expansions = {}
     for i, enquiry_item in enumerate(enquiry_items):
         match = items_by_index.get(i)
         if not match:
             continue
         matched_item = None
-        zero_stock_item = None
         item_code = (match.get('item_code') or '').strip()
         if item_code:
             candidate = Items.objects.filter(item_code=item_code).first()
             if candidate:
-                # total_available_stock (synced from stock.junaidworld.com's
-                # total_stock) is the true across-warehouse figure -- fall
-                # back to item_stock (DIP warehouse only) if that sync
-                # hasn't populated it for this item yet.
-                stock = candidate.total_available_stock
-                if stock is None:
-                    stock = candidate.item_stock
                 # Always quote the best catalog match found, even at 0 stock,
                 # rather than silently dropping the line -- regardless of
                 # whether a specific brand was requested. view_quotation_details
@@ -681,8 +1093,6 @@ def draft_quotation(tracked_email) -> None:
                 # while one is at 0 stock -- so a human confirms availability
                 # before approving/sending.
                 matched_item = candidate
-                if not stock or stock <= 0:
-                    zero_stock_item = candidate
         enquiry_item.matched_item = matched_item
         enquiry_item.matched_price = matched_item.item_price if matched_item else None
         enquiry_item.matched_unit = match.get('unit') if match.get('unit') in ('pcs', 'ctn', 'roll') else 'pcs'
@@ -693,12 +1103,9 @@ def draft_quotation(tracked_email) -> None:
         # build_match_notes truncates the agent's free text, never the fixed
         # markers, so keeping both is safe within match_notes' 255 chars.
         agent_notes = match.get('notes', '') or ('' if matched_item else 'No confident catalog match.')
-        zero_stock_note = ''
-        if zero_stock_item:
-            zero_stock_note = (
-                f"Catalog match {zero_stock_item.item_code} is currently 0 stock -- quoted anyway; "
-                "verify availability before approving."
-            )
+        # A 0-stock or 0-priced match is still quoted (dropping it would hide
+        # the requirement) -- these notes are what flag it for the reviewer.
+        zero_stock_note, zero_price_note = _stock_and_price_notes(matched_item)
         default_brand_note = (
             # Python-authored (not the agent's own words) so it's reliably
             # detectable later -- see DEFAULT_BRAND_NOTE_PREFIX -- when the
@@ -706,8 +1113,24 @@ def draft_quotation(tracked_email) -> None:
             f"{DEFAULT_BRAND_NOTE_PREFIX} ({matched_item.item_firm})."
             if matched_item and match.get('default_brand_applied') else ''
         )
-        enquiry_item.match_notes = build_match_notes(agent_notes, zero_stock_note, default_brand_note)
+        enquiry_item.match_notes = build_match_notes(
+            agent_notes, zero_stock_note, zero_price_note, default_brand_note,
+        )
         enquiry_item.save(update_fields=['matched_item', 'matched_price', 'matched_unit', 'match_notes'])
+        # The near-misses the agent found but correctly would not quote on its
+        # own -- stored for the reviewer's Add buttons on the quotation screen,
+        # never quoted here. Only meaningful while the line is unmatched: a
+        # line we did quote has nothing to substitute.
+        if not matched_item:
+            _record_suggested_substitutes(enquiry_item, match.get('suggested_substitutes'))
+        # Only expand a line that matched something itself -- extra sizes
+        # hanging off a line reported as unmatched would quote sizes the
+        # reviewer has no matched line to check them against.
+        extra_codes = match.get('additional_item_codes') or []
+        if matched_item and extra_codes:
+            range_expansions[i] = extra_codes
+
+    enquiry_items = _expand_size_range_matches(tracked_email, enquiry_items, range_expansions)
 
     draft.matched_customer = matched_customer
     draft.customer_guess = (captured.get('customer_display_name', '') or (tracked_email.sender_name or tracked_email.sender))[:255]
@@ -1179,7 +1602,7 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
 
         unit = match.get('unit') if match.get('unit') in ('pcs', 'ctn', 'roll') else 'pcs'
         qty, qty_note = _resolve_quantity(enquiry_item.quantity, enquiry_item.unit, candidate)
-        price = _resolve_price(original_draft.matched_customer, candidate)
+        price = _resolve_price(candidate)
         line_total = qty * price
 
         if enquiry_item.matched_item_id:
@@ -1207,6 +1630,10 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             f"Catalog match {candidate.item_code} is currently 0 stock -- quoted anyway; "
             "verify availability before approving."
         ) if (not stock or stock <= 0) else ''
+        zero_price_note = (
+            f"Catalog price for {candidate.item_code} is 0.00 in the stock app -- "
+            "quoted at 0.00; set the price before sending."
+        ) if not candidate.item_price else ''
         default_brand_note = (
             f"{DEFAULT_BRAND_NOTE_PREFIX} ({candidate.item_firm})."
             if match.get('default_brand_applied') else ''
@@ -1222,7 +1649,7 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
         enquiry_item.matched_quantity = qty
         enquiry_item.match_notes = build_match_notes(
             "; ".join(filter(None, [(match.get('notes', '') or ''), qty_note])),
-            zero_stock_note, default_brand_note, brand_change_note,
+            zero_stock_note, zero_price_note, default_brand_note, brand_change_note,
         )
         enquiry_item.save(update_fields=[
             'matched_item', 'matched_price', 'matched_unit', 'matched_quantity', 'match_notes',

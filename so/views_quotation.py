@@ -159,14 +159,10 @@ def create_quotation(request):
             # -------------------------
             # 5. Process Items
             # -------------------------
-            # Batch-fetch all items and customer prices to avoid N+1 queries
+            # Batch-fetch all items to avoid N+1 queries
             items_map = {
                 str(obj.id): obj
                 for obj in Items.objects.filter(id__in=item_ids)
-            }
-            customer_prices_map = {
-                str(cp.item_id): cp
-                for cp in CustomerPrice.objects.filter(customer=customer, item_id__in=item_ids)
             }
 
             quotation_items = []
@@ -181,9 +177,17 @@ def create_quotation(request):
                     quantity_val = int(qty)
                     unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'
 
-                    # Automatic price from CustomerPrice or default item price
-                    customer_price = customer_prices_map.get(str(item_id))
-                    price_val = float(price_input) if price_input else (customer_price.custom_price if customer_price else float(item.item_price))
+                    # The submitted price if the user typed/kept one, else the
+                    # catalog price. A CustomerPrice override is deliberately
+                    # NOT used as a fallback here: the price box is prefilled
+                    # with default_price (= item_price) by create_quotation.html
+                    # and the customer's previous price is only shown beside it
+                    # as a reference, so falling back to the override when the
+                    # box arrived empty (failed price lookup, or cleared by
+                    # hand) silently quoted a different number than the screen
+                    # had shown. Storing CustomerPrice is unchanged -- see the
+                    # update_or_create below.
+                    price_val = float(price_input) if price_input else float(item.item_price)
 
                     if quantity_val <= 0:
                         messages.error(request, f'Quantity must be positive for item {i+1}.')
@@ -1448,6 +1452,248 @@ def _agent_draft_for_quotation(quotation):
     return getattr(quotation, 'quotation_draft', None) or getattr(quotation, 'additional_quotation_draft', None)
 
 
+def _substitute_reason(suggestion):
+    """The agent's reason for one substitute, with any leading repeat of the
+    item's own description stripped off.
+
+    Agents commonly write the reason as "<the item> -- <what differs>", which
+    on screen sits directly under a line that already shows the item, so the
+    row reads as the same text twice and the part that actually matters --
+    what differs -- gets lost at the end. Only the distinguishing half is
+    worth showing, since that is what the reviewer is choosing on. Handles a
+    truncated repeat too (the description cut short mid-way), which a plain
+    startswith check would miss."""
+    reason = (suggestion.reason or '').strip()
+    description = (suggestion.item.item_description or '').strip()
+    if not reason or not description:
+        return reason
+    if reason.lower().startswith(description.lower()):
+        return reason[len(description):].lstrip(' -\u2013\u2014:\u00b7').strip() or reason
+    head, separator, tail = reason.partition(' -- ')
+    if separator and head and description.lower().startswith(head.strip().lower()):
+        return tail.strip() or reason
+    return reason
+
+
+def _suggested_substitutes(quotation):
+    """The near-miss substitutes the email agent recorded for requirement
+    lines it left OFF this quotation (EnquiryItemSuggestion) -- one group per
+    unquoted line, each holding the candidate substitutes for it. [] for a
+    manually-built quotation, or when the agent found nothing close enough to
+    be worth offering.
+
+    Grouped rather than flat because the candidates within a line are
+    ALTERNATIVES TO EACH OTHER -- a 125mm clamp we don't stock is offered as
+    the 4" or the 6", and the reviewer picks one -- so the screen has to
+    present them as a choice, not as a list of things to add one after
+    another.
+
+    Each candidate carries exactly what pressing its button would add: the
+    catalog item, its live stock, the quantity, and the resulting line total
+    -- a reviewer choosing between substitutes has to be able to see what they
+    are choosing between. The quantity in particular is NOT the requirement's
+    raw number: swapping a 5.8m pipe for a 4m one changes how many pieces
+    cover the requested length, so it is recomputed per candidate through the
+    same conversion the agent uses (and again on submit, which is what
+    actually counts)."""
+    draft = _agent_draft_for_quotation(quotation)
+    if not draft:
+        return []
+    from emailagent.quotation_agent import _resolve_quantity
+
+    groups = []
+    for enquiry_item in draft.unmatched_item_suggestions():
+        # Resolved exactly as _add_suggested_item resolves it on submit, so
+        # the rows show the unit the line will actually be created with.
+        unit = enquiry_item.matched_unit if enquiry_item.matched_unit in ('pcs', 'ctn', 'roll') else 'pcs'
+        candidates = []
+        for suggestion in enquiry_item.suggestions.select_related('item'):
+            suggested = suggestion.item
+            # Same across-warehouse figure, with the same fallback, that the
+            # quoted lines above use -- see view_quotation_details.
+            stock = suggested.total_available_stock
+            if stock is None:
+                stock = suggested.item_stock
+            quantity, quantity_note = _resolve_quantity(
+                enquiry_item.quantity, enquiry_item.unit, suggested,
+            )
+            price = suggested.item_price or 0.0
+            candidates.append({
+                'suggestion_id': suggestion.id,
+                'item': suggested,
+                'reason': _substitute_reason(suggestion),
+                'unit': unit,
+                'stock': stock,
+                'is_out_of_stock': not stock or stock <= 0,
+                # Stock that exists but won't cover the line is the failure a
+                # reviewer is most likely to miss -- "stock 1" reads fine
+                # until you notice the line needs 15.
+                'is_short_stock': bool(stock and 0 < stock < quantity),
+                'quantity': quantity,
+                'quantity_note': quantity_note,
+                'price': price,
+                'line_total': quantity * price,
+            })
+        if not candidates:
+            continue
+
+        # What separates the options, worked out here so the template can
+        # simply mark it. Choosing a substitute is a commercial decision, so
+        # the two things that decide it are what it costs relative to the
+        # cheapest option, and whether the piece count changes (it does
+        # whenever the substitute comes in a different length -- the surprise
+        # that a straight description-vs-description comparison hides).
+        cheapest = min(c['line_total'] for c in candidates)
+        quantities = {c['quantity'] for c in candidates}
+        quantity_varies = len(quantities) > 1
+        for position, candidate in enumerate(candidates):
+            candidate['extra_cost'] = candidate['line_total'] - cheapest
+            candidate['is_cheapest'] = candidate['line_total'] <= cheapest
+            candidate['quantity_varies'] = quantity_varies
+            # The agent ranked these best-first; saying so gives the reviewer
+            # a default to accept or overrule instead of a flat list.
+            candidate['is_best'] = position == 0
+
+        groups.append({
+            'enquiry_item_id': enquiry_item.id,
+            'requirement': enquiry_item.description,
+            'requested_quantity': enquiry_item.quantity,
+            'requested_unit': enquiry_item.unit,
+            'candidates': candidates,
+            'is_choice': len(candidates) > 1,
+            'quantity_varies': quantity_varies,
+        })
+    return groups
+
+
+def _add_suggested_item(request, quotation):
+    """Puts ONE of the agent's near-miss substitutes for an unquoted
+    requirement line onto `quotation`, and only ever on a reviewer's explicit
+    click -- the agent records suggestions (EnquiryItemSuggestion) but never
+    quotes them. Where a line offered several, this accepts exactly the one
+    whose button was pressed and the line is then closed: the alternatives
+    were alternatives TO each other, so choosing one settles the line. A
+    reviewer who wants something else as well adds it on the Edit screen.
+
+    Everything is re-derived and re-checked here rather than trusted from the
+    form: the posted suggestion must belong to this quotation's own enquiry
+    (and, for a multi-scope enquiry, to this quotation's scope), its line must
+    still be unquoted, and the suggestion must still exist. The quantity is
+    recomputed against the chosen substitute for the reason in
+    _suggested_substitutes above."""
+    from emailagent.models import EnquiryItemSuggestion
+    from emailagent.quotation_agent import (
+        SUBSTITUTE_ACCEPTED_NOTE_PREFIX, _resolve_quantity, build_match_notes,
+    )
+
+    draft = _agent_draft_for_quotation(quotation)
+    source_email = getattr(draft, 'tracked_email', None)
+    if not source_email:
+        messages.error(request, 'This quotation was not auto-drafted from an RFQ email, so there is nothing to add.')
+        return
+
+    try:
+        suggestion_id = int(request.POST.get('suggestion_id') or 0)
+    except (TypeError, ValueError):
+        suggestion_id = 0
+
+    # Scoped to THIS quotation's enquiry: the id arrives from a form post, so
+    # it must never be able to reach another email's requirement items.
+    suggestion = EnquiryItemSuggestion.objects.filter(
+        id=suggestion_id, enquiry_item__tracked_email=source_email,
+    ).select_related('item', 'enquiry_item').first()
+    if not suggestion:
+        messages.error(request, 'That suggested item does not belong to this quotation.')
+        return
+    enquiry_item = suggestion.enquiry_item
+
+    # A multi-scope enquiry drafts one quotation per attachment scope (see
+    # AdditionalQuotationDraft), so a line from a sibling scope belongs on the
+    # sibling quotation, not this one. QuotationDraft has no source_attachment
+    # at all -- it covers the whole email -- so the check is skipped for it.
+    scope = getattr(draft, 'source_attachment', None)
+    if scope is not None and (enquiry_item.source_attachment or '') != (scope or ''):
+        messages.error(request, 'That requirement line belongs to a different quotation for this enquiry.')
+        return
+
+    if enquiry_item.matched_item_id:
+        # Already settled -- a double-click, the browser's back button, or a
+        # second option pressed on a line whose choice was already made.
+        messages.info(
+            request,
+            f'"{enquiry_item.description[:60]}" is already quoted as '
+            f'{enquiry_item.matched_item.item_code} -- use Edit to change it.',
+        )
+        return
+
+    suggested = suggestion.item
+
+    quantity, quantity_note = _resolve_quantity(
+        enquiry_item.quantity, enquiry_item.unit, suggested,
+    )
+    price = suggested.item_price or 0.0
+    unit = enquiry_item.matched_unit if enquiry_item.matched_unit in ('pcs', 'ctn', 'roll') else 'pcs'
+
+    with transaction.atomic():
+        QuotationItem.objects.create(
+            quotation=quotation,
+            item=suggested,
+            quantity=quantity,
+            unit=unit,
+            price=price,
+            line_total=quantity * price,
+        )
+
+        # The requirement line now counts as quoted, so it drops out of the
+        # "needs attention" card and cannot be added a second time. The fixed
+        # marker is what lets the Send Quotation step disclose the substitution
+        # to the client -- see _accepted_substitute_items.
+        enquiry_item.matched_item = suggested
+        enquiry_item.matched_price = price
+        enquiry_item.matched_quantity = quantity
+        enquiry_item.matched_unit = unit
+        enquiry_item.match_notes = build_match_notes(
+            enquiry_item.match_notes,
+            f"{SUBSTITUTE_ACCEPTED_NOTE_PREFIX}: {suggested.item_code}"
+            + (f" ({suggestion.reason})" if suggestion.reason else ''),
+            quantity_note,
+        )
+        enquiry_item.save(update_fields=[
+            'matched_item', 'matched_price', 'matched_quantity', 'matched_unit', 'match_notes',
+        ])
+
+        # Recomputed from the live item list -- the same figure the page
+        # displays -- so the stored totals never drift from the lines.
+        total = sum(qi.quantity * qi.price for qi in quotation.items.all())
+        quotation.total_amount = total
+        quotation.grand_total = total - (quotation.discount_amount or 0.0)
+        update_fields = ['total_amount', 'grand_total']
+
+        # Adding a line changes what was approved, so a previously-approved
+        # quotation drops back to Pending and is re-judged by the auto-approval
+        # block on the next render -- which re-approves it immediately if the
+        # new line is above cost and in stock, and leaves it Pending for a
+        # human if it isn't. 'On Hold' is left alone: that is a deliberate
+        # human decision, not an automatic state.
+        if quotation.status == 'Approved':
+            quotation.status = 'Pending'
+            update_fields.append('status')
+        quotation.save(update_fields=update_fields)
+
+        QuotationLog.objects.create(
+            quotation=quotation,
+            user=request.user if request.user.is_authenticated else None,
+            action='updated',
+        )
+
+    messages.success(
+        request,
+        f'Added {suggested.item_code} -- {suggested.item_description} '
+        f'({quantity} {unit} @ {price:.2f}) as the substitute for "{enquiry_item.description[:60]}".'
+        + (f' {quantity_note}' if quantity_note else ''),
+    )
+
+
 def view_quotation_details(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
     quotation_items = quotation.items.all()
@@ -1602,6 +1848,13 @@ def view_quotation_details(request, quotation_id):
             messages.warning(request, 'Quotation put on hold.')
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
+        elif action == 'add_suggested_item':
+            # Reviewer accepted the agent's near-miss substitute for a line it
+            # left unquoted -- the only way one of those ever reaches a
+            # quotation.
+            _add_suggested_item(request, quotation)
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
         elif action == 'update_license_name':
             valid_keys = {k for k, _ in Quotation.LICENSE_CHOICES}
             new_license = (request.POST.get('license_name') or '').strip()
@@ -1716,6 +1969,13 @@ def view_quotation_details(request, quotation_id):
         "default_cc_email": default_cc_email,
         "default_send_message": default_send_message,
         "suggested_datasheets": suggested_datasheets,
+        "suggested_substitutes": _suggested_substitutes(quotation),
+        # Only the unquoted lines that have NO substitute block of their own
+        # below -- see QuotationDraft.unmatched_item_issues(exclude_suggested).
+        "agent_issue_notes": (
+            _agent_draft_for_quotation(quotation).unmatched_item_issues(exclude_suggested=True)
+            if _agent_draft_for_quotation(quotation) else []
+        ),
         "existing_submittal": existing_submittal,
     })
 
@@ -2281,15 +2541,34 @@ def _unmatched_no_brand_items(source_email):
     ]
 
 
+def _accepted_substitute_items(source_email):
+    """Requirement items where a reviewer accepted the agent's near-miss
+    SUBSTITUTE on the quotation screen (see _add_suggested_item and
+    SUBSTITUTE_ACCEPTED_NOTE_PREFIX) -- the customer asked for one thing and
+    the quotation offers something slightly different. Returns
+    [(description, substitute_description), ...], used to say so when the
+    quotation is emailed, on the same principle as _default_brand_notice_items
+    above: nothing is substituted without the client's knowledge."""
+    if not source_email:
+        return []
+    from emailagent.quotation_agent import SUBSTITUTE_ACCEPTED_NOTE_PREFIX
+    return [
+        (item.description, item.matched_item.item_description)
+        for item in source_email.items.select_related('matched_item').all()
+        if item.matched_item_id and SUBSTITUTE_ACCEPTED_NOTE_PREFIX in (item.match_notes or '')
+    ]
+
+
 def _build_default_send_message(quotation, source_email):
     """The default text pre-filled into the "Send Quotation" email body --
     shared between the modal prefill (view_quotation_details) and the
     fallback used if a user submits the send form with the message left
     blank (send_quotation_email), so both stay in sync. Automatically calls
     out any item(s) quoted under our own default brand because the customer
-    didn't specify one (see _default_brand_notice_items above), and any
-    item(s) that couldn't be quoted at all for the same reason (see
-    _unmatched_no_brand_items above)."""
+    didn't specify one (see _default_brand_notice_items above), any item(s)
+    quoted as a reviewer-accepted substitute for something we don't stock (see
+    _accepted_substitute_items above), and any item(s) that couldn't be quoted
+    at all for the same reason (see _unmatched_no_brand_items above)."""
     company = 'Alabama' if quotation.division == 'ALABAMA' else 'Junaid World'
     display_name = quotation.customer_display_name or (quotation.customer.customer_name if quotation.customer_id else '')
     date_str = quotation.quotation_date.strftime('%d-%m-%Y') if quotation.quotation_date else ''
@@ -2315,6 +2594,22 @@ def _build_default_send_message(quotation, source_email):
         lines.append(
             "Kindly review the quoted brand and let us know if you require any specific brand. If you would "
             "like to change the brand, we can revise the quotation accordingly."
+        )
+
+    substitute_items = _accepted_substitute_items(source_email)
+    if substitute_items:
+        lines.append("")
+        lines.append(
+            "Please also note that for the following item(s) the exact product requested was not "
+            "available, and we have quoted the closest alternative we currently stock:"
+        )
+        lines.append("")
+        for description, substitute in substitute_items:
+            lines.append(f"{description}: quoted as {substitute}")
+        lines.append("")
+        lines.append(
+            "Kindly confirm that this alternative is acceptable, and we will be happy to revise the "
+            "quotation if you require the original specification."
         )
 
     unmatched_items = _unmatched_no_brand_items(source_email)

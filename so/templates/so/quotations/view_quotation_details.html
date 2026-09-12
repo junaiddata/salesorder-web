@@ -300,6 +300,219 @@
             border-top: 1px dashed #ffe3a1;
         }
 
+        /* Closest-available alternatives the agent found but did NOT quote.
+           Laid out as rows on one shared column grid (not a <table>, so the
+           whole thing can collapse to stacked blocks on a narrow screen):
+           every option's figures sit in the same column, so comparing two is
+           reading straight down rather than across a paragraph. Deliberately
+           quiet -- this already sits inside a yellow warning card, so colour
+           is reserved for a genuine stock problem. */
+        .agent-substitutes {
+            margin-top: 14px;
+            border-top: 1px solid #f0dfb4;
+            padding-top: 14px;
+        }
+
+        .agent-substitutes-header {
+            font-weight: 600;
+            font-size: 12.5px;
+            color: #856404;
+            margin-bottom: 12px;
+        }
+
+        .sub-group + .sub-group {
+            margin-top: 16px;
+        }
+
+        .sub-req {
+            font-size: 12.5px;
+            color: var(--sap-gray-700, #354a5f);
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+
+        .sub-req strong { color: var(--sap-gray-900, #32363a); }
+        .sub-req-hint { color: var(--sap-gray-500, #6a6d70); }
+
+        .sub-table {
+            background: #fff;
+            border: 1px solid var(--sap-gray-300, #d9d9d9);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .sub-row {
+            display: grid;
+            grid-template-columns:
+                minmax(190px, 2.1fr)   /* item */
+                minmax(150px, 1.7fr)   /* what differs */
+                84px                   /* qty */
+                110px                  /* total */
+                104px                  /* stock */
+                108px;                 /* action */
+            gap: 14px;
+            align-items: center;
+            padding: 10px 14px;
+        }
+
+        .sub-row + .sub-row,
+        .sub-row-body:first-of-type {
+            border-top: 1px solid var(--sap-gray-200, #eaecee);
+        }
+
+        .sub-row-head {
+            background: var(--sap-gray-100, #f5f6f7);
+            font-size: 10.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            color: var(--sap-gray-500, #6a6d70);
+            padding-top: 7px;
+            padding-bottom: 7px;
+        }
+
+        .sub-row-body:hover { background: #fafbff; }
+
+        .sub-item-name {
+            font-size: 12.5px;
+            font-weight: 600;
+            line-height: 1.35;
+            color: var(--sap-gray-900, #32363a);
+            word-break: break-word;
+        }
+
+        .sub-item-meta {
+            font-size: 11px;
+            color: var(--sap-gray-500, #6a6d70);
+            margin-top: 2px;
+        }
+
+        /* The only badge in the block, on the agent's first choice. */
+        .sub-pick {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            color: #3730a3;
+            background: #eef2ff;
+            border-radius: 3px;
+            padding: 1px 5px;
+            margin-left: 4px;
+            vertical-align: 1px;
+        }
+
+        .sub-why {
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--sap-gray-700, #354a5f);
+        }
+
+        .sub-num {
+            font-size: 12.5px;
+            color: var(--sap-gray-900, #32363a);
+            line-height: 1.35;
+        }
+
+        .sub-num small {
+            display: block;
+            font-size: 10.5px;
+            color: var(--sap-gray-500, #6a6d70);
+        }
+
+        .sub-num-total { font-weight: 600; }
+
+        /* Red appears here and nowhere else in the block. */
+        .sub-num.is-problem,
+        .sub-num.is-problem small { color: #bb0000; }
+        .sub-num.is-problem { font-weight: 600; }
+
+        .sub-action {
+            margin: 0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        /* Sized for a table row, not a page-level action -- .sap-button is
+           10px/24px and 14px type, which dwarfs a 10px-padded row. Scoped to
+           this block so the page's other buttons keep their own size. */
+        .sub-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 13px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.25;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+        }
+
+        .sub-btn i { font-size: 9.5px; }
+
+        .sub-btn-primary {
+            background: var(--sap-blue, #0a6ed1);
+            border-color: var(--sap-blue, #0a6ed1);
+            color: #fff;
+        }
+
+        .sub-btn-primary:hover {
+            background: var(--sap-blue-dark, #0854a0);
+            border-color: var(--sap-blue-dark, #0854a0);
+        }
+
+        /* The non-suggested options: present but not competing with the
+           suggested one for attention. */
+        .sub-btn-quiet {
+            background: #fff;
+            border-color: var(--sap-gray-400, #c9ccce);
+            color: var(--sap-gray-700, #354a5f);
+        }
+
+        .sub-btn-quiet:hover {
+            background: var(--sap-blue-light, #ebf5ff);
+            border-color: var(--sap-blue, #0a6ed1);
+            color: var(--sap-blue-dark, #0854a0);
+        }
+
+        .sub-convert {
+            grid-column: 1 / -1;
+            font-size: 11px;
+            line-height: 1.45;
+            color: var(--sap-gray-500, #6a6d70);
+            margin-top: -2px;
+        }
+
+        /* Stacked once the columns would be too narrow to read. The header row
+           is dropped and each figure carries its own label instead. */
+        @media (max-width: 900px) {
+            .sub-row-head { display: none; }
+
+            .sub-row {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px 14px;
+                padding: 12px 14px;
+            }
+
+            .sub-item { grid-column: 1 / -1; }
+            .sub-why { grid-column: 1 / -1; }
+            .sub-action { grid-column: 1 / -1; }
+            .sub-btn { width: 100%; }
+
+            .sub-num::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: .4px;
+                color: var(--sap-gray-500, #6a6d70);
+                margin-bottom: 1px;
+            }
+        }
+
         /* SAP-style Cards */
         .sap-card {
             background-color: white;
@@ -775,8 +988,8 @@
         {% endif %}
 
         {% if agent_draft %}
-            {% with draft_issues=agent_draft.unmatched_item_issues %}
-                {% if is_incomplete_agent_quotation or draft_issues %}
+            {% with draft_issues=agent_issue_notes %}
+                {% if is_incomplete_agent_quotation or draft_issues or suggested_substitutes %}
                 <div class="agent-issues-card mb-3">
                     <div class="agent-issues-header"><i class="fas fa-triangle-exclamation"></i> Needs attention -- auto-drafted by the email agent</div>
                     {% if is_incomplete_agent_quotation %}
@@ -785,6 +998,86 @@
                     {% for issue in draft_issues %}
                         <div class="agent-issue-note">{{ issue }}</div>
                     {% endfor %}
+
+                    {% comment %}
+                        Lines the agent could not quote but DID find close alternatives for.
+                        Nothing here is on the quotation. Where a line lists several they are
+                        alternatives to EACH OTHER, so pressing one settles that line. The
+                        requirements shown here are left out of the warning list above, which
+                        would otherwise name each of them twice.
+                    {% endcomment %}
+                    {% if suggested_substitutes %}
+                    <div class="agent-substitutes">
+                        <div class="agent-substitutes-header">
+                            <i class="fas fa-arrow-right-arrow-left"></i>
+                            Not in stock as requested -- closest alternatives below. Nothing is added unless you choose one.
+                        </div>
+                        {% for group in suggested_substitutes %}
+                        <div class="sub-group">
+                            <div class="sub-req">
+                                <strong>{{ group.requirement }}</strong>{% if group.requested_quantity %} &middot; {{ group.requested_quantity }} {{ group.requested_unit }} requested{% endif %}
+                                <span class="sub-req-hint">
+                                    {% if group.is_choice %}
+                                        &mdash; choose one of {{ group.candidates|length }}{% if group.quantity_varies %} (the piece count differs between them){% endif %}
+                                    {% endif %}
+                                </span>
+                            </div>
+
+                            <div class="sub-table">
+                                <div class="sub-row sub-row-head">
+                                    <div>Item</div>
+                                    <div>What's different</div>
+                                    <div>Qty</div>
+                                    <div>Line total</div>
+                                    <div>Stock</div>
+                                    <div></div>
+                                </div>
+
+                                {% for candidate in group.candidates %}
+                                <div class="sub-row sub-row-body">
+                                    <div class="sub-item">
+                                        <div class="sub-item-name">{{ candidate.item.item_description }}{% if group.is_choice and candidate.is_best %}<span class="sub-pick">Suggested</span>{% endif %}</div>
+                                        <div class="sub-item-meta">{{ candidate.item.item_code }}{% if candidate.item.item_firm %} &middot; {{ candidate.item.item_firm }}{% endif %}</div>
+                                    </div>
+
+                                    <div class="sub-why">{{ candidate.reason|default:"&mdash;" }}</div>
+
+                                    <div class="sub-num" data-label="Qty">
+                                        {{ candidate.quantity }} <small>{{ candidate.unit }}</small>
+                                    </div>
+
+                                    <div class="sub-num sub-num-total" data-label="Line total">
+                                        {{ candidate.line_total|floatformat:2 }}
+                                        <small>@ {{ candidate.price|floatformat:2 }}{% if group.is_choice and candidate.extra_cost > 0 %} &middot; +{{ candidate.extra_cost|floatformat:2 }}{% endif %}</small>
+                                    </div>
+
+                                    {% if candidate.is_out_of_stock %}
+                                    <div class="sub-num is-problem" data-label="Stock">0 <small>out of stock</small></div>
+                                    {% elif candidate.is_short_stock %}
+                                    <div class="sub-num is-problem" data-label="Stock">{{ candidate.stock|floatformat:"-2" }} <small>{{ candidate.quantity }} needed</small></div>
+                                    {% else %}
+                                    <div class="sub-num" data-label="Stock">{{ candidate.stock|floatformat:"-2" }} <small>available</small></div>
+                                    {% endif %}
+
+                                    <form method="post" class="sub-action">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="add_suggested_item">
+                                        <input type="hidden" name="suggestion_id" value="{{ candidate.suggestion_id }}">
+                                        <button type="submit" class="sub-btn {% if candidate.is_best %}sub-btn-primary{% else %}sub-btn-quiet{% endif %}">
+                                            <i class="fas fa-plus"></i>{% if group.is_choice %}Use this{% else %}Add{% endif %}
+                                        </button>
+                                    </form>
+
+                                    {% if candidate.quantity_note %}
+                                    <div class="sub-convert">{{ candidate.quantity_note }}</div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endif %}
             {% endwith %}

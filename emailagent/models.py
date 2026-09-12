@@ -249,6 +249,13 @@ class EnquiryItem(models.Model):
                   "'brand differs from what was requested'.",
     )
 
+    # Near-miss substitutes for this line live in EnquiryItemSuggestion below
+    # (related_name='suggestions') rather than in a field here, because one
+    # requirement commonly has SEVERAL plausible stand-ins and picking between
+    # them is the reviewer's call, not the agent's -- a 125mm clamp we don't
+    # carry sits between the 4" and the 6" we do, and which one is acceptable
+    # depends on the job.
+
     submittal = models.ForeignKey(
         'submittal.Submittal', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
         help_text="No longer set by any current code path -- submittal drafting from a Requirement "
@@ -263,6 +270,58 @@ class EnquiryItem(models.Model):
 
     def __str__(self):
         return self.description[:60]
+
+
+class EnquiryItemSuggestion(models.Model):
+    """One catalog item the quotation agent found that is CLOSE to a
+    requirement line but not close enough to quote on its own authority -- the
+    right pipe in the wrong colour, a different fixed length, the next size up
+    or down. A line can have several: "Clamp 125mm" has no exact match, and
+    the 4" (113-118mm) and 6" (168-172mm) we stock are both plausible, so both
+    are offered and the REVIEWER decides which (if either) is acceptable.
+
+    Nothing here is on any quotation. The parent line stays unmatched and
+    keeps showing under "needs attention" until a reviewer accepts one of
+    these from the quotation screen -- see
+    so/views_quotation.py::_add_suggested_item (action="add_suggested_item"),
+    which is the only code path that turns a suggestion into a quoted line.
+
+    Deliberately real rows with a real FK, rather than letting the agent name
+    the codes in match_notes prose: recorded this way each code is validated
+    against the catalog at draft time, so a button can only ever offer an item
+    that genuinely exists, and nothing downstream has to guess which number in
+    a sentence was meant to be an item code."""
+    enquiry_item = models.ForeignKey(
+        EnquiryItem, on_delete=models.CASCADE, related_name='suggestions',
+    )
+    item = models.ForeignKey(
+        'so.Items', on_delete=models.CASCADE, related_name='+',
+        help_text="The catalog item being offered as a substitute.",
+    )
+    reason = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="How THIS item differs from what the customer asked for, in the agent's own "
+                  "words (e.g. '4\" (113-118mm) -- one size under the 125mm requested') -- shown "
+                  "beside its Add button so a reviewer sees what they are accepting. Each "
+                  "suggestion carries its own, since that is what distinguishes them.",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="The agent's own ranking, best first -- suggestions are shown in this order.",
+    )
+
+    class Meta:
+        ordering = ['order', 'id']
+        constraints = [
+            # The same catalog item twice on one line is never two options to
+            # choose between, only a duplicated row for the reviewer to read.
+            models.UniqueConstraint(
+                fields=['enquiry_item', 'item'], name='unique_suggestion_per_enquiry_item',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} suggested for enquiry item {self.enquiry_item_id}"
 
 
 class SubmittalRequestItem(models.Model):
@@ -351,7 +410,7 @@ class QuotationDraft(models.Model):
     def __str__(self):
         return f"Quotation draft for {self.tracked_email_id} ({self.status})"
 
-    def unmatched_item_issues(self):
+    def unmatched_item_issues(self, exclude_suggested=False):
         """One line per requirement item that could NOT be put on the
         quotation, with its exact reason (from EnquiryItem.match_notes) --
         e.g. no catalog match found, or a match was found but is out of
@@ -361,13 +420,42 @@ class QuotationDraft(models.Model):
         match". Filters in Python (over .all()) rather than issuing its own
         .filter() query, so a caller that prefetched tracked_email__items
         gets the benefit -- one that didn't still works, just less
-        efficiently."""
+        efficiently.
+
+        `exclude_suggested` drops the lines that have substitutes to offer
+        (see unmatched_item_suggestions) -- the quotation screen renders those
+        as their own block naming the same requirement, so listing them here
+        too says everything twice. The dashboards leave it False and still see
+        every unquoted line.
+        """
         if not self.tracked_email_id:
             return []
         return [
             f"Not quoted -- \"{item.description[:80]}\": {item.match_notes or 'no reason recorded.'}"
             for item in self.tracked_email.items.all()
             if not item.matched_item_id
+            and not (exclude_suggested and item.suggestions.all())
+        ]
+
+    def unmatched_item_suggestions(self):
+        """The subset of the unquoted requirement lines above that the agent
+        found at least one near-miss substitute for (EnquiryItemSuggestion) --
+        the quotation screen renders each line with one "Add to quotation"
+        button per suggestion, see
+        so/views_quotation.py::_add_suggested_item.
+
+        Returns the EnquiryItems themselves (not strings like
+        unmatched_item_issues above) so the template can show each suggested
+        item's real description, price and stock -- a reviewer choosing
+        between substitutes has to be able to see what they are choosing
+        between. Kept as a separate method rather than changing
+        unmatched_item_issues' return type, which the Agent Activity dashboard
+        and the drafts queue both rely on being a plain list of strings."""
+        if not self.tracked_email_id:
+            return []
+        return [
+            item for item in self.tracked_email.items.all()
+            if not item.matched_item_id and item.suggestions.all()
         ]
 
     def is_empty_quotation(self):
@@ -420,7 +508,7 @@ class AdditionalQuotationDraft(models.Model):
     def __str__(self):
         return f"Additional quotation draft ({self.source_attachment or 'untitled scope'}) for email {self.tracked_email_id}"
 
-    def unmatched_item_issues(self):
+    def unmatched_item_issues(self, exclude_suggested=False):
         """Same idea as QuotationDraft.unmatched_item_issues, but scoped to
         just THIS scope's items (by source_attachment) rather than the
         whole email -- a multi-scope enquiry drafts a separate quotation
@@ -430,6 +518,16 @@ class AdditionalQuotationDraft(models.Model):
             f"Not quoted -- \"{item.description[:80]}\": {item.match_notes or 'no reason recorded.'}"
             for item in self.tracked_email.items.filter(source_attachment=self.source_attachment)
             if not item.matched_item_id
+            and not (exclude_suggested and item.suggestions.all())
+        ]
+
+    def unmatched_item_suggestions(self):
+        """Same as QuotationDraft.unmatched_item_suggestions, scoped to just
+        THIS scope's items -- see unmatched_item_issues above for why the
+        scoping matters."""
+        return [
+            item for item in self.tracked_email.items.filter(source_attachment=self.source_attachment)
+            if not item.matched_item_id and item.suggestions.all()
         ]
 
 
