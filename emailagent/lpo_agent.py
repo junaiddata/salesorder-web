@@ -57,21 +57,26 @@ def find_matching_quotation(lpo_request):
     Never raises; returns (quotation_or_None, method, score_or_None,
     candidates: list[Quotation]).
 
-    1. Exact reference match -- the ONLY method eligible for auto-create
-       (see lpo_agent.process_lpo / the confidence policy in this module's
-       docstring). Normalizes referenced_quotation_number and every
-       Quotation.quotation_number the same way; a unique normalized match
-       wins outright, regardless of that quotation's current status --
-       eligibility for actually converting it is checked separately.
+    ADVISORY ONLY. Nothing here creates or converts anything any more: the
+    agent raises orders from the LPO's own contents alone (see
+    match_and_maybe_convert), and this is called solely to hand a human a
+    shortlist on the review page once that has already failed. The scores
+    and thresholds below therefore only order that shortlist -- they no
+    longer gate a real financial document.
+
+    1. Exact reference match -- normalizes referenced_quotation_number and
+       every Quotation.quotation_number the same way; a unique normalized
+       match wins outright, regardless of that quotation's current status
+       (eligibility to actually convert it is checked at conversion time,
+       in views.lpo_request_convert).
     2. Fuzzy reference match -- only when a reference was stated but step 1
-       found nothing. Never auto-creates; surfaces close matches (stdlib
-       difflib, ratio >= EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD) for a human
-       to confirm.
+       found nothing. Surfaces close matches (stdlib difflib, ratio >=
+       EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD) for a human to confirm.
     3. Customer + item/amount overlap fallback -- only when no reference
-       was stated at all, or steps 1-2 found nothing. Never auto-creates.
-       Requires the LPO's stated customer name to resolve to EXACTLY ONE
-       so.Customer (an ambiguous customer must never feed a scoring
-       heuristic) before scoring that customer's recent quotations.
+       was stated at all, or steps 1-2 found nothing. Requires the LPO's
+       stated customer name to resolve to EXACTLY ONE so.Customer (an
+       ambiguous customer must never feed a scoring heuristic) before
+       scoring that customer's recent quotations.
     """
     from so.models import Quotation
 
@@ -236,15 +241,13 @@ def _match_catalog_item(description):
 
 def build_sales_order_directly_from_lpo(lpo_request):
     """Builds a real so.SalesOrder straight from `lpo_request`'s own
-    extracted items -- the fallback match_and_maybe_convert reaches for
-    (via _finalize_needs_review_or_direct_build) whenever its quotation
-    matching didn't itself produce a usable, confirmable quotation: no
-    candidate at all, a candidate that isn't eligible/ready yet (not
-    Approved, discount pending, etc.), or an ambiguous/weak match. In
-    every one of those cases there's nothing usable to convert, so this
-    is the only way such an LPO can still auto-create an order rather
-    than sitting stuck waiting on a human (or a quotation that may never
-    get approved).
+    extracted customer, line items and prices -- the ONLY way the agent
+    auto-creates an order from an LPO. A customer's Purchase Order is
+    itself the confirmation of an already-agreed order, so the agent
+    raises the order from that document alone and never consults, matches
+    or converts a Quotation to do it. (Quotation matching still exists,
+    but only runs for a human's benefit once this has already failed --
+    see match_and_maybe_convert.)
 
     Deliberately all-or-nothing and conservative -- every one of the
     following must resolve confidently, or this creates NOTHING and
@@ -256,19 +259,25 @@ def build_sales_order_directly_from_lpo(lpo_request):
       - EVERY line item must match exactly one catalog item (see
         _match_catalog_item) -- an order silently missing a line the
         customer actually asked for is worse than no order at all.
+      - EVERY line item must carry a price taken off the LPO (see the
+        unpriced-line gate below).
 
-    Item pricing uses the SAME company/customer pricing quotations
-    already use (quotation_agent._resolve_price) -- never the price
-    printed on the customer's own PO, which is unverified PDF-extracted
-    text, not something to trust for a real financial document.
+    Line pricing comes from the LPO itself (LPORequestItem.price): the PO
+    states the pricing the customer has already agreed to and is ordering
+    against, so that is the figure the order must be raised at. The
+    catalog rate (quotation_agent._resolve_price) is deliberately NOT used
+    as a fallback for a line the extraction couldn't price -- that would
+    quietly bill a different number than the PO the customer sent, which
+    is the exact mismatch this path exists to avoid.
 
-    Tagged created_via=SalesOrder.CREATED_VIA_AGENT_LPO_DIRECT --
-    deliberately distinct from CREATED_VIA_AGENT_LPO (only for the
-    quotation-conversion path) so these are always identifiable later as
-    having skipped quotation review entirely."""
+    Tagged created_via=SalesOrder.CREATED_VIA_AGENT_LPO_DIRECT -- still
+    distinct from CREATED_VIA_AGENT_LPO, which is now only ever reached by
+    orders the agent created before this became the sole path (a human
+    converting a quotation from the review page stamps CREATED_VIA_MANUAL),
+    so agent orders stay identifiable as raised from the PO alone."""
     from django.db import transaction
 
-    from emailagent.quotation_agent import _is_length_unit, _parse_quantity, _resolve_price
+    from emailagent.quotation_agent import _is_length_unit, _parse_quantity
     from so.models import OrderItem, SalesOrder
 
     customer = _resolve_single_customer(lpo_request.customer_name_stated)
@@ -319,6 +328,23 @@ def build_sales_order_directly_from_lpo(lpo_request):
             + "; ".join(unreadable_quantities[:10])
         )
 
+    # The order is raised at the LPO's OWN prices, so a line the extraction
+    # couldn't put a price on has nothing to bill against. Falling back to the
+    # catalog rate here would quietly raise the order at a different figure
+    # than the PO the customer sent -- escalated like an unreadable quantity
+    # instead. A stated 0.00 is left alone: free-of-charge lines are genuinely
+    # written on customer POs, and that is a price, not a missing one.
+    unpriced_lines = [
+        item.description[:60] for item in lpo_items
+        if item.price is None or item.price < 0
+    ]
+    if unpriced_lines:
+        return None, (
+            "Line(s) have no price stated on the LPO, so the order cannot be raised "
+            "automatically at the customer's agreed pricing: "
+            + "; ".join(unpriced_lines[:10])
+        )
+
     resolved = []
     unmatched_descriptions = []
     for lpo_item in lpo_items:
@@ -346,9 +372,20 @@ def build_sales_order_directly_from_lpo(lpo_request):
         total_amount = 0.0
         for lpo_item, catalog_item in resolved:
             quantity = _parse_quantity(lpo_item.quantity)
-            price = _resolve_price(customer, catalog_item)
+            # Straight off the customer's PO -- guaranteed non-None by the
+            # unpriced-line gate above. Flagged is_custom_price whenever it
+            # differs from the catalog rate, exactly as the quotation
+            # conversion path does, so the order screens show it as a
+            # deliberately-set price rather than a stale catalog figure.
+            # Unlike that path this does NOT write the rate back to
+            # CustomerPrice: a price agreed on one PO is for that order, and
+            # persisting it would silently re-apply to later drafts for the
+            # same customer (the reason quotation_agent._resolve_price stopped
+            # reading that table at all).
+            price = lpo_item.price
             order_items.append(OrderItem(
                 order=sales_order, item=catalog_item, quantity=quantity, price=price, unit='pcs',
+                is_custom_price=abs(float(price) - float(catalog_item.item_price)) > 0.01,
             ))
             total_amount += quantity * price
 
@@ -359,151 +396,83 @@ def build_sales_order_directly_from_lpo(lpo_request):
 
     return sales_order, (
         f"Auto-created Sales Order {sales_order.order_number} directly from this LPO's own "
-        f"{len(resolved)} line item(s), matched to the catalog, for customer {customer.customer_name}."
+        f"{len(resolved)} line item(s), matched to the catalog and priced at the LPO's own "
+        f"stated rates, for customer {customer.customer_name}. No quotation was involved."
     )
 
 
-def _finalize_needs_review_or_direct_build(lpo_request, review_reason):
-    """Shared by every branch of match_and_maybe_convert that would
-    otherwise leave the LPORequest at STATUS_NEEDS_REVIEW because its
-    quotation-matching result wasn't itself usable (no candidate at all,
-    an ineligible candidate, or an ambiguous/weak one) -- tries
-    build_sales_order_directly_from_lpo as a last resort before actually
-    giving up on auto-creating anything, so a messy QUOTATION situation
-    doesn't block an order when the LPO's own customer/items are clean
-    enough to stand on their own. `review_reason` explains why the
-    quotation path alone didn't confirm this; combined with the direct
-    attempt's own outcome either way so the full picture is always on
-    the LPORequest, whether it ends up Confirmed or stays Needs Review."""
-    from .models import LPORequest
-
-    sales_order, direct_reason = build_sales_order_directly_from_lpo(lpo_request)
-    if sales_order:
-        lpo_request.sales_order = sales_order
-        lpo_request.status = LPORequest.STATUS_CONFIRMED
-        lpo_request.match_reasoning = f"{review_reason} {direct_reason}"
-    else:
-        # Lead with WHY nothing could be auto-created (the actual blocker
-        # a human needs to act on) -- the quotation situation is just
-        # context at this point, since it was never going to be used
-        # either way once a quotation candidate wasn't itself confirmable.
-        lpo_request.status = LPORequest.STATUS_NEEDS_REVIEW
-        lpo_request.match_reasoning = (
-            f"Could not auto-create a Sales Order directly from the LPO's own items: {direct_reason} "
-            f"(Quotation situation: {review_reason}) Review the extracted details below and "
-            "match/create this manually."
-        )
-
-
-AUTO_CREATE_MIN_SCORE = 0.6
-# Floor applied to a customer+item-overlap or fuzzy-number match before it's
-# trusted to auto-create (see match_and_maybe_convert) -- an exact reference
-# match always scores 1.0 so this never gates that path. Chosen so a single
-# candidate that only weakly overlaps on tokens (e.g. shares just one
-# generic word) still falls back to human review instead of silently
-# creating a real financial document.
-
-
 def match_and_maybe_convert(lpo_request):
-    """Runs find_matching_quotation against `lpo_request`'s CURRENT
-    extracted fields/items and, when it resolves to exactly one
-    unambiguous, eligible candidate quotation, auto-creates a real
-    so.SalesOrder via quotation_conversion_service (tagged
-    created_via='agent_lpo' so it's identifiable later -- see
-    so.models.SalesOrder.created_via and supervisor.evaluate_lpo).
+    """Auto-creates a real so.SalesOrder for `lpo_request` straight from its
+    OWN extracted customer, line items and prices, via
+    build_sales_order_directly_from_lpo (tagged
+    created_via='agent_lpo_direct').
 
-    In EVERY other case -- no candidate quotation at all, a candidate
-    that isn't eligible/ready yet, or an ambiguous/weak match -- falls
-    back to build_sales_order_directly_from_lpo (tagged
-    created_via='agent_lpo_direct') via _finalize_needs_review_or_direct_build,
-    so a Sales Order still gets auto-created whenever the LPO's own
-    customer + every line item resolve confidently against the catalog,
-    regardless of whether a usable quotation exists. An LPO should never
-    sit waiting on a quotation that may never get built (or approved) if
-    it can be resolved directly. Only when THAT also fails to resolve
-    does the LPORequest actually land at STATUS_NEEDS_REVIEW, with
-    whatever quotation candidates were found (if any) plus the reason
-    the direct build couldn't confirm it either, for a human to pick up.
+    A customer's Purchase Order is the confirmation of an already-agreed
+    order, so the agent raises the order from that document alone: it no
+    longer matches, eligibility-checks or converts a Quotation on the way,
+    and a quotation that is missing, unapproved or already converted can no
+    longer hold up an order the LPO itself fully describes.
 
-    "Unambiguous" = find_matching_quotation returned zero or one candidate
-    (an exact reference match always does; a fuzzy-number or customer+item
-    match only counts here when just ONE quotation cleared its threshold)
-    AND, for anything other than an exact reference match, the match score
-    is at least AUTO_CREATE_MIN_SCORE -- a single weak-overlap candidate
-    still goes to a human rather than auto-converting.
+    That build is deliberately all-or-nothing (see its docstring): if the
+    customer doesn't resolve to exactly one record, or ANY line is ordered
+    by length, lacks a usable quantity, lacks a price, or doesn't match
+    exactly one catalog item, it creates NOTHING and the request lands at
+    STATUS_NEEDS_REVIEW with that specific blocker recorded.
+
+    ONLY in that failed case is find_matching_quotation then run -- purely
+    to hand the human picking this up a shortlist of quotations they could
+    convert instead from the review page (views.lpo_request_convert, which
+    stamps created_via='manual'). It never runs on the success path, so a
+    confirmed LPO costs no quotation scan at all, and its result never
+    feeds an automatic conversion either way.
 
     Pulled out of process_lpo so it can ALSO be re-run later against an
-    LPORequest whose own data hasn't changed but whose matching quotation
-    now exists/is newly eligible (e.g. the quotation was only created or
-    approved after this LPO first arrived) -- see
+    LPORequest whose extracted data has since been corrected, or whose
+    customer/items now resolve against a catalog that has moved -- see
     emailagent.views.lpo_request_recheck_match. Mutates and saves
     `lpo_request`; never raises (failures are recorded on the request
     itself, same contract as process_lpo)."""
-    from django.db import transaction
-
-    from so import quotation_conversion_service
     from .models import LPORequest
 
-    quotation, method, score, candidates = find_matching_quotation(lpo_request)
-    lpo_request.match_method = method
-    lpo_request.match_score = score
-    lpo_request.matched_quotation = quotation
+    sales_order, direct_reason = build_sales_order_directly_from_lpo(lpo_request)
 
-    unambiguous = quotation is not None and len(candidates) <= 1
-    confident = method == LPORequest.MATCH_EXACT_NUMBER or (score or 0) >= AUTO_CREATE_MIN_SCORE
-
-    if method == LPORequest.MATCH_EXACT_NUMBER:
-        match_basis = f"by exact reference to '{lpo_request.referenced_quotation_number}'"
-    elif method == LPORequest.MATCH_FUZZY_NUMBER:
-        match_basis = f"by a close (fuzzy) match to the cited reference '{lpo_request.referenced_quotation_number}'"
-    elif method == LPORequest.MATCH_CUSTOMER_ITEM:
-        match_basis = "by customer name + item overlap (no usable quotation reference was stated)"
+    if sales_order:
+        lpo_request.sales_order = sales_order
+        lpo_request.status = LPORequest.STATUS_CONFIRMED
+        lpo_request.match_reasoning = direct_reason
+        # Cleared rather than left as they were: a re-check may be running
+        # over a request that failed earlier and picked up candidate
+        # quotations then, none of which had anything to do with the order
+        # just raised from the LPO itself.
+        lpo_request.matched_quotation = None
+        lpo_request.match_method = LPORequest.MATCH_NONE
+        lpo_request.match_score = None
+        lpo_request.save()
+        lpo_request.candidate_quotations.clear()
     else:
-        match_basis = ''
+        # Nothing could be raised automatically, so a human has to finish
+        # this one -- look for quotations they might convert instead.
+        # Advisory only: nothing below this point creates or converts
+        # anything (see find_matching_quotation's docstring).
+        quotation, method, score, candidates = find_matching_quotation(lpo_request)
+        lpo_request.matched_quotation = quotation
+        lpo_request.match_method = method
+        lpo_request.match_score = score
 
-    if unambiguous and confident:
-        eligible, reason = quotation_conversion_service.check_conversion_eligibility(quotation)
-        if eligible:
-            with transaction.atomic():
-                sales_order = quotation_conversion_service.convert_quotation_to_sales_order(
-                    quotation, created_via='agent_lpo',
-                )
-            lpo_request.sales_order = sales_order
-            lpo_request.status = LPORequest.STATUS_CONFIRMED
-            lpo_request.match_reasoning = (
-                f"Matched quotation {quotation.quotation_number} {match_basis}; it was Approved and "
-                f"eligible -- auto-created Sales Order {sales_order.order_number}."
+        fallback_hint = ''
+        if quotation is not None:
+            fallback_hint = (
+                f" A possible related quotation was also found ({quotation.quotation_number}) and is "
+                "listed below -- convert that instead if it is the right one."
             )
-        else:
-            # A quotation candidate exists but isn't ready to convert --
-            # try building the order directly from the LPO's own items
-            # instead of leaving it stuck on this quotation (see
-            # _finalize_needs_review_or_direct_build).
-            lpo_request.candidate_quotations.set([quotation])
-            _finalize_needs_review_or_direct_build(
-                lpo_request,
-                f"Matched quotation {quotation.quotation_number} {match_basis}, but it is not yet "
-                f"ready to convert: {reason}",
-            )
-    elif quotation is not None:
-        lpo_request.candidate_quotations.set(candidates)
-        if not confident:
-            review_reason = (
-                f"A possible match ({quotation.quotation_number}, {match_basis}) was found, but the "
-                f"match is too weak to trust for a sales order."
-            )
-        else:
-            review_reason = f"Multiple possible quotations were found {match_basis}."
-        _finalize_needs_review_or_direct_build(lpo_request, review_reason)
-    else:
-        # No candidate quotation exists to convert at all.
-        _finalize_needs_review_or_direct_build(
-            lpo_request,
-            "Could not find any candidate quotation -- no quotation reference was stated, and the "
-            "customer name/items didn't resolve to one either.",
+
+        lpo_request.status = LPORequest.STATUS_NEEDS_REVIEW
+        lpo_request.match_reasoning = (
+            f"Could not auto-create a Sales Order from this LPO: {direct_reason} "
+            f"Review the extracted details below and raise the order manually.{fallback_hint}"
         )
-
-    lpo_request.save()
+        lpo_request.save()
+        lpo_request.candidate_quotations.set(candidates)
 
     if lpo_request.status == LPORequest.STATUS_CONFIRMED and lpo_request.sales_order_id:
         # Best-effort/non-blocking -- see stock_check's own docstring.
@@ -517,11 +486,11 @@ def match_and_maybe_convert(lpo_request):
 def process_lpo(tracked_email, result):
     """Best-effort entry point used by services.py -- creates the
     LPORequest + LPORequestItem rows from the classifier's extracted
-    fields, then runs match_and_maybe_convert to try to match a quotation
-    and (only when that match is unambiguous, confident, and the
-    quotation's already eligible) auto-create a real so.SalesOrder. Never
-    raises: a failure is recorded on the request itself so it never blocks
-    email tracking."""
+    fields, then runs match_and_maybe_convert, which auto-creates a real
+    so.SalesOrder straight from those rows (the LPO's own customer, items
+    and prices) whenever every one of them resolves confidently, and never
+    consults a quotation to do it. Never raises: a failure is recorded on
+    the request itself so it never blocks email tracking."""
     from .models import LPORequest, LPORequestItem
 
     lpo_request, _ = LPORequest.objects.get_or_create(tracked_email=tracked_email)

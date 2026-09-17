@@ -280,9 +280,43 @@ def lpo_request_review(request, pk):
     # Only fetched if it already exists -- viewing this page must never be
     # what creates the singleton report row.
     stock_shortage_report = StockShortageReport.objects.filter(pk=1).first()
+
+    # Narrowed to the report lines THIS LPO actually contributes demand to.
+    # StockShortageReport is a consolidated singleton covering every pending
+    # LPO-sourced order (see emailagent.stock_check.recompute), so this page
+    # used to raise a red shortage alert whenever ANY item anywhere was short
+    # -- rendering directly beneath this LPO's own success banner and reading
+    # as though this order were the problem, when in practice the short items
+    # belonged to a completely different LPO.
+    #
+    # Matched on each line's lpo_breakdown (which records exactly which LPO
+    # needs how much of that item) rather than by comparing item codes: it is
+    # the same per-LPO attribution the consolidated page itself shows, and it
+    # correctly goes quiet once this LPO's order is marked 'SO Created' and
+    # drops out of the pending demand pool recompute() scores.
+    shortage_lines = []
+    for line in (stock_shortage_report.lines if stock_shortage_report else None) or []:
+        mine = next((entry for entry in line.get('lpo_breakdown', [])
+                     if entry.get('lpo_id') == lpo_request.id), None)
+        if not mine:
+            continue
+        shortage_lines.append({
+            'item_code': line.get('item_code'),
+            'description': line.get('description'),
+            'this_lpo_qty': mine.get('quantity'),
+            'available_qty': line.get('available_qty'),
+            # None for an item whose stock has never been synced -- recompute()
+            # deliberately still lists those, with availability unknown rather
+            # than dropping them, so the template has to say "never synced"
+            # instead of rendering a bare "None".
+            'availability_unknown': line.get('available_qty') is None,
+            'final_qty': line.get('final_qty'),
+        })
+
     return render(request, 'emailagent/lpo_review.html', {
         'lpo_request': lpo_request,
         'stock_shortage_report': stock_shortage_report,
+        'shortage_lines': shortage_lines,
     })
 
 
@@ -360,16 +394,16 @@ def lpo_request_convert(request, pk):
 @login_required
 @require_POST
 def lpo_request_recheck_match(request, pk):
-    """Re-runs matching (emailagent.lpo_agent.match_and_maybe_convert)
-    against an LPORequest's ALREADY-extracted fields/items -- for a
-    needs-review LPO whose matching quotation didn't exist (or wasn't
-    eligible) when it first arrived, but does/is now. Never re-reads the
-    source email/PDF or calls Claude; only re-scores against the current
-    state of so.Quotation. If exactly one confident candidate is now
-    found and it's eligible, this auto-creates the Sales Order (tagged
-    created_via='agent_lpo') exactly as if it had matched on first
-    arrival -- otherwise it just refreshes the candidate list/reasoning
-    shown on this page."""
+    """Re-runs emailagent.lpo_agent.match_and_maybe_convert against an
+    LPORequest's ALREADY-extracted fields/items -- for a needs-review LPO
+    whose blocker has since been cleared (the customer now resolves to one
+    record, a line now matches the catalog, a price got corrected). Never
+    re-reads the source email/PDF or calls Claude. If everything now
+    resolves, this auto-creates the Sales Order straight from the LPO's own
+    items and prices (tagged created_via='agent_lpo_direct') exactly as if
+    it had resolved on first arrival -- otherwise it just refreshes the
+    blocker reasoning and the advisory candidate-quotation list shown on
+    this page."""
     from .lpo_agent import match_and_maybe_convert
     from .supervisor import AgentRunRecorder
 
@@ -390,14 +424,15 @@ def lpo_request_recheck_match(request, pk):
         return redirect('emailagent:lpo_request_review', pk=pk)
 
     if lpo_request.status == LPORequest.STATUS_CONFIRMED:
-        # A re-check can confirm WITHOUT a matching quotation: when no usable
-        # candidate is found, match_and_maybe_convert falls back to building
-        # the order straight from the LPO's own items
-        # (build_sales_order_directly_from_lpo), leaving matched_quotation
-        # None. Dereferencing it unguarded here raised AttributeError on that
-        # path -- a 500 shown to the user even though the Sales Order had in
-        # fact been created. Mirrors supervisor.evaluate_lpo, which already
-        # guards the same field this way.
+        # matched_quotation is always None on a freshly-confirmed re-check now:
+        # the order is built straight from the LPO's own items/prices, and the
+        # quotation lookup only runs when that FAILS (see
+        # match_and_maybe_convert). The guard stays rather than being dropped,
+        # both because rows confirmed by the older quotation-conversion path
+        # still carry one and because dereferencing it unguarded here raised
+        # AttributeError -- a 500 shown to the user even though the Sales Order
+        # had in fact been created. Mirrors supervisor.evaluate_lpo, which
+        # already guards the same field this way.
         quotation_number = (lpo_request.matched_quotation.quotation_number
                             if lpo_request.matched_quotation_id else '—')
         recorder.finish(

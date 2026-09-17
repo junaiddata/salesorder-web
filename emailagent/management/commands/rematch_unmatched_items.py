@@ -137,7 +137,7 @@ class Command(BaseCommand):
 
                 unit = match.get('unit') if match.get('unit') in ('pcs', 'ctn', 'roll') else 'pcs'
                 qty, qty_note = _resolve_quantity(enquiry_item.quantity, enquiry_item.unit, candidate)
-                price = _resolve_price(draft.matched_customer, candidate)
+                price = _resolve_price(candidate)
                 line_total = qty * price
 
                 zero_stock_note = (

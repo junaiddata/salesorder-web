@@ -197,6 +197,103 @@ def submit_item_rematch(items: list[MatchedItem], reasoning: str) -> str:
     return "Recorded"
 
 
+# Our own standard/default brand per product bucket -- the brand to quote (or
+# to build a submittal for) when the CUSTOMER DID NOT STATE ONE. Structured
+# rather than prose because two very different consumers need it:
+#   - quotation_agent's Claude prompt, which renders it as the table below
+#     (_DEFAULT_BRAND_TABLE_TEXT) and applies it with judgement, and
+#   - submittal_agent.default_brand_for_requirement(), which is deliberately
+#     NOT a tool-calling agent (see that module's header) and so needs a real
+#     lookup table it can keyword-match against.
+# Keeping ONE definition means a bucket added/retargeted here changes both at
+# once; a second, hand-maintained copy in submittal_agent would silently drift
+# and start drafting submittals for a brand we no longer default to.
+#
+# `bucket`/`prompt_suffix` are the exact prompt wording (order preserved --
+# changing it changes the prompt). `keywords` and `priority` are used only by
+# the deterministic submittal-side matcher: lower priority is tested first, so
+# a specific bucket wins over a generic one -- the same judgement the prompt
+# asks Claude for ("a floor drain or manhole cover is Drainage even if its
+# category was tagged generically as Sanitary Ware"), and the reason the
+# broadest buckets (Pipes & Fittings, Sanitary Ware) are tested LAST.
+DEFAULT_BRANDS = [
+    {
+        'brand': 'COSMOPLAST',
+        'bucket': 'Pipes & Fittings (PVC/PPR/CPVC pipes, elbows, tees, sockets, unions, reducers, etc.)',
+        'prompt_suffix': ' (search the catalog brand token "COSMO", which is how every Cosmoplast '
+                         'item is recorded -- e.g. "COSMO - UPVC FITTINGS")',
+        'priority': 80,
+        'keywords': ('pipe', 'pipes', 'fitting', 'fittings', 'elbow', 'tee', 'socket',
+                     'union', 'reducer', 'coupling', 'bend', 'upvc', 'ppr', 'cpvc', 'pvc'),
+    },
+    {
+        'brand': 'ARISTON',
+        'bucket': 'Water Heaters',
+        'prompt_suffix': ' (the "ARISTON - ITALY" catalog brand specifically -- not the '
+                         'ARISTON-CHINA/BANGLADESH/OLD/SOLAR variants)',
+        'priority': 30,
+        'keywords': ('water heater', 'water heaters', 'geyser', 'calorifier', 'heater', 'heaters'),
+    },
+    {
+        'brand': 'PEGLER',
+        'bucket': 'Valves (gate/ball/check/angle/pressure-reducing, etc.)',
+        'prompt_suffix': '',
+        'priority': 60,
+        'keywords': ('valve', 'valves', 'prv', 'pressure reducing', 'pressure-reducing', 'strainer'),
+    },
+    {
+        'brand': 'GROHE',
+        'bucket': 'Bathroom Fittings & Sanitary Ware (taps, mixers, showers, basins, WC fittings -- fixtures, not drainage)',
+        'prompt_suffix': '',
+        'priority': 70,
+        'keywords': ('sanitary ware', 'sanitaryware', 'sanitary', 'bathroom', 'mixer', 'mixers',
+                     'faucet', 'tap', 'taps', 'shower', 'showers', 'basin', 'wc', 'water closet', 'bidet'),
+    },
+    {
+        'brand': 'OATEY',
+        'bucket': 'Solvent Cement & Glue',
+        'prompt_suffix': '',
+        'priority': 10,
+        'keywords': ('solvent cement', 'solvent', 'glue', 'adhesive'),
+    },
+    {
+        'brand': 'AQUAVERA',
+        'bucket': 'Drainage / manhole covers / floor traps & cleanouts',
+        'prompt_suffix': '',
+        'priority': 20,
+        'keywords': ('drainage', 'drain', 'drains', 'manhole', 'floor trap', 'gully',
+                     'cleanout', 'clean out', 'grating', 'gratings'),
+    },
+    {
+        'brand': 'JETFIX',
+        'bucket': 'Hanging Clamps (pipe clamps/brackets)',
+        'prompt_suffix': '',
+        'priority': 40,
+        'keywords': ('hanging clamp', 'pipe clamp', 'clamp', 'clamps', 'hanger', 'hangers', 'bracket', 'brackets'),
+    },
+    {
+        'brand': 'JOMIX',
+        'bucket': 'Flexible Hose',
+        'prompt_suffix': '',
+        # Deliberately tested AFTER Valves despite both being specific product
+        # buckets: "hose" shows up as a modifier on other products far more
+        # often than "valve" does ("hose connection", "hose union", "hose bib"),
+        # so a description mentioning both is nearly always a valve WITH a hose
+        # connection rather than a hose.
+        'priority': 65,
+        'keywords': ('flexible hose', 'flexi hose', 'flexible connector', 'hose', 'hoses'),
+    },
+]
+
+# The default-brand table exactly as it appears in the prompt -- generated from
+# DEFAULT_BRANDS so the prompt and the submittal-side matcher can never disagree
+# about which brand a bucket defaults to.
+_DEFAULT_BRAND_TABLE_TEXT = ''.join(
+    f"  {entry['bucket']} -> {entry['brand']}{entry['prompt_suffix']}\n"
+    for entry in DEFAULT_BRANDS
+)
+
+
 # Shared between the initial full draft and the later unmatched-items
 # re-check -- keeping this in one place means a synonym/rule added for one
 # flow automatically applies to the other.
@@ -362,19 +459,7 @@ _ITEM_MATCH_RETRY_RULES = (
     "default_brand_applied=True on that item -- this is required so the "
     "quotation can flag to the client that no brand was specified and our "
     "standard brand was used instead:\n"
-    "  Pipes & Fittings (PVC/PPR/CPVC pipes, elbows, tees, sockets, unions, "
-    "reducers, etc.) -> COSMOPLAST (search the catalog brand token \"COSMO\", "
-    "which is how every Cosmoplast item is recorded -- e.g. \"COSMO - UPVC "
-    "FITTINGS\")\n"
-    "  Water Heaters -> ARISTON (the \"ARISTON - ITALY\" catalog brand "
-    "specifically -- not the ARISTON-CHINA/BANGLADESH/OLD/SOLAR variants)\n"
-    "  Valves (gate/ball/check/angle/pressure-reducing, etc.) -> PEGLER\n"
-    "  Bathroom Fittings & Sanitary Ware (taps, mixers, showers, basins, WC "
-    "fittings -- fixtures, not drainage) -> GROHE\n"
-    "  Solvent Cement & Glue -> OATEY\n"
-    "  Drainage / manhole covers / floor traps & cleanouts -> AQUAVERA\n"
-    "  Hanging Clamps (pipe clamps/brackets) -> JETFIX\n"
-    "  Flexible Hose -> JOMIX\n\n"
+    + _DEFAULT_BRAND_TABLE_TEXT + "\n"
 )
 
 

@@ -1139,7 +1139,7 @@ def submittal_generate_from_quotation(request, quotation_id):
     if source_email:
         sibling_ids = submittal_agent.sibling_quotation_ids(source_email) - {quotation.id}
         if sibling_ids:
-            hints, top_brand_name = submittal_agent.quotation_item_hints(quotation, item_ids)
+            hints, top_brand_name, _brand_source = submittal_agent.quotation_item_hints(quotation, item_ids)
             prelim_brand, prelim_matched, _ = submittal_agent.match_submittal_materials(top_brand_name, hints)
             shared = None
             if prelim_brand:
@@ -1339,20 +1339,38 @@ def submittal_send_email(request, pk):
         )
         return redirect('submittal:detail', pk=pk)
 
+    sent_at = timezone.now()
     submittal.emailed_to = to_raw
-    submittal.emailed_at = timezone.now()
+    submittal.emailed_at = sent_at
     submittal.emailed_message_id = outbound_message_id
     submittal.status = Submittal.STATUS_SENT
     submittal.save(update_fields=['emailed_to', 'emailed_at', 'emailed_message_id', 'status'])
 
+    # Same best-effort Sent-folder copy as send_quotation_email -- see there
+    # (and emailagent/sent_mail.py) for why a failure here must never be
+    # reported as a send failure.
+    from emailagent.sent_mail import save_to_sent
+    copied_to_sent = save_to_sent(email, sent_at=sent_at.timestamp())
+
     send_recorder.finish(
         summary=f"sent to {', '.join(to_list)}" + (f" (cc: {', '.join(cc_list)})" if cc_list else "") +
-                f" by {request.user.get_username()}",
+                f" by {request.user.get_username()}" +
+                ("" if copied_to_sent else " -- copy to Sent folder FAILED"),
         submittal=submittal,
+        issues=None if copied_to_sent else [
+            "The submittal was delivered, but a copy could not be filed in the Sent folder -- "
+            "check the IMAP settings/credentials for the sending account."
+        ],
     )
     cc_suffix = f" (cc: {', '.join(cc_list)})" if cc_list else ''
     messages.success(
         request,
         f"The submittal for {submittal.project} has been emailed to {', '.join(to_list)}{cc_suffix}.",
     )
+    if not copied_to_sent:
+        messages.warning(
+            request,
+            'The submittal was sent successfully, but a copy could not be saved to the Sent folder, '
+            'so it will not appear there. No need to resend -- the client has received it.',
+        )
     return redirect('submittal:detail', pk=pk)

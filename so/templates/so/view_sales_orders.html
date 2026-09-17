@@ -122,6 +122,31 @@
             background-color: rgba(67, 97, 238, 0.15);
             color: var(--primary);
         }
+
+        /* Where the order came from -- SalesOrder.created_via. Deliberately
+           quieter and smaller than .status-badge: this is provenance, which
+           never changes, and must not compete with the order's live status
+           for attention. */
+        .origin-badge {
+            display: inline-block;
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.16rem 0.5rem;
+            border-radius: 50px;
+            vertical-align: middle;
+            margin-left: 0.4rem;
+            white-space: nowrap;
+        }
+
+        .origin-agent {
+            background-color: rgba(111, 66, 193, 0.13);
+            color: #6f42c1;
+        }
+
+        .origin-manual {
+            background-color: rgba(108, 117, 125, 0.13);
+            color: #6c757d;
+        }
         
         .nav-tabs .nav-link {
             border: none;

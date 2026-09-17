@@ -249,6 +249,24 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
+# A copy of every quotation/submittal we email is filed into the sending
+# account's IMAP Sent folder (see emailagent/sent_mail.py) -- SMTP alone puts
+# nothing in your own mailbox, so without this the mail reaches the client but
+# is invisible in sales@junaid.ae's Sent folder.
+#
+# These all default to the OUTLOOK_IMAP_* mailbox above, which IS the account
+# we send as (EMAIL_HOST_USER), so nothing normally needs setting here.
+# Override only if the sending account and that polled mailbox ever diverge.
+# SENT_IMAP_FOLDER empty (the default) means "ask the server" -- the folder
+# advertised with RFC 6154's \Sent attribute, which is safer than assuming a
+# name, since APPENDing to a folder that doesn't exist can silently create a
+# second, empty one beside the real Sent.
+SENT_IMAP_HOST = os.getenv('SENT_IMAP_HOST', '')
+SENT_IMAP_PORT = int(os.getenv('SENT_IMAP_PORT', '0'))
+SENT_IMAP_USER = os.getenv('SENT_IMAP_USER', '')
+SENT_IMAP_PASSWORD = os.getenv('SENT_IMAP_PASSWORD', '')
+SENT_IMAP_FOLDER = os.getenv('SENT_IMAP_FOLDER', '')
+
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 EMAILAGENT_CLASSIFICATION_MODEL = os.getenv('EMAILAGENT_CLASSIFICATION_MODEL', 'claude-sonnet-5')
 # Cheap/fast model used only for the triage pre-check in classify_email --

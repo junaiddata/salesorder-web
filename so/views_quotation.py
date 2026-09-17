@@ -2767,17 +2767,36 @@ def send_quotation_email(request, quotation_id):
         return redirect('view_quotation_details', quotation_id=quotation_id)
 
     from django.utils import timezone
+    sent_at = timezone.now()
     quotation.emailed_to = to_raw
-    quotation.emailed_at = timezone.now()
+    quotation.emailed_at = sent_at
     quotation.emailed_message_id = outbound_message_id
     quotation.save(update_fields=['emailed_to', 'emailed_at', 'emailed_message_id'])
+
+    # File a copy in the Sent folder. Strictly after the send and deliberately
+    # not allowed to fail the request: the client already has the quotation, so
+    # reporting an error here would prompt a re-send and they would receive it
+    # twice. A failure is recorded on the AgentRun (and warned about) instead.
+    from emailagent.sent_mail import save_to_sent
+    copied_to_sent = save_to_sent(email, sent_at=sent_at.timestamp())
 
     send_recorder.finish(
         summary=f"sent to {', '.join(to_list)}" + (f" (cc: {', '.join(cc_list)})" if cc_list else "") +
                 (f" with {len(extra_attachment_names)} extra attachment(s)" if extra_attachment_names else "") +
-                f" by {request.user.get_username()}",
+                f" by {request.user.get_username()}" +
+                ("" if copied_to_sent else " -- copy to Sent folder FAILED"),
+        issues=None if copied_to_sent else [
+            "The quotation was delivered, but a copy could not be filed in the Sent folder -- "
+            "check the IMAP settings/credentials for the sending account."
+        ],
     )
     messages.success(request, f'Quotation sent to {", ".join(to_list)}.')
+    if not copied_to_sent:
+        messages.warning(
+            request,
+            'The quotation was sent successfully, but a copy could not be saved to the Sent folder, '
+            'so it will not appear there. No need to resend -- the client has received it.',
+        )
     return redirect('view_quotation_details', quotation_id=quotation_id)
 
 

@@ -12,7 +12,7 @@
         
         <div class="d-flex justify-content-between align-items-start mb-3">
           <div>
-            <h5 class="mb-1">Order #{{ order.order_number }}</h5>
+            <h5 class="mb-1">Order #{{ order.order_number }}{% if order.created_via == 'agent_lpo_direct' %}<span class="origin-badge origin-agent" title="Raised automatically by the LPO agent, straight from the customer's own PO -- no quotation involved."><i class="fas fa-robot"></i> Agent &middot; LPO</span>{% elif order.created_via == 'agent_lpo' %}<span class="origin-badge origin-agent" title="Raised automatically by the LPO agent, by converting a matched quotation."><i class="fas fa-robot"></i> Agent &middot; Quotation</span>{% else %}<span class="origin-badge origin-manual" title="Created by a user -- the Create Order screen, the quotation Convert button, or a human picking a quotation on the LPO review page."><i class="fas fa-user"></i> Manual</span>{% endif %}</h5>
             {% if order.id >= 111 %}
               <span class="order-date">{{ order.order_date_time|date:"M j, g:i a" }}</span>
             {% else %}

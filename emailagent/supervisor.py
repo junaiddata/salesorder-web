@@ -168,10 +168,12 @@ def evaluate_lpo(lpo_request):
         # Sourced from the SalesOrder itself (see so.models.SalesOrder.created_via)
         # rather than inferred from how this AgentRun was triggered, so the label is
         # correct however/whenever confirmation actually happened -- immediately at
-        # ingestion (agent_lpo), a later lpo_request_recheck_match (also agent_lpo),
-        # or a human on this review page (manual).
+        # ingestion (agent_lpo_direct), a later lpo_request_recheck_match (also
+        # agent_lpo_direct), a human on this review page (manual), or -- for orders
+        # raised before the agent went LPO-only -- the old quotation-conversion
+        # path (agent_lpo).
         via = lpo_request.sales_order.created_via if lpo_request.sales_order_id else ''
-        via_label = ' (auto)' if via == 'agent_lpo' else ' (manual)' if via == 'manual' else ''
+        via_label = ' (auto)' if via in ('agent_lpo', 'agent_lpo_direct') else ' (manual)' if via == 'manual' else ''
         summary = f"lpo={lpo_request.lpo_number or '—'} matched={quotation_number} sales_order={order_number}{via_label}"
         return AgentRun.STATUS_SUCCESS, '', summary, [], lpo_request.matched_quotation, lpo_request.sales_order
 

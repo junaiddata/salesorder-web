@@ -44,6 +44,20 @@
     .notice-x.danger { background: var(--danger-50); border: 1px solid #fecaca; color: #7f1d1d; }
     .notice-x.danger i.notice-ic { color: var(--danger); }
 
+    .notice-x .shortage-list { margin: .5rem 0 0; padding-left: 1.15rem; }
+    .notice-x .shortage-list li { margin-bottom: .28rem; }
+    .notice-x .shortage-list code { font-size: .82rem; font-weight: 600; }
+
+    /* Quiet counterpart to .notice-x.danger, shown when nothing on THIS LPO
+       is short -- keeps the consolidated report one click away without
+       raising an alarm about someone else's order. */
+    .quiet-link {
+        font-size: .82rem; color: var(--muted);
+        margin: -.4rem 0 1.25rem; display: flex; align-items: center; gap: .45rem;
+    }
+    .quiet-link a { color: var(--muted); text-decoration: underline; }
+    .quiet-link a:hover { color: var(--body); }
+
     .tbl-x th.num, .tbl-x td.num { text-align: right; }
 
     /* ── LPO totals footer ── */
@@ -151,7 +165,9 @@
     <div class="notice-x success">
         <i class="fas fa-circle-check notice-ic"></i>
         <div>
-            {% if lpo_request.sales_order.created_via == 'agent_lpo' %}
+            {% if lpo_request.sales_order.created_via == 'agent_lpo_direct' %}
+            <strong><i class="fas fa-robot"></i> Auto-created by the LPO agent</strong> — raised directly from this LPO's own items and prices. No quotation was involved and no one reviewed the item matching or pricing before the order was created.
+            {% elif lpo_request.sales_order.created_via == 'agent_lpo' %}
             <strong><i class="fas fa-robot"></i> Auto-created by the LPO agent</strong> — matched to a single, confident quotation with no human involved.
             {% elif lpo_request.reviewed_by %}
             <strong>Sales order created</strong> — manually matched and converted by {{ lpo_request.reviewed_by.username }} on {{ lpo_request.reviewed_at|date:"d M Y, H:i" }}.
@@ -164,16 +180,27 @@
             </div>
         </div>
     </div>
-    {% if stock_shortage_report and stock_shortage_report.lines %}
+    {% if shortage_lines %}
     <div class="notice-x danger">
         <i class="fas fa-triangle-exclamation notice-ic"></i>
         <div>
-            <strong>Stock shortage detected</strong> — {{ stock_shortage_report.lines|length }} item(s) can't be fully covered by current stock across all pending LPO orders (not necessarily this one specifically -- the report is consolidated).
+            <strong>Stock shortage on this LPO</strong> — {{ shortage_lines|length }} of this order's item{{ shortage_lines|length|pluralize }} can't be fully covered by current stock:
+            <ul class="shortage-list">
+                {% for line in shortage_lines %}
+                <li><code>{{ line.item_code }}</code> {{ line.description }} — this LPO needs {{ line.this_lpo_qty|floatformat:"-2" }}, {% if line.availability_unknown %}stock level never synced{% else %}{{ line.available_qty|floatformat:"-2" }} in stock{% endif %}{% if line.final_qty %}, short {{ line.final_qty|floatformat:"-2" }} once every pending LPO is counted{% endif %}.</li>
+                {% endfor %}
+            </ul>
             <div class="notice-actions">
                 <a href="{% url 'emailagent:stock_shortage_report' %}" class="btn-x sm btn-danger-x"><i class="fas fa-magnifying-glass"></i> View Consolidated Report</a>
             </div>
         </div>
     </div>
+    {% elif stock_shortage_report %}
+    <p class="quiet-link">
+        <i class="fas fa-circle-check"></i>
+        No stock shortage recorded against this order's items.
+        <a href="{% url 'emailagent:stock_shortage_report' %}">View consolidated stock report</a>
+    </p>
     {% endif %}
     {% endif %}
 
