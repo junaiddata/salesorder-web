@@ -60,8 +60,6 @@ def api_item_analysis_totals(request):
         {
             'item_code': row['item__item_code'],
             'total_qty': _num(row['total_qty']),
-            'ho_qty': 0,
-            'others_qty': 0,
             'total_2025': _num(row['total_2025']),
             'total_2026': _num(row['total_2026']),
         }
