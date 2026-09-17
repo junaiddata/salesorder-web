@@ -7,6 +7,7 @@ from . import sales_analysis_views
 from . import salesorder_views
 from . import quotation_combined_views
 from . import credit_note_analysis_views
+from . import api_views
 
 app_name = 'alabama'
 
@@ -59,4 +60,5 @@ urlpatterns = [
     path('item-analysis/export-excel/', item_analysis_views.export_item_analysis_excel, name='export_item_analysis_excel'),
     path('customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),
     path('customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
+    path('api/item-analysis-totals/', api_views.api_item_analysis_totals, name='api_item_analysis_totals'),
 ]
