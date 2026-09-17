@@ -22,19 +22,165 @@ def _normalize_reference(text):
     return _REF_NORMALIZE_RE.sub('', (text or '').upper())
 
 
+_COMPANY_WORD_RE = re.compile(r'[A-Z0-9]+')
+# Only spelling variants of the same legal form are ignored. Distinct forms
+# (PJSC, FZE, WLL, LTD, ...) stay significant -- "X PJSC" and "X LLC" can be
+# different entities, and this match can auto-create a real Sales Order.
+_LEGAL_SUFFIX_WORDS = {'LLC', 'CO', 'COMPANY', 'EST', 'ESTABLISHMENT'}
+
+
+def _normalize_company_name(text):
+    """'Menasco Mech. Contracting, (L.L.C.)' and 'MENASCO MECH CONTRACTING LLC'
+    both -> 'MENASCO MECH CONTRACTING': uppercased, punctuation dropped, runs
+    of single letters rejoined (L.L.C -> LLC), legal-form words removed."""
+    words = _COMPANY_WORD_RE.findall((text or '').upper().replace('&', ' AND '))
+    merged, run = [], ''
+    for word in words:
+        if len(word) == 1 and word.isalpha():
+            run += word
+            continue
+        if run:
+            merged.append(run)
+            run = ''
+        merged.append(word)
+    if run:
+        merged.append(run)
+    return ' '.join(w for w in merged if w not in _LEGAL_SUFFIX_WORDS)
+
+
 def _resolve_single_customer(customer_name):
     """Resolves a stated customer name to exactly one so.Customer, or None
     if it's blank, unresolved, or ambiguous (2+ matches) -- shared by
     find_matching_quotation's customer+item fallback and
     build_sales_order_directly_from_lpo, so an ambiguous customer name is
-    never silently guessed at by either path."""
+    never silently guessed at by either path.
+
+    Only when the plain substring lookup finds NOTHING, falls back to an
+    exact comparison of _normalize_company_name on both sides, so formatting
+    drift ("(L.L.C.)" vs "LLC", stray commas) alone can't drop a match -- still
+    requiring exactly one hit. A name that is already ambiguous stays so."""
     from so.models import Customer
 
     customer_name = (customer_name or '').strip()
     if not customer_name:
         return None
     matches = list(Customer.objects.filter(customer_name__icontains=customer_name)[:2])
+    if matches:
+        return matches[0] if len(matches) == 1 else None
+
+    normalized = _normalize_company_name(customer_name)
+    if not normalized:
+        return None
+    normalized_matches = [
+        customer_id for customer_id, name in Customer.objects.values_list('id', 'customer_name')
+        if _normalize_company_name(name) == normalized
+    ]
+    if len(normalized_matches) != 1:
+        return None
+    return Customer.objects.get(id=normalized_matches[0])
+
+
+def _normalize_trn(text):
+    """Digits only; '' unless it's a full 15-digit UAE TRN."""
+    digits = re.sub(r'\D', '', text or '')
+    return digits if len(digits) == 15 else ''
+
+
+def _resolve_customer_by_trn(trn):
+    """Exactly one so.Customer whose vat_number is this TRN, or None. Our own
+    TRN (settings.EMAILAGENT_OWN_TRNS) never resolves -- it's printed on every
+    LPO sent to us and is wrongly stored on some customer rows."""
+    from so.models import Customer
+
+    trn = _normalize_trn(trn)
+    if not trn or trn in {_normalize_trn(t) for t in settings.EMAILAGENT_OWN_TRNS}:
+        return None
+    matches = [c for c in Customer.objects.filter(vat_number__contains=trn)[:5]
+               if _normalize_trn(c.vat_number) == trn]
     return matches[0] if len(matches) == 1 else None
+
+
+def _resolve_lpo_customer(lpo_request):
+    """Returns (customer_or_None, how) -- `how` is 'TRN' or 'name' on success,
+    or a conflict explanation when the stated TRN and the stated name each
+    resolve to a DIFFERENT customer (never guessed between)."""
+    by_trn = _resolve_customer_by_trn(lpo_request.customer_trn_stated)
+    by_name = _resolve_single_customer(lpo_request.customer_name_stated)
+    if by_trn and by_name and by_trn.id != by_name.id:
+        return None, (
+            f"TRN {lpo_request.customer_trn_stated} belongs to {by_trn.customer_name} but the name "
+            f"resolves to {by_name.customer_name}"
+        )
+    if by_trn:
+        return by_trn, 'TRN'
+    if by_name:
+        return by_name, 'name'
+    return None, ''
+
+
+def _read_lpo_document_for_customer(attachment):
+    """(text, [(bytes, media_type)]) for the stored LPO attachment: a PDF's
+    text plus page 1 ALWAYS rendered as an image (the letterhead), or an image
+    attachment as-is. ('', []) when there's nothing readable."""
+    from . import classifier
+
+    if not attachment or not attachment.file:
+        return '', []
+    content_type = attachment.content_type or ''
+    if content_type != 'application/pdf' and not content_type.startswith('image/'):
+        return '', []
+    attachment.file.open('rb')
+    try:
+        data = attachment.file.read()
+    finally:
+        attachment.file.close()
+    if not data:
+        return '', []
+
+    if content_type == 'application/pdf':
+        text = classifier.extract_pdf_text(data, max_chars=8000)
+        images = [(png, 'image/png') for png in classifier.render_pdf_pages_as_images(data, max_pages=1)]
+        return text, images
+    return '', [(data, classifier._image_media_type(content_type))]
+
+
+def refine_lpo_customer(lpo_request):
+    """LPO-only second pass that re-reads the buyer's name/TRN from the LPO
+    document itself (classifier.extract_lpo_customer, with page 1 sent as an
+    image so a name that exists only in a letterhead logo is still seen).
+    Overwrites customer_name_stated only when it returns a name, so the
+    classifier's value stays as the fallback. Mutates `lpo_request` without
+    saving. Never raises; returns True if anything was updated."""
+    from . import classifier
+
+    tracked_email = lpo_request.tracked_email
+    try:
+        text, images = _read_lpo_document_for_customer(lpo_request.source_attachment)
+        if not text.strip() and not images:
+            return False
+        email_context = (
+            f"From: {tracked_email.sender_name} <{tracked_email.sender}>\n"
+            f"Subject: {tracked_email.subject}\n"
+            f"Body:\n{(tracked_email.body_text or '')[:3000]}"
+        )
+        extracted = classifier.extract_lpo_customer(text, images, email_context)
+    except Exception:
+        logger.exception(f"refine_lpo_customer failed for LPORequest {lpo_request.pk}")
+        return False
+
+    name = extracted['customer_name'][:255]
+    if _normalize_company_name(name).startswith('JUNAID SANITARY'):
+        name = ''  # our own name from the supplier block, not the buyer
+    trn = extracted['customer_trn'][:50]
+    if _normalize_trn(trn) in {_normalize_trn(t) for t in settings.EMAILAGENT_OWN_TRNS}:
+        trn = ''
+
+    if name:
+        lpo_request.customer_name_stated = name
+        lpo_request.customer_name_source = (extracted['name_source'] or 'LPO document')[:100]
+    if trn:
+        lpo_request.customer_trn_stated = trn
+    return bool(name or trn)
 
 
 def _parse_amount(text):
@@ -109,7 +255,7 @@ def find_matching_quotation(lpo_request):
                 best_score = top[0][0]
                 return candidates[0], LPORequest.MATCH_FUZZY_NUMBER, best_score, candidates
 
-    customer = _resolve_single_customer(lpo_request.customer_name_stated)
+    customer, _ = _resolve_lpo_customer(lpo_request)
     if customer:
         cutoff = (timezone.now() - timedelta(days=settings.EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS)).date()
         lpo_items = list(lpo_request.items.all())
@@ -280,11 +426,13 @@ def build_sales_order_directly_from_lpo(lpo_request):
     from emailagent.quotation_agent import _is_length_unit, _parse_quantity
     from so.models import OrderItem, SalesOrder
 
-    customer = _resolve_single_customer(lpo_request.customer_name_stated)
+    customer, matched_by = _resolve_lpo_customer(lpo_request)
     if not customer:
+        trn_note = f" (TRN {lpo_request.customer_trn_stated})" if lpo_request.customer_trn_stated else ''
+        conflict_note = f": {matched_by}" if matched_by else ''
         return None, (
-            f"Customer '{lpo_request.customer_name_stated or '(not stated)'}' could not be resolved "
-            "to exactly one existing customer."
+            f"Customer '{lpo_request.customer_name_stated or '(not stated)'}'{trn_note} could not be resolved "
+            f"to exactly one existing customer{conflict_note}."
         )
 
     lpo_items = list(lpo_request.items.all())
@@ -397,7 +545,8 @@ def build_sales_order_directly_from_lpo(lpo_request):
     return sales_order, (
         f"Auto-created Sales Order {sales_order.order_number} directly from this LPO's own "
         f"{len(resolved)} line item(s), matched to the catalog and priced at the LPO's own "
-        f"stated rates, for customer {customer.customer_name}. No quotation was involved."
+        f"stated rates, for customer {customer.customer_name} (matched by {matched_by}). "
+        "No quotation was involved."
     )
 
 
@@ -498,6 +647,8 @@ def process_lpo(tracked_email, result):
         lpo_request.lpo_number = result.lpo_number
         lpo_request.lpo_date = result.lpo_date
         lpo_request.customer_name_stated = result.lpo_customer_name
+        lpo_request.customer_name_source = 'email classifier' if result.lpo_customer_name else ''
+        lpo_request.customer_trn_stated = ''
         lpo_request.referenced_quotation_number = result.lpo_referenced_quotation_number
         lpo_request.delivery_terms = result.lpo_delivery_terms
         lpo_request.payment_terms = result.lpo_payment_terms
@@ -507,6 +658,11 @@ def process_lpo(tracked_email, result):
         lpo_request.total_vat = _parse_amount(result.lpo_total_vat)
         lpo_request.amount_in_words = result.lpo_amount_in_words
         lpo_request.source_attachment = _resolve_source_attachment(tracked_email, result)
+        # The classifier reads the LPO PDF as text only (a name that exists
+        # only in the letterhead logo is invisible to it) -- re-read just the
+        # buyer from the document with page 1 as an image. Never raises; keeps
+        # the classifier's name when it finds nothing.
+        refine_lpo_customer(lpo_request)
         lpo_request.save()
 
         lpo_request.items.all().delete()

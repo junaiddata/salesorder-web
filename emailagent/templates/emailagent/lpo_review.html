@@ -210,7 +210,8 @@
             <div class="kv-grid">
                 <div class="kv-item"><span class="kv-label">LPO Number</span><span class="kv-value {% if not lpo_request.lpo_number %}muted{% endif %}">{{ lpo_request.lpo_number|default:"—" }}</span></div>
                 <div class="kv-item"><span class="kv-label">LPO Date</span><span class="kv-value {% if not lpo_request.lpo_date %}muted{% endif %}">{{ lpo_request.lpo_date|default:"—" }}</span></div>
-                <div class="kv-item"><span class="kv-label">Customer (stated)</span><span class="kv-value {% if not lpo_request.customer_name_stated %}muted{% endif %}">{{ lpo_request.customer_name_stated|default:"—" }}</span></div>
+                <div class="kv-item"><span class="kv-label">Customer (stated)</span><span class="kv-value {% if not lpo_request.customer_name_stated %}muted{% endif %}">{{ lpo_request.customer_name_stated|default:"—" }}{% if lpo_request.customer_name_source %} <small class="muted">({{ lpo_request.customer_name_source }})</small>{% endif %}</span></div>
+                <div class="kv-item"><span class="kv-label">Customer TRN (stated)</span><span class="kv-value {% if not lpo_request.customer_trn_stated %}muted{% endif %}">{{ lpo_request.customer_trn_stated|default:"—" }}</span></div>
                 <div class="kv-item"><span class="kv-label">Referenced Quotation</span><span class="kv-value {% if not lpo_request.referenced_quotation_number %}muted{% endif %}">{{ lpo_request.referenced_quotation_number|default:"—" }}</span></div>
                 <div class="kv-item"><span class="kv-label">Delivery Terms</span><span class="kv-value {% if not lpo_request.delivery_terms %}muted{% endif %}">{{ lpo_request.delivery_terms|default:"—" }}</span></div>
                 <div class="kv-item"><span class="kv-label">Payment Terms</span><span class="kv-value {% if not lpo_request.payment_terms %}muted{% endif %}">{{ lpo_request.payment_terms|default:"—" }}</span></div>

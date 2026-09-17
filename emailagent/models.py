@@ -671,6 +671,16 @@ class LPORequest(models.Model):
     lpo_number = models.CharField(max_length=100, blank=True, default='')
     lpo_date = models.CharField(max_length=100, blank=True, default='')
     customer_name_stated = models.CharField(max_length=255, blank=True, default='')
+    customer_trn_stated = models.CharField(
+        max_length=50, blank=True, default='',
+        help_text="Buyer's TRN as printed on the LPO (lpo_agent.refine_lpo_customer) -- matched against "
+                  "so.Customer.vat_number before the name.",
+    )
+    customer_name_source = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text="Where customer_name_stated was read from, e.g. 'letterhead logo' -- 'email classifier' "
+                  "when the dedicated LPO customer extraction found nothing and the classifier's value was kept.",
+    )
     referenced_quotation_number = models.CharField(max_length=100, blank=True, default='')
     delivery_terms = models.TextField(blank=True, default='')
     payment_terms = models.TextField(blank=True, default='')

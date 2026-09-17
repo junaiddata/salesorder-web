@@ -819,6 +819,104 @@ def extract_lpo_details(pdf_text: str, page_images: list = None) -> dict:
     }
 
 
+@beta_tool
+def submit_lpo_customer(customer_name: str = "", customer_trn: str = "", name_source: str = "") -> str:
+    """Record the BUYER on this Purchase Order / LPO -- the company that
+    issued it. Call this exactly once -- do not describe your answer in text.
+
+    Args:
+        customer_name: The buyer's full company name exactly as printed
+            (e.g. "SPACE ELECTROMECHANICAL WORKS L.L.C"). Take it from the
+            document's own letterhead/logo at the top of page 1 (read the
+            page image -- a logo often carries the name when the text layer
+            doesn't), or from a "Buyer"/"From"/"Issued by"/"Bill to" block.
+            NEVER the supplier/vendor the PO is addressed to (that is us --
+            see the instructions). "" if no buyer name is shown anywhere.
+        customer_trn: The BUYER's own TRN / VAT registration number as
+            printed (UAE TRNs are 15 digits). Only when it clearly belongs to
+            the buyer -- never the supplier/vendor's TRN. "" if not shown or
+            if you can't tell whose it is.
+        name_source: Where customer_name was read from, in a few words --
+            e.g. "letterhead logo", "letterhead text", "Buyer block", "email
+            signature". "" if customer_name is "".
+    """
+    return "Recorded"
+
+
+_LPO_CUSTOMER_PROMPT = (
+    "The content below is a customer's Purchase Order / LPO sent to us, "
+    "JUNAID SANITARY & ELECTRICAL MAT. TRDG. LLC (our TRN is 100225006400003). "
+    "We are the SUPPLIER on this document. Identify the BUYER -- the company that "
+    "issued the PO. Its name is usually in the letterhead/logo at the top of page 1 "
+    "(look at the page image: the name is often only inside the logo graphic and "
+    "missing from the extracted text), or in a Buyer/From/Issued-by block. Never "
+    "return our own company name or our TRN, or anything from the 'To'/'Supplier'/"
+    "'Vendor' block addressed to us. Copy the name and TRN exactly as printed -- "
+    "never guess or invent. The email's sender and body are included only as a "
+    "fallback for when the document itself shows no buyer name. Record the answer "
+    "via submit_lpo_customer."
+)
+
+
+def extract_lpo_customer(document_text: str, images: list = None, email_context: str = "") -> dict:
+    """LPO-only, best-effort extraction of just the buyer's name/TRN from an
+    LPO document -- used by lpo_agent.refine_lpo_customer after classify_email
+    has already flagged the email is_lpo. Unlike build_classification_content
+    it always receives page 1 as an image, so a company name that exists only
+    inside a letterhead logo is still readable; kept separate so RFQ and
+    submittal classification cost/behaviour are untouched.
+
+    images: list of (bytes, media_type) tuples. Never raises; returns
+    {'customer_name': '', 'customer_trn': '', 'name_source': ''} on any
+    failure."""
+    empty = {'customer_name': '', 'customer_trn': '', 'name_source': ''}
+    text = (
+        f"{_LPO_CUSTOMER_PROMPT}\n\n"
+        f"--- LPO document (extracted text; may be empty or incomplete) ---\n{document_text or '(no text layer)'}\n\n"
+        f"--- Email (fallback context only) ---\n{email_context}"
+    )
+    content = [{"type": "text", "text": text}]
+    for data_bytes, media_type in (images or []):
+        if not data_bytes:
+            continue
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type,
+                       "data": base64.standard_b64encode(data_bytes).decode('utf-8')},
+        })
+
+    captured = None
+    try:
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=settings.EMAILAGENT_CLAUDE_TIMEOUT_SECS)
+        runner = client.beta.messages.tool_runner(
+            model=settings.EMAILAGENT_CLASSIFICATION_MODEL,
+            max_tokens=1000,
+            thinking={"type": "disabled"},
+            tools=[submit_lpo_customer],
+            messages=[{"role": "user", "content": content}],
+            max_iterations=2,
+        )
+        for message in runner:
+            for block in message.content:
+                if block.type == "tool_use" and block.name == "submit_lpo_customer":
+                    captured = block.input
+                    break
+            if captured is not None:
+                break
+    except anthropic.APIError as exc:
+        logger.warning(f"extract_lpo_customer agent loop API error: {exc!r}")
+    except Exception:
+        logger.exception("extract_lpo_customer agent loop unexpected failure")
+
+    if captured is None:
+        return empty
+    return {
+        'customer_name': (captured.get('customer_name', '') or '').strip(),
+        'customer_trn': (captured.get('customer_trn', '') or '').strip(),
+        'name_source': (captured.get('name_source', '') or '').strip(),
+    }
+
+
 def decide_status(category: str, confidence: float) -> str:
     from emailagent.models import TrackedEmail
 

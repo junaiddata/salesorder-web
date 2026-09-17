@@ -343,6 +343,12 @@ EMAILAGENT_REVIEW_PAGE_SIZE = int(os.getenv('EMAILAGENT_REVIEW_PAGE_SIZE', '10')
 # quotations get surfaced to a human on the "needs review" page.
 EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD = float(os.getenv('EMAILAGENT_LPO_FUZZY_MATCH_THRESHOLD', '0.8'))
 EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS = int(os.getenv('EMAILAGENT_LPO_MATCH_LOOKBACK_DAYS', '180'))
+# Our OWN TRN(s) -- printed in the supplier block of every LPO sent to us, so
+# never usable to identify the buyer (and it is wrongly stored on a few
+# so.Customer rows, which would otherwise auto-match). Comma-separated.
+EMAILAGENT_OWN_TRNS = [
+    t.strip() for t in os.getenv('EMAILAGENT_OWN_TRNS', '100225006400003').split(',') if t.strip()
+]
 
 # Sender addresses that must never be tracked as customer enquiries, on
 # either mailbox (Gmail or Outlook -- see services.process_new_message).
