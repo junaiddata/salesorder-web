@@ -1672,8 +1672,8 @@ def _add_suggested_item(request, quotation):
         # Adding a line changes what was approved, so a previously-approved
         # quotation drops back to Pending and is re-judged by the auto-approval
         # block on the next render -- which re-approves it immediately if the
-        # new line is above cost and in stock, and leaves it Pending for a
-        # human if it isn't. 'On Hold' is left alone: that is a deliberate
+        # new line is above cost, and leaves it Pending for a human if it
+        # isn't. 'On Hold' is left alone: that is a deliberate
         # human decision, not an automatic state.
         if quotation.status == 'Approved':
             quotation.status = 'Pending'
@@ -1733,8 +1733,8 @@ def view_quotation_details(request, quotation_id):
             # Stock check -- a line quoted at 0 available stock (e.g. the
             # email-tracking agent quoting a specifically-requested brand
             # that's currently out of stock, see emailagent/quotation_agent.py)
-            # needs a human to confirm availability before this goes out, so
-            # it must never slip through the auto-approval below.
+            # is flagged on the page for the reviewer. Display only: it does
+            # not block the auto-approval below.
             live_stock = item.item.total_available_stock
             if live_stock is None:
                 live_stock = item.item.item_stock
@@ -1802,13 +1802,13 @@ def view_quotation_details(request, quotation_id):
     # Once a discount is approved (or there was never one), auto-approval behaves exactly as before.
     discount_unresolved = bool(quotation.discount_type) and quotation.discount_approval_status in ('PENDING', 'REJECTED')
 
-    # 🔹 Automatic approval if no undercost items (suppressed while a discount is unresolved,
-    # or while any line is quoted at 0 stock -- e.g. a brand the customer specifically
-    # requested that's currently unavailable; see has_zero_stock_items above).
+    # 🔹 Automatic approval if no undercost items (suppressed while a discount is unresolved).
+    # 0-stock lines do NOT block approval -- they're only flagged on the page
+    # (has_zero_stock_items / item.is_out_of_stock above).
     # Requires at least one item -- an empty quotation trivially has "no
     # undercost items" but that's nothing to approve, not a clean pass; it
     # must stay Pending for a human to complete and review.
-    if (not discount_unresolved and not has_undercost_items and not has_zero_stock_items
+    if (not discount_unresolved and not has_undercost_items
             and quotation_items and quotation.status != 'Approved'):
         quotation.status = 'Approved'
         quotation.save()
@@ -1872,12 +1872,10 @@ def view_quotation_details(request, quotation_id):
 
             # Cascade: approving the discount is the only thing that was pausing auto-approval —
             # if pricing is otherwise clean, auto-apply full approval in this same click.
-            if not has_undercost_items and not has_zero_stock_items:
+            if not has_undercost_items:
                 quotation.status = 'Approved'
                 update_fields.append('status')
                 messages.success(request, 'Discount approved — quotation auto-approved since all prices are above minimum selling price.')
-            elif has_zero_stock_items:
-                messages.success(request, 'Discount approved. Note: one or more items are quoted at 0 stock, so the quotation itself still needs separate approval.')
             else:
                 messages.success(request, 'Discount approved. Note: one or more items are still priced below cost, so the quotation itself still needs separate approval.')
 

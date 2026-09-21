@@ -1173,10 +1173,8 @@ def draft_quotation(tracked_email) -> None:
                 # Always quote the best catalog match found, even at 0 stock,
                 # rather than silently dropping the line -- regardless of
                 # whether a specific brand was requested. view_quotation_details
-                # (so/views_quotation.py) checks live stock on every quoted item
-                # and keeps the quotation Pending -- it is never auto-approved
-                # while one is at 0 stock -- so a human confirms availability
-                # before approving/sending.
+                # (so/views_quotation.py) flags any quoted item at 0 live stock
+                # for the reviewer; 0 stock does not block auto-approval.
                 matched_item = candidate
         enquiry_item.matched_item = matched_item
         enquiry_item.matched_price = matched_item.item_price if matched_item else None
@@ -1672,9 +1670,9 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             stock = candidate.item_stock
         # Always quote the best match found, even at 0 stock, rather than
         # skipping it -- regardless of brand (see the matching rule in
-        # draft_quotation above). view_quotation_details keeps the quotation
-        # Pending while any line is at 0 stock, so a human confirms
-        # availability before approving/sending.
+        # draft_quotation above). 0 stock does not hold the quotation Pending;
+        # the zero_stock_note below and the stock flag on
+        # view_quotation_details are what alert the reviewer.
 
         # A genuine brand switch on an already-matched line (as opposed to a
         # first-time match, or a same-brand item-code swap) -- flagged so the
@@ -1778,8 +1776,8 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
         if reopened:
             # Reset to the same starting point any other edit leaves a quotation
             # in -- view_quotation_details' existing auto-approval check will
-            # re-approve it on next view if every line is still clean (priced
-            # above cost, in stock), or leave it Pending for a human otherwise.
+            # re-approve it on next view if every line is still priced above
+            # cost, or leave it Pending for a human otherwise.
             # Sending the revised quotation to the client is still a separate,
             # always-manual "Send Quotation" click -- never automatic.
             quotation.status = 'Pending'
