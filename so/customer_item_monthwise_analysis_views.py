@@ -4,8 +4,8 @@ Customer-wise Item Sold — Month-wise Analysis
 Pivot table:
   - Rows    = customers (collapsed by default; expand to reveal their items)
   - Nested  = items bought by that customer, each with 3 sub-rows: Qty / Avg Rate / GP%
-  - Columns = months from Jan 2025 through the current month
-  - Filters = Salesman (multi-select), Customer search, Item search
+  - Columns = Jan..Dec of the selected year
+  - Filters = Year, Salesman (multi-select), Brand (multi-select), Store, Customer search, Item search
 
 Net qty/sales/GP = AR Invoice line values + AR Credit Memo line values, summed
 directly (credit-memo lines are stored negative, so summing nets returns
@@ -33,35 +33,19 @@ from .brandwise_sales_analysis_views import (
 MAX_ITEMS_PER_CUSTOMER = 40
 
 
-def _month_columns():
-    """Month columns paired by month name across years: Jan-25, Jan-26, Feb-25,
-    Feb-26, ... through Dec-25 (2026 months beyond the current month are omitted
-    since they have no data yet)."""
-    today = date.today()
-    valid_year_months = set()
-    y, m = 2025, 1
-    while (y, m) <= (today.year, today.month):
-        valid_year_months.add((y, m))
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-    years = sorted({yr for yr, _ in valid_year_months})
-
-    months = []
-    for month_num in range(1, 13):
-        for yr in years:
-            if (yr, month_num) in valid_year_months:
-                months.append({
-                    'year': yr, 'month': month_num,
-                    'label': f"{MONTH_NAMES_SHORT[month_num - 1]}-{str(yr)[2:]}",
-                })
-    # Mark the last column of each month-name group (e.g. Jan-26, right before
-    # Feb-25 starts) so the table can draw a thicker divider there.
-    for i, m in enumerate(months):
-        is_last = (i == len(months) - 1) or (months[i + 1]['month'] != m['month'])
-        m['group_end'] = is_last
-    return months
+def _month_columns(year):
+    """The 12 month columns of `year` — Jan..Dec, always the full year (months
+    with no data yet simply come back empty) so every year reads the same way.
+    Quarter ends are marked so the table can draw a thicker divider there."""
+    return [
+        {
+            'year': year,
+            'month': m,
+            'label': f"{MONTH_NAMES_SHORT[m - 1]}-{str(year)[2:]}",
+            'group_end': m % 3 == 0 and m != 12,
+        }
+        for m in range(1, 13)
+    ]
 
 
 def _compute_customer_item_monthwise(request):
@@ -71,7 +55,18 @@ def _compute_customer_item_monthwise(request):
     months/years, and the option lists for the filter widgets).
     """
     is_admin = _user_is_admin(request.user)
-    months = _month_columns()
+
+    # ── Year filter (same range/default as Brandwise Sales Analysis) ──
+    current_year = date.today().year
+    calendar_years = list(range(2024, current_year + 2))
+    try:
+        selected_year = int(request.GET.get('year', '').strip() or current_year)
+    except (ValueError, TypeError):
+        selected_year = current_year
+    if selected_year not in calendar_years:
+        selected_year = current_year
+
+    months = _month_columns(selected_year)
     n_months = len(months)
     month_index = {(m['year'], m['month']): i for i, m in enumerate(months)}
     years = sorted({m['year'] for m in months})
@@ -79,11 +74,14 @@ def _compute_customer_item_monthwise(request):
 
     selected_salesmen = [s.strip() for s in request.GET.getlist('salesman') if s.strip()]
     selected_firms = list(dict.fromkeys(f.strip() for f in request.GET.getlist('firm') if f and f.strip()))
+    store_filter = request.GET.get('store', '').strip()
+    if store_filter not in ('HO', 'Others'):
+        store_filter = ''
     customer_search = request.GET.get('customer', '').strip()
     item_search = request.GET.get('item', '').strip()
 
-    start_date = date(2025, 1, 1)
-    end_date = date.today()
+    start_date = date(selected_year, 1, 1)
+    end_date = date(selected_year, 12, 31)
 
     scope_q = salesman_scope_q_salesorder(request.user)
     inv_headers = (
@@ -99,6 +97,9 @@ def _compute_customer_item_monthwise(request):
     if selected_salesmen:
         inv_headers = inv_headers.filter(salesman_name__in=selected_salesmen)
         cm_headers = cm_headers.filter(salesman_name__in=selected_salesmen)
+    if store_filter:
+        inv_headers = inv_headers.filter(store=store_filter)
+        cm_headers = cm_headers.filter(store=store_filter)
 
     inv_items = (
         SAPARInvoiceItem.objects.filter(invoice__in=inv_headers)
@@ -229,7 +230,7 @@ def _compute_customer_item_monthwise(request):
         .values_list('salesman_name', flat=True).distinct().order_by('salesman_name')
     )
 
-    # ── Firm list for the filter dropdown (all firms in Items) ────
+    # ── Brand (item_firm) list for the filter dropdown ────────────
     firms = list(
         Items.objects.exclude(item_firm__isnull=True).exclude(item_firm='')
         .values_list('item_firm', flat=True).distinct().order_by('item_firm')
@@ -250,9 +251,12 @@ def _compute_customer_item_monthwise(request):
         'selected_salesmen': selected_salesmen,
         'firms': firms,
         'selected_firms': selected_firms,
+        'store_filter': store_filter,
         'customer_search': customer_search,
         'item_search': item_search,
-        'period_label': f"Jan 2025 – {MONTH_NAMES_SHORT[end_date.month - 1]} {end_date.year}",
+        'calendar_years': calendar_years,
+        'selected_year': selected_year,
+        'period_label': f"Jan – Dec {selected_year}",
     }
 
 
@@ -300,8 +304,8 @@ def _build_item_details(customers_raw, codes, months, years, year_col_indices,
                     'gp_pct': _pct(g, a),
                     'group_end': months[i]['group_end'],
                 })
-            # Per-year totals (2025 and 2026 kept separate, not blended together) —
-            # each year's avg rate/avg GP/GP% is computed from that year's own qty/amt/gp sums.
+            # Year total column — avg rate/avg GP/GP% computed from the year's
+            # own qty/amt/gp sums, not averaged across the monthly cells.
             year_totals = []
             for yr in years:
                 idxs = year_col_indices[yr]
@@ -364,7 +368,7 @@ def export_customer_item_monthwise_analysis_pdf(request):
     Items) to PDF — same design system as Item Sold Analysis' PDF export
     (navy document header, KPI bar, zebra-striped bordered table, totals row).
     The full item x month pivot isn't exported (60+ columns per item across
-    both years wouldn't fit any page); this mirrors what's visible collapsed
+    the selected year wouldn't fit any page); this mirrors what's visible collapsed
     on the HTML page, across all customers rather than just the current page.
     """
     from datetime import datetime
@@ -391,7 +395,7 @@ def export_customer_item_monthwise_analysis_pdf(request):
     PDF_MAX_ITEMS_PER_CUSTOMER = 10
     # Customers shown in the PDF. With month-wise item detail this report can run
     # to hundreds of pages and tens of seconds to build for the full unfiltered
-    # customer list — cap it and point the user at the Salesman/Firm filters to
+    # customer list — cap it and point the user at the Salesman/Brand/Store filters to
     # get a complete, fast export of the slice they actually need.
     PDF_MAX_CUSTOMERS = 150
 
@@ -422,7 +426,9 @@ def export_customer_item_monthwise_analysis_pdf(request):
     if ctx['selected_salesmen']:
         filter_parts.append(_name_list_label(ctx['selected_salesmen'], 'Salesman'))
     if ctx['selected_firms']:
-        filter_parts.append(_name_list_label(ctx['selected_firms'], 'Firm'))
+        filter_parts.append(_name_list_label(ctx['selected_firms'], 'Brand'))
+    if ctx['store_filter']:
+        filter_parts.append(f"Store: {ctx['store_filter']}")
     if ctx['customer_search']:
         filter_parts.append(f"Customer: “{ctx['customer_search']}”")
     if ctx['item_search']:
@@ -451,7 +457,8 @@ def export_customer_item_monthwise_analysis_pdf(request):
     elements.append(Spacer(1, 10))
 
     response = HttpResponse(content_type='application/pdf')
-    fname = f"customer_item_monthwise_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    fname = (f"customer_item_monthwise_analysis_{ctx['selected_year']}"
+             f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
     response['Content-Disposition'] = f'attachment; filename="{fname}"'
 
     def _finish():
@@ -483,7 +490,7 @@ def export_customer_item_monthwise_analysis_pdf(request):
     n_months = len(months)
 
     # Compact styles for the month grid — smaller than the standard analysis
-    # styles since up to 19 month columns have to share the page width.
+    # styles since 12 month columns have to share the page width.
     base = getSampleStyleSheet()['Normal']
     from reportlab.lib.enums import TA_RIGHT, TA_LEFT
     mth_hdr = ParagraphStyle('MthHdr', parent=base, fontName='Helvetica-Bold', fontSize=5.2,
@@ -626,7 +633,7 @@ def export_customer_item_monthwise_analysis_pdf(request):
         elements.append(Spacer(1, 0.1 * inch))
         elements.append(Paragraph(
             f'<font color="#6B7280">(Showing top {PDF_MAX_CUSTOMERS} of {len(customer_rows)} customers by sales value — '
-            f'use the Salesman/Firm/Customer filters on the report page to export a specific slice in full.)</font>',
+            f'use the Salesman/Brand/Store/Customer filters on the report page to export a specific slice in full.)</font>',
             page_styles['label'],
         ))
 

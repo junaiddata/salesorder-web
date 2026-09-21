@@ -42,6 +42,8 @@
     .field label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
     .field > input[type="text"] { height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 0.875rem; font-family: inherit; min-width: 200px; }
     .field > input[type="text"]:focus { outline: none; border-color: var(--primary); }
+    .field > select { height: 38px; padding: 0 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 0.8125rem; font-family: inherit; min-width: 140px; cursor: pointer; }
+    .field > select:focus { outline: none; border-color: var(--primary); }
 
     /* Multi-select (Salesman) — same searchable design as Brandwise Sales Analysis */
     .multi-select { position: relative; width: 260px; min-width: 220px; }
@@ -174,6 +176,15 @@
       <input type="hidden" name="page" id="page-input" value="{{ page_obj.number }}">
       <div class="filters-row">
         <div class="field">
+          <label for="year">Year</label>
+          <select name="year" id="year" onchange="document.getElementById('page-input').value=1;document.getElementById('filter-form').submit();">
+            {% for y in calendar_years %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
           <label>Salesman</label>
           <div class="multi-select" id="salesman-wrapper">
             <div class="select-box" id="salesman-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
@@ -208,20 +219,20 @@
         </div>
 
         <div class="field">
-          <label>Firm</label>
+          <label>Brand</label>
           <div class="multi-select" id="firm-wrapper">
             <div class="select-box" id="firm-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
-              <span class="select-box-text placeholder" id="firm-display">All firms</span>
+              <span class="select-box-text placeholder" id="firm-display">All brands</span>
               <button type="button" class="select-box-clear" id="firm-clear" title="Clear all" aria-label="Clear selection">
                 <i class="fas fa-times"></i>
               </button>
               <i class="fas fa-chevron-down select-box-chevron"></i>
             </div>
-            <div class="options-container" id="firm-options" role="listbox" aria-label="Select firms">
+            <div class="options-container" id="firm-options" role="listbox" aria-label="Select brands">
               <div class="options-header">
                 <div class="options-search-wrap">
                   <svg class="options-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <input type="text" id="firm-search" class="options-search" placeholder="Search firms…" autocomplete="off" aria-label="Search firms">
+                  <input type="text" id="firm-search" class="options-search" placeholder="Search brands…" autocomplete="off" aria-label="Search brands">
                 </div>
                 <div class="options-actions">
                   <button type="button" class="options-action-btn" id="firm-select-all">Select All</button>
@@ -236,9 +247,18 @@
                 </label>
                 {% endfor %}
               </div>
-              <div class="options-empty" id="firm-no-results" style="display:none;">No firms found</div>
+              <div class="options-empty" id="firm-no-results" style="display:none;">No brands found</div>
             </div>
           </div>
+        </div>
+
+        <div class="field">
+          <label for="store">Store</label>
+          <select name="store" id="store">
+            <option value="" {% if not store_filter %}selected{% endif %}>All stores</option>
+            <option value="HO" {% if store_filter == 'HO' %}selected{% endif %}>HO</option>
+            <option value="Others" {% if store_filter == 'Others' %}selected{% endif %}>Others</option>
+          </select>
         </div>
 
         <div class="field">
@@ -258,7 +278,7 @@
               <span class="btn-spinner"></span>
               <i class="fas fa-filter btn-icon"></i> Apply
             </button>
-            {% if selected_salesmen or selected_firms or customer_search or item_search %}
+            {% if selected_salesmen or selected_firms or store_filter or customer_search or item_search %}
             <a href="{% url 'customer_item_monthwise_analysis' %}" class="btn" id="clear-filters-btn"><i class="fas fa-times"></i> Clear</a>
             {% endif %}
           </div>
@@ -281,8 +301,8 @@
         <div class="value">{{ total_customers|intcomma }}</div>
       </div>
       <div class="stat">
-        <div class="label">Period</div>
-        <div class="value">{{ period_label }}</div>
+        <div class="label">Year</div>
+        <div class="value">{{ selected_year }}</div>
       </div>
     </div>
 
@@ -410,7 +430,7 @@
   (function() {
     'use strict';
 
-    // Searchable multi-select (shared by Salesman and Firm filters — same
+    // Searchable multi-select (shared by Salesman and Brand filters — same
     // behaviour as Brandwise Sales Analysis' Brand filter)
     function initMultiSelect(prefix, placeholderText) {
       var wrapper   = document.getElementById(prefix + '-wrapper');
@@ -500,7 +520,7 @@
     }
 
     initMultiSelect('salesman', 'All salesmen');
-    initMultiSelect('firm', 'All firms');
+    initMultiSelect('firm', 'All brands');
 
     // Full-page loading overlay while the filter form (Apply / pagination) or
     // the Clear-filters link navigates
