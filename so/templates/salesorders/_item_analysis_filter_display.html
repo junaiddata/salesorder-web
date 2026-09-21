@@ -7,13 +7,13 @@
     {% endfor %}
   {% endif %}
   {% if filters.firm %}
-    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman %}12px{% else %}0{% endif %};">Firms: </span>
+    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman %}12px{% else %}0{% endif %};">Brands: </span>
     {% for firm in filters.firm %}
       <span style="background: var(--primary-light); color: var(--primary); padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ firm }}</span>
     {% endfor %}
   {% endif %}
   {% if filters.exclude_firm %}
-    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman or filters.firm %}12px{% else %}0{% endif %};">Exclude Firms: </span>
+    <span style="color: var(--text-secondary); margin-left: {% if filters.salesman or filters.firm %}12px{% else %}0{% endif %};">Exclude Brands: </span>
     {% for firm in filters.exclude_firm %}
       <span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-top: 2px;">{{ firm }}</span>
     {% endfor %}

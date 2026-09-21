@@ -716,14 +716,14 @@
             </div>
           </div>
           <div class="field">
-            <label>Firm</label>
+            <label>Brand</label>
             <div class="multi-select" id="firm-wrapper">
               <div class="select-box" id="firm-trigger">
-                <span id="firm-text">All Firms</span>
+                <span id="firm-text">All Brands</span>
               </div>
               <div class="options-container" id="firm-options">
                 <div class="search-box-container">
-                  <input type="text" id="firm-search" class="search-box" placeholder="Search firms..." autocomplete="off">
+                  <input type="text" id="firm-search" class="search-box" placeholder="Search brands..." autocomplete="off">
                 </div>
                 <div class="options-list" id="firm-options-list">
                   {% for firm in firms %}
@@ -737,14 +737,14 @@
             </div>
           </div>
           <div class="field">
-            <label>Exclude Firm</label>
+            <label>Exclude Brand</label>
             <div class="multi-select" id="exclude-firm-wrapper">
               <div class="select-box" id="exclude-firm-trigger">
                 <span id="exclude-firm-text">None Excluded</span>
               </div>
               <div class="options-container" id="exclude-firm-options">
                 <div class="search-box-container">
-                  <input type="text" id="exclude-firm-search" class="search-box" placeholder="Search firms to exclude..." autocomplete="off">
+                  <input type="text" id="exclude-firm-search" class="search-box" placeholder="Search brands to exclude..." autocomplete="off">
                 </div>
                 <div class="options-list" id="exclude-firm-options-list">
                   {% for firm in firms %}
@@ -1063,7 +1063,7 @@
       function updateFirmLabel() {
         const checked = Array.from(getFirmCheckboxes()).filter(c => c.checked);
         if (checked.length === 0) {
-          firmText.textContent = "All Firms";
+          firmText.textContent = "All Brands";
           firmText.style.opacity = "0.6";
         } else if (checked.length === 1) {
           firmText.textContent = checked[0].value;
