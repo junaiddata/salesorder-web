@@ -19,7 +19,14 @@ from emailagent.models import (
     AdditionalQuotationDraft, EnquiryItem, EnquiryItemSuggestion, QuotationDraft,
 )
 
-from emailagent.tools import PIPE_SIZE_MM_TO_INCH_TEXT, lookup_customer, lookup_item_master
+from emailagent.tools import (
+    PIPE_SIZE_MM_TO_INCH_TEXT,
+    PROMPT_CACHE_CONTROL,
+    accumulate_cache_usage,
+    log_cache_usage,
+    lookup_customer,
+    lookup_item_master,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1110,7 +1117,15 @@ def draft_quotation(tracked_email) -> None:
 
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=settings.EMAILAGENT_CLAUDE_TIMEOUT_SECS)
     content = _build_draft_content(tracked_email, enquiry_items)
-    content.insert(0, {"type": "text", "text": _QUOTATION_DRAFT_PROMPT})
+    # The prompt goes FIRST, ahead of this email's own content, and carries the
+    # cache marker: caching is a prefix match, so only what precedes the marker
+    # is reusable. This ordering (already how it was written) is what makes the
+    # static rules cacheable while the per-email part stays free to vary --
+    # putting the marker after the email would cache bytes no other request
+    # ever reads, which costs 1.25x for nothing. See tools.PROMPT_CACHE_CONTROL.
+    content.insert(0, {
+        "type": "text", "text": _QUOTATION_DRAFT_PROMPT, "cache_control": PROMPT_CACHE_CONTROL,
+    })
 
     # Unlike classification, this agent needs at least TWO lookup_item_master
     # calls per item (the prompt requires a retry with different wording
@@ -1120,6 +1135,7 @@ def draft_quotation(tracked_email) -> None:
     max_iterations = max(settings.EMAILAGENT_AGENT_MAX_ITERATIONS, min(60, len(enquiry_items) * 4 + 10))
 
     captured = None
+    cache_usage = {}
     try:
         runner = client.beta.messages.tool_runner(
             model=settings.EMAILAGENT_CLASSIFICATION_MODEL,
@@ -1131,8 +1147,14 @@ def draft_quotation(tracked_email) -> None:
             tools=[lookup_item_master, lookup_customer, submit_quotation_draft],
             messages=[{"role": "user", "content": content}],
             max_iterations=max_iterations,
+            # Also caches the conversation as it GROWS, not just the static
+            # prompt above: this loop can run 60 iterations, each one resending
+            # every search result that came before it. The marker above keeps
+            # the rules cheap; this keeps the accumulating tail cheap too.
+            cache_control=PROMPT_CACHE_CONTROL,
         )
         for message in runner:
+            accumulate_cache_usage(cache_usage, message)
             for block in message.content:
                 if block.type == "tool_use" and block.name == "submit_quotation_draft":
                     captured = block.input
@@ -1143,6 +1165,8 @@ def draft_quotation(tracked_email) -> None:
         logger.warning(f"draft_quotation agent loop API error: {exc!r}")
     except Exception:
         logger.exception("draft_quotation agent loop unexpected failure")
+
+    log_cache_usage('draft_quotation', cache_usage)
 
     if captured is None:
         draft.status = QuotationDraft.STATUS_FAILED
@@ -1358,7 +1382,8 @@ def rematch_unmatched_items(tracked_email, unmatched_items) -> list:
             f"{item.quantity} | {item.unit} | {item.notes}"
         )
     content = [
-        {"type": "text", "text": _ITEM_REMATCH_PROMPT},
+        # Static rules first and marked; the item list after it varies per run.
+        {"type": "text", "text": _ITEM_REMATCH_PROMPT, "cache_control": PROMPT_CACHE_CONTROL},
         {"type": "text", "text": "\n".join(lines)},
     ]
 
@@ -1377,6 +1402,7 @@ def rematch_unmatched_items(tracked_email, unmatched_items) -> list:
             tools=[lookup_item_master, submit_item_rematch],
             messages=[{"role": "user", "content": content}],
             max_iterations=max_iterations,
+            cache_control=PROMPT_CACHE_CONTROL,
         )
         for message in runner:
             for block in message.content:
@@ -1438,7 +1464,8 @@ def recheck_item_brand_matches(tracked_email, enquiry_items) -> list:
             f"{item.quantity} | {item.unit} | {item.notes} | {current}"
         )
     content = [
-        {"type": "text", "text": _ITEM_BRAND_RECHECK_PROMPT},
+        # Static rules first and marked; the item list after it varies per run.
+        {"type": "text", "text": _ITEM_BRAND_RECHECK_PROMPT, "cache_control": PROMPT_CACHE_CONTROL},
         {"type": "text", "text": "\n".join(lines)},
     ]
 
@@ -1457,6 +1484,7 @@ def recheck_item_brand_matches(tracked_email, enquiry_items) -> list:
             tools=[lookup_item_master, submit_item_rematch],
             messages=[{"role": "user", "content": content}],
             max_iterations=max_iterations,
+            cache_control=PROMPT_CACHE_CONTROL,
         )
         for message in runner:
             for block in message.content:
@@ -1600,7 +1628,8 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             f"{item.quantity} | {item.unit} | {item.notes} | {current}"
         )
     content = [
-        {"type": "text", "text": _FOLLOWUP_MERGE_PROMPT},
+        # Static rules first and marked; the item list after it varies per run.
+        {"type": "text", "text": _FOLLOWUP_MERGE_PROMPT, "cache_control": PROMPT_CACHE_CONTROL},
         {"type": "text", "text": "\n".join(lines)},
     ]
 
@@ -1619,6 +1648,7 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             tools=[lookup_item_master, submit_item_rematch],
             messages=[{"role": "user", "content": content}],
             max_iterations=max_iterations,
+            cache_control=PROMPT_CACHE_CONTROL,
         )
         for message in runner:
             for block in message.content:

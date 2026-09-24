@@ -10,6 +10,26 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+PROMPT_CACHE_CONTROL = {"type": "ephemeral"}
+# Prompt-caching marker, applied by every agent that runs a tool loop (see
+# classifier.classify_email and quotation_agent's four loops).
+#
+# The API is stateless, so each iteration of a loop re-sends the WHOLE
+# conversation from the start -- including the agent's static instruction
+# block, which for one quotation draft means the same ~3,200-token prompt
+# paid for 15-60 times over. Marking that block caches it: the first call
+# writes it (1.25x), every later call in the same loop reads it (~0.1x)
+# instead of paying full price again.
+#
+# This changes BILLING ONLY. Claude receives byte-identical input either
+# way, so no draft, quotation or classification can come out differently
+# because of it -- which is why it is safe to apply to agents that produce
+# real financial documents.
+#
+# Single-sourced here so both agent modules mark their prompts identically
+# and the TTL (5 minutes by default, which comfortably outlives a loop whose
+# iterations are seconds apart) has one place to change.
+
 # Catalog-verified mm<->inch sizes for our UPVC/mUPVC pipe range. Defined
 # here (and imported by emailagent.quotation_agent, which states the same
 # table in its own item-matching retry rules) so BOTH agents are always told
@@ -22,6 +42,49 @@ PIPE_SIZE_MM_TO_INCH_TEXT = (
     "mUPVC BS5255 36mm=1-1/4in, 43mm=1-1/2in, 56mm=2in; "
     "UPVC BSEN1329 82mm=3in, 110mm=4in, 160mm=6in, 200mm=8in"
 )
+
+def accumulate_cache_usage(totals, message):
+    """Adds one tool-loop message's token usage into `totals` (a plain dict,
+    created empty by the caller).
+
+    Prompt caching's characteristic failure is SILENT -- a later edit puts
+    something variable ahead of the cached block, every request misses, and
+    nothing errors; the bill is just quietly higher again. These counters are
+    the only ground truth that it is still working, so each agent totals them
+    up across its loop and logs one line per run (see log_cache_usage).
+
+    Never raises: observability must not be able to break an agent run, so a
+    missing/renamed usage field is swallowed rather than allowed to kill a
+    quotation draft."""
+    try:
+        usage = message.usage
+        totals['calls'] = totals.get('calls', 0) + 1
+        totals['read'] = totals.get('read', 0) + (usage.cache_read_input_tokens or 0)
+        totals['written'] = totals.get('written', 0) + (usage.cache_creation_input_tokens or 0)
+        totals['uncached'] = totals.get('uncached', 0) + (usage.input_tokens or 0)
+    except Exception:
+        logger.debug("accumulate_cache_usage: no usage on message", exc_info=True)
+    return totals
+
+
+def log_cache_usage(agent_name, totals):
+    """One line per agent run summarizing what prompt caching actually did.
+
+    A healthy multi-call loop reads far more than it writes. `read` staying
+    at 0 across a multi-call run means the cache is not being hit at all --
+    something variable now precedes the marked block, or the prefix is below
+    the model's minimum cacheable size (1024 tokens on Sonnet 5, but 4096 on
+    Haiku 4.5, where a ~3,200-token prompt silently will not cache)."""
+    calls = totals.get('calls', 0)
+    if not calls:
+        return
+    read, written, uncached = totals.get('read', 0), totals.get('written', 0), totals.get('uncached', 0)
+    verdict = 'cache HIT' if read else ('cache miss' if calls > 1 else 'single call, nothing to reuse')
+    logger.info(
+        f"{agent_name} prompt cache: {calls} model call(s), {read} tokens read from cache, "
+        f"{written} written, {uncached} uncached -- {verdict}."
+    )
+
 
 _ITEM_SEARCH_LIMIT = 20
 

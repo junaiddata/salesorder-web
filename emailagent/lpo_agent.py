@@ -324,9 +324,14 @@ def _resolve_source_attachment(tracked_email, result):
 
 
 _ITEM_MATCH_MIN_TOKENS = 2
-# An LPO line with fewer than this many meaningful (3+ char) words has too
-# little signal to match against the 10k+ item catalog safely -- treated as
-# unmatched rather than guessing.
+# An LPO line with fewer than this many meaningful tokens (see
+# _canonical_item_tokens) has too little signal to match against the 10k+ item
+# catalog safely -- treated as unmatched rather than guessing.
+
+_ITEM_MATCH_MAX_NARROWING = 3
+# How many of a line's words are used to narrow the catalog in the database
+# before the exact subset test runs in Python. Three is comfortably enough to
+# cut any line down to a scannable set; more just costs extra queries.
 
 _ITEM_MATCH_SCAN_LIMIT = 2000
 # Upper bound on rows _match_catalog_item will examine after narrowing, set
@@ -336,29 +341,253 @@ _ITEM_MATCH_SCAN_LIMIT = 2000
 # rather than matching against an arbitrary subset.
 
 
-def _match_catalog_item(description):
+# --- Normalization layer -----------------------------------------------------
+# A customer's LPO and our catalog describe the same product in different
+# words: "Water Heater 50 Ltr. Horizontal [PRO R] Ariston Italy" is
+# "W/H ARISTON PRO 1 R 50 H MT" (firm ARISTON - ITALY) in the item master.
+# Comparing those two strings word-for-word can never succeed, so BOTH sides
+# are put through _canonical_item_tokens first and only then compared. Every
+# rule below rewrites both sides identically -- nothing here is applied to the
+# LPO alone, which is what keeps the comparison honest.
+
+_ITEM_PHRASE_SYNONYMS = (
+    # (pattern, canonical token). Trade abbreviations only, each one verified
+    # against how this catalog actually writes the product. The canonical form
+    # is deliberately a single made-up word so it can never collide with a real
+    # catalog word, and so the multi-word side ("water heater") and the
+    # abbreviated side ("W/H") collapse to the same token.
+    (re.compile(r'\bw\s*/\s*h\b'), ' waterheater '),
+    (re.compile(r'\bwater\s+heater\b'), ' waterheater '),
+    (re.compile(r'\bfl\s*/\s*drain\b'), ' floordrain '),
+    (re.compile(r'\bfloor\s+drain\b'), ' floordrain '),
+    (re.compile(r'\bw\s*/\s*m\b'), ' wallmounted '),
+    (re.compile(r'\bwall\s+mounted\b'), ' wallmounted '),
+    # Colour, spelled out on one side and abbreviated on the other.
+    (re.compile(r'\bg(?:y|ray)\b'), ' grey '),
+    (re.compile(r'\bor\b'), ' orange '),
+)
+
+_MIXED_FRACTION_RE = re.compile(r'(\d+)\s*-\s*(\d+)\s*/\s*(\d+)')
+_SIMPLE_FRACTION_RE = re.compile(r'(?<![\d.])(\d+)\s*/\s*(\d+)')
+# Imperial sizes are ONE size, never the digits they are written with: a
+# 2-1/2" valve is 2.5, not a 2 and a 1 and a 2. Collapsing them first is what
+# stops a "BRASS GATEVALVE 2-1/2 PEG IMP (1068-2-1/2)" line being satisfied by
+# the 1/2" row of the same valve -- every digit it needs happens to appear
+# there, so without this it reads as a clean match and bills the wrong size.
+# Runs after the phrase synonyms above so "W/H" is already gone, and only ever
+# fires between two digits, leaving R/R, FL/DRAIN and 50V/5 untouched.
+
+_ITEM_TOKEN_SEARCH_VARIANTS = {
+    # How each canonical token above can literally appear in the catalog text,
+    # used ONLY to narrow the queryset in the database (icontains). The exact
+    # decision is always made by the token subset test in Python.
+    'waterheater': ('w/h', 'water heater', 'waterheater'),
+    'floordrain': ('fl/drain', 'floor drain', 'floordrain'),
+    'wallmounted': ('w/m', 'wall mounted', 'wallmounted'),
+}
+
+_ITEM_NON_SEARCHABLE_TOKENS = frozenset({'horiz', 'vert', 'grey', 'orange'})
+# Canonical tokens that must never be used as a database search term, because
+# the catalog writes them in a form the canonical spelling doesn't appear in:
+# orientation as a bare "H"/"V" (far too common a substring to narrow on) and
+# colour as either spelling ("...SS GY" and "...SS GREY" are both in there).
+# Searching for one spelling silently drops every row using the other -- which
+# is worse than not narrowing at all, since it can leave a single survivor that
+# then looks like a unique match. They are still fully enforced by the subset
+# test below; they just don't get to choose the candidates.
+
+_ITEM_ORIENTATION_TOKENS = {
+    # Orientation is written out on an LPO and abbreviated to a single letter
+    # in the catalog ("50 H MT", "50V/5"), so both collapse to one token. This
+    # is what stops a horizontal LPO line matching the vertical model of the
+    # same heater -- previously the letter was dropped entirely as too short.
+    'horizontal': 'horiz', 'horiz': 'horiz', 'hor': 'horiz', 'h': 'horiz',
+    'vertical': 'vert', 'vert': 'vert', 'ver': 'vert', 'v': 'vert',
+}
+
+_ITEM_NOISE_TOKENS = frozenset({
+    # Words that carry no identifying information, dropped from both sides.
+    # Units of measure are safe to drop because the NUMBER they belong to is
+    # kept and still has to match ("50 LTR" -> {50}, "110MM" -> {110}); what
+    # they fix is one side spelling the unit and the other not.
+    'ltr', 'ltrs', 'litre', 'litres', 'liter', 'liters', 'l',
+    'mm', 'cm', 'inch', 'inches', 'in', 'x',
+    'nos', 'no', 'pcs', 'pc', 'piece', 'pieces', 'qty', 'quantity',
+    'and', 'with', 'the', 'of', 'for', 'a', 'an', 'as', 'per', 'approx',
+})
+
+_NUMBER_LETTER_RE = re.compile(r'(\d)\s*([a-z])')
+_LETTER_NUMBER_RE = re.compile(r'([a-z])\s*(\d)')
+_ITEM_TOKEN_RE = re.compile(r'[a-z]+|\d+(?:\.\d+)?')
+
+
+def _canonical_number(token):
+    """'50.00' -> '50', '1.20' -> '1.2', so the same size written two ways is
+    one token. Left untouched if it isn't a plain small number."""
+    try:
+        value = float(token)
+    except (TypeError, ValueError):
+        return token
+    if not (0 < abs(value) < 1e6):
+        return token
+    return f"{value:g}"
+
+
+def _expand_fraction(match):
+    """'2-1/2' -> ' 2.5 ', '3/4' -> ' 0.75 '. A nonsense denominator is left
+    exactly as written rather than raising -- it simply won't match anything."""
+    groups = match.groups()
+    whole, numerator, denominator = ('0',) * (3 - len(groups)) + groups
+    if int(denominator) == 0:
+        return match.group(0)
+    return f" {int(whole) + int(numerator) / int(denominator):g} "
+
+
+def _canonical_item_tokens(text):
+    """The shared vocabulary both an LPO line and a catalog row are reduced to
+    before they are compared: trade synonyms collapsed, units and filler
+    dropped, glued size/letter codes split apart ("50V/5" -> 50, v, 5) and
+    orientation letters spelled out.
+
+    Note this deliberately KEEPS numbers and single letters, which the old
+    3+ character rule threw away -- on this catalog "50", "R" and "H" are
+    precisely what separate one Ariston water heater from the next, so
+    ignoring them risked ordering the wrong model, not just missing one."""
+    text = (text or '').lower()
+    for pattern, replacement in _ITEM_PHRASE_SYNONYMS:
+        text = pattern.sub(replacement, text)
+    text = _MIXED_FRACTION_RE.sub(_expand_fraction, text)
+    text = _SIMPLE_FRACTION_RE.sub(_expand_fraction, text)
+    # "50V/5" / "1.2KW" / "R50" are one word to the tokenizer but two facts to
+    # a reader -- split so they compare against a catalog that spaces them out.
+    text = _NUMBER_LETTER_RE.sub(r'\1 \2', text)
+    text = _LETTER_NUMBER_RE.sub(r'\1 \2', text)
+
+    tokens = set()
+    for raw in _ITEM_TOKEN_RE.findall(text):
+        if raw in _ITEM_NOISE_TOKENS:
+            continue
+        tokens.add(_ITEM_ORIENTATION_TOKENS.get(raw) or _canonical_number(raw))
+    return tokens
+
+
+def _catalog_row_tokens(item):
+    """An item's own vocabulary: its description PLUS its firm. The brand and
+    the country of origin an LPO names ("Ariston Italy") frequently live only
+    in item_firm ("ARISTON - ITALY"), so a description-only comparison drops
+    them -- and it is exactly that country word that tells the Italian model
+    apart from the Bangladeshi one."""
+    return _canonical_item_tokens(item.item_description) | _canonical_item_tokens(item.item_firm)
+
+
+def _pick_by_literal_wording(candidates, description):
+    """Of several candidates, the one that also matches the line EXACTLY as
+    written -- word for word, before any normalization (the rule this matcher
+    used to apply on its own).
+
+    Normalizing necessarily loosens: "6x4x4" becomes 6 and 4, which a plain
+    "6X4" row now also satisfies. Where one candidate still carries the
+    customer's own literal wording and the others only survive because of that
+    loosening, the literal one is what they asked for."""
+    literal_tokens = {t for t in _tokens(description) if len(t) >= 3}
+    if not literal_tokens:
+        return None
+    literal_matches = [
+        item for item in candidates
+        if literal_tokens <= _tokens(item.item_description)
+    ]
+    return literal_matches[0] if len(literal_matches) == 1 else None
+
+
+_PRICE_TIEBREAK_MAX_DIFF = 0.10
+_PRICE_TIEBREAK_MIN_RUNNER_UP_DIFF = 0.30
+# Price only settles a tie when it settles it OUTRIGHT: the winner within 10%
+# of the rate the customer printed on the LPO and every other candidate at
+# least 30% away. Anything closer than that is two plausible models, which is a
+# question for a human rather than a coin toss on a real Sales Order.
+
+
+def _pick_by_lpo_price(candidates, price):
+    """Of several equally-worded catalog rows, the one whose list price matches
+    what the customer is actually ordering at. Returns None unless one wins
+    outright (see the thresholds above)."""
+    if not price or price <= 0:
+        return None
+
+    scored = []
+    for item in candidates:
+        catalog_price = float(item.item_price or 0)
+        if catalog_price <= 0:
+            continue
+        scored.append((abs(catalog_price - price) / max(catalog_price, price), item))
+    if len(scored) < 2:
+        return None
+
+    scored.sort(key=lambda pair: pair[0])
+    best_diff, best_item = scored[0]
+    runner_up_diff = scored[1][0]
+    if best_diff <= _PRICE_TIEBREAK_MAX_DIFF and runner_up_diff >= _PRICE_TIEBREAK_MIN_RUNNER_UP_DIFF:
+        return best_item
+    return None
+
+
+def _pick_by_customer_history(candidates, customer):
+    """Of several equally-worded catalog rows, the one THIS customer has
+    actually bought before -- from our own Sales Orders and from the SAP sales
+    history. Only decides when exactly one candidate has any history with
+    them; two of them having history means their wording genuinely doesn't say
+    which, so it goes to a human."""
+    if customer is None:
+        return None
+
+    from so.models import HistoricalSalesLine, OrderItem
+
+    by_id = {item.id: item for item in candidates}
+    bought_ids = set(
+        OrderItem.objects.filter(order__customer=customer, item_id__in=by_id)
+        .values_list('item_id', flat=True)
+    )
+    bought_ids.update(
+        HistoricalSalesLine.objects.filter(customer=customer, item_id__in=by_id)
+        .values_list('item_id', flat=True)
+    )
+    if len(bought_ids) == 1:
+        return by_id[next(iter(bought_ids))]
+    return None
+
+
+def _match_catalog_item(description, price=None, customer=None):
     """Best-effort match of one LPO line's free-text description to a real
     so.Items catalog row -- deliberately conservative, since this feeds a
     real financial document (a Sales Order) with no human review (see
-    build_sales_order_directly_from_lpo): every one of the description's
-    own significant (3+ char) words must ALSO appear in the candidate's
-    item_description -- not just a partial overlap -- and exactly one
-    catalog item may satisfy that. Returns the matched Items row, or None
-    if the description has too little signal, or the match is missing or
-    ambiguous."""
-    from so.models import Items
+    build_sales_order_directly_from_lpo): every one of the line's own
+    meaningful tokens must ALSO appear in the candidate's own tokens -- not
+    just a partial overlap -- with both sides first reduced to the shared
+    vocabulary of _canonical_item_tokens.
 
-    hint_tokens = {t for t in _tokens(description) if len(t) >= 3}
-    if len(hint_tokens) < _ITEM_MATCH_MIN_TOKENS:
+    That subset test is the only thing that admits a candidate. When it admits
+    exactly one, that is the match, exactly as before. When it admits several
+    -- routinely the same model in two wattages -- the line's own wording has
+    genuinely not said which, so one is chosen ONLY if the price the customer
+    printed on the LPO, or their own buying history, points at one of them
+    outright; otherwise this still returns None and a human picks.
+
+    Returns the matched Items row, or None if the description has too little
+    signal, or the match is missing or ambiguous. `price` is the LPO's own
+    unit price for this line and `customer` the resolved so.Customer; both are
+    optional, and without them this behaves exactly as the subset test alone."""
+    hint_tokens = _canonical_item_tokens(description)
+    word_tokens = [t for t in hint_tokens if t.isalpha() and len(t) >= 3]
+    if len(hint_tokens) < _ITEM_MATCH_MIN_TOKENS or not word_tokens:
         return None
 
-    # 10k+ catalog rows -- too many to token-score in Python without a DB
-    # pre-filter first. Narrows using the two longest (most distinctive)
-    # words, then scores the narrowed set exactly.
-    narrowing_tokens = sorted(hint_tokens, key=len, reverse=True)[:2]
-    candidates_qs = Items.objects.all()
-    for token in narrowing_tokens:
-        candidates_qs = candidates_qs.filter(item_description__icontains=token)
+    search_tokens = [t for t in word_tokens if t not in _ITEM_NON_SEARCHABLE_TOKENS]
+    if not search_tokens:
+        return None
+
+    candidates_qs = _narrowed_catalog_queryset(search_tokens)
+    if candidates_qs is None:
+        return None
 
     # Every row the narrowing left is examined -- no arbitrary window. A
     # two-word narrowing routinely exceeds 200 rows on this catalog
@@ -378,11 +607,67 @@ def _match_catalog_item(description):
         )
         return None
 
-    matches = [
-        item for item in candidates
-        if hint_tokens <= _tokens(item.item_description)
-    ]
-    return matches[0] if len(matches) == 1 else None
+    matches = [item for item in candidates if hint_tokens <= _catalog_row_tokens(item)]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        return None
+
+    # Several rows fit the wording equally well -- break the tie only on
+    # evidence from this very order, never on a preference of our own (no
+    # "pick the one in stock": stock says nothing about which model the
+    # customer meant, and getting that wrong bills them for the wrong item).
+    # Tried in order and lazily -- the wording is free to re-check, the buying
+    # history costs queries, so it is only reached if nothing cheaper decided.
+    for tiebreak, resolve in (
+        ('the line as literally written', lambda: _pick_by_literal_wording(matches, description)),
+        ('LPO price', lambda: _pick_by_lpo_price(matches, price)),
+        ("customer's buying history", lambda: _pick_by_customer_history(matches, customer)),
+    ):
+        picked = resolve()
+        if picked is not None:
+            logger.info(
+                f"_match_catalog_item: {description!r} matched {len(matches)} catalog rows; "
+                f"{tiebreak} settled it on {picked.item_code} ({picked.item_description!r})."
+            )
+            return picked
+
+    logger.debug(
+        f"_match_catalog_item: {description!r} fits {len(matches)} catalog rows "
+        f"({', '.join(item.item_code for item in matches[:5])}) and nothing settled which "
+        "-- leaving unmatched for human review."
+    )
+    return None
+
+
+def _narrowed_catalog_queryset(word_tokens):
+    """The catalog cut down to the rows worth token-testing in Python -- 10k+
+    rows is too many to score one by one. Narrows on the line's longest (most
+    distinctive) words, each searched in the spellings the catalog might
+    actually use (see _ITEM_TOKEN_SEARCH_VARIANTS), across description AND
+    firm.
+
+    Returns None when the line cannot match anything: a word absent from the
+    entire catalog can't be in any candidate's token set either, so the subset
+    test would reject every row anyway."""
+    from django.db.models import Q
+
+    from so.models import Items
+
+    candidates_qs = Items.objects.all()
+    narrowed_by = 0
+    for token in sorted(word_tokens, key=len, reverse=True):
+        if narrowed_by >= _ITEM_MATCH_MAX_NARROWING:
+            break
+        condition = Q()
+        for variant in _ITEM_TOKEN_SEARCH_VARIANTS.get(token, (token,)):
+            condition |= Q(item_description__icontains=variant) | Q(item_firm__icontains=variant)
+        narrowed_qs = candidates_qs.filter(condition)
+        if not narrowed_qs.exists():
+            return None
+        candidates_qs = narrowed_qs
+        narrowed_by += 1
+    return candidates_qs if narrowed_by else None
 
 
 def build_sales_order_directly_from_lpo(lpo_request):
@@ -402,8 +687,10 @@ def build_sales_order_directly_from_lpo(lpo_request):
     has:
       - the stated customer name must resolve to exactly one so.Customer
         (see _resolve_single_customer)
-      - EVERY line item must match exactly one catalog item (see
-        _match_catalog_item) -- an order silently missing a line the
+      - EVERY line item must resolve to exactly one catalog item (see
+        _match_catalog_item -- its wording must fit exactly one row, or fit
+        several and be settled outright by this LPO's own price or the
+        customer's buying history) -- an order silently missing a line the
         customer actually asked for is worse than no order at all.
       - EVERY line item must carry a price taken off the LPO (see the
         unpriced-line gate below).
@@ -496,7 +783,12 @@ def build_sales_order_directly_from_lpo(lpo_request):
     resolved = []
     unmatched_descriptions = []
     for lpo_item in lpo_items:
-        catalog_item = _match_catalog_item(lpo_item.description)
+        # Price and customer are passed purely as tie-breakers for a line whose
+        # wording fits more than one catalog row (see _match_catalog_item) --
+        # they never admit a row the wording itself didn't already fit. Both
+        # are known-good here: the gates above have already established a
+        # single customer and a stated price on every line.
+        catalog_item = _match_catalog_item(lpo_item.description, price=lpo_item.price, customer=customer)
         if catalog_item:
             resolved.append((lpo_item, catalog_item))
         else:

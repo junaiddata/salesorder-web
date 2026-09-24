@@ -18,7 +18,13 @@ from django.conf import settings
 from PyPDF2 import PdfReader
 from pydantic import BaseModel
 
-from emailagent.tools import lookup_item_master, search_similar_enquiries
+from emailagent.tools import (
+    PROMPT_CACHE_CONTROL,
+    accumulate_cache_usage,
+    log_cache_usage,
+    lookup_item_master,
+    search_similar_enquiries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -638,9 +644,23 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
 
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=settings.EMAILAGENT_CLAUDE_TIMEOUT_SECS)
     content = build_classification_content(email, attachments)
-    content.insert(0, {"type": "text", "text": _CLASSIFICATION_PROMPT})
+    # Marked for prompt caching (see tools.PROMPT_CACHE_CONTROL). It must stay
+    # FIRST, ahead of this email's own body/attachments: only what precedes the
+    # marker is reusable, so the static rules cache while the per-email part
+    # stays free to vary.
+    #
+    # NOTE this loop's model varies -- triage may route a simple email to
+    # EMAILAGENT_TRIAGE_MODEL (Haiku 4.5) instead. Haiku's minimum cacheable
+    # prefix is 4096 tokens against this prompt's ~3000, so on that path the
+    # marker simply does nothing: no cache, no error, no premium. It is left
+    # unconditional so the Sonnet path (1024 minimum) always benefits, and so
+    # this keeps working by itself if the prompt grows or the model changes.
+    content.insert(0, {
+        "type": "text", "text": _CLASSIFICATION_PROMPT, "cache_control": PROMPT_CACHE_CONTROL,
+    })
 
     captured = None
+    cache_usage = {}
     try:
         runner = client.beta.messages.tool_runner(
             model=model_to_use,
@@ -658,8 +678,13 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
             tools=[search_similar_enquiries, lookup_item_master, submit_classification],
             messages=[{"role": "user", "content": content}],
             max_iterations=settings.EMAILAGENT_AGENT_MAX_ITERATIONS,
+            # Caches the conversation as it grows too, not just the prompt
+            # above -- every tool result this loop collects is resent on each
+            # subsequent call.
+            cache_control=PROMPT_CACHE_CONTROL,
         )
         for message in runner:
+            accumulate_cache_usage(cache_usage, message)
             for block in message.content:
                 if block.type == "tool_use" and block.name == "submit_classification":
                     captured = block.input
@@ -670,6 +695,8 @@ def classify_email(email: dict, attachments: list) -> ClassificationResult:
         logger.warning(f"classify_email agent loop API error: {exc!r}")
     except Exception:
         logger.exception("classify_email agent loop unexpected failure")
+
+    log_cache_usage('classify_email', cache_usage)
 
     if captured is None:
         return ClassificationResult(
