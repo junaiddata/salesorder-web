@@ -4,6 +4,7 @@ import logging
 import threading
 from collections import Counter
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -543,12 +544,37 @@ def quotation_draft_queue(request):
                   ),
               )
               .order_by('-tracked_email__received_at'))
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        drafts = drafts.filter(
+            Q(tracked_email__subject__icontains=search_query)
+            | Q(tracked_email__sender__icontains=search_query)
+            | Q(tracked_email__sender_name__icontains=search_query)
+            | Q(matched_customer__customer_name__icontains=search_query)
+            | Q(matched_customer__customer_code__icontains=search_query)
+            | Q(customer_guess__icontains=search_query)
+            | Q(quotation__quotation_number__icontains=search_query)
+            | Q(merged_into__quotation_number__icontains=search_query)
+        )
+    # Sent = the quotation has been emailed to the client via "Send
+    # Quotation" (so/views_quotation.send_quotation_email stamps emailed_at).
+    sent_filter = request.GET.get('sent', '')
+    if sent_filter == 'yes':
+        drafts = drafts.filter(quotation__emailed_at__isnull=False)
+    elif sent_filter == 'no':
+        drafts = drafts.filter(quotation__emailed_at__isnull=True)
+    else:
+        sent_filter = ''
     paginator = Paginator(drafts, settings.EMAILAGENT_LIST_PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get('page'))
+    base_params = {k: v for k, v in (('q', search_query), ('sent', sent_filter)) if v}
     return render(request, 'emailagent/quotation_queue.html', {
         'drafts': page_obj,
         'page_obj': page_obj,
         'total_count': paginator.count,
+        'search_query': search_query,
+        'sent_filter': sent_filter,
+        'base_query': urlencode(base_params),
     })
 
 

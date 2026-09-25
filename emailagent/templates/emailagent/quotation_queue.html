@@ -1,7 +1,39 @@
 {% extends 'emailagent/base.html' %}
-{% load static %}
+{% load static emailagent_extras %}
 
 {% block title %}Quotation Drafts | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-box {
+        display: flex; align-items: center; position: relative; margin-left: auto;
+        background: var(--surface-alt); border: 1px solid var(--line); border-radius: 999px;
+        flex: 0 0 auto;
+    }
+    .search-box input {
+        border: none; background: transparent; padding: .4rem .5rem .4rem 2.1rem;
+        font-size: .82rem; width: 260px; max-width: 60vw; color: var(--body);
+    }
+    .search-box input:focus { outline: none; }
+    .search-box i.fa-magnifying-glass { position: absolute; left: 1.05rem; color: var(--muted); font-size: .78rem; pointer-events: none; }
+    .search-submit {
+        border: none; background: var(--primary); color: #fff; cursor: pointer;
+        width: 28px; height: 28px; margin: 2px 3px 2px 0; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: .7rem;
+    }
+    .search-submit:hover { filter: brightness(1.1); }
+    .search-clear { font-size: .78rem; margin-left: .5rem; color: var(--muted); }
+    .search-wrap { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; gap: .3rem; }
+    .search-hint { font-size: .72rem; color: var(--muted); text-align: right; }
+    .search-hint b { font-weight: 600; color: var(--body); }
+    .sent-meta { font-size: .72rem; color: var(--muted); margin-top: .2rem; line-height: 1.3; }
+    @media (max-width: 640px) {
+        .search-wrap { align-items: stretch; width: 100%; margin-left: 0; }
+        .search-box input { width: 100%; max-width: none; }
+        .search-hint { text-align: left; }
+    }
+</style>
+{% endblock %}
 
 {% block body %}
 <div class="hero">
@@ -16,6 +48,26 @@
 <div class="u-wrap u-page">
     <div class="sec-head">
         <h2>All Drafts <span class="count">({{ total_count }})</span></h2>
+        <div class="pill-row" style="align-items:center;">
+            <a href="?{% qs_replace sent='' %}" class="pill {% if not sent_filter %}active{% endif %}">All</a>
+            <a href="?{% qs_replace sent='yes' %}" class="pill {% if sent_filter == 'yes' %}active{% endif %}"><i class="fas fa-paper-plane"></i> Sent</a>
+            <a href="?{% qs_replace sent='no' %}" class="pill {% if sent_filter == 'no' %}active{% endif %}"><i class="fas fa-clock"></i> Not Sent</a>
+        </div>
+        <form method="get" class="search-wrap">
+            <div style="display:flex; align-items:center;">
+                <div class="search-box" style="margin-left:0;">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="text" name="q" value="{{ search_query }}" placeholder="Search quotations..."
+                           title="Searches subject, sender email, sender name, customer name, customer code, walk-in name and quotation number">
+                    <button type="submit" class="search-submit" aria-label="Search"><i class="fas fa-arrow-right"></i></button>
+                </div>
+                {% if sent_filter %}<input type="hidden" name="sent" value="{{ sent_filter }}">{% endif %}
+                {% if search_query %}<a href="?{% qs_replace q='' %}" class="search-clear">Clear</a>{% endif %}
+            </div>
+            <div class="search-hint">
+                Searches: <b>Subject</b> · <b>Sender email</b> · <b>Sender name</b> · <b>Customer name</b> · <b>Customer code</b> · <b>Walk-in name</b> · <b>Quotation #</b>
+            </div>
+        </form>
     </div>
 
     {% if drafts %}
@@ -28,6 +80,7 @@
                     <th>Customer</th>
                     <th>Quotation</th>
                     <th>Status</th>
+                    <th>Sent to Client</th>
                     <th>Notes</th>
                     <th>Received</th>
                     <th class="actions">Actions</th>
@@ -56,6 +109,17 @@
                         {% elif draft.status == 'failed' %}<span class="chip-x gray"><i class="fas fa-triangle-exclamation"></i> Failed</span>
                         {% elif draft.status == 'merged' %}<span class="chip-x green"><i class="fas fa-code-merge"></i> Merged</span>
                         {% else %}<span class="chip-x gray">{{ draft.get_status_display }}</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if draft.quotation.emailed_at %}
+                            <span class="chip-x green"><i class="fas fa-paper-plane"></i> Sent</span>
+                            <div class="sent-meta" title="{{ draft.quotation.emailed_to }}">
+                                {{ draft.quotation.emailed_at|date:"d M Y, H:i" }}<br>
+                                to {{ draft.quotation.emailed_to|truncatechars:30 }}
+                            </div>
+                        {% elif draft.quotation %}
+                            <span class="chip-x amber"><i class="fas fa-clock"></i> Not sent</span>
+                        {% else %}—{% endif %}
                     </td>
                     <td>
                         {% if draft.status == 'failed' %}
@@ -100,16 +164,16 @@
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="page-bar">
         {% if page_obj.has_previous %}
-            <a href="?page=1"><i class="fas fa-angles-left"></i> First</a>
-            <a href="?page={{ page_obj.previous_page_number }}"><i class="fas fa-chevron-left"></i> Prev</a>
+            <a href="?page=1{% if base_query %}&{{ base_query }}{% endif %}"><i class="fas fa-angles-left"></i> First</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if base_query %}&{{ base_query }}{% endif %}"><i class="fas fa-chevron-left"></i> Prev</a>
         {% else %}
             <span class="disabled"><i class="fas fa-angles-left"></i> First</span>
             <span class="disabled"><i class="fas fa-chevron-left"></i> Prev</span>
         {% endif %}
         <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}">Next <i class="fas fa-chevron-right"></i></a>
-            <a href="?page={{ page_obj.paginator.num_pages }}">Last <i class="fas fa-angles-right"></i></a>
+            <a href="?page={{ page_obj.next_page_number }}{% if base_query %}&{{ base_query }}{% endif %}">Next <i class="fas fa-chevron-right"></i></a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if base_query %}&{{ base_query }}{% endif %}">Last <i class="fas fa-angles-right"></i></a>
         {% else %}
             <span class="disabled">Next <i class="fas fa-chevron-right"></i></span>
             <span class="disabled">Last <i class="fas fa-angles-right"></i></span>
@@ -120,8 +184,13 @@
     <div class="card-x">
         <div class="empty-x">
             <div class="ic"><i class="fas fa-file-invoice-dollar"></i></div>
+            {% if search_query or sent_filter %}
+            <h3>No matching quotations</h3>
+            <p>No quotations match the current {% if search_query %}search "{{ search_query }}"{% if sent_filter %} and {% endif %}{% endif %}{% if sent_filter %}"{% if sent_filter == 'yes' %}Sent{% else %}Not Sent{% endif %}" filter{% endif %}. <a href="?">Show all</a></p>
+            {% else %}
             <h3>No quotations yet</h3>
             <p>A quotation is created automatically as soon as an email is confirmed as an RFQ.</p>
+            {% endif %}
         </div>
     </div>
     {% endif %}

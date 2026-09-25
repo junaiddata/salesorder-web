@@ -1694,9 +1694,50 @@ def _add_suggested_item(request, quotation):
     )
 
 
+def _attach_previous_prices(quotation, quotation_items):
+    """Set item.previous_price / previous_price_source / previous_price_date on
+    each line: the unit price on this customer's most recent SAP AR invoice
+    for that item, falling back to the imported CustomerPrice when the item
+    was never invoiced to them. None when neither exists."""
+    from .models import SAPARInvoiceItem
+
+    item_codes = {qi.item.item_code for qi in quotation_items if getattr(qi, 'item', None)}
+    customer_code = (quotation.customer.customer_code or '').strip()
+
+    invoice_prices = {}
+    if item_codes and customer_code:
+        rows = (SAPARInvoiceItem.objects
+                .filter(invoice__customer_code=customer_code, item_code__in=item_codes)
+                .order_by('-invoice__posting_date', '-invoice__id', '-line_no')
+                .values_list('item_code', 'price', 'invoice__invoice_number', 'invoice__posting_date'))
+        for code, price, inv_no, inv_date in rows:
+            invoice_prices.setdefault(code, (price, inv_no, inv_date))
+
+    custom_prices = {}
+    if item_codes:
+        custom_prices = dict(
+            CustomerPrice.objects
+            .filter(customer=quotation.customer, item__item_code__in=item_codes)
+            .values_list('item__item_code', 'custom_price')
+        )
+
+    for qi in quotation_items:
+        qi.previous_price = qi.previous_price_source = qi.previous_price_date = None
+        code = qi.item.item_code if getattr(qi, 'item', None) else None
+        if code in invoice_prices:
+            price, inv_no, inv_date = invoice_prices[code]
+            qi.previous_price = float(price)
+            qi.previous_price_source = f'Inv {inv_no}'
+            qi.previous_price_date = inv_date
+        elif custom_prices.get(code):
+            qi.previous_price = float(custom_prices[code])
+            qi.previous_price_source = 'Customer price list'
+
+
 def view_quotation_details(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
-    quotation_items = quotation.items.all()
+    quotation_items = list(quotation.items.select_related('item'))
+    _attach_previous_prices(quotation, quotation_items)
 
     from django.utils.http import url_has_allowed_host_and_scheme
     back_param = request.GET.get('back', '')
@@ -2709,6 +2750,11 @@ def send_quotation_email(request, quotation_id):
              if (h.get('name') or '').lower() == 'message-id' and h.get('value')),
             '',
         )
+        # IMAP/Outlook headers can arrive folded (e.g. '\r\n <id@host>') --
+        # keep only the bare <id>, since header values can't hold newlines.
+        import re
+        match = re.search(r'<[^<>\s]+>', orig_message_id)
+        orig_message_id = match.group(0) if match else ' '.join(orig_message_id.split())
         if orig_message_id:
             email_headers['In-Reply-To'] = orig_message_id
             email_headers['References'] = orig_message_id

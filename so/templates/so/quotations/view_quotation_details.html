@@ -1309,12 +1309,14 @@
                         <tr>
                             <th style="width: 60px;">#</th>
                             <th>Item Code</th>
+                            <th>UPC Code</th>
                             <th>Item Description</th>
                             <th style="width: 120px; text-align: right;">Quantity</th>
                             <th style="width: 90px; text-align: right;">DIP Stock</th>
                             <th style="width: 100px; text-align: right;">Total Stock</th>
                             
                             <th style="width: 150px; text-align: right;">Unit Price</th>
+                            <th style="width: 150px; text-align: right;">Previous Price</th>
                             {% if is_admin %}
                             <th style="width: 150px; text-align: right;">Cost Price</th>
                             <th style="width: 150px; text-align: right;">Min. Selling Price</th>
@@ -1330,6 +1332,7 @@
                         <tr>
                             <td class="table-number" data-label="#">{{ forloop.counter }}</td>
                             <td data-label="Item Code">{{ item.item.item_code }}</td>
+                            <td data-label="UPC Code">{{ item.item.item_upvc|default:"—" }}</td>
                             <td data-label="Item Description">{{ item.item.item_description }}</td>
                             <td style="text-align: right;" data-label="Quantity">{{ item.quantity }} {{item.unit}}</td>
                             <td style="text-align: right;" data-label="DIP Stock">
@@ -1355,6 +1358,14 @@
                                 data-label="Unit Price">
                                 AED {{ item.price|floatformat:2 }}
                             </td>
+                            <td style="text-align: right;" data-label="Previous Price">
+                                {% if item.previous_price is not None %}
+                                    AED {{ item.previous_price|floatformat:2 }}
+                                    <div style="font-size: 0.75rem; color: var(--sap-text-secondary, #6a6d70);">
+                                        {{ item.previous_price_source }}{% if item.previous_price_date %} · {{ item.previous_price_date|date:"d M Y" }}{% endif %}
+                                    </div>
+                                {% else %}—{% endif %}
+                            </td>
                             {% if is_admin %}
                             <td style="text-align: right;" data-label="Cost Price">AED {{ item.item.item_cost|floatformat:2 }}</td>
                             <td style="text-align: right;" data-label="Min. Selling Price">AED {{ item.item.item_price|floatformat:2 }}</td>
@@ -1366,7 +1377,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}10{% else %}11{% endif %}{% else %}8{% endif %}">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}12{% else %}13{% endif %}{% else %}10{% endif %}">
                                 <div class="empty-state">
                                     <i class="fas fa-inbox"></i>
                                     <p>No items in this quotation</p>
@@ -1376,14 +1387,14 @@
                         {% endfor %}
                         {% if quotation_items %}
                         <tr class="table-total-row">
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Subtotal:</td>
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}11{% else %}12{% endif %}{% else %}9{% endif %}" style="text-align: right;">Subtotal:</td>
                             <td style="text-align: right;">
                                 AED {{ grand_total|floatformat:2 }}
                             </td>
                         </tr>
                         {% if discount_amount %}
                         <tr class="table-total-row">
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}11{% else %}12{% endif %}{% else %}9{% endif %}" style="text-align: right;">
                                 Discount ({% if quotation.discount_type == 'PERCENT' %}{{ quotation.discount_value|floatformat:2 }}%{% else %}AED {{ quotation.discount_value|floatformat:2 }} flat{% endif %}):
                             </td>
                             <td style="text-align: right; color: var(--sap-error);">
@@ -1392,13 +1403,13 @@
                         </tr>
                         {% endif %}
                         <tr class="table-total-row">
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">VAT (5%):</td>
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}11{% else %}12{% endif %}{% else %}9{% endif %}" style="text-align: right;">VAT (5%):</td>
                             <td style="text-align: right;">
                                 AED {{ vat_amount|floatformat:2 }}
                             </td>
                         </tr>
                         <tr class="table-total-row">
-                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}9{% else %}10{% endif %}{% else %}7{% endif %}" style="text-align: right;">Grand Total:</td>
+                            <td colspan="{% if is_admin %}{% if has_zero_cost_items %}11{% else %}12{% endif %}{% else %}9{% endif %}" style="text-align: right;">Grand Total:</td>
                             <td style="text-align: right; color: var(--sap-blue); font-weight: 700;">
                                 AED {{ grand_total_with_vat|floatformat:2 }}
                             </td>

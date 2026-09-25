@@ -1310,6 +1310,11 @@ def submittal_send_email(request, pk):
              if (h.get('name') or '').lower() == 'message-id' and h.get('value')),
             '',
         )
+        # IMAP/Outlook headers can arrive folded (e.g. '\r\n <id@host>') --
+        # keep only the bare <id>, since header values can't hold newlines.
+        import re
+        match = re.search(r'<[^<>\s]+>', orig_message_id)
+        orig_message_id = match.group(0) if match else ' '.join(orig_message_id.split())
         if orig_message_id:
             email_headers['In-Reply-To'] = orig_message_id
             email_headers['References'] = orig_message_id
