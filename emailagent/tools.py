@@ -3,6 +3,7 @@ its answer. Each tool wraps its own DB query in try/except and returns a
 plain string -- Claude sees a graceful message either way, never a crash.
 """
 import logging
+import re
 from datetime import timedelta
 
 from anthropic import beta_tool
@@ -105,6 +106,41 @@ _FULL_PHRASE_SCORE = 1000
 _ALL_TERMS_SCORE = 200
 
 
+# Joint types of UPVC drainage pipes and fittings. A customer says "push fit"
+# or "solvent"; the catalog writes the same thing as a 2-letter code (RR, PF,
+# SS) that the >=3-letter word filter in lookup_item_master would otherwise
+# throw away, so the joint type never influenced ranking. Each entry is
+# (label, regex for the customer's wording in the SEARCH, regex for the
+# catalog's wording in a description/brand).
+#
+# Catalog side uses PostgreSQL word boundaries (\y) so "SS" does not match
+# BRASS/GLASS/PRESSURE. Standalone catalog "PE" is deliberately NOT matched:
+# in this catalog it means polyethylene (PPR AL/PE, HDPE PE 100); plain-end
+# pipes are written "P/E" or "PLAIN END". "Plane end" is a common misspelling
+# of plain end and does not occur in the catalog, so it is search-side only.
+# Search side ignores "solvent cement/glue/adhesive" -- that is the adhesive
+# product, not a joint type.
+_JOINT_TYPES = (
+    (
+        'push-fit (RR / PF / RUBBER RING / PUSH FIT)',
+        re.compile(r'(?<![\w/])(?:rr|pf|push[\s-]*fit|rubber[\s-]*ring)(?![\w/])', re.I),
+        r'\y(?:RR|PF|RUBBER\s*RING|PUSH[\s-]*FIT)\y',
+    ),
+    (
+        'solvent (SS / SOLVENT / P/E / PLAIN END)',
+        re.compile(
+            r'(?<![\w/])(?:ss|pe|p/e|glue[\s-]*(?:type|joint|fit)|plain[\s-]*end(?:ed)?|plane[\s-]*end(?:ed)?'
+            r'|solvent(?![\s-]*(?:cement|glue|adhesive)))(?![\w/])',
+            re.I,
+        ),
+        r'\y(?:SS|SOLVENT|P/E|PLAIN\s*END(?:ED)?)\y',
+    ),
+)
+# Above the most distinctive per-word weight (24) so the requested joint type
+# decides between otherwise-identical fittings (e.g. the RR and SS versions).
+_JOINT_TYPE_WEIGHT = 30
+
+
 def _term_weight(document_frequency):
     if document_frequency <= 0:
         return 0
@@ -203,6 +239,14 @@ def lookup_item_master(description: str) -> str:
     search (e.g. "pegler pressure valve") ranks brand-correct items above
     same-category items of other brands.
 
+    Joint type: UPVC drainage pipes/fittings come push-fit or solvent-weld.
+    Put the customer's joint-type word in the search -- "push fit", "rubber
+    ring", "RR", "PF" (catalog: RR / PF / RUBBER RING / PUSH FIT) or
+    "solvent", "SS", "glue type", "plain end", "plane end", "PE" (catalog:
+    SS / SOLVENT / P/E / PLAIN END) -- and rows of that joint type are ranked
+    above the same item in the other joint type. This works even though these
+    codes are under 3 letters, which are otherwise ignored.
+
     mm<->inch conversion for our UPVC/mUPVC pipe range specifically is NOT
     the generic mm/25.4 formula (or a textbook NPS chart) -- it's each
     product line's own actual stated size, confirmed against the real
@@ -225,9 +269,20 @@ def lookup_item_master(description: str) -> str:
 
     try:
         description = description.strip()
+        # Joint-type words (push fit / RR / PF, solvent / SS / plain end ...)
+        # are lifted out of the plain word list and matched against every
+        # catalog spelling of that joint type instead -- see _JOINT_TYPES.
+        # A search with none of them is left exactly as written.
+        joint_labels, joint_hits = [], []
+        word_source = description
+        for label, search_rx, catalog_rx in _JOINT_TYPES:
+            if search_rx.search(word_source):
+                word_source = search_rx.sub(' ', word_source)
+                joint_labels.append(label)
+                joint_hits.append(Q(item_description__iregex=catalog_rx) | Q(item_firm__iregex=catalog_rx))
         # De-duplicated, order-preserving: a word repeated in the enquiry
         # ("4 inch x 3 inch") must not be scored twice for the same hit.
-        words = list(dict.fromkeys(w for w in description.split() if len(w) >= 3))
+        words = list(dict.fromkeys(w for w in word_source.split() if len(w) >= 3))
 
         # Rank EVERY candidate by how many search terms it actually matches
         # -- across both description and brand -- rather than just taking
@@ -266,6 +321,16 @@ def lookup_item_master(description: str) -> str:
             weight = _term_weight(frequencies.get(f"df_{i}", 0))
             relevance = relevance + Case(
                 When(word_hit, then=Value(weight)),
+                default=Value(0), output_field=IntegerField(),
+            )
+        # The requested joint type counts as one more search term: it is
+        # scored, can pull a row into the candidates, and a row must carry it
+        # to reach the "matches ALL your search terms" tier below.
+        for joint_hit in joint_hits:
+            combined_q |= joint_hit
+            all_terms_hit = joint_hit if all_terms_hit is None else (all_terms_hit & joint_hit)
+            relevance = relevance + Case(
+                When(joint_hit, then=Value(_JOINT_TYPE_WEIGHT)),
                 default=Value(0), output_field=IntegerField(),
             )
         # A row carrying EVERY search word is a categorically better answer
@@ -315,6 +380,12 @@ def lookup_item_master(description: str) -> str:
             )
         else:
             header.append(f"These are ALL {total_matches} matches -- the list is complete.")
+        if joint_labels:
+            header.append(
+                "Joint type requested in your search: " + "; ".join(joint_labels) + ". Rows of that joint "
+                "type rank above the same item in the other joint type. Only UPVC pipes/fittings use "
+                "these joint types -- ignore RR on cable, SS meaning stainless steel, PE meaning polyethylene."
+            )
         if tied_at_top == len(matches) and total_matches > len(matches):
             header.append(
                 f"WARNING: every item shown is tied at the same relevance score, so this ordering "
@@ -324,7 +395,7 @@ def lookup_item_master(description: str) -> str:
 
         lines = header
         for it in matches:
-            marker = " <-- matches ALL your search terms" if len(words) > 1 and it._covers_all else ""
+            marker = " <-- matches ALL your search terms" if len(words) + len(joint_hits) > 1 and it._covers_all else ""
             lines.append(
                 f"- {it.item_code} | {it.item_description} | brand={it.item_firm} "
                 f"| stock={it.item_stock} | price={it.item_price}{marker}"
