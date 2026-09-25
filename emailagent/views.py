@@ -14,6 +14,7 @@ from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -565,15 +566,32 @@ def quotation_draft_queue(request):
         drafts = drafts.filter(quotation__emailed_at__isnull=True)
     else:
         sent_filter = ''
+    # Date range on the RFQ email's received date (the "Received" column),
+    # inclusive on both ends. An unparseable value is ignored and dropped.
+    def _get_date(key):
+        try:
+            return parse_date(request.GET.get(key, '').strip())
+        except ValueError:  # well-formed but impossible, e.g. 2026-02-31
+            return None
+    start, end = _get_date('date_from'), _get_date('date_to')
+    if start:
+        drafts = drafts.filter(tracked_email__received_at__date__gte=start)
+    if end:
+        drafts = drafts.filter(tracked_email__received_at__date__lte=end)
+    date_from = start.isoformat() if start else ''
+    date_to = end.isoformat() if end else ''
     paginator = Paginator(drafts, settings.EMAILAGENT_LIST_PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get('page'))
-    base_params = {k: v for k, v in (('q', search_query), ('sent', sent_filter)) if v}
+    base_params = {k: v for k, v in (('q', search_query), ('sent', sent_filter),
+                                     ('date_from', date_from), ('date_to', date_to)) if v}
     return render(request, 'emailagent/quotation_queue.html', {
         'drafts': page_obj,
         'page_obj': page_obj,
         'total_count': paginator.count,
         'search_query': search_query,
         'sent_filter': sent_filter,
+        'date_from': date_from,
+        'date_to': date_to,
         'base_query': urlencode(base_params),
     })
 

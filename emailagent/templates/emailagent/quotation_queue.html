@@ -26,11 +26,18 @@
     .search-wrap { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; gap: .3rem; }
     .search-hint { font-size: .72rem; color: var(--muted); text-align: right; }
     .search-hint b { font-weight: 600; color: var(--body); }
+    .date-filter { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+    .date-filter label { font-size: .75rem; color: var(--muted); display: flex; align-items: center; gap: .3rem; margin: 0; }
+    .date-filter input[type=date] {
+        border: 1px solid var(--line); background: var(--surface-alt); color: var(--body);
+        border-radius: 8px; padding: .25rem .45rem; font-size: .8rem;
+    }
     .sent-meta { font-size: .72rem; color: var(--muted); margin-top: .2rem; line-height: 1.3; }
     @media (max-width: 640px) {
         .search-wrap { align-items: stretch; width: 100%; margin-left: 0; }
         .search-box input { width: 100%; max-width: none; }
         .search-hint { text-align: left; }
+        .date-filter { justify-content: flex-start; }
     }
 </style>
 {% endblock %}
@@ -54,6 +61,12 @@
             <a href="?{% qs_replace sent='no' %}" class="pill {% if sent_filter == 'no' %}active{% endif %}"><i class="fas fa-clock"></i> Not Sent</a>
         </div>
         <form method="get" class="search-wrap">
+            <div class="date-filter">
+                <label>From <input type="date" name="date_from" value="{{ date_from }}" {% if date_to %}max="{{ date_to }}"{% endif %}></label>
+                <label>To <input type="date" name="date_to" value="{{ date_to }}" {% if date_from %}min="{{ date_from }}"{% endif %}></label>
+                <button type="submit" class="btn-x sm" title="Filter by received date"><i class="fas fa-filter"></i> Apply</button>
+                {% if date_from or date_to %}<a href="?{% qs_replace date_from='' date_to='' %}" class="search-clear" style="margin-left:0;">Clear dates</a>{% endif %}
+            </div>
             <div style="display:flex; align-items:center;">
                 <div class="search-box" style="margin-left:0;">
                     <i class="fas fa-magnifying-glass"></i>
@@ -184,9 +197,9 @@
     <div class="card-x">
         <div class="empty-x">
             <div class="ic"><i class="fas fa-file-invoice-dollar"></i></div>
-            {% if search_query or sent_filter %}
+            {% if search_query or sent_filter or date_from or date_to %}
             <h3>No matching quotations</h3>
-            <p>No quotations match the current {% if search_query %}search "{{ search_query }}"{% if sent_filter %} and {% endif %}{% endif %}{% if sent_filter %}"{% if sent_filter == 'yes' %}Sent{% else %}Not Sent{% endif %}" filter{% endif %}. <a href="?">Show all</a></p>
+            <p>No quotations match the current {% if search_query %}search "{{ search_query }}"{% if sent_filter %} and {% endif %}{% endif %}{% if sent_filter %}"{% if sent_filter == 'yes' %}Sent{% else %}Not Sent{% endif %}" filter{% endif %}{% if date_from or date_to %}{% if search_query or sent_filter %} and {% endif %}received {% if date_from %}from {{ date_from }}{% endif %}{% if date_to %} to {{ date_to }}{% endif %}{% endif %}. <a href="?">Show all</a></p>
             {% else %}
             <h3>No quotations yet</h3>
             <p>A quotation is created automatically as soon as an email is confirmed as an RFQ.</p>
