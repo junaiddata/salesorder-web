@@ -138,14 +138,20 @@ def get_business_category(salesman_name):
         "A. RAFIQ ABU - RASHID",
     ]
     
+    # Retail names without the "R." prefix (will be normalized for comparison)
+    retail_names_raw = [
+        "ABUL",
+    ]
+
     # Normalize all names in lists for comparison
     project_names = [normalize_salesman_name(name) for name in project_names_raw]
     trading_names = [normalize_salesman_name(name) for name in trading_names_raw]
-    
+    retail_names = [normalize_salesman_name(name) for name in retail_names_raw]
+
     # Check categories
     if nm.startswith("E."):
         return "Export"
-    elif nm.startswith("R."):
+    elif nm.startswith("R.") or nm in retail_names:
         return "Retail"
     elif nm in project_names:
         return "Project"
