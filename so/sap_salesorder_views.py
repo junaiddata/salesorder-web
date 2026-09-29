@@ -9128,6 +9128,11 @@ def item_analysis(request):
                 })
 
     # Live stock & item master price from Items (Admin only; same pattern as salesorder_detail)
+    # stock_total/item_price_total are grand totals across ALL filtered items
+    # (before pagination, same as year_totals above) -- shown in the totals
+    # row's Tot. Stock / Item price cells instead of a plain "—".
+    stock_total = Decimal('0')
+    item_price_total = Decimal('0')
     if is_admin and items_list:
         master_codes = [item['item_code'] for item in items_list if item.get('item_code')]
         master_lookup = {}
@@ -9148,6 +9153,9 @@ def item_analysis(request):
             else:
                 item['total_available_stock'] = Decimal('0')
                 item['item_price'] = None
+            stock_total += item['total_available_stock']
+            if item['item_price'] is not None:
+                item_price_total += item['item_price']
 
     # Paginate items - show 1000 items per page
     page_size = 1000
@@ -9174,8 +9182,10 @@ def item_analysis(request):
                 'years': years,
                 'is_admin': is_admin,
                 'totals_list': totals_list,
+                'stock_total': stock_total,
+                'item_price_total': item_price_total,
             }, request=request)
-            
+
             # Render pagination HTML if needed
             pagination_html = ''
             if paginator.num_pages > 1:
@@ -9226,6 +9236,8 @@ def item_analysis(request):
         'salesmen': all_salesmen,
         'firms': all_firms,
         'totals_list': totals_list,
+        'stock_total': stock_total,
+        'item_price_total': item_price_total,
         'category_salesmen': category_salesmen_for_tiles,  # For Power BI-style salesman tiles when category selected
         'filters': {
             'q': search_query,

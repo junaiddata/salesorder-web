@@ -815,8 +815,8 @@
               <td class="sticky-col" style="left: 0; font-weight: 700; background: var(--primary-light);">TOTAL</td>
               <td class="sticky-col" style="left: 150px; font-weight: 700; background: var(--primary-light);"></td>
               {% if is_admin %}
-              <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">—</td>
-              <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">—</td>
+              <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">{{ stock_total|default:0|floatformat:0|intcomma }}</td>
+              <td class="sticky-col text-right" style="font-weight: 700; background: var(--primary-light);">{{ item_price_total|default:0|floatformat:2|intcomma }}</td>
               {% endif %}
               {% for totals in totals_list %}
                 <td class="text-right totals-cell" style="font-weight: 700; background: var(--primary-light);">{{ totals.total_sales|default:0|floatformat:2|intcomma }}</td>
