@@ -156,8 +156,12 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
     but that mailbox must never auto-create a real Sales Order/PO -- so
     allow_quotation=True, allow_lpo=False) and poll_submittal_mailbox
     (submittal-only: allow_quotation=False, allow_lpo=False -- an RFQ or LPO
-    from that mailbox is still tracked/visible, it just never triggers either
-    step)."""
+    from that mailbox is still tracked/visible, and LPO processing never
+    runs for it regardless of what a later poller sees; but if the SAME
+    Message-ID later shows up in a quotation-enabled mailbox (sales@/
+    outlook, project@ -- e.g. CC'd to both), the dedup branch below still
+    drafts a quotation for the row this mailbox already created, since that
+    second sighting is the real signal it was meant for sales)."""
     raw = client.fetch_message(service, message_id)
     parsed = client.parse_message(raw)
 
@@ -202,6 +206,35 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
             if new_uid and source == existing.source and existing.imap_uid != new_uid:
                 existing.imap_uid = new_uid
                 existing.save(update_fields=['imap_uid'])
+
+            # This exact message was already claimed by the submittal-only
+            # mailbox (allow_quotation=False there, so no draft was ever
+            # attempted), but a quotation-enabled mailbox (sales@/outlook,
+            # project@) has now also received the same Message-ID -- e.g.
+            # CC'd to both sales@junaid.ae and the submittal inbox. That's
+            # the real signal this was meant for sales, not just "the
+            # classifier thinks it's an RFQ", so draft it now instead of
+            # silently dropping it (see TrackedEmail 673: correctly
+            # classified rfq/0.97 by the submittal poller, but never
+            # quoted because that mailbox's row permanently owned the
+            # dedup key). Only fires for a confirmed RFQ (status was never
+            # set for submittal/lpo/not_relevant/needs_review content) and
+            # never touches allow_lpo -- this mailbox must still never
+            # auto-create a real Sales Order. draft_quotation is idempotent
+            # (QuotationDraft.get_or_create + STATUS_CONFIRMED guard), so
+            # this is safe even if more than one quotation-enabled mailbox
+            # sees the same message.
+            if (allow_quotation and existing.source == TrackedEmail.SOURCE_SUBMITTAL
+                    and existing.status == TrackedEmail.STATUS_RFQ):
+                draft_recorder = supervisor.AgentRunRecorder(AgentRun.AGENT_DRAFT, tracked_email=existing)
+                try:
+                    quotation_agent.draft_quotation(existing)
+                    supervisor.finalize_draft_run(draft_recorder, existing)
+                except Exception as exc:
+                    logger.exception(f"Quotation drafting failed for TrackedEmail {existing.id}")
+                    draft_recorder.fail(exc)
+                    draft_recorder.finish()
+
             return None
 
     attachment_payloads = _build_attachment_payloads(service, parsed['gmail_message_id'], parsed['attachments'])

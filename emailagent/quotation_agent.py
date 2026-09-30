@@ -606,6 +606,20 @@ def _parse_quantity(raw) -> int:
         return 1
 
 
+def _quantity_parsed_ok(raw) -> bool:
+    """True iff `raw` is actually a real, positive number -- i.e. whether
+    _parse_quantity's return value is a genuine reading of the requirement
+    rather than its silent default-to-1 fallback (blank, a range like
+    '20-25', a size mixed into the same field, etc.). Kept as a separate
+    check rather than changing _parse_quantity's return shape, since that
+    function is also called as-is by lpo_agent.process_lpo for a plain int
+    with no note to attach it to."""
+    try:
+        return float(str(raw).strip()) > 0
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 # Matches a requested unit that is a LENGTH measure rather than a piece count
 # -- customers commonly write pipe/cable/hose requirements in running meters
 # ("24 MTR", "50m") even though we sell that item as fixed-length pieces or
@@ -708,11 +722,20 @@ def _resolve_quantity(raw_quantity, raw_unit, matched_item):
     quoting the wrong quantity.
 
     Returns (quantity: int, note: str) -- note is '' unless a human should
-    double check this line (a conversion was applied, or should have been
-    but the catalog description didn't have a parseable length).
+    double check this line (the raw quantity couldn't be read as a real
+    number at all, a conversion was applied, or a conversion should have
+    been applied but the catalog description didn't have a parseable
+    length).
     """
     base_qty = _parse_quantity(raw_quantity)
     if not _is_length_unit(raw_unit):
+        if not _quantity_parsed_ok(raw_quantity):
+            note = (
+                f"Quantity not clearly stated in the requirement "
+                f"({raw_quantity!r} could not be read as a number) -- defaulted to 1. "
+                "Please confirm the actual quantity before approving."
+            )
+            return base_qty, note
         return base_qty, ''
 
     try:

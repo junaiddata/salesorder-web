@@ -267,7 +267,57 @@ _PDF_SPARSE_TEXT_CHARS = 200  # a PDF whose real content is a BOQ/item table
 # build_classification_content) rather than trusting a short text layer.
 
 
+# Emitted before each detected table's grid rendition in extract_pdf_text --
+# also checked by build_classification_content to decide whether to render
+# page images as a visual cross-check even when plain text extraction looks
+# long enough on its own (see the marker's use there).
+_PDF_TABLE_GRID_MARKER = "[Table detected -- exact grid below, use it to double-check any row/column value you're unsure about above:]"
+
+
 def extract_pdf_text(file_bytes: bytes, max_chars: int = 20000) -> str:
+    """Best-effort text extraction, preferring PyMuPDF (fitz) over PyPDF2:
+    PyPDF2's extract_text() has no concept of table columns, so a table row
+    like 'Pipe 6mm | 24 | MTR' commonly comes out as four separate lines in
+    an arbitrary stream order, and quantity/price/unit numbers end up
+    detached from the row they belong to -- a traced cause of wrong
+    quantities being read from PDF attachments. fitz's own get_text(sort=
+    True) already keeps a row's cells together far more reliably, and
+    page.find_tables() (text-based strategy, so whitespace-aligned tables
+    with no visible borders are still caught, not just ruled ones) gives an
+    explicit grid rendition of any detected table as a clean, unambiguous
+    supplement the model can cross-check against. Falls back to the
+    previous PyPDF2-only path if fitz can't open the file at all or
+    extracts nothing, so a PDF that already worked keeps working."""
+    try:
+        doc = fitz.open(stream=file_bytes, filetype='pdf')
+        parts = []
+        for page in doc:
+            page_text = page.get_text('text', sort=True) or ''
+            if page_text.strip():
+                parts.append(page_text)
+            try:
+                tables = page.find_tables(strategy='text').tables
+            except Exception:
+                tables = []
+            for table in tables:
+                try:
+                    rows = table.extract()
+                except Exception:
+                    rows = []
+                grid_lines = [
+                    ' | '.join((cell or '').strip() for cell in row)
+                    for row in rows
+                    if any((cell or '').strip() for cell in row)
+                ]
+                if grid_lines:
+                    parts.append(_PDF_TABLE_GRID_MARKER + '\n' + '\n'.join(grid_lines))
+        doc.close()
+        text = '\n\n'.join(parts)
+        if text.strip():
+            return text[:max_chars]
+    except Exception as e:
+        logger.warning(f"PyMuPDF PDF text extraction failed, falling back to PyPDF2: {e}")
+
     try:
         reader = PdfReader(BytesIO(file_bytes))
         text = '\n'.join(page.extract_text() or '' for page in reader.pages)
@@ -293,6 +343,22 @@ def render_pdf_pages_as_images(file_bytes: bytes, max_pages: int = 5, dpi: int =
     except Exception as e:
         logger.warning(f"PDF page rendering failed: {e}")
     return images
+
+
+def _pdf_page_count(file_bytes: bytes) -> int:
+    """Cheap page-count-only open (no rasterization) -- used by
+    build_classification_content to size render_pdf_pages_as_images'
+    max_pages against this specific document instead of a flat guess, and
+    to detect when the render still had to stop short of the real page
+    count. 0 if the file can't even be opened (never raises)."""
+    try:
+        doc = fitz.open(stream=file_bytes, filetype='pdf')
+        count = doc.page_count
+        doc.close()
+        return count
+    except Exception as e:
+        logger.warning(f"PDF page count failed: {e}")
+        return 0
 
 
 def extract_excel_text(file_bytes: bytes, max_rows: int = 200) -> str:
@@ -362,7 +428,8 @@ def build_classification_content(email: dict, attachments: list) -> list:
             text = att.get('extracted_text') or (extract_pdf_text(data_bytes) if data_bytes else '')
             if text.strip():
                 text_parts.append(f"\n--- Attachment (PDF): {att.get('filename')} ---\n{text}")
-            if len(text.strip()) < _PDF_SPARSE_TEXT_CHARS and data_bytes:
+            has_detected_table = _PDF_TABLE_GRID_MARKER in text
+            if data_bytes and (len(text.strip()) < _PDF_SPARSE_TEXT_CHARS or has_detected_table):
                 # Either no extractable text layer at all (a fully scanned/
                 # image-only PDF), or only a thin one -- e.g. a one-line
                 # caption/note ("All PVC Pipe and Fittings in white color")
@@ -373,14 +440,54 @@ def build_classification_content(email: dict, attachments: list) -> list:
                 # than trusting it just because it's non-empty -- otherwise
                 # the table is silently missed entirely (observed: a 287KB
                 # PDF where extraction returned only that one caption line).
-                page_images = render_pdf_pages_as_images(data_bytes)
+                # ALSO render page images whenever extract_pdf_text detected
+                # an actual table (has_detected_table), even with plenty of
+                # text -- a visual cross-check on top of the text/grid, since
+                # this is exactly the content where a misread quantity/price/
+                # unit does the most damage (a traced cause of wrong
+                # quantities being read from PDF attachments).
+                #
+                # How many pages to render is NOT a flat guess (it used to
+                # be a hardcoded 5 regardless of the document, which is what
+                # silently dropped 9 of 14 pages on a real multi-page BOQ) --
+                # it's sized to this specific PDF's own page count, capped by
+                # however many image slots this email actually has left
+                # (EMAILAGENT_MAX_ATTACHMENT_IMAGES total, shared across every
+                # attachment/image in the email; _add_image already enforces
+                # this cap, so asking for exactly what's left rather than a
+                # flat 5 never sends more images than today's budget already
+                # allows -- a short PDF that fits now gets read in full
+                # instead of stopping at page 5 for no reason, at no extra
+                # cost; a long one still gets cut off at the same total
+                # image ceiling as before, just later and more usefully).
+                remaining_image_slots = settings.EMAILAGENT_MAX_ATTACHMENT_IMAGES - len(image_blocks)
+                total_pdf_pages = _pdf_page_count(data_bytes)
+                render_cap = min(total_pdf_pages, remaining_image_slots) if remaining_image_slots > 0 else 0
+                page_images = render_pdf_pages_as_images(data_bytes, max_pages=render_cap) if render_cap > 0 else []
                 if page_images:
                     text_parts.append(
                         f"\n--- Attachment (PDF, also rendered as {len(page_images)} page image(s) below "
-                        f"since extracted text was sparse/empty): {att.get('filename')} ---"
+                        f"to visually cross-check exact values -- extracted text was sparse/empty and/or "
+                        f"a table was detected): {att.get('filename')} ---"
                     )
                 for i, page_png in enumerate(page_images):
                     _add_image(page_png, "image/png", f"{att.get('filename')} (page {i + 1})")
+                if total_pdf_pages > len(page_images):
+                    # Still couldn't cover the whole document (this email's
+                    # image budget ran out, or fitz couldn't open it) --
+                    # surfaced as text so it isn't a silent gap: the model is
+                    # asked to carry this into its own reasoning (shown to a
+                    # human via TrackedEmail.classification_reasoning), since
+                    # there is no reliable way to guarantee every document,
+                    # of any size, always fits within one request's budget.
+                    text_parts.append(
+                        f"\n[WARNING: {att.get('filename')} has {total_pdf_pages} page(s), but only "
+                        f"{len(page_images)} could be rendered as images within this email's attachment-"
+                        f"image budget -- items on the remaining pages may be MISSING from what's shown "
+                        f"above. If this could plausibly affect the items list, say so explicitly in your "
+                        f"reasoning so a human knows to check the original document past page "
+                        f"{len(page_images)}.]"
+                    )
         elif content_type in ('application/vnd.ms-excel',
                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'):
             text = att.get('extracted_text') or (extract_excel_text(data_bytes) if data_bytes else '')
