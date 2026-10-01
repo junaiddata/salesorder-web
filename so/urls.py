@@ -18,6 +18,7 @@ from . import historical_sales_views
 from . import accounts_recording_views
 from . import brandwise_sales_analysis_views
 from . import brandwise_quotation_matrix_views
+from . import api_item_quotation_totals_views
 from . import customer_item_monthwise_analysis_views
 from . import customer_item_yearwise_analysis_views
 
@@ -194,6 +195,7 @@ urlpatterns += [
     path('saparinvoices/purchase-stock-requirement/', purchase_stock_requirement_views.purchase_stock_requirement, name='purchase_stock_requirement'),
     path('saparinvoices/purchase-stock-requirement/export-excel/', purchase_stock_requirement_views.export_purchase_stock_requirement_excel, name='export_purchase_stock_requirement_excel'),
     path('api/item-analysis-totals/', purchase_stock_requirement_views.api_item_analysis_totals, name='api_item_analysis_totals'),
+    path('api/item-quotation-totals/', api_item_quotation_totals_views.api_item_quotation_totals, name='api_item_quotation_totals'),
     path('saparinvoices/quotation-conversion/', sap_salesorder_views.quotation_conversion_analysis, name='quotation_conversion_analysis'),
     path('saparinvoices/item-analysis/export-pdf/', sap_salesorder_views.export_item_analysis_pdf, name='export_item_analysis_pdf'),
     path('saparinvoices/item-analysis/export-excel/', sap_salesorder_views.export_item_analysis_excel, name='export_item_analysis_excel'),
