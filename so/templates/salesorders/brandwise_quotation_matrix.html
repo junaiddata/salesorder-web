@@ -1,0 +1,949 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brandwise Quotation Matrix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+      --transition: 150ms ease;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      color: var(--text-secondary);
+      font-size: 0.938rem;
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    /* Table Card */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      position: relative;
+    }
+
+    th.text-right {
+      text-align: right;
+    }
+
+    th.sticky-col {
+      position: sticky;
+      left: 0;
+      background: var(--bg);
+      z-index: 11;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+
+    tbody tr:hover {
+      background: var(--bg);
+    }
+
+    td {
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: var(--text);
+      position: relative;
+    }
+
+    td.text-right {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    td.sticky-col {
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      z-index: 9;
+      font-weight: 500;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+      padding: 8px 12px;
+    }
+
+    tbody tr:hover td.sticky-col {
+      background: var(--bg);
+    }
+
+    {% if is_admin %}
+    thead th.sticky-col:nth-child(1), tbody td.sticky-col:nth-child(1) { left: 0; }
+    thead th.sticky-col:nth-child(2), tbody td.sticky-col:nth-child(2) { left: 150px; }
+    thead th.sticky-col:nth-child(3), tbody td.sticky-col:nth-child(3) { left: 350px; }
+    thead th.sticky-col:nth-child(4), tbody td.sticky-col:nth-child(4) { left: 470px; }
+    thead th.sticky-col:nth-child(5), tbody td.sticky-col:nth-child(5) { left: 570px; }
+    {% else %}
+    td.sticky-col:nth-child(2) {
+      left: 150px;
+    }
+    thead th.sticky-col:nth-child(3), tbody td.sticky-col:nth-child(3) { left: 350px; }
+    {% endif %}
+
+    .item-code {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+      line-height: 1.4;
+    }
+    
+    .item-upc {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+
+    .item-description {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      line-height: 1.3;
+      max-width: 200px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .year-group {
+      background: rgba(59, 130, 246, 0.05);
+    }
+    
+    /* Admin: 5 sticky + 4 cols/year; tbody cols 6–9 = first year, 10–13 = second, 14–17 = third */
+    {% if is_admin %}
+    thead tr:first-child th:nth-child(6) { border-right: 3px solid var(--primary); }
+    thead tr:first-child th:nth-child(7) { border-left: 3px solid var(--primary); border-right: 3px solid var(--primary); }
+    thead tr:first-child th:nth-child(8) { border-left: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(4) { border-right: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(5) { border-left: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(8) { border-right: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(9) { border-left: 3px solid var(--primary); }
+    tbody td:nth-child(9) { border-right: 3px solid var(--primary); }
+    tbody td:nth-child(10) { border-left: 3px solid var(--primary); }
+    tbody td:nth-child(13) { border-right: 3px solid var(--primary); }
+    tbody td:nth-child(14) { border-left: 3px solid var(--primary); }
+    {% else %}
+    /* Non-admin: 3 sticky + 3 cols/year; tbody 4–6 = first year, 7–9 = second, 10–12 = third */
+    thead tr:first-child th:nth-child(4) { border-right: 3px solid var(--primary); }
+    thead tr:first-child th:nth-child(5) { border-left: 3px solid var(--primary); border-right: 3px solid var(--primary); }
+    thead tr:first-child th:nth-child(6) { border-left: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(3) { border-right: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(4) { border-left: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(6) { border-right: 3px solid var(--primary); }
+    thead tr:nth-child(2) th:nth-child(7) { border-left: 3px solid var(--primary); }
+    tbody td:nth-child(6) { border-right: 3px solid var(--primary); }
+    tbody td:nth-child(7) { border-left: 3px solid var(--primary); }
+    tbody td:nth-child(9) { border-right: 3px solid var(--primary); }
+    tbody td:nth-child(10) { border-left: 3px solid var(--primary); }
+    {% endif %}
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .totals-row {
+      background: var(--primary-light);
+      border-top: 2px solid var(--primary);
+      border-bottom: 2px solid var(--primary);
+      font-weight: 700;
+    }
+
+    .totals-row td {
+      background: var(--primary-light);
+      font-weight: 700;
+    }
+
+    .totals-row:hover {
+      background: var(--primary-light);
+    }
+
+    /* Filters */
+    .filters-card {
+      margin-bottom: 20px;
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.813rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    /* Multi-select dropdown */
+    .multi-select {
+      position: relative;
+      width: 100%;
+    }
+
+    .select-box {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      transition: all var(--transition);
+    }
+
+    .select-box:hover {
+      border-color: var(--primary);
+    }
+
+    .select-box::after {
+      content: '\f107';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .options-container {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      margin-top: 4px;
+    }
+
+    .options-container.active {
+      display: block;
+    }
+
+    .option-label {
+      display: block;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background var(--transition);
+    }
+
+    .option-label:hover {
+      background: var(--bg);
+    }
+
+    .option-label input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    /* Search box in dropdown */
+    .search-box-container {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .search-box {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.813rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .search-box:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    .options-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .option-label.hidden {
+      display: none;
+    }
+
+    /* Store Filter Tiles */
+    .store-tile {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all var(--transition);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .store-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .store-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    /* Month Filter Tiles */
+    .month-tile {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-size: 0.813rem;
+      font-weight: 500;
+      transition: all var(--transition);
+      border: 2px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .month-tile:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .month-tile.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px 12px 40px;
+      }
+      
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .table-wrapper {
+        font-size: 0.813rem;
+      }
+      
+      th, td {
+        padding: 8px 12px;
+      }
+    }
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .loading-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-text {
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>Brandwise Quotation Matrix</h1>
+        <p>Item-wise quotation value, GP and quantity by year</p>
+      </div>
+      <div class="header-right">
+        <a href="{% url 'brandwise_quotation_analysis' %}" class="btn btn-secondary">
+          <i class="fas fa-calendar-days"></i>
+          Calendar View
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-secondary">
+          <i class="fas fa-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <label style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Month:</label>
+        <button type="button" class="month-tile {% if '1' in filters.month %}active{% endif %}" data-month="1">Jan</button>
+        <button type="button" class="month-tile {% if '2' in filters.month %}active{% endif %}" data-month="2">Feb</button>
+        <button type="button" class="month-tile {% if '3' in filters.month %}active{% endif %}" data-month="3">Mar</button>
+        <button type="button" class="month-tile {% if '4' in filters.month %}active{% endif %}" data-month="4">Apr</button>
+        <button type="button" class="month-tile {% if '5' in filters.month %}active{% endif %}" data-month="5">May</button>
+        <button type="button" class="month-tile {% if '6' in filters.month %}active{% endif %}" data-month="6">Jun</button>
+        <button type="button" class="month-tile {% if '7' in filters.month %}active{% endif %}" data-month="7">Jul</button>
+        <button type="button" class="month-tile {% if '8' in filters.month %}active{% endif %}" data-month="8">Aug</button>
+        <button type="button" class="month-tile {% if '9' in filters.month %}active{% endif %}" data-month="9">Sep</button>
+        <button type="button" class="month-tile {% if '10' in filters.month %}active{% endif %}" data-month="10">Oct</button>
+        <button type="button" class="month-tile {% if '11' in filters.month %}active{% endif %}" data-month="11">Nov</button>
+        <button type="button" class="month-tile {% if '12' in filters.month %}active{% endif %}" data-month="12">Dec</button>
+      </div>
+    </div>
+
+    <div class="card filters-card">
+      <form method="GET" action="{% url 'brandwise_quotation_matrix' %}" id="filters-form">
+        <div class="filters-grid">
+          <div class="field">
+            <label>Search</label>
+            <input type="text" name="q" id="search-input" value="{{ filters.q }}" placeholder="Item Code, Description, or UPC" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>Salesman</label>
+            <div class="multi-select" id="salesman-wrapper">
+              <div class="select-box" id="salesman-trigger">
+                <span id="salesman-text">All Salesmen</span>
+              </div>
+              <div class="options-container" id="salesman-options">
+                <div class="search-box-container">
+                  <input type="text" id="salesman-search" class="search-box" placeholder="Search salesmen..." autocomplete="off">
+                </div>
+                <div class="options-list" id="salesman-options-list">
+                  {% for salesman in salesmen %}
+                    <label class="option-label" data-value="{{ salesman }}">
+                      <input type="checkbox" name="salesman" value="{{ salesman }}" {% if salesman in filters.salesman %}checked{% endif %}>
+                      <span class="option-text">{{ salesman }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Brand</label>
+            <div class="multi-select" id="firm-wrapper">
+              <div class="select-box" id="firm-trigger">
+                <span id="firm-text">All Brands</span>
+              </div>
+              <div class="options-container" id="firm-options">
+                <div class="search-box-container">
+                  <input type="text" id="firm-search" class="search-box" placeholder="Search brands..." autocomplete="off">
+                </div>
+                <div class="options-list" id="firm-options-list">
+                  {% for firm in firms %}
+                    <label class="option-label" data-value="{{ firm }}">
+                      <input type="checkbox" name="firm" value="{{ firm }}" {% if firm in filters.firm %}checked{% endif %}>
+                      <span class="option-text">{{ firm }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Start Date</label>
+            <input type="date" name="start" id="start-date" value="{{ filters.start }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field">
+            <label>End Date</label>
+            <input type="date" name="end" id="end-date" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field" style="display: flex; gap: 8px; align-self:end;">
+            <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
+            <button class="btn btn-primary" type="submit" id="apply-filters">Apply</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2" class="sticky-col" style="min-width: 150px; left: 0; vertical-align: bottom;">Item Code</th>
+              <th rowspan="2" class="sticky-col" style="min-width: 200px; left: 150px; vertical-align: bottom;">Item Description</th>
+              <th rowspan="2" class="sticky-col" style="min-width: 120px; left: 350px; vertical-align: bottom;">Brand</th>
+              {% if is_admin %}
+              <th rowspan="2" class="sticky-col text-right" style="min-width: 100px; left: 470px; vertical-align: bottom;" title="Item Master: total_available_stock">Tot. Stock</th>
+              <th rowspan="2" class="sticky-col text-right" style="min-width: 100px; left: 570px; vertical-align: bottom;" title="Item Master: item_price (min sell)">Item price</th>
+              {% endif %}
+              {% for year in years %}
+              <th colspan="{% if is_admin %}4{% else %}3{% endif %}" class="year-group text-right" style="text-align: center;">{{ year }}</th>
+              {% endfor %}
+            </tr>
+            <tr>
+              {% for year in years %}
+              <th class="text-right">Quoted Value</th>
+              {% if is_admin %}<th class="text-right">GP</th>{% endif %}
+              <th class="text-right">Qty Quoted</th>
+              <th class="text-right">Quotations</th>
+              {% endfor %}
+            </tr>
+          </thead>
+{% include 'salesorders/_brandwise_quotation_matrix_table.html' %}
+        </table>
+      </div>
+      {% include 'salesorders/_pagination.html' with page_obj=page_obj %}
+      <div class="total-count" style="margin-top: 16px; text-align: center; color: var(--text-secondary); font-size: 0.875rem;">
+        Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count|intcomma }}</strong> items
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const salesmanWrapper = document.getElementById('salesman-wrapper');
+      const salesmanTrigger = document.getElementById('salesman-trigger');
+      const salesmanOptions = document.getElementById('salesman-options');
+      const salesmanOptionsList = document.getElementById('salesman-options-list');
+      const salesmanText = document.getElementById('salesman-text');
+      const salesmanSearch = document.getElementById('salesman-search');
+      const getSalesmanCheckboxes = () => salesmanOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getSalesmanLabels = () => salesmanOptionsList.querySelectorAll('.option-label');
+
+      salesmanTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        salesmanOptions.classList.toggle('active');
+        if (salesmanOptions.classList.contains('active')) {
+          // Focus search box when dropdown opens
+          setTimeout(() => salesmanSearch.focus(), 100);
+        } else {
+          // Clear search when dropdown closes
+          salesmanSearch.value = '';
+          getSalesmanLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      salesmanOptions.addEventListener('click', e => e.stopPropagation());
+
+      // Search functionality for Salesman
+      salesmanSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getSalesmanLabels();
+        
+        labels.forEach(label => {
+          const text = label.querySelector('.option-text').textContent.toLowerCase();
+          if (text.includes(searchTerm)) {
+            label.classList.remove('hidden');
+          } else {
+            label.classList.add('hidden');
+          }
+        });
+      });
+
+      salesmanSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateSalesmanLabel() {
+        const checked = Array.from(getSalesmanCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          salesmanText.textContent = "All Salesmen";
+          salesmanText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          salesmanText.textContent = checked[0].value;
+          salesmanText.style.opacity = "1";
+        } else {
+          salesmanText.textContent = `${checked.length} Selected`;
+          salesmanText.style.opacity = "1";
+        }
+      }
+
+      function syncSalesmanTilesFromCheckboxes() {
+        document.querySelectorAll('.salesman-tile[data-salesman]').forEach(tile => {
+          const salesmanName = tile.dataset.salesman;
+          const checkbox = salesmanOptionsList ? Array.from(salesmanOptionsList.querySelectorAll('input[type="checkbox"]')).find(cb => cb.value === salesmanName) : null;
+          if (checkbox) tile.classList.toggle('active', checkbox.checked);
+        });
+      }
+
+      updateSalesmanLabel();
+
+      getSalesmanCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateSalesmanLabel();
+          syncSalesmanTilesFromCheckboxes();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!salesmanWrapper.contains(e.target)) salesmanOptions.classList.remove('active');
+      });
+
+      // Multi-Select for Firm
+      const firmWrapper = document.getElementById('firm-wrapper');
+      const firmTrigger = document.getElementById('firm-trigger');
+      const firmOptions = document.getElementById('firm-options');
+      const firmOptionsList = document.getElementById('firm-options-list');
+      const firmText = document.getElementById('firm-text');
+      const firmSearch = document.getElementById('firm-search');
+      const getFirmCheckboxes = () => firmOptionsList.querySelectorAll('input[type="checkbox"]');
+      const getFirmLabels = () => firmOptionsList.querySelectorAll('.option-label');
+
+      // Function to sort firm labels - selected firms first
+      function sortFirmLabels() {
+        const labels = Array.from(getFirmLabels());
+        const container = firmOptionsList;
+        
+        // Separate selected and unselected
+        const selected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && checkbox.checked;
+        });
+        const unselected = labels.filter(label => {
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          return checkbox && !checkbox.checked;
+        });
+        
+        // Clear container
+        container.innerHTML = '';
+        
+        // Add selected firms first
+        selected.forEach(label => container.appendChild(label));
+        
+        // Add unselected firms after
+        unselected.forEach(label => container.appendChild(label));
+      }
+
+      firmTrigger.addEventListener('click', e => {
+        e.stopPropagation();
+        firmOptions.classList.toggle('active');
+        if (firmOptions.classList.contains('active')) {
+          // Sort firms when opening - selected first
+          sortFirmLabels();
+          setTimeout(() => firmSearch.focus(), 100);
+        } else {
+          // Clear search when dropdown closes
+          firmSearch.value = '';
+          getFirmLabels().forEach(label => label.classList.remove('hidden'));
+        }
+      });
+
+      firmOptions.addEventListener('click', e => e.stopPropagation());
+
+      // Search functionality for Firm
+      firmSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const labels = getFirmLabels();
+        
+        if (searchTerm === '') {
+          // If search is cleared, show all and sort (selected first)
+          labels.forEach(label => label.classList.remove('hidden'));
+          sortFirmLabels();
+        } else {
+          // Filter and sort: selected matching firms first, then unselected matching firms
+          const selectedMatching = [];
+          const unselectedMatching = [];
+          const hidden = [];
+          
+          labels.forEach(label => {
+            const text = label.querySelector('.option-text').textContent.toLowerCase();
+            const checkbox = label.querySelector('input[type="checkbox"]');
+            const isChecked = checkbox && checkbox.checked;
+            
+            // Check if matches search
+            const matches = text.includes(searchTerm);
+            
+            if (matches) {
+              if (isChecked) {
+                selectedMatching.push(label);
+              } else {
+                unselectedMatching.push(label);
+              }
+              label.classList.remove('hidden');
+            } else {
+              hidden.push(label);
+              label.classList.add('hidden');
+            }
+          });
+          
+          // Reorder: selected matching first, then unselected matching
+          const container = firmOptionsList;
+          container.innerHTML = '';
+          selectedMatching.forEach(label => container.appendChild(label));
+          unselectedMatching.forEach(label => container.appendChild(label));
+          hidden.forEach(label => container.appendChild(label));
+        }
+      });
+
+      firmSearch.addEventListener('click', e => e.stopPropagation());
+
+      function updateFirmLabel() {
+        const checked = Array.from(getFirmCheckboxes()).filter(c => c.checked);
+        if (checked.length === 0) {
+          firmText.textContent = "All Brands";
+          firmText.style.opacity = "0.6";
+        } else if (checked.length === 1) {
+          firmText.textContent = checked[0].value;
+          firmText.style.opacity = "1";
+        } else {
+          firmText.textContent = `${checked.length} Selected`;
+          firmText.style.opacity = "1";
+        }
+        
+        // Re-sort firms when selection changes (selected first)
+        if (firmOptions.classList.contains('active')) {
+          sortFirmLabels();
+        }
+      }
+
+      updateFirmLabel();
+
+      getFirmCheckboxes().forEach(box => {
+        box.addEventListener('change', function() {
+          updateFirmLabel();
+        });
+      });
+
+      document.addEventListener('click', e => {
+        if (!firmWrapper.contains(e.target)) firmOptions.classList.remove('active');
+      });
+
+      document.querySelectorAll('.month-tile[data-month]').forEach(tile => {
+        tile.addEventListener('click', function() { this.classList.toggle('active'); });
+      });
+
+      const filtersForm = document.getElementById('filters-form');
+      function buildParams() {
+        const params = new URLSearchParams();
+        for (const [key, value] of new FormData(filtersForm).entries()) {
+          if (value) params.append(key, value);
+        }
+        document.querySelectorAll('.month-tile.active').forEach(t => params.append('month', t.dataset.month));
+        return params;
+      }
+      filtersForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        window.location.href = '{% url "brandwise_quotation_matrix" %}?' + buildParams().toString();
+      });
+      document.getElementById('clear-filters').addEventListener('click', function() {
+        window.location.href = '{% url "brandwise_quotation_matrix" %}';
+      });
+      document.addEventListener('click', function(e) {
+        const a = e.target.closest('.pagination a[data-page]');
+        if (!a) return;
+        e.preventDefault();
+        const params = new URLSearchParams(window.location.search);
+        params.set('page', a.getAttribute('data-page'));
+        window.location.href = '{% url "brandwise_quotation_matrix" %}?' + params.toString();
+      });
+    });
+  </script>
+</body>
+</html>
