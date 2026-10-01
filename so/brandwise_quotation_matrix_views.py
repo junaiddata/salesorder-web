@@ -104,12 +104,23 @@ def brandwise_quotation_matrix(request):
             'quotation_numbers': set(),
         }
 
+    # TOTAL-row figures follow the brandwise page's calendar totals exactly:
+    #  * a quotation counts only when its matching lines add up to a non-zero value
+    #  * days after today in the current month are left out (the calendar stops at today)
+    # Item rows are not affected by either rule (same as the brandwise item table).
+    today = date.today()
+    total_acc = {
+        year: {'value': Decimal('0'), 'gp': Decimal('0'), 'quotes': 0} for year in years
+    }
+
     # item_code -> {description, latest date, years{year: totals}}
     item_data = {}
     for quote in quotes:
         if not quote.posting_date:
             continue
         year = quote.posting_date.year
+        quote_value = Decimal('0')
+        quote_gp = Decimal('0')
         for item in quote.items.all():
             code = str(item.item_no).strip() if item.item_no else ''
             if not code:
@@ -146,6 +157,18 @@ def brandwise_quotation_matrix(request):
             y['total_gp'] += row_total - (item_cost * qty)
             y['total_quantity'] += qty
             y['quotation_numbers'].add(quote.q_number)
+            quote_value += row_total
+            quote_gp += row_total - (item_cost * qty)
+
+        in_calendar = not (
+            quote.posting_date.year == today.year
+            and quote.posting_date.month == today.month
+            and quote.posting_date.day > today.day
+        )
+        if quote_value and in_calendar and year in total_acc:
+            total_acc[year]['value'] += quote_value
+            total_acc[year]['gp'] += quote_gp
+            total_acc[year]['quotes'] += 1
 
     def finish(totals):
         # "total_sales" is the quoted value (name kept for the shared table keys).
@@ -177,7 +200,13 @@ def brandwise_quotation_matrix(request):
         })
 
     items_list.sort(key=lambda r: sum(y['total_sales'] for y in r['year_list']), reverse=True)
-    totals_list = [finish(year_sums[year]) for year in years]
+    totals_list = []
+    for year in years:
+        totals = finish(year_sums[year])
+        totals['total_sales'] = total_acc[year]['value']
+        totals['total_gp'] = total_acc[year]['gp']
+        totals['quotation_count'] = total_acc[year]['quotes']
+        totals_list.append(totals)
 
     stock_total = sum((r['total_available_stock'] for r in items_list), Decimal('0'))
     item_price_total = sum((r['item_price'] for r in items_list if r['item_price'] is not None), Decimal('0'))
