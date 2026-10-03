@@ -1,0 +1,459 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Upload Enquiry | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<style>
+    .up-page { max-width: 1180px; margin: 0 auto; padding: 2rem 1.5rem 5.5rem; }
+
+    /* ── Page header ── */
+    .up-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
+    .up-eyebrow { display: inline-flex; align-items: center; gap: .5rem; font-size: .72rem; font-weight: 700; letter-spacing: .09em;
+        text-transform: uppercase; color: var(--primary, #003399); background: var(--primary-50, #eef3ff);
+        padding: .3rem .7rem; border-radius: 999px; margin-bottom: .75rem; }
+    .up-head h1 { font-size: 1.85rem; font-weight: 800; letter-spacing: -.02em; color: var(--ink, #0f172a); margin: 0 0 .35rem; }
+    .up-head p { color: var(--muted, #64748b); font-size: .95rem; margin: 0; max-width: 640px; line-height: 1.55; }
+    .up-head-link { font-size: .85rem; font-weight: 600; color: var(--primary, #003399); text-decoration: none; }
+    .up-head-link:hover { text-decoration: underline; }
+
+    /* ── Two-column layout ── */
+    .up-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1.5rem; align-items: start; }
+    @media (max-width: 991px) { .up-grid { grid-template-columns: 1fr; } }
+
+    .up-card { background: #fff; border: 1px solid var(--line, #e2e8f0); border-radius: 16px;
+        box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.08); }
+
+    /* ── Form sections ── */
+    .up-section { padding: 1.5rem 1.75rem; }
+    .up-section + .up-section { border-top: 1px solid var(--line-soft, #f1f5f9); }
+    .up-sec-head { display: flex; align-items: center; gap: .85rem; margin-bottom: 1.1rem; }
+    .up-step { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+        font-size: .82rem; font-weight: 800; color: #fff; background: var(--primary, #003399); }
+    .up-sec-title { font-size: 1rem; font-weight: 700; color: var(--ink, #0f172a); margin: 0; }
+    .up-sec-sub { font-size: .82rem; color: var(--muted, #64748b); margin: .1rem 0 0; }
+    .up-opt { font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint, #94a3b8);
+        background: var(--line-soft, #f1f5f9); padding: .15rem .5rem; border-radius: 999px; margin-left: .5rem; vertical-align: middle; }
+
+    /* ── Drop zone ── */
+    .up-drop { position: relative; border: 2px dashed #c7d2e6; border-radius: 14px; background: linear-gradient(180deg, #f8faff 0%, #f3f6fd 100%);
+        padding: 2.1rem 1.5rem; text-align: center; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+    .up-drop:hover, .up-drop:focus-visible { border-color: var(--primary-300, #7d97e0); background: #f1f5ff; outline: none; }
+    .up-drop.dragging { border-color: var(--primary, #003399); background: var(--primary-50, #eef3ff); transform: scale(1.005); }
+    .up-drop-icon { width: 58px; height: 58px; border-radius: 16px; margin: 0 auto .9rem; display: grid; place-items: center;
+        font-size: 1.5rem; color: var(--primary, #003399); background: #fff; border: 1px solid var(--primary-100, #dbe4ff);
+        box-shadow: 0 6px 16px -8px rgba(0,51,153,.35); }
+    .up-drop-title { font-size: 1rem; font-weight: 700; color: var(--ink, #0f172a); margin: 0 0 .25rem; }
+    .up-drop-title u { color: var(--primary, #003399); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    .up-drop-hint { font-size: .82rem; color: var(--muted, #64748b); margin: 0 0 .9rem; }
+    .up-types { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; }
+    .up-type { display: inline-flex; align-items: center; gap: .35rem; font-size: .72rem; font-weight: 700; padding: .25rem .6rem;
+        border-radius: 999px; background: #fff; border: 1px solid var(--line, #e2e8f0); color: var(--body, #334155); }
+    .up-type i { font-size: .8rem; }
+    .t-xls i { color: #16a34a; } .t-pdf i { color: #dc2626; } .t-img i { color: #0284c7; }
+
+    /* ── File cards ── */
+    .up-files { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .6rem; }
+    .up-file { display: flex; align-items: center; gap: .85rem; padding: .65rem .85rem; border: 1px solid var(--line, #e2e8f0);
+        border-radius: 12px; background: #fff; animation: upIn .2s ease; }
+    @keyframes upIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .up-file-ic { flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 1.1rem; }
+    .up-file-ic.xls { background: #ecfdf5; color: #16a34a; } .up-file-ic.pdf { background: #fef2f2; color: #dc2626; }
+    .up-file-ic.img { background: #f0f9ff; color: #0284c7; }
+    .up-file-meta { flex: 1; min-width: 0; }
+    .up-file-name { font-size: .88rem; font-weight: 600; color: var(--ink, #0f172a); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .up-file-size { font-size: .75rem; color: var(--muted, #64748b); }
+    .up-file-rm { flex: none; border: 0; background: transparent; width: 30px; height: 30px; border-radius: 8px; color: var(--faint, #94a3b8); cursor: pointer; }
+    .up-file-rm:hover { background: #fef2f2; color: #dc2626; }
+
+    /* ── Inputs ── */
+    .up-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.1rem; }
+    @media (max-width: 640px) { .up-fields { grid-template-columns: 1fr; } }
+    .up-field.full { grid-column: 1 / -1; }
+    .up-label { display: block; font-size: .8rem; font-weight: 700; color: var(--body, #334155); margin-bottom: .4rem; }
+    .up-input-wrap { position: relative; }
+    .up-input-wrap > i { position: absolute; left: .95rem; top: 50%; transform: translateY(-50%); color: var(--faint, #94a3b8); font-size: .85rem; pointer-events: none; }
+    .up-input, .up-textarea { width: 100%; font: inherit; font-size: .9rem; color: var(--ink, #0f172a); background: #fff;
+        border: 1px solid #cfd8e6; border-radius: 10px; padding: .65rem .9rem; transition: border-color .15s, box-shadow .15s; }
+    .up-input-wrap .up-input { padding-left: 2.5rem; }
+    .up-textarea { resize: vertical; min-height: 84px; line-height: 1.5; }
+    .up-input:focus, .up-textarea:focus { outline: none; border-color: var(--primary, #003399); box-shadow: 0 0 0 4px rgba(0,51,153,.1); }
+    .up-input::placeholder, .up-textarea::placeholder { color: #a3aec0; }
+    .up-help { font-size: .76rem; color: var(--muted, #64748b); margin: .4rem 0 0; line-height: 1.45; }
+
+    /* ── Select2 dropdowns (Salesman / Customer), styled to match the other inputs ── */
+    .up-field .select2-container { width: 100% !important; }
+    .up-field .select2-container--default .select2-selection--single { height: 44px; border: 1px solid #cfd8e6; border-radius: 10px; background: #fff; transition: border-color .15s, box-shadow .15s; }
+    .up-field .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 42px; padding-left: 2.5rem; padding-right: 2.2rem; font-size: .9rem; color: var(--ink, #0f172a); }
+    .up-field .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #a3aec0; }
+    .up-field .select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px; right: 8px; }
+    .up-field .select2-container--default .select2-selection--single .select2-selection__clear { margin-right: 6px; color: var(--faint, #94a3b8); font-size: 1.2rem; }
+    .up-field .select2-container--default.select2-container--focus .select2-selection--single,
+    .up-field .select2-container--default.select2-container--open .select2-selection--single { border-color: var(--primary, #003399); box-shadow: 0 0 0 4px rgba(0,51,153,.1); }
+    .up-input-wrap > i { z-index: 2; }
+    .select2-dropdown { border: 1px solid #cfd8e6 !important; border-radius: 12px !important; overflow: hidden; box-shadow: 0 16px 32px -12px rgba(15,23,42,.25); }
+    .select2-container--default .select2-search--dropdown .select2-search__field { border: 1px solid #cfd8e6; border-radius: 8px; padding: .45rem .7rem; outline: none; }
+    .select2-container--default .select2-search--dropdown .select2-search__field:focus { border-color: var(--primary, #003399); }
+    .select2-container--default .select2-results__option { padding: .5rem .85rem; font-size: .88rem; }
+    .select2-container--default .select2-results__option--highlighted[aria-selected] { background: var(--primary, #003399); }
+
+    /* ── Alerts ── */
+    .up-alert { display: none; margin: 0 1.75rem 1.25rem; padding: .85rem 1rem; border-radius: 12px; font-size: .88rem; line-height: 1.5; }
+    .up-alert.error { background: var(--danger-50, #fef2f2); border: 1px solid #fecaca; color: #991b1b; }
+    .up-dup { display: none; margin: 0 1.75rem 1.25rem; border: 1px solid #fcd9a1; background: #fffbeb; border-radius: 14px; overflow: hidden; }
+    .up-dup-head { display: flex; gap: .8rem; padding: 1rem 1.1rem .5rem; }
+    .up-dup-head .ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #fef3c7; color: #b45309; }
+    .up-dup-head h3 { font-size: .95rem; font-weight: 800; color: #92400e; margin: 0 0 .15rem; }
+    .up-dup-head p { font-size: .82rem; color: #a16207; margin: 0; }
+    .up-dup-list { list-style: none; margin: .4rem 0 0; padding: 0 1.1rem; display: grid; gap: .5rem; }
+    .up-dup-item { background: #fff; border: 1px solid #fde7bd; border-radius: 10px; padding: .6rem .8rem; font-size: .82rem; color: var(--body, #334155); }
+    .up-dup-item strong { color: var(--ink, #0f172a); }
+    .up-dup-item a { font-weight: 600; margin-left: .35rem; }
+    .up-dup-actions { display: flex; gap: .6rem; padding: .9rem 1.1rem 1.1rem; }
+
+    /* ── Action bar ── */
+    .up-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+        padding: 1.1rem 1.75rem; background: #f8fafc; border-top: 1px solid var(--line, #e2e8f0); border-radius: 0 0 16px 16px; }
+    .up-summary { font-size: .84rem; color: var(--muted, #64748b); }
+    .up-summary strong { color: var(--ink, #0f172a); }
+    .up-submit { display: inline-flex; align-items: center; gap: .6rem; border: 0; cursor: pointer; font: inherit; font-size: .92rem; font-weight: 700;
+        color: #fff; background: linear-gradient(180deg, #1a44b8 0%, #003399 100%); padding: .8rem 1.6rem; border-radius: 12px;
+        box-shadow: 0 8px 18px -8px rgba(0,51,153,.65), inset 0 1px 0 rgba(255,255,255,.18); transition: transform .12s, box-shadow .12s, opacity .12s; }
+    .up-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 22px -8px rgba(0,51,153,.7), inset 0 1px 0 rgba(255,255,255,.18); }
+    .up-submit:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+    .btn-up { display: inline-flex; align-items: center; gap: .4rem; font: inherit; font-size: .82rem; font-weight: 700; padding: .55rem 1rem; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+    .btn-up.warn { background: #d97706; color: #fff; } .btn-up.warn:hover { background: #b45309; }
+    .btn-up.ghost { background: #fff; color: var(--body, #334155); border-color: var(--line, #e2e8f0); } .btn-up.ghost:hover { background: #f8fafc; }
+
+    /* ── Side panel ── */
+    .up-side { display: grid; gap: 1.25rem; position: sticky; top: 84px; }
+    @media (max-width: 991px) { .up-side { position: static; } }
+    .up-side-card { padding: 1.4rem 1.5rem; }
+    .up-side-card h3 { font-size: .8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #64748b); margin: 0 0 1.1rem; }
+    .up-flow { list-style: none; margin: 0; padding: 0; position: relative; }
+    .up-flow li { position: relative; display: flex; gap: .9rem; padding-bottom: 1.2rem; }
+    .up-flow li:last-child { padding-bottom: 0; }
+    .up-flow li:not(:last-child)::before { content: ''; position: absolute; left: 17px; top: 36px; bottom: 2px; width: 2px; background: var(--primary-100, #dbe4ff); }
+    .up-flow .n { flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: .95rem;
+        color: var(--primary, #003399); background: var(--primary-50, #eef3ff); border: 1px solid var(--primary-100, #dbe4ff); }
+    .up-flow b { display: block; font-size: .88rem; color: var(--ink, #0f172a); margin-bottom: .1rem; }
+    .up-flow span { font-size: .8rem; color: var(--muted, #64748b); line-height: 1.45; }
+    .up-tip { background: linear-gradient(180deg, #f8faff 0%, #eef3ff 100%); border-color: var(--primary-100, #dbe4ff); }
+    .up-tip .ic { color: var(--primary, #003399); font-size: 1.1rem; margin-bottom: .5rem; display: block; }
+    .up-tip p { font-size: .82rem; color: var(--body, #334155); line-height: 1.55; margin: 0 0 .5rem; }
+    .up-tip p:last-child { margin: 0; }
+
+    /* ── Optional details toggle ── */
+    .up-toggle { display: flex; align-items: center; gap: .6rem; width: 100%; background: transparent; border: 0; padding: 0; cursor: pointer; text-align: left; font: inherit; }
+    .up-toggle .chev { margin-left: auto; color: var(--faint, #94a3b8); transition: transform .2s; }
+    .up-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+    .up-collapse { display: none; margin-top: 1.1rem; }
+    .up-collapse.open { display: block; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="up-page">
+    <div class="up-head">
+        <div>
+            <span class="up-eyebrow"><i class="fas fa-wand-magic-sparkles"></i> Quotation Agent</span>
+            <h1>Upload Enquiry</h1>
+            <p>Drop in the customer's enquiry &mdash; an Excel sheet, PDF or photo of a BOQ. The agent reads every line, matches it to your catalog
+               and prepares a draft quotation for you to review.</p>
+        </div>
+        <a class="up-head-link" href="{% url 'emailagent:quotation_draft_queue' %}">View quotation drafts <i class="fas fa-arrow-right"></i></a>
+    </div>
+
+    <div class="up-grid">
+        <form id="uploadForm" class="up-card" autocomplete="off" novalidate>
+            {% csrf_token %}
+
+            <!-- 1 · Files -->
+            <section class="up-section">
+                <div class="up-sec-head">
+                    <span class="up-step">1</span>
+                    <div>
+                        <h2 class="up-sec-title">Enquiry files</h2>
+                        <p class="up-sec-sub">Add one or more files for the same enquiry.</p>
+                    </div>
+                </div>
+
+                <div class="up-drop" id="dropZone" tabindex="0" role="button" aria-label="Choose enquiry files">
+                    <div class="up-drop-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                    <p class="up-drop-title">Drag &amp; drop files here, or <u>browse</u></p>
+                    <p class="up-drop-hint">Up to {{ max_mb }} MB per file</p>
+                    <div class="up-types">
+                        <span class="up-type t-xls"><i class="fas fa-file-excel"></i> Excel</span>
+                        <span class="up-type t-pdf"><i class="fas fa-file-pdf"></i> PDF</span>
+                        <span class="up-type t-img"><i class="fas fa-file-image"></i> Images</span>
+                    </div>
+                    <input type="file" id="files" class="d-none" multiple accept="{{ accept }}">
+                </div>
+                <ul class="up-files" id="fileList"></ul>
+            </section>
+
+            <!-- 2 · Customer & salesman -->
+            <section class="up-section">
+                <div class="up-sec-head">
+                    <span class="up-step">2</span>
+                    <div>
+                        <h2 class="up-sec-title">Customer &amp; salesman <span class="up-opt">Optional</span></h2>
+                        <p class="up-sec-sub">Tell the agent who this quotation is for. Leave blank and it works it out from the file.</p>
+                    </div>
+                </div>
+                <div class="up-fields">
+                    <div class="up-field">
+                        <label class="up-label" for="salesman_id">Salesman</label>
+                        <div class="up-input-wrap">
+                            <i class="fas fa-user-tie"></i>
+                            <select id="salesman_id" name="salesman_id">
+                                <option value=""></option>
+                                {% for sm in salesmen %}<option value="{{ sm.id }}">{{ sm.salesman_name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <p class="up-help">Pick a salesman to narrow the customer list. Leave empty to use the customer's usual salesman.</p>
+                    </div>
+                    <div class="up-field">
+                        <label class="up-label" for="customer_id">Customer</label>
+                        <div class="up-input-wrap">
+                            <i class="fas fa-building"></i>
+                            <select id="customer_id" name="customer_id">
+                                <option value=""></option>
+                            </select>
+                        </div>
+                        <p class="up-help">Search by name or code. Choosing a customer also fills in their salesman.</p>
+                    </div>
+                    <div class="up-field full">
+                        <label class="up-label" for="customer_display_name">Customer display name <span class="up-opt">Optional</span></label>
+                        <input type="text" id="customer_display_name" name="customer_display_name" class="up-input"
+                               placeholder="e.g. walk-in customer name or project reference">
+                        <p class="up-help">For CASH / walk-in customers &mdash; this name is printed on the quotation.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3 · Optional details -->
+            <section class="up-section">
+                <button type="button" class="up-toggle" id="detailsToggle" aria-expanded="false" aria-controls="detailsBody">
+                    <span class="up-step" style="background:#64748b;">3</span>
+                    <div>
+                        <h2 class="up-sec-title">Subject &amp; notes <span class="up-opt">Optional</span></h2>
+                        <p class="up-sec-sub">Add context the file doesn't contain, like preferred brands or delivery.</p>
+                    </div>
+                    <i class="fas fa-chevron-down chev"></i>
+                </button>
+                <div class="up-collapse" id="detailsBody">
+                    <div class="up-fields">
+                        <div class="up-field full">
+                            <label class="up-label" for="subject">Subject</label>
+                            <input type="text" id="subject" name="subject" class="up-input" placeholder="e.g. Enquiry for GEMS FPS &ndash; Phase 2">
+                        </div>
+                        <div class="up-field full">
+                            <label class="up-label" for="note">Notes for the agent</label>
+                            <textarea id="note" name="note" class="up-textarea" placeholder="Preferred brands, delivery location, special instructions&hellip;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="up-alert error" id="errorBox" role="alert"></div>
+
+            <div class="up-dup" id="duplicateBox" role="alert">
+                <div class="up-dup-head">
+                    <span class="ic"><i class="fas fa-copy"></i></span>
+                    <div>
+                        <h3>This looks like a file we already have</h3>
+                        <p>Uploading it again will create another quotation for the same enquiry.</p>
+                    </div>
+                </div>
+                <ul class="up-dup-list" id="duplicateList"></ul>
+                <div class="up-dup-actions">
+                    <button type="button" class="btn-up warn" id="uploadAnyway"><i class="fas fa-file-arrow-up"></i> Upload anyway</button>
+                    <button type="button" class="btn-up ghost" id="cancelUpload">Cancel</button>
+                </div>
+            </div>
+
+            <div class="up-actions">
+                <div class="up-summary" id="summary">No files added yet</div>
+                <button type="submit" class="up-submit" id="submitBtn" disabled>
+                    <i class="fas fa-wand-magic-sparkles"></i> Create quotation
+                </button>
+            </div>
+        </form>
+
+        <aside class="up-side">
+            <div class="up-card up-side-card">
+                <h3>How it works</h3>
+                <ol class="up-flow">
+                    <li><span class="n"><i class="fas fa-file-arrow-up"></i></span>
+                        <div><b>You upload</b><span>Any mix of Excel, PDF and image files from the customer.</span></div></li>
+                    <li><span class="n"><i class="fas fa-magnifying-glass-chart"></i></span>
+                        <div><b>Agent reads the items</b><span>Descriptions, quantities and units are pulled from every file.</span></div></li>
+                    <li><span class="n"><i class="fas fa-link"></i></span>
+                        <div><b>Matches your catalog</b><span>Each line is matched to an item with current price and stock.</span></div></li>
+                    <li><span class="n"><i class="fas fa-file-invoice-dollar"></i></span>
+                        <div><b>Draft quotation ready</b><span>Review and edit it like any other quotation before it goes out.</span></div></li>
+                </ol>
+            </div>
+            <div class="up-card up-side-card up-tip">
+                <i class="fas fa-lightbulb ic"></i>
+                <p><strong>Tip:</strong> clear, readable files give the best match. For photos, make sure the text is sharp and fully in frame.</p>
+                <p>Files already received &mdash; by email or earlier upload &mdash; are flagged before anything is created.</p>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+(function () {
+    const MAX_BYTES = {{ max_mb }} * 1024 * 1024;
+    const ALLOWED = '{{ accept }}'.split(',');
+    const form = document.getElementById('uploadForm');
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('files');
+    const fileList = document.getElementById('fileList');
+    const summary = document.getElementById('summary');
+    const errorBox = document.getElementById('errorBox');
+    const dupBox = document.getElementById('duplicateBox');
+    const dupList = document.getElementById('duplicateList');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitHtml = submitBtn.innerHTML;
+
+    let selected = [];   // File objects, in the order added
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const extOf = n => { const i = n.lastIndexOf('.'); return i < 0 ? '' : n.slice(i).toLowerCase(); };
+    function kind(name) {
+        const e = extOf(name);
+        if (e === '.pdf') return { cls: 'pdf', icon: 'fa-file-pdf' };
+        if (e === '.xlsx' || e === '.xls') return { cls: 'xls', icon: 'fa-file-excel' };
+        return { cls: 'img', icon: 'fa-file-image' };
+    }
+    function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+
+    function showError(msg) { errorBox.textContent = msg; errorBox.style.display = msg ? 'block' : 'none'; }
+
+    function render() {
+        fileList.innerHTML = selected.map((f, i) => {
+            const k = kind(f.name);
+            return `<li class="up-file">
+                <span class="up-file-ic ${k.cls}"><i class="fas ${k.icon}"></i></span>
+                <div class="up-file-meta"><div class="up-file-name" title="${esc(f.name)}">${esc(f.name)}</div><div class="up-file-size">${fmtSize(f.size)}</div></div>
+                <button type="button" class="up-file-rm" data-i="${i}" aria-label="Remove ${esc(f.name)}"><i class="fas fa-xmark"></i></button>
+            </li>`;
+        }).join('');
+        const total = selected.reduce((s, f) => s + f.size, 0);
+        summary.innerHTML = selected.length
+            ? `<strong>${selected.length}</strong> file${selected.length > 1 ? 's' : ''} &middot; ${fmtSize(total)}`
+            : 'No files added yet';
+        submitBtn.disabled = selected.length === 0;
+        dupBox.style.display = 'none';
+    }
+
+    function addFiles(list) {
+        const problems = [];
+        Array.from(list).forEach(f => {
+            if (!ALLOWED.includes(extOf(f.name))) { problems.push(`${f.name}: unsupported type`); return; }
+            if (f.size > MAX_BYTES) { problems.push(`${f.name}: larger than {{ max_mb }} MB`); return; }
+            if (selected.some(s => s.name === f.name && s.size === f.size)) return;   // same file picked twice
+            selected.push(f);
+        });
+        showError(problems.length ? 'Some files were skipped — ' + problems.join('; ') + '.' : '');
+        render();
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+    fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+    ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragging'); }));
+    ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragging'); }));
+    dropZone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+    // A file dropped outside the zone should not make the browser open it.
+    ['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => { if (!dropZone.contains(e.target)) e.preventDefault(); }));
+    fileList.addEventListener('click', e => {
+        const btn = e.target.closest('.up-file-rm');
+        if (!btn) return;
+        selected.splice(parseInt(btn.dataset.i, 10), 1);
+        showError('');
+        render();
+    });
+
+    // Optional details
+    const toggle = document.getElementById('detailsToggle');
+    const body = document.getElementById('detailsBody');
+    toggle.addEventListener('click', () => {
+        const open = body.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    // Salesman / Customer dropdowns (select2, as on the quotation edit screen)
+    const $sm = $('#salesman_id'), $cu = $('#customer_id');
+    $sm.select2({ placeholder: 'Select salesman', allowClear: true, width: '100%', minimumResultsForSearch: 5 });
+    $cu.select2({
+        placeholder: 'Search customer', allowClear: true, width: '100%',
+        ajax: {
+            url: "{% url 'emailagent:upload_customer_search' %}", dataType: 'json', delay: 250,
+            data: p => ({ q: p.term || '', page: p.page || 1, salesman_id: $sm.val() || '' }),
+            processResults: (d, p) => ({ results: d.results, pagination: { more: d.more } }),
+        },
+    });
+    // A different salesman means a different customer list.
+    let fillingSalesman = false;
+    $sm.on('change', () => { if (!fillingSalesman) $cu.val(null).trigger('change'); });
+    // Picking a customer fills in their salesman when none is chosen yet.
+    $cu.on('select2:select', e => {
+        const sid = e.params.data.salesman_id;
+        if (sid && !$sm.val() && $sm.find('option[value="' + sid + '"]').length) {
+            fillingSalesman = true;
+            $sm.val(String(sid)).trigger('change');
+            fillingSalesman = false;
+        }
+    });
+
+    function setBusy(busy) {
+        submitBtn.disabled = busy || selected.length === 0;
+        submitBtn.innerHTML = busy ? '<i class="fas fa-spinner fa-spin"></i> Uploading…' : submitHtml;
+    }
+
+    function send(confirmDuplicate) {
+        showError('');
+        const fd = new FormData(form);
+        fd.delete('files');
+        selected.forEach(f => fd.append('files', f, f.name));
+        if (confirmDuplicate) fd.append('confirm_duplicate', '1');
+        setBusy(true);
+        fetch("{% url 'emailagent:upload_enquiry' %}", { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) { window.location.href = data.redirect; return; }
+                setBusy(false);
+                if (data.duplicate) {
+                    dupList.innerHTML = data.matches.map(m =>
+                        `<li class="up-dup-item"><strong>${esc(m.filename)}</strong> was received on ${esc(m.received_at)}
+                         (${esc(m.source)}${m.sender ? ' · ' + esc(m.sender) : ''})${m.quotation_number ? ' — quotation <strong>' + esc(m.quotation_number) + '</strong>' : ''}
+                         <a href="${esc(m.url)}" target="_blank" rel="noopener">View</a></li>`).join('');
+                    dupBox.style.display = 'block';
+                    dupBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                showError(data.error || 'The upload failed. Please try again.');
+            })
+            .catch(() => { setBusy(false); showError('Could not reach the server. Please try again.'); });
+    }
+
+    form.addEventListener('submit', e => {
+        e.preventDefault();
+        if (!selected.length) { showError('Add at least one enquiry file first.'); return; }
+        dupBox.style.display = 'none';
+        send(false);
+    });
+    document.getElementById('uploadAnyway').addEventListener('click', () => { dupBox.style.display = 'none'; send(true); });
+    document.getElementById('cancelUpload').addEventListener('click', () => { dupBox.style.display = 'none'; });
+
+    render();
+})();
+</script>
+{% endblock %}

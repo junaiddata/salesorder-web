@@ -45,11 +45,16 @@ class TrackedEmail(models.Model):
     # allow_lpo params). Kept as its own source value for the same reason
     # SOURCE_PROJECT is: distinguishable everywhere `source` is shown/filtered.
     SOURCE_SUBMITTAL = 'submittal'
+    # An enquiry file (Excel / PDF / image BOQ) uploaded by a person on the
+    # "Upload Enquiry" page instead of arriving by email -- it goes through the
+    # same classify -> draft-quotation pipeline (see emailagent.upload_enquiry).
+    SOURCE_UPLOAD = 'upload'
     SOURCE_CHOICES = [
         (SOURCE_GMAIL, 'Gmail'),
         (SOURCE_OUTLOOK, 'Outlook'),
         (SOURCE_PROJECT, 'Project Mailbox'),
         (SOURCE_SUBMITTAL, 'Submittal Mailbox'),
+        (SOURCE_UPLOAD, 'Manual Upload'),
     ]
 
     # Holds the provider's own Message-ID for either source (Gmail API's
@@ -109,6 +114,27 @@ class TrackedEmail(models.Model):
         related_name='emailagent_confirmed_emails',
     )
     confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # Manual uploads only (source='upload'): who uploaded it, and the customer /
+    # salesman names they typed on the upload form (applied to the drafted
+    # quotation after the agent finishes -- see upload_enquiry._apply_typed_names).
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='emailagent_uploaded_enquiries',
+    )
+    upload_customer = models.ForeignKey(
+        'so.Customer', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+        help_text="Customer picked on the upload form.",
+    )
+    upload_salesman = models.ForeignKey(
+        'so.Salesman', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+        help_text="Salesman picked on the upload form.",
+    )
+    # Names shown on the progress page. upload_customer_name is the optional
+    # "customer display name" typed for walk-in/cash customers (or, on older
+    # uploads, the customer name typed as free text).
+    upload_customer_name = models.CharField(max_length=255, blank=True, default='')
+    upload_salesman_name = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         ordering = ['-received_at']
@@ -177,6 +203,9 @@ class EmailAttachment(models.Model):
 
     extracted_text = models.TextField(blank=True, default='')
     included_in_classification = models.BooleanField(default=True)
+    # SHA-256 of the file's bytes -- only filled for manually uploaded enquiry
+    # files, used to warn when the same file is uploaded again.
+    file_hash = models.CharField(max_length=64, blank=True, default='', db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

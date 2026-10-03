@@ -34,6 +34,9 @@
                 <a href="{% url 'emailagent:email_list' %}" class="app-nav-link {% if url_name == 'email_list' or url_name == 'email_detail' %}active{% endif %}">
                     <i class="fas fa-list"></i> All Emails
                 </a>
+                <a href="{% url 'emailagent:upload_enquiry' %}" class="app-nav-link {% if url_name == 'upload_enquiry' or url_name == 'upload_enquiry_progress' %}active{% endif %}">
+                    <i class="fas fa-file-arrow-up"></i> Upload Enquiry
+                </a>
                 <a href="{% url 'emailagent:quotation_draft_queue' %}" class="app-nav-link {% if url_name == 'quotation_draft_queue' or url_name == 'quotation_draft_review' %}active{% endif %}">
                     <i class="fas fa-file-invoice-dollar"></i> Quotation Drafts
                 </a>

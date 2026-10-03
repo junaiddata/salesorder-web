@@ -1,0 +1,194 @@
+{% extends 'emailagent/base.html' %}
+{% load static %}
+
+{% block title %}Quotation from Upload | Email Tracking Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pg-page { max-width: 1180px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .pg-back { display: inline-flex; align-items: center; gap: .45rem; font-size: .84rem; font-weight: 600; color: var(--muted, #64748b); text-decoration: none; margin-bottom: 1.25rem; }
+    .pg-back:hover { color: var(--primary, #003399); }
+    .pg-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1.5rem; align-items: start; }
+    @media (max-width: 991px) { .pg-grid { grid-template-columns: 1fr; } }
+    .pg-card { background: #fff; border: 1px solid var(--line, #e2e8f0); border-radius: 16px;
+        box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.08); }
+
+    /* ── Hero / status ── */
+    .pg-hero { padding: 2.25rem 2rem 1.75rem; text-align: center; border-bottom: 1px solid var(--line-soft, #f1f5f9); }
+    .pg-badge { width: 76px; height: 76px; border-radius: 22px; margin: 0 auto 1.1rem; display: grid; place-items: center; font-size: 1.9rem; }
+    .pg-badge.work { background: var(--primary-50, #eef3ff); color: var(--primary, #003399); }
+    .pg-badge.ok { background: #ecfdf5; color: #059669; }
+    .pg-badge.bad { background: #fef2f2; color: #dc2626; }
+    .pg-hero h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; color: var(--ink, #0f172a); margin: 0 0 .4rem; }
+    .pg-hero p { color: var(--muted, #64748b); font-size: .92rem; line-height: 1.55; max-width: 520px; margin: 0 auto; }
+
+    /* ── Stepper ── */
+    .pg-steps { display: flex; align-items: flex-start; justify-content: center; padding: 1.6rem 1.5rem 1.8rem; }
+    .pg-step { flex: 1; max-width: 190px; text-align: center; position: relative; }
+    .pg-step:not(:last-child)::after { content: ''; position: absolute; top: 18px; left: calc(50% + 24px); right: calc(-50% + 24px); height: 3px; border-radius: 3px; background: var(--line, #e2e8f0); }
+    .pg-step.done:not(:last-child)::after { background: #059669; }
+    .pg-step.active:not(:last-child)::after { background: linear-gradient(90deg, var(--primary, #003399), var(--line, #e2e8f0)); }
+    .pg-dot { width: 38px; height: 38px; border-radius: 50%; margin: 0 auto .55rem; display: grid; place-items: center; font-size: .9rem;
+        background: #fff; border: 2px solid var(--line, #e2e8f0); color: var(--faint, #94a3b8); position: relative; z-index: 1; }
+    .pg-step.done .pg-dot { background: #059669; border-color: #059669; color: #fff; }
+    .pg-step.active .pg-dot { border-color: var(--primary, #003399); color: var(--primary, #003399); box-shadow: 0 0 0 6px rgba(0,51,153,.1); }
+    .pg-step.failed .pg-dot { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .pg-step b { display: block; font-size: .82rem; color: var(--ink, #0f172a); }
+    .pg-step span { font-size: .74rem; color: var(--muted, #64748b); }
+
+    /* ── Results ── */
+    .pg-body { padding: 1.5rem 2rem 2rem; }
+    .pg-result-title { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #64748b); margin: 0 0 .8rem; }
+    .pg-q { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.1rem; border: 1px solid var(--line, #e2e8f0); border-radius: 14px; background: #fff; }
+    .pg-q + .pg-q { margin-top: .75rem; }
+    .pg-q-ic { flex: none; width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: var(--primary-50, #eef3ff); color: var(--primary, #003399); font-size: 1.15rem; }
+    .pg-q-main { flex: 1; min-width: 0; }
+    .pg-q-no { font-size: 1rem; font-weight: 800; color: var(--ink, #0f172a); }
+    .pg-q-cust { font-size: .82rem; color: var(--muted, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pg-q-actions { display: flex; gap: .5rem; flex: none; }
+    .pg-btn { display: inline-flex; align-items: center; gap: .4rem; font-size: .82rem; font-weight: 700; padding: .55rem 1rem; border-radius: 10px;
+        text-decoration: none; border: 1px solid var(--line, #e2e8f0); background: #fff; color: var(--body, #334155); }
+    .pg-btn:hover { background: #f8fafc; color: var(--ink, #0f172a); }
+    .pg-btn.primary { background: var(--primary, #003399); border-color: var(--primary, #003399); color: #fff; }
+    .pg-btn.primary:hover { background: var(--primary-700, #002a85); color: #fff; }
+    .pg-footer-links { display: flex; justify-content: center; gap: 1.5rem; margin-top: 1.4rem; font-size: .84rem; }
+    .pg-footer-links a { color: var(--primary, #003399); font-weight: 600; text-decoration: none; }
+    .pg-footer-links a:hover { text-decoration: underline; }
+    .pg-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 12px; padding: .9rem 1.1rem; font-size: .88rem; line-height: 1.5; margin-bottom: 1.25rem; }
+    .pg-fail-actions { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+    .pg-hidden { display: none; }
+    @media (max-width: 575px) { .pg-q { flex-wrap: wrap; } .pg-q-actions { width: 100%; } .pg-q-actions .pg-btn { flex: 1; justify-content: center; } }
+
+    /* ── Side summary ── */
+    .pg-side-card { padding: 1.4rem 1.5rem; }
+    .pg-side-card + .pg-side-card { margin-top: 1.25rem; }
+    .pg-side-card h3 { font-size: .8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #64748b); margin: 0 0 1rem; }
+    .pg-meta { display: grid; gap: .8rem; margin: 0; }
+    .pg-meta div { display: flex; gap: .7rem; align-items: flex-start; }
+    .pg-meta i { flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--line-soft, #f1f5f9); color: var(--muted, #64748b); display: grid; place-items: center; font-size: .78rem; }
+    .pg-meta dt { font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint, #94a3b8); margin: 0; }
+    .pg-meta dd { font-size: .88rem; font-weight: 600; color: var(--ink, #0f172a); margin: 0; word-break: break-word; }
+    .pg-files { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+    .pg-file { display: flex; align-items: center; gap: .7rem; font-size: .84rem; color: var(--ink, #0f172a); }
+    .pg-file i { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: .95rem; }
+    .pg-file i.xls { background: #ecfdf5; color: #16a34a; } .pg-file i.pdf { background: #fef2f2; color: #dc2626; } .pg-file i.img { background: #f0f9ff; color: #0284c7; }
+    .pg-file span { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; word-break: break-word; font-weight: 600; }
+    .pg-file small { flex: none; color: var(--muted, #64748b); }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="pg-page">
+    <a href="{% url 'emailagent:upload_enquiry' %}" class="pg-back"><i class="fas fa-arrow-left"></i> Upload another enquiry</a>
+
+    <div class="pg-grid">
+        <div class="pg-card">
+            <div class="pg-hero">
+                <div class="pg-badge work" id="badge"><i class="fas fa-wand-magic-sparkles fa-beat-fade"></i></div>
+                <h1 id="heroTitle">The agent is working on your enquiry</h1>
+                <p id="heroText">It reads every line from your file(s), matches it to the catalog and drafts the quotation. This usually takes a minute or two &mdash; you can keep this page open.</p>
+            </div>
+
+            <div class="pg-steps" id="steps">
+                <div class="pg-step done"><div class="pg-dot"><i class="fas fa-check"></i></div><b>Files received</b><span>Upload complete</span></div>
+                <div class="pg-step active" id="stepWork"><div class="pg-dot"><i class="fas fa-spinner fa-spin"></i></div><b>Reading &amp; matching</b><span>Items to catalog</span></div>
+                <div class="pg-step" id="stepDone"><div class="pg-dot"><i class="fas fa-file-invoice-dollar"></i></div><b>Quotation ready</b><span>For your review</span></div>
+            </div>
+
+            <div class="pg-body pg-hidden" id="resultBody">
+                <div class="pg-error pg-hidden" id="errorBox"></div>
+                <div id="resultWrap">
+                    <p class="pg-result-title" id="resultTitle">Quotation</p>
+                    <div id="quotationList"></div>
+                </div>
+                <div class="pg-fail-actions pg-hidden" id="failActions">
+                    <a href="{% url 'create_quotation' %}" class="pg-btn primary"><i class="fas fa-plus"></i> Create quotation manually</a>
+                    <a href="{% url 'emailagent:upload_enquiry' %}" class="pg-btn"><i class="fas fa-rotate-right"></i> Try another upload</a>
+                </div>
+                <div class="pg-footer-links">
+                    <a id="draftLink" href="#" class="pg-hidden"><i class="fas fa-robot"></i> Agent draft details</a>
+                    <a id="emailLink" href="{% url 'emailagent:email_detail' tracked_email.pk %}"><i class="fas fa-paperclip"></i> View uploaded files</a>
+                </div>
+            </div>
+        </div>
+
+        <aside>
+            <div class="pg-card pg-side-card">
+                <h3>Enquiry</h3>
+                <dl class="pg-meta">
+                    <div><i class="fas fa-heading"></i><span><dt>Subject</dt><dd>{{ tracked_email.subject|default:"(no subject)" }}</dd></span></div>
+                    {% if tracked_email.upload_customer_name %}<div><i class="fas fa-building"></i><span><dt>Customer</dt><dd>{{ tracked_email.upload_customer_name }}</dd></span></div>{% endif %}
+                    {% if tracked_email.upload_salesman_name %}<div><i class="fas fa-user-tie"></i><span><dt>Salesman</dt><dd>{{ tracked_email.upload_salesman_name }}</dd></span></div>{% endif %}
+                    <div><i class="fas fa-clock"></i><span><dt>Uploaded</dt><dd>{{ tracked_email.received_at|date:"d M Y, H:i" }}{% if tracked_email.uploaded_by %} &middot; {{ tracked_email.uploaded_by.get_username }}{% endif %}</dd></span></div>
+                </dl>
+            </div>
+            <div class="pg-card pg-side-card">
+                <h3>Files ({{ tracked_email.attachments.count }})</h3>
+                <ul class="pg-files">
+                    {% for att in tracked_email.attachments.all %}
+                    <li class="pg-file">
+                        <i class="fas {% if att.is_pdf %}fa-file-pdf pdf{% elif att.is_excel %}fa-file-excel xls{% else %}fa-file-image img{% endif %}"></i>
+                        <span title="{{ att.filename }}">{{ att.filename }}</span>
+                        <small>{{ att.size_bytes|filesizeformat }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script>
+(function () {
+    const statusUrl = "{% url 'emailagent:upload_enquiry_status' tracked_email.pk %}";
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const $ = id => document.getElementById(id);
+
+    function finish(cls, icon, title, text) {
+        $('badge').className = 'pg-badge ' + cls;
+        $('badge').innerHTML = '<i class="fas ' + icon + '"></i>';
+        $('heroTitle').textContent = title;
+        $('heroText').textContent = text;
+        $('resultBody').classList.remove('pg-hidden');
+    }
+
+    function poll() {
+        fetch(statusUrl).then(r => r.json()).then(d => {
+            if (d.state === 'processing') { setTimeout(poll, 3000); return; }
+
+            if (d.state === 'done') {
+                $('stepWork').className = 'pg-step done';
+                $('stepWork').querySelector('.pg-dot').innerHTML = '<i class="fas fa-check"></i>';
+                $('stepDone').className = 'pg-step done';
+                $('stepDone').querySelector('.pg-dot').innerHTML = '<i class="fas fa-check"></i>';
+                const n = d.quotations.length;
+                finish('ok', 'fa-circle-check', n > 1 ? n + ' quotations are ready' : 'Your quotation is ready',
+                    d.item_count + ' requirement line' + (d.item_count === 1 ? '' : 's') + ' read from your file(s). Review the draft and complete anything the agent could not match.');
+                $('resultTitle').textContent = n > 1 ? 'Quotations created' : 'Quotation created';
+                $('quotationList').innerHTML = d.quotations.map(q =>
+                    `<div class="pg-q">
+                        <span class="pg-q-ic"><i class="fas fa-file-invoice-dollar"></i></span>
+                        <div class="pg-q-main"><div class="pg-q-no">${esc(q.number)}</div><div class="pg-q-cust">${esc(q.customer)}</div></div>
+                        <div class="pg-q-actions">
+                            <a href="${esc(q.view_url)}" class="pg-btn"><i class="fas fa-eye"></i> View</a>
+                            <a href="${esc(q.edit_url)}" class="pg-btn primary"><i class="fas fa-pen"></i> Edit</a>
+                        </div>
+                    </div>`).join('');
+                if (d.draft_url) { $('draftLink').href = d.draft_url; $('draftLink').classList.remove('pg-hidden'); }
+            } else {
+                $('stepWork').className = 'pg-step failed';
+                $('stepWork').querySelector('.pg-dot').innerHTML = '<i class="fas fa-xmark"></i>';
+                finish('bad', 'fa-triangle-exclamation', "The quotation couldn't be created",
+                    'Nothing was lost — your file(s) are saved. You can create the quotation manually or try another upload.');
+                $('resultWrap').classList.add('pg-hidden');
+                $('errorBox').textContent = d.error || 'Something went wrong.';
+                $('errorBox').classList.remove('pg-hidden');
+                $('failActions').classList.remove('pg-hidden');
+                if (d.draft_url) { $('draftLink').href = d.draft_url; $('draftLink').classList.remove('pg-hidden'); }
+            }
+        }).catch(() => setTimeout(poll, 5000));
+    }
+    poll();
+})();
+</script>
+{% endblock %}

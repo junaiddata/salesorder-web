@@ -11,8 +11,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
-from django.http import FileResponse, HttpResponse, HttpResponseForbidden
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_exempt
@@ -830,3 +831,126 @@ def _run_triggered_poll():
         )
     except Exception:
         logger.exception("Gmail push-triggered poll failed")
+
+
+# ── Manual enquiry upload (Excel / PDF / image -> quotation draft) ─────────
+
+@login_required
+def upload_enquiry(request):
+    """Upload page. GET shows the form; POST (sent with fetch from the page) stores the
+    files, starts the same classify -> draft-quotation pipeline an emailed RFQ goes through,
+    and answers with JSON. If a file looks like one already received, the first POST only
+    answers with a warning; the page re-sends it with confirm_duplicate=1 once the user agrees."""
+    from so.models import Salesman
+
+    from . import upload_enquiry as upload_service
+
+    if request.method != 'POST':
+        return render(request, 'emailagent/upload_enquiry.html', {
+            'accept': upload_service.ACCEPT_ATTR,
+            'salesmen': Salesman.objects.order_by('salesman_name'),
+            'max_mb': settings.EMAILAGENT_MAX_ATTACHMENT_MB,
+        })
+
+    files = request.FILES.getlist('files')
+    if not files:
+        return JsonResponse({'ok': False, 'error': 'Choose at least one file to upload.'}, status=400)
+    bad = [f.name for f in files if not upload_service.content_type_for(f.name)]
+    if bad:
+        return JsonResponse({
+            'ok': False,
+            'error': 'Unsupported file type: ' + ', '.join(bad) + '. Use Excel, PDF or image files.',
+        }, status=400)
+    max_bytes = settings.EMAILAGENT_MAX_ATTACHMENT_MB * 1024 * 1024
+    too_big = [f.name for f in files if f.size > max_bytes]
+    if too_big:
+        return JsonResponse({
+            'ok': False,
+            'error': f'Too large (limit {settings.EMAILAGENT_MAX_ATTACHMENT_MB} MB): ' + ', '.join(too_big),
+        }, status=400)
+
+    if request.POST.get('confirm_duplicate') != '1':
+        info = []
+        for f in files:
+            data = f.read()
+            f.seek(0)
+            info.append({'name': f.name, 'size': len(data), 'hash': upload_service.sha256_hex(data)})
+        duplicates = upload_service.find_duplicates(info)
+        if duplicates:
+            for d in duplicates:
+                d['url'] = reverse('emailagent:email_detail', args=[d['email_id']])
+            return JsonResponse({'ok': False, 'duplicate': True, 'matches': duplicates})
+
+    from so.models import Customer
+
+    def _picked(model, raw):
+        raw = (raw or '').strip()
+        return model.objects.filter(pk=int(raw)).first() if raw.isdigit() else None
+
+    tracked_email = upload_service.create_upload(
+        request.user, files,
+        subject=request.POST.get('subject', ''),
+        note=request.POST.get('note', ''),
+        customer=_picked(Customer, request.POST.get('customer_id')),
+        salesman=_picked(Salesman, request.POST.get('salesman_id')),
+        customer_display_name=request.POST.get('customer_display_name', ''),
+    )
+    upload_service.start_processing(tracked_email.pk)
+    return JsonResponse({'ok': True, 'redirect': reverse('emailagent:upload_enquiry_progress', args=[tracked_email.pk])})
+
+
+@login_required
+def upload_enquiry_progress(request, pk):
+    tracked_email = get_object_or_404(TrackedEmail, pk=pk, source=TrackedEmail.SOURCE_UPLOAD)
+    return render(request, 'emailagent/upload_enquiry_progress.html', {'tracked_email': tracked_email})
+
+
+@login_required
+def upload_enquiry_status(request, pk):
+    from . import upload_enquiry as upload_service
+
+    tracked_email = get_object_or_404(TrackedEmail, pk=pk, source=TrackedEmail.SOURCE_UPLOAD)
+    state = upload_service.upload_state(tracked_email)
+    payload = {'state': state['state']}
+    if state['state'] == 'done':
+        payload['item_count'] = state['item_count']
+        payload['quotations'] = [
+            {
+                'number': q.quotation_number,
+                'customer': q.customer_display_name or q.customer.customer_name,
+                'view_url': reverse('view_quotation_details', args=[q.id]),
+                'edit_url': reverse('edit_quotation', args=[q.id]),
+            }
+            for q in state['quotations']
+        ]
+        payload['draft_url'] = reverse('emailagent:quotation_draft_review', args=[state['draft_id']])
+    elif state['state'] == 'failed':
+        payload['error'] = state['error']
+        if state.get('draft_id'):
+            payload['draft_url'] = reverse('emailagent:quotation_draft_review', args=[state['draft_id']])
+        payload['email_url'] = reverse('emailagent:email_detail', args=[tracked_email.pk])
+    return JsonResponse(payload)
+
+
+@login_required
+def upload_customer_search(request):
+    """Select2 source for the Customer dropdown on the upload form: searchable, paged, and
+    narrowed to one salesman's customers when a salesman is chosen (same idea as the
+    salesman -> customer dropdowns on the quotation edit screen)."""
+    from so.models import Customer
+
+    q = request.GET.get('q', '').strip()
+    salesman_id = request.GET.get('salesman_id', '').strip()
+    raw_page = str(request.GET.get('page', '1'))
+    page = int(raw_page) if raw_page.isdigit() and int(raw_page) > 0 else 1
+    qs = Customer.objects.all()
+    if salesman_id.isdigit():
+        qs = qs.filter(salesman_id=int(salesman_id))
+    for word in q.split():
+        qs = qs.filter(Q(customer_name__icontains=word) | Q(customer_code__icontains=word))
+    size = 30
+    rows = list(qs.order_by('customer_name')[(page - 1) * size: page * size + 1])
+    return JsonResponse({
+        'results': [{'id': c.id, 'text': c.customer_name, 'salesman_id': c.salesman_id} for c in rows[:size]],
+        'more': len(rows) > size,
+    })
