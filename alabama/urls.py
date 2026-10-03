@@ -24,6 +24,7 @@ urlpatterns = [
     ),
     path('sales-analysis/', sales_analysis_views.sales_analysis_dashboard, name='sales_analysis_dashboard'),
     path('ar-invoices/', views.arinvoice_list, name='arinvoice_list'),
+    path('ar-invoices/export/<str:fmt>/', views.arinvoice_export, name='arinvoice_export'),
     path('credit-memos/', views.arcreditmemo_list, name='arcreditmemo_list'),
     path('credit-note-analysis/', credit_note_analysis_views.credit_note_analysis, name='credit_note_analysis'),
     path('purchase-summary/', views.purchase_summary_list, name='purchase_summary_list'),

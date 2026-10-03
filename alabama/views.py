@@ -598,6 +598,169 @@ def arinvoice_list(request):
 
 
 @login_required
+def arinvoice_export(request, fmt):
+    """Export the AR Invoices list (all filtered documents, not just the current page)
+    as Excel (fmt='excel') or PDF (fmt='pdf'). Uses the same filters as arinvoice_list."""
+    from io import BytesIO
+    from django.db.models import Min
+    from django.http import HttpResponse
+
+    if fmt not in ('excel', 'pdf'):
+        raise Http404("Unknown export format")
+
+    lines_qs = AlabamaSalesLine.objects.filter(document_type='Invoice')
+    role = getattr(request.user, 'role', None)
+    if role and role.role == 'Salesman' and getattr(role, 'company', 'Junaid') == 'Alabama':
+        lines_qs = lines_qs.filter(alabama_salesman_scope_q(request.user, field='sales_employee'))
+
+    q = request.GET.get('q', '').strip()
+    clean_salesmen = [s for s in request.GET.getlist('salesman') if s.strip()]
+    if clean_salesmen:
+        lines_qs = lines_qs.filter(sales_employee__in=clean_salesmen)
+
+    def parse_date(s):
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date() if s else None
+        except ValueError:
+            return None
+
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    if parse_date(start):
+        lines_qs = lines_qs.filter(posting_date__gte=parse_date(start))
+    if parse_date(end):
+        lines_qs = lines_qs.filter(posting_date__lte=parse_date(end))
+    if q:
+        lines_qs = lines_qs.filter(
+            Q(document_number__icontains=q) |
+            Q(customer__customer_name__icontains=q) |
+            Q(customer__customer_code__icontains=q) |
+            Q(sales_employee__icontains=q)
+        )
+
+    is_admin = request.user.is_superuser or request.user.is_staff or (
+        request.user.username or ''
+    ).strip().lower() == 'manager'
+
+    docs = list(
+        lines_qs.values('document_number', 'posting_date')
+        .annotate(
+            net_sales=Sum('net_sales'),
+            gross_profit=Sum('gross_profit'),
+            customer_name=Min('customer__customer_name'),
+            salesman=Min('sales_employee'),
+        )
+        .order_by('-posting_date', '-document_number')
+    )
+
+    headers = ['Date', 'Document Number', 'Customer', 'Salesman', 'Net Sales']
+    if is_admin:
+        headers.append('Gross Profit')
+    rows = []
+    for d in docs:
+        row = [
+            d['posting_date'].strftime('%d-%m-%Y') if d['posting_date'] else '',
+            d['document_number'],
+            d['customer_name'] or '',
+            d['salesman'] or '',
+            d['net_sales'] or Decimal('0'),
+        ]
+        if is_admin:
+            row.append(d['gross_profit'] or Decimal('0'))
+        rows.append(row)
+    total_net = sum((d['net_sales'] or Decimal('0')) for d in docs)
+    total_gp = sum((d['gross_profit'] or Decimal('0')) for d in docs)
+    stamp = date.today().strftime('%Y%m%d')
+
+    if fmt == 'excel':
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'AR Invoices'
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill('solid', fgColor='1E40AF')
+            cell.alignment = Alignment(horizontal='center')
+        for row in rows:
+            ws.append([float(v) if isinstance(v, Decimal) else v for v in row])
+        total_row = ['', '', '', 'Total', float(total_net)] + ([float(total_gp)] if is_admin else [])
+        ws.append(total_row)
+        for cell in ws[ws.max_row]:
+            cell.font = Font(bold=True)
+        for col in range(5, len(headers) + 1):
+            for r in range(2, ws.max_row + 1):
+                ws.cell(row=r, column=col).number_format = '#,##0.00'
+        for col, width in zip('ABCDEF', (14, 20, 40, 22, 16, 16)):
+            ws.column_dimensions[col].width = width
+        ws.freeze_panes = 'A2'
+        buf = BytesIO()
+        wb.save(buf)
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="alabama_ar_invoices_{stamp}.xlsx"'
+        return response
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    styles = getSampleStyleSheet()
+    cell_style = styles['BodyText']
+    cell_style.fontSize = 7
+    cell_style.leading = 9
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=0.4 * inch, rightMargin=0.4 * inch,
+                            topMargin=0.4 * inch, bottomMargin=0.4 * inch)
+    filter_bits = []
+    if q:
+        filter_bits.append(f'Search: {q}')
+    if clean_salesmen:
+        filter_bits.append('Salesmen: ' + ', '.join(clean_salesmen))
+    if start or end:
+        filter_bits.append(f'Dates: {start or "…"} to {end or "…"}')
+    elements = [Paragraph('Alabama - AR Invoices', styles['Title'])]
+    if filter_bits:
+        elements.append(Paragraph(' | '.join(filter_bits), styles['Normal']))
+    elements.append(Spacer(1, 8))
+
+    def fmt_num(v):
+        return f'{v:,.2f}'
+
+    data = [headers]
+    for r in rows:
+        data.append([
+            r[0], r[1], Paragraph(r[2], cell_style), Paragraph(r[3], cell_style),
+            fmt_num(r[4]), *([fmt_num(r[5])] if is_admin else []),
+        ])
+    data.append(['', '', '', 'Total', fmt_num(total_net), *([fmt_num(total_gp)] if is_admin else [])])
+    col_widths = [0.9 * inch, 1.4 * inch, 3.3 * inch, 1.8 * inch, 1.2 * inch] + ([1.2 * inch] if is_admin else [])
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (4, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#cbd5e1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8fafc')]),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="alabama_ar_invoices_{stamp}.pdf"'
+    return response
+
+
+@login_required
 def arcreditmemo_list(request):
     """Credit Memos -- Alabama Sales Summary filtered to Credit Memo documents only."""
     return _sales_summary_list_impl(

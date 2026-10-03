@@ -116,6 +116,25 @@
       font-size: 0.75rem;
     }
     .stat-value { font-weight: 700; }
+    .filters-flex { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 12px; }
+    .filters-flex .field { flex: 1 1 0; min-width: 0; max-width: 190px; }
+    .filters-flex .field:has(input[name="page_size"]) { flex: 0 0 80px; }
+    .filters-flex .field input[type="date"] { padding-left: 8px; padding-right: 8px; }
+    .export-actions { display: flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 8px; margin-left: 4px; }
+    .filters-flex .btn-export { height: 38px; padding: 0 14px; }
+    @media (max-width: 1100px) { .filters-flex { flex-wrap: wrap; } .filters-flex .field { flex: 1 1 160px; } }
+    .btn-export {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
+      height: 40px; padding: 0 18px; font-size: 0.875rem; font-weight: 600; font-family: inherit;
+      color: #fff; border: 0; border-radius: 10px; text-decoration: none; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-export-apply { background: #0d6efd; }
+    .btn-export-apply:hover { background: #0b5ed7; }
+    .btn-export:hover { color: #fff; }
+    .btn-export-pdf { background: #dc3545; }
+    .btn-export-pdf:hover { background: #b02a37; }
+    .btn-export-excel { background: #10b981; }
+    .btn-export-excel:hover { background: #0d9668; }
     .table-card { margin-top: 12px; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 600px; }
@@ -155,7 +174,7 @@
 
 {% block content %}
   <div class="card filters-card">
-    <form class="filters-grid" method="get">
+    <form class="filters-grid{% if active_page == 'arinvoice_list' %} filters-flex{% endif %}" method="get">
       <div class="field">
         <label>Search</label>
         <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Doc No, Customer, Salesman...">
@@ -204,9 +223,17 @@
         <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
       </div>
 
+      {% if active_page == 'arinvoice_list' %}
+      <div class="export-actions">
+        <button class="btn-export btn-export-apply" type="submit">Apply</button>
+        <a class="btn-export btn-export-pdf" href="{% url 'alabama:arinvoice_export' 'pdf' %}?{{ query_string }}"><i class="fas fa-file-pdf"></i> Export PDF</a>
+        <a class="btn-export btn-export-excel" href="{% url 'alabama:arinvoice_export' 'excel' %}?{{ query_string }}"><i class="fas fa-file-excel"></i> Export Excel</a>
+      </div>
+      {% else %}
       <div class="field" style="align-self:end;">
         <button class="btn btn-primary" type="submit">Apply</button>
       </div>
+      {% endif %}
     </form>
 
     <div class="stat-cards">
