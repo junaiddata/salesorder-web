@@ -514,11 +514,16 @@ details.collapsible-section > .items-table-wrap {
 }
 
 
-/* ── Agent nav: collapse to the hamburger on tablets ──
-   The agent nav has 8 links + SO Home, which overflowed between 861px and
-   ~1199px (tablets). Same collapsed layout as ui.css's <=860px rule, applied
-   only to the agent's #appNav so submittal/other pages are unaffected. */
-@media (max-width: 1199px) {
+/* ── Agent nav: fit / collapse on tablets and mid-size screens ──
+   The agent nav has 8 links + SO Home, which needs ~1330px but ui.css caps
+   .app-nav-inner at 1140px, so the links ran off the right edge on wide
+   tablets (e.g. 1280px-wide screens). Scoped to the agent's #appNav so
+   submittal/other pages are unaffected. */
+#appNav .app-nav-inner { max-width: 1600px; }
+#appNav .app-nav-links { gap: 0; margin-left: 0; min-width: 0; }
+#appNav .app-nav-link { padding: .5rem .6rem; font-size: .8rem; }
+#appNav .app-nav-ghost { padding: .4rem .7rem; }
+@media (max-width: 1499px) {
     #appNav .app-nav-toggle { display: block; }
     #appNav .app-nav-links, #appNav .app-nav-right {
         display: none; position: absolute; top: 60px; left: 0; right: 0;
