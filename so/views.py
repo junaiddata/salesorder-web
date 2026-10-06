@@ -3722,6 +3722,24 @@ def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting
         if end_date:
             qs = qs.filter(posting_date__lte=end_date)
 
+        # Optional month filter driven by the calendar's year/month chips
+        # (only when the page explicitly asks for it via by_month=1).
+        if request.GET.get('by_month') == '1':
+            try:
+                m_year = int(request.GET.get('qcal_year', '').strip())
+            except (ValueError, TypeError):
+                m_year = None
+            m_months = []
+            for raw in request.GET.getlist('qcal_month'):
+                try:
+                    m = int(str(raw).strip())
+                    if 1 <= m <= 12:
+                        m_months.append(m)
+                except (ValueError, TypeError):
+                    continue
+            if m_year and m_months:
+                qs = qs.filter(posting_date__year=m_year, posting_date__month__in=m_months)
+
     return qs
 
 

@@ -149,15 +149,27 @@
 
     .filters-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 16px;
       padding: 20px;
     }
 
-    @media (min-width: 1024px) {
-      .filters-grid {
-        grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
-      }
+    /* Fields wrap onto the next row when there isn't room, so every control
+       (incl. Search / Status / Total / Remarks) keeps a readable width. */
+    .filters-grid > .field {
+      min-width: 0;
+    }
+    /* Let the multi-select boxes shrink to their cell (ellipsis on long text)
+       instead of overflowing onto the neighbouring field. */
+    .filters-grid .multi-select,
+    .filters-grid .select-box,
+    .filters-grid .select-box-text {
+      min-width: 0;
+      max-width: 100%;
+    }
+    .filters-grid .input,
+    .filters-grid .select {
+      min-width: 0;
     }
 
     .field label {
@@ -1121,7 +1133,12 @@
 
         <div class="field">
           <label>&nbsp;</label>
-          <button class="btn btn-primary" type="submit">Apply</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" type="submit">Apply</button>
+            <button class="btn btn-secondary" type="button" id="clear-dates-btn" title="Clear start/end dates and month filter" style="min-height:40px;">
+              <i class="fas fa-times"></i> Clear dates
+            </button>
+          </div>
         </div>
       </form>
 
@@ -1245,11 +1262,34 @@
       return usp.toString();
     }
 
+    // Month filter: off until the user changes the calendar's year/months
+    // (or the page was loaded with by_month=1), so the default view is unchanged.
+    let byMonthActive = new URLSearchParams(window.location.search).get('by_month') === '1';
+    window.quotationListApplyMonthFilter = function () {
+      byMonthActive = true;
+      const start = form.querySelector('input[name="start"]');
+      const end = form.querySelector('input[name="end"]');
+      if (start) start.value = '';
+      if (end) end.value = '';
+      load(collectParams({ page: 1 }));
+    };
+
     function collectParams(overrides={}) {
       const data = new FormData(form);
       const params = new URLSearchParams();
       for (const [key, value] of data.entries()) {
         params.append(key, value);
+      }
+      if (byMonthActive) {
+        params.delete('qcal_year');
+        params.delete('qcal_month');
+        params.delete('by_month');
+        const yearEl = document.getElementById('qcal-year');
+        if (yearEl) params.append('qcal_year', yearEl.value);
+        document.querySelectorAll('#qcal-month-picker input[name="qcal_month"]:checked').forEach(function (cb) {
+          params.append('qcal_month', cb.value);
+        });
+        params.append('by_month', '1');
       }
       for (const k in overrides) {
         if(k === 'page') params.delete('page');
@@ -1306,6 +1346,18 @@
       if (end) end.value = isoDate;
       load(collectParams({ page: 1 }));
     };
+
+    const clearDatesBtn = document.getElementById('clear-dates-btn');
+    if (clearDatesBtn) {
+      clearDatesBtn.addEventListener('click', function () {
+        const start = form.querySelector('input[name="start"]');
+        const end = form.querySelector('input[name="end"]');
+        if (start) start.value = '';
+        if (end) end.value = '';
+        byMonthActive = false;
+        load(collectParams({ page: 1 }));
+      });
+    }
 
     form.addEventListener('submit', function(e) {
       e.preventDefault();
@@ -1420,9 +1472,13 @@
           if (loadingEl) loadingEl.style.display = 'none';
         });
       }
-      calYear.addEventListener('change', loadCalendar);
+      function onCalendarChange() {
+        loadCalendar();
+        if (window.quotationListApplyMonthFilter) window.quotationListApplyMonthFilter();
+      }
+      calYear.addEventListener('change', onCalendarChange);
       calMonthPicker.addEventListener('change', function (e) {
-        if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) loadCalendar();
+        if (e.target && e.target.matches && e.target.matches('input[name="qcal_month"]')) onCalendarChange();
       });
     })();
   });
