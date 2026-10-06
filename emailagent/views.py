@@ -494,7 +494,37 @@ def stock_shortage_report(request):
               .select_related('last_triggered_by', 'last_triggered_by__customer')
               .filter(pk=1)
               .first()) or StockShortageReport.current()
-    return render(request, 'emailagent/stock_shortage_detail.html', {'report': report})
+    incoming = _consolidated_incoming_lookup()
+    lines = report.lines or []
+    for line in lines:
+        code = str(line.get('item_code') or '').strip()
+        line['incoming_qty'] = incoming.get(code, 0) if incoming is not None else None
+    return render(request, 'emailagent/stock_shortage_detail.html', {'report': report, 'lines': lines})
+
+
+def _consolidated_incoming_lookup():
+    """item_code -> total_qty_ordered (incoming stock) from the purchase
+    app's consolidated-qty API. Returns None if the call fails so the page
+    shows "—" instead of a misleading 0; items absent from the API are 0."""
+    import requests
+
+    try:
+        resp = requests.get(
+            'https://purchase.junaidworld.com/api/consolidated-qty/',
+            headers={'X-API-Key': settings.CONSOLIDATED_API_KEY},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        rows = resp.json().get('items') or []
+    except Exception:
+        logging.getLogger(__name__).exception('consolidated-qty API call failed')
+        return None
+    lookup = {}
+    for row in rows:
+        code = str(row.get('item_code') or '').strip()
+        if code:
+            lookup[code] = lookup.get(code, 0) + (row.get('total_qty_ordered') or 0)
+    return lookup
 
 
 @login_required

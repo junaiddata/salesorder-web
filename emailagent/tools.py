@@ -247,6 +247,11 @@ def lookup_item_master(description: str) -> str:
     above the same item in the other joint type. This works even though these
     codes are under 3 letters, which are otherwise ignored.
 
+    Converting socket: "converting socket", "female socket" and "female
+    adaptor" are the same item (plain/solvent end to female-threaded end).
+    The catalog may word it any of these ways, so if one search finds
+    nothing retry the others, including the size and thread type.
+
     mm<->inch conversion for our UPVC/mUPVC pipe range specifically is NOT
     the generic mm/25.4 formula (or a textbook NPS chart) -- it's each
     product line's own actual stated size, confirmed against the real

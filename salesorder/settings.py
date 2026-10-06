@@ -274,6 +274,11 @@ EMAILAGENT_CLASSIFICATION_MODEL = os.getenv('EMAILAGENT_CLASSIFICATION_MODEL', '
 # extract) before spending EMAILAGENT_CLASSIFICATION_MODEL on it.
 EMAILAGENT_TRIAGE_MODEL = os.getenv('EMAILAGENT_TRIAGE_MODEL', 'claude-haiku-4-5-20251001')
 EMAILAGENT_CONFIDENCE_THRESHOLD = float(os.getenv('EMAILAGENT_CONFIDENCE_THRESHOLD', '0.75'))
+CONSOLIDATED_API_KEY  = os.getenv('CONSOLIDATED_API_KEY', '')
+
+
+
+
 
 # The 'poll_gmail' management command wires its own file handler at module
 # import time, so manual runs already log to logs/poll_gmail.log. The
@@ -361,6 +366,14 @@ EMAILAGENT_IGNORED_SENDER_EMAILS = {
         'ibrahim.ali@cosmoplast.com,rabie@cosmoplast.com,'
         'lorena.lorenzo@georgfischer.com,mohamed.zohdy@georgfischer.com',
     ).split(',') if e.strip()
+}
+
+
+# Reply mails sent from these domains (i.e. OUR OWN staff replying in a
+# thread) are never tracked -- see services.process_new_message. Customer
+# replies are unaffected. Comma-separated, case-insensitive.
+EMAILAGENT_OWN_DOMAINS = {
+    d.strip().lower() for d in os.getenv('EMAILAGENT_OWN_DOMAINS', 'junaid.ae').split(',') if d.strip()
 }
 
 

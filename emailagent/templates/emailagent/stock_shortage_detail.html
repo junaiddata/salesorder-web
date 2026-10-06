@@ -117,7 +117,7 @@
     </div>
     {% endif %}
 
-    {% if report.lines %}
+    {% if lines %}
     <div class="tbl-x-wrap">
         <table class="tbl-x grouped">
             <thead>
@@ -127,6 +127,7 @@
                     <th class="num">LPO Qty</th>
                     <th class="num">Total Required Qty</th>
                     <th class="num">Available Stock</th>
+                    <th class="num">Incoming Stock</th>
                     <th class="num">Final Qty (To Procure)</th>
                     <th class="num">LPO Sent to Supplier</th>
                     <th class="num">Final Qty to Purchase</th>
@@ -134,7 +135,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for line in report.lines %}
+                {% for line in lines %}
                 {% cycle 'zebra-a' 'zebra-b' as item_zebra silent %}
                 {% with row_count=line.lpo_breakdown|length|default:1 %}
                 {% for entry in line.lpo_breakdown %}
@@ -150,6 +151,7 @@
                     {% if forloop.first %}
                     <td class="num item-cell" rowspan="{{ row_count }}">{{ line.total_required_qty|floatformat:2 }}</td>
                     <td class="num item-cell" rowspan="{{ row_count }}">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
+                    <td class="num item-cell" rowspan="{{ row_count }}">{% if line.incoming_qty is not None %}{{ line.incoming_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="num final-qty item-cell" rowspan="{{ row_count }}">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="num item-cell po-breakdown-cell" rowspan="{{ row_count }}">
                         {% include 'emailagent/_po_breakdown_cell.html' %}
@@ -166,6 +168,7 @@
                     <td colspan="3">—</td>
                     <td class="num item-cell">{{ line.total_required_qty|floatformat:2 }}</td>
                     <td class="num item-cell">{% if line.available_qty is not None %}{{ line.available_qty|floatformat:2 }}{% else %}Unknown{% endif %}</td>
+                    <td class="num item-cell">{% if line.incoming_qty is not None %}{{ line.incoming_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="num final-qty item-cell">{% if line.final_qty is not None %}{{ line.final_qty|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="num item-cell po-breakdown-cell">
                         {% include 'emailagent/_po_breakdown_cell.html' %}

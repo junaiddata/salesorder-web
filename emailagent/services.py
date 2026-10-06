@@ -46,6 +46,20 @@ def _reply_header_message_ids(raw_headers):
     return message_ids
 
 
+def _is_own_reply(parsed):
+    """True when the message was sent by one of our own domains
+    (settings.EMAILAGENT_OWN_DOMAINS) AND is a reply (has In-Reply-To/
+    References headers, or a "Re:" subject). Fresh mails from our own
+    domain are not affected."""
+    sender = (parsed.get('sender') or '').strip().lower()
+    domain = sender.rsplit('@', 1)[-1] if '@' in sender else ''
+    if domain not in settings.EMAILAGENT_OWN_DOMAINS:
+        return False
+    if _reply_header_message_ids(parsed.get('raw_headers') or []):
+        return True
+    return (parsed.get('subject') or '').strip().lower().startswith('re:')
+
+
 def _find_quotation_by_reply_headers(raw_headers):
     """Gmail's own thread_id is the primary way a customer's reply gets
     linked back to its enquiry (see is_thread_continuation below), but that
@@ -177,6 +191,22 @@ def process_new_message(service, message_id, dry_run=False, client=gmail_client,
             'category': None,
             'confidence': None,
             'reasoning': 'Ignored sender (supplier mailbox, not a customer).',
+            'status': None,
+            'stored': False,
+            'item_count': 0,
+            'attachment_sources': {},
+        }
+
+    if _is_own_reply(parsed):
+        # Our own staff replying in a thread (sender on our domain AND the
+        # message is a reply) -- not an enquiry, never tracked.
+        return None if not dry_run else {
+            'gmail_message_id': parsed['gmail_message_id'],
+            'subject': parsed['subject'],
+            'sender': parsed['sender'],
+            'category': None,
+            'confidence': None,
+            'reasoning': 'Ignored reply sent from our own side.',
             'status': None,
             'stored': False,
             'item_count': 0,

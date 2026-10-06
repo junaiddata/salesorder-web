@@ -31,6 +31,9 @@ def _flatten_rows(report):
     line with no breakdown at all -- matching stock_shortage_detail.html's
     row-per-LPO-entry table exactly, so the export always matches what's
     on screen."""
+    from .views import _consolidated_incoming_lookup
+
+    incoming = _consolidated_incoming_lookup()
     rows = []
     for line in report.lines:
         breakdown = line.get('lpo_breakdown') or []
@@ -40,6 +43,10 @@ def _flatten_rows(report):
             'Description': line.get('description', ''),
             'Total Required Qty': line.get('total_required_qty'),
             'Available Stock': line.get('available_qty'),
+            'Incoming Stock': (
+                incoming.get(str(line.get('item_code') or '').strip(), 0)
+                if incoming is not None else None
+            ),
             'Final Qty (To Procure)': line.get('final_qty'),
             'LPO Sent to Supplier': line.get('already_ordered_qty'),
             'Final Qty to Purchase': line.get('final_purchase_qty'),
@@ -70,7 +77,8 @@ def export_stock_shortage_excel(request):
 
     columns = [
         'Item Code', 'Brand', 'Description', 'Customer', 'LPO', 'Sales Order',
-        'LPO Qty', 'Total Required Qty', 'Available Stock', 'Final Qty (To Procure)',
+        'LPO Qty', 'Total Required Qty', 'Available Stock', 'Incoming Stock',
+        'Final Qty (To Procure)',
         'LPO Sent to Supplier', 'Final Qty to Purchase', 'Payment Terms',
     ]
     df = pd.DataFrame(rows, columns=columns)
@@ -173,6 +181,7 @@ def export_stock_shortage_pdf(request):
         0.55 * inch,   # LPO Qty
         0.65 * inch,   # Total Required
         0.65 * inch,   # Available
+        0.65 * inch,   # Incoming
         0.65 * inch,   # Final Qty
         0.65 * inch,   # LPO Sent
         0.65 * inch,   # Final Purchase
@@ -192,6 +201,7 @@ def export_stock_shortage_pdf(request):
         Paragraph('LPO Qty', styles['header_cell_r']),
         Paragraph('Total Req.', styles['header_cell_r']),
         Paragraph('Available', styles['header_cell_r']),
+        Paragraph('Incoming', styles['header_cell_r']),
         Paragraph('Final Qty', styles['header_cell_r']),
         Paragraph('LPO Sent', styles['header_cell_r']),
         Paragraph('To Purchase', styles['header_cell_r']),
@@ -209,6 +219,7 @@ def export_stock_shortage_pdf(request):
             Paragraph(_num(row['LPO Qty']), styles['cell_r']),
             Paragraph(_num(row['Total Required Qty']), styles['cell_r']),
             Paragraph(_num(row['Available Stock']), styles['cell_r']),
+            Paragraph(_num(row['Incoming Stock']), styles['cell_r']),
             Paragraph(_num(row['Final Qty (To Procure)']), styles['cell_bold_r']),
             Paragraph(_num(row['LPO Sent to Supplier']), styles['cell_r']),
             Paragraph(_num(row['Final Qty to Purchase']), styles['cell_bold_r']),
@@ -216,7 +227,7 @@ def export_stock_shortage_pdf(request):
         ])
 
     if not rows:
-        table_data.append([Paragraph('No shortages -- every pending order is covered by available stock.', styles['label'])] + [''] * 12)
+        table_data.append([Paragraph('No shortages -- every pending order is covered by available stock.', styles['label'])] + [''] * 13)
 
     data_table = Table(table_data, colWidths=col_widths, repeatRows=1)
     data_table.setStyle(_standard_data_table_style(len(table_data), has_total_row=False))
