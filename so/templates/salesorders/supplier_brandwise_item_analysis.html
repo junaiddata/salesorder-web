@@ -143,6 +143,10 @@
         <p>Compare selected brands side by side &mdash; AR Invoices &amp; Credit Memos</p>
       </div>
       <div class="header-actions">
+        {% if selected_brands %}
+        <a href="{% url 'export_supplier_brandwise_item_analysis_excel' %}?{{ request.GET.urlencode }}" class="btn btn-excel"><i class="fas fa-file-excel"></i> Export Excel</a>
+        <a href="{% url 'export_supplier_brandwise_item_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-pdf"><i class="fas fa-file-pdf"></i> Export PDF</a>
+        {% endif %}
         <a href="{% url 'home' %}" class="btn"><i class="fas fa-arrow-left"></i> Back to Home</a>
       </div>
     </div>
