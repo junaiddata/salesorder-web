@@ -93,7 +93,7 @@ AUTO_CONTENT_LABELS = {
 # Sections that need per-submittal upload (unless user removed them from index)
 UPLOAD_LABELS = {
     "highlighted vendor list", "comply statement with project specification",
-    "comply statement", "area of application", "warranty draft letter",
+    "comply statement", "project specification", "area of application", "warranty draft letter",
 }
 
 
@@ -103,7 +103,8 @@ DEFAULT_INDEX_ITEMS = [
     "Company Profile",
     "Trade License",
     "Highlighted Vendor List",
-    "Comply Statement with Project Specification",
+    "Comply Statement",
+    "Project Specification",
     "List of Proposed Material",
     "Product Catalogue",
     "Test Certificates",
@@ -128,6 +129,7 @@ INDEX_LABEL_TO_SECTION = {
     "highlighted vendor list": 5,
     "comply statement with project specification": 6,
     "comply statement": 6,
+    "project specification": 17,
     "list of proposed material": 7,
     "area of application": 8,
     "product catalogue": 9,
@@ -172,13 +174,16 @@ PROJECT_DETAIL_LABELS = {
 }
 
 
-def _fixed_field_value(submittal, key):
+def _fixed_field_value(submittal, key, brand=None):
     if key == 'brand':
-        return submittal.title_brand.name if submittal.title_brand else submittal.product
+        if brand is not None:
+            return brand.name
+        brands = submittal.get_title_brands()
+        return ', '.join(b.name for b in brands) if brands else submittal.product
     return getattr(submittal, key, '') or ''
 
 
-def _ordered_project_fields(submittal, label_map):
+def _ordered_project_fields(submittal, label_map, brand=None):
     """
     Build the ordered (label, value) list for the project-details block shown
     on the title page, compliance statement, and materials list. Honors the
@@ -188,7 +193,7 @@ def _ordered_project_fields(submittal, label_map):
     """
     order = submittal.field_order or []
     if not order:
-        return [(label_map[k], _fixed_field_value(submittal, k)) for k in FIXED_FIELD_KEYS if k in label_map]
+        return [(label_map[k], _fixed_field_value(submittal, k, brand)) for k in FIXED_FIELD_KEYS if k in label_map]
 
     result = []
     for entry in order:
@@ -197,7 +202,7 @@ def _ordered_project_fields(submittal, label_map):
         if entry.get('type') == 'fixed':
             key = entry.get('key')
             if key in label_map:
-                result.append((label_map[key], _fixed_field_value(submittal, key)))
+                result.append((label_map[key], _fixed_field_value(submittal, key, brand)))
         elif entry.get('type') == 'custom':
             label = (entry.get('label') or '').strip()
             value = (entry.get('value') or '').strip()
@@ -855,9 +860,10 @@ def _build_divider_page(section_number: int, section_name: str, company: str = '
 # Proposed Materials Table (Section 7) – Background image + table overlay
 # ---------------------------------------------------------------------------
 
-def _get_effective_columns(submittal, column_override=None):
+def _get_effective_columns(submittal, column_override=None, materials=None):
     """Return list of (key, label) for materials table."""
-    materials = submittal.materials.select_related('brand').all()
+    if materials is None:
+        materials = submittal.materials.select_related('brand').all()
     if not materials:
         return [('model_no', 'Model No.'), ('item_description', 'Item Description')]
 
@@ -867,7 +873,7 @@ def _get_effective_columns(submittal, column_override=None):
             continue
         for col in mat.brand.column_definitions:
             key = col.get('key') or col.get('label', '')
-            if key and key not in seen_keys:
+            if key and key not in seen_keys and key not in services.WIZARD_HIDDEN_COLUMN_KEYS:
                 seen_keys[key] = col.get('label', key)
 
     if not seen_keys:
@@ -897,10 +903,10 @@ def _get_effective_columns(submittal, column_override=None):
     return cols if cols else [('model_no', 'Model No.')]
 
 
-def _get_warranty_columns(submittal):
+def _get_warranty_columns(submittal, materials=None):
     """Return columns for warranty materials table."""
     sel = submittal.warranty_materials_columns if submittal.warranty_materials_columns else None
-    return _get_effective_columns(submittal, column_override=sel)
+    return _get_effective_columns(submittal, column_override=sel, materials=materials)
 
 
 # Continuation pages keep the original tight margin (header/title only,
@@ -1045,6 +1051,38 @@ def _order_materials_for_pdf(materials):
     return materials
 
 
+def _title_brand_groups(submittal, materials=None):
+    """
+    Brand-wise blocks for a submittal with MORE THAN ONE brand selected on the
+    title page: [(brand, [materials of that brand])], following the title-page
+    brand order. Materials from a brand that is not ticked on the title page
+    are kept (as their own group, after the others) so nothing disappears.
+    Returns None when zero or one brand is selected (or there are no materials),
+    in which case every section keeps its original single-brand output.
+    """
+    brands = submittal.get_title_brands()
+    if len(brands) < 2:
+        return None
+    if materials is None:
+        materials = _order_materials_for_pdf(
+            submittal.materials.select_related('brand').order_by('display_order', 'model_no')
+        )
+    materials = list(materials)
+    groups, used = [], set()
+    for brand in brands:
+        mats = [m for m in materials if m.brand_id == brand.pk]
+        if mats:
+            groups.append((brand, mats))
+            used.update(m.pk for m in mats)
+    leftovers = {}
+    for m in materials:
+        if m.pk not in used:
+            leftovers.setdefault(m.brand_id, []).append(m)
+    for mats in leftovers.values():
+        groups.append((mats[0].brand, mats))
+    return groups or None
+
+
 def _build_materials_table(submittal: Submittal) -> BytesIO:
     """
     Build materials table PDF with background image on every page.
@@ -1095,56 +1133,74 @@ def _build_materials_table(submittal: Submittal) -> BytesIO:
         .order_by('display_order', 'model_no')
     )
     materials = _order_materials_for_pdf(materials)
-    cols = _get_effective_columns(submittal)
 
-    # ── Build table header ────────────────────────────────────────────
-    header_row = [Paragraph('S.No', style_header)] + [
-        Paragraph(lbl, style_header) for _, lbl in cols
-    ]
+    def _materials_table(mats, cols):
+        # ── Build table header ────────────────────────────────────────
+        header_row = [Paragraph('S.No', style_header)] + [
+            Paragraph(lbl, style_header) for _, lbl in cols
+        ]
 
-    # ── Build table rows ──────────────────────────────────────────────
-    data = [header_row]
-    for idx, mat in enumerate(materials, 1):
-        row = [Paragraph(str(idx), style_cell)]
-        for key, _ in cols:
-            if key == 'model_no':
-                val = mat.model_no
-            else:
-                val = mat.get(key, '')
-            row.append(Paragraph(str(val or ''), style_cell))
-        data.append(row)
+        # ── Build table rows ──────────────────────────────────────────
+        data = [header_row]
+        for idx, mat in enumerate(mats, 1):
+            row = [Paragraph(str(idx), style_cell)]
+            for key, _ in cols:
+                if key == 'model_no':
+                    val = mat.model_no
+                else:
+                    val = mat.get(key, '')
+                row.append(Paragraph(str(val or ''), style_cell))
+            data.append(row)
 
-    # ── Column widths ─────────────────────────────────────────────────
-    ncols = len(cols) + 1
-    available_w = PAGE_W - 100  # left + right margin
-    col_widths = [30] + [max(45, (available_w - 30) // (ncols - 1))] * (ncols - 1)
+        # ── Column widths ─────────────────────────────────────────────
+        ncols = len(cols) + 1
+        available_w = PAGE_W - 100  # left + right margin
+        col_widths = [30] + [max(45, (available_w - 30) // (ncols - 1))] * (ncols - 1)
 
-    # ── Create table ──────────────────────────────────────────────────
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle([
-        # Header row styling
-        ('BACKGROUND',     (0, 0), (-1, 0), BLUE_DARK),
-        ('TEXTCOLOR',      (0, 0), (-1, 0), colors.white),
-        ('FONTNAME',       (0, 0), (-1, 0), header_font),
-        ('FONTSIZE',       (0, 0), (-1, 0), 8),
+        # ── Create table ──────────────────────────────────────────────
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            # Header row styling
+            ('BACKGROUND',     (0, 0), (-1, 0), BLUE_DARK),
+            ('TEXTCOLOR',      (0, 0), (-1, 0), colors.white),
+            ('FONTNAME',       (0, 0), (-1, 0), header_font),
+            ('FONTSIZE',       (0, 0), (-1, 0), 8),
 
-        # Body styling
-        ('FONTNAME',       (0, 1), (-1, -1), body_font),
-        ('FONTSIZE',       (0, 1), (-1, -1), 8),
-        ('TEXTCOLOR',      (0, 1), (-1, -1), colors.black),
+            # Body styling
+            ('FONTNAME',       (0, 1), (-1, -1), body_font),
+            ('FONTSIZE',       (0, 1), (-1, -1), 8),
+            ('TEXTCOLOR',      (0, 1), (-1, -1), colors.black),
 
-        # Grid & padding
-        ('GRID',           (0, 0), (-1, -1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, HexColor('#F5F7FA')]),
-        ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING',     (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING',  (0, 0), (-1, -1), 4),
-        ('LEFTPADDING',    (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING',   (0, 0), (-1, -1), 4),
-    ]))
+            # Grid & padding
+            ('GRID',           (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, HexColor('#F5F7FA')]),
+            ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING',     (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING',  (0, 0), (-1, -1), 4),
+            ('LEFTPADDING',    (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING',   (0, 0), (-1, -1), 4),
+        ]))
+        return table
 
     # ── Build PDF ─────────────────────────────────────────────────────
-    elements = [NextPageTemplate('MaterialLater'), table]
+    brand_groups = _title_brand_groups(submittal, materials)
+    if brand_groups:
+        # Several brands selected: one table per brand (own heading, own
+        # columns, numbering restarts at 1).
+        from xml.sax.saxutils import escape
+        style_brand = ParagraphStyle(
+            'MatBrand', fontSize=10, fontName=header_font, leading=13,
+            spaceBefore=8, spaceAfter=4, textColor=BLUE_DARK, keepWithNext=1,
+        )
+        elements = [NextPageTemplate('MaterialLater')]
+        for brand, mats in brand_groups:
+            if brand is not None:
+                elements.append(Paragraph(escape(brand.name or ''), style_brand))
+            elements.append(_materials_table(mats, _get_effective_columns(submittal, materials=mats)))
+            elements.append(Spacer(1, 10))
+    else:
+        elements = [NextPageTemplate('MaterialLater'),
+                    _materials_table(materials, _get_effective_columns(submittal))]
     doc.build(elements)
     buf.seek(0)
     return buf
@@ -1334,20 +1390,21 @@ def _split_paragraph_into_chunks(text, style, avail_width, max_chunk_height):
 # Compliance Statement PDF (Section 6 - generated from form rows)
 # ---------------------------------------------------------------------------
 
-def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
+def _build_compliance_statement_pdf(submittal: Submittal, brand=None, rows=None) -> BytesIO:
     """
     Build a multi-page compliance statement PDF from submittal.compliance_rows.
     First page: company header + horizontal line + title + project details + table.
     Continuation pages: title only + table (no header / project details).
     """
-    rows = submittal.compliance_rows or []
+    if rows is None:
+        rows = submittal.compliance_rows or []
 
     buf = BytesIO()
 
     # Page frame leaves room for the first-page header content. Extra fields
     # beyond the 6 fixed ones, plus any long values that wrap onto extra
     # lines, push the table's start further down so they never overlap it.
-    _cs_fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+    _cs_fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS, brand=brand)
     _extra_field_count = max(0, len(_cs_fields) - len(FIXED_FIELD_KEYS))
     _cs_colon_x, _cs_value_x, _cs_wrap_max_w = _project_field_columns(
         _cs_fields, 55, 170, 'Helvetica-Bold', 9, PAGE_W, 36)
@@ -1420,7 +1477,7 @@ def _build_compliance_statement_pdf(submittal: Submittal) -> BytesIO:
         title_y = _draw_cs_title(c)
 
         # Project details
-        fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        fields = _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS, brand=brand)
         field_y = title_y - 30
         label_x = 55
         colon_x, value_x, max_w = _cs_colon_x, _cs_value_x, _cs_wrap_max_w
@@ -1673,7 +1730,7 @@ class _WarrantyDocTemplate(BaseDocTemplate):
         self.addPageTemplates([template])
 
 
-def _build_warranty_letter_pdf(submittal) -> BytesIO:
+def _build_warranty_letter_pdf(submittal, brand=None) -> BytesIO:
     """
     Build a black-and-white warranty certificate letter styled after the
     Pegler reference image (logo top-right, DRAFT watermark, label table,
@@ -1721,7 +1778,10 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
         .all()
         .order_by('display_order', 'model_no')
     )
-    cols = _get_warranty_columns(submittal)
+    if brand is not None:
+        materials = materials.filter(brand=brand)
+    materials = list(materials)
+    cols = _get_warranty_columns(submittal, materials=materials if brand is not None else None)
 
     # ── Build materials table ─────────────────────────────────────────
     header_row = [Paragraph('S.No', style_header)] + [
@@ -1772,7 +1832,7 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
     # fixed Subject line.
     info_data = [
         _lbl_row(lbl, val)
-        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS, brand=brand)
         if val
     ]
     info_data.append(_lbl_row('Subject', 'Warranty Certificate for Plumbing Valves'))
@@ -1859,7 +1919,7 @@ def _build_warranty_letter_pdf(submittal) -> BytesIO:
     return buf
 
 
-def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
+def _build_ariston_warranty_letter_pdf(submittal, brand=None) -> BytesIO:
     """
     Build the Ariston "LETTER OF WARRANTY", styled after the Ariston reference
     letter -- distinct from the Pegler-style certificate in
@@ -1918,6 +1978,9 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
         .all()
         .order_by('display_order', 'model_no')
     )
+    if brand is not None:
+        materials = materials.filter(brand=brand)
+    materials = list(materials)
 
     # ── Fill-in-by-hand table: Date / Invoice / LPO-DO / Brand-Model / Qty ──
     # Only Brand/Model (item description) is prefilled; the rest are left
@@ -1955,7 +2018,7 @@ def _build_ariston_warranty_letter_pdf(submittal) -> BytesIO:
     # the title page, compliance statement and materials list).
     project_elements = [
         Paragraph(f'<b>{lbl}</b> : {val}', style_project)
-        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS)
+        for lbl, val in _ordered_project_fields(submittal, PROJECT_DETAIL_LABELS, brand=brand)
         if val
     ]
 
@@ -2084,13 +2147,33 @@ def _append_item_or_brand_docs(merger, materials, mode_attr, get_item_pdf, brand
                     merger.append(path)
 
 
+def _append_item_or_brand_docs_grouped(collector, submittal, materials, visible_num, display, company,
+                                       mode_attr, get_item_pdf, brand_doc_type):
+    """
+    Same as _append_item_or_brand_docs for a single-brand submittal. With several
+    brands selected, the documents are grouped brand by brand (no extra divider
+    pages -- only the order changes).
+    """
+    groups = _title_brand_groups(submittal, list(materials))
+    if not groups:
+        _append_item_or_brand_docs(collector, materials, mode_attr=mode_attr,
+                                   get_item_pdf=get_item_pdf, brand_doc_type=brand_doc_type)
+        return
+    for brand, mats in groups:
+        sub = _PageCollector()
+        _append_item_or_brand_docs(sub, mats, mode_attr=mode_attr,
+                                   get_item_pdf=get_item_pdf, brand_doc_type=brand_doc_type)
+        for piece in sub.pieces:
+            collector.append(piece)
+
+
 # ---------------------------------------------------------------------------
 # Company stamp
 # ---------------------------------------------------------------------------
 
 # Sections stamped when Submittal.stamp_mode == 'custom' (List of Proposed
 # Material, Comply Statement with Project Specification).
-STAMP_CUSTOM_SECTIONS = (6, 7)
+STAMP_CUSTOM_SECTIONS = (6, 7, 17)
 
 
 def stamp_image_on_pages(pdf_buf: BytesIO, stamp_path: str, pages: set = None) -> BytesIO:
@@ -2192,6 +2275,11 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
 
     has_title = any(_label_to_section(it['canonical']) == 1 for it in items)
     has_index = any(_label_to_section(it['canonical']) == 2 for it in items)
+    # When the Index lists "Project Specification" as its own item, the uploaded
+    # specification PDF belongs to that section and Comply Statement keeps only
+    # the generated compliance table. Older submittals (single combined item)
+    # are unchanged.
+    has_separate_spec = any(_label_to_section(it['canonical']) == 17 for it in items)
     # Both are always exactly 1 page (fixed single-canvas builders), so this
     # offset can be computed up front without building either of them yet.
     running_page = (1 if has_title else 0) + (1 if has_index else 0)
@@ -2236,13 +2324,34 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                     True, visible_num, display, company=company)
 
         # ── Upload-based sections (standard or custom) ──
-        elif section in (5, 6, 8, 13) or section is None:
+        elif section in (5, 6, 8, 13, 17) or section is None:
             # Always add divider; content optional (show renamed display)
             collector.append(_build_divider_page(visible_num, display, company=company))
 
             # Section 13: generated warranty letter (brand-specific format, when
             # the brand has one) OR uploaded PDF
-            if section == 13:
+            warranty_groups = _title_brand_groups(submittal) if section == 13 else None
+            if section == 13 and warranty_groups:
+                # Several brands: each brand gets its own letter -- generated when
+                # the brand has a format, otherwise that brand's own uploaded PDF.
+                added = False
+                for wbrand, _mats in warranty_groups:
+                    if wbrand is None:
+                        continue
+                    wbuilder = _resolve_warranty_letter_builder(wbrand)
+                    if wbuilder:
+                        collector.append(wbuilder(submittal, brand=wbrand))
+                        added = True
+                    else:
+                        wpath = _get_upload_path(submittal, f'{canonical}::{wbrand.pk}')
+                        if wpath:
+                            collector.append(wpath)
+                            added = True
+                if not added:
+                    wpath = _get_upload_path(submittal, canonical) or _safe_path(submittal.warranty_draft_pdf)
+                    if wpath:
+                        collector.append(wpath)
+            elif section == 13:
                 warranty_brand = getattr(submittal, 'warranty_brand', None)
                 letter_builder = _resolve_warranty_letter_builder(warranty_brand)
                 if letter_builder:
@@ -2269,26 +2378,39 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
                     collector.append(_extract_pdf_pages(upload_path, page_range))
 
                 # Section 6: also append generated compliance table if rows exist
-                if section == 6 and (submittal.compliance_rows or []):
-                    collector.append(_build_compliance_statement_pdf(submittal))
+                if section == 6:
+                    # Several brands: one statement per brand that has rows; otherwise the
+                    # single shared list, exactly as before.
+                    by_brand = submittal.compliance_rows_by_brand or {}
+                    brand_statements = []
+                    if len(submittal.get_title_brands()) > 1 and by_brand:
+                        for cbrand in submittal.get_title_brands():
+                            crows = by_brand.get(str(cbrand.pk)) or []
+                            if crows:
+                                brand_statements.append((cbrand, crows))
+                    if brand_statements:
+                        for cbrand, crows in brand_statements:
+                            collector.append(_build_compliance_statement_pdf(submittal, brand=cbrand, rows=crows))
+                    elif submittal.compliance_rows or []:
+                        collector.append(_build_compliance_statement_pdf(submittal))
 
         # ── Material-level multi sections (9, 10, 11) ──
         elif section in (9, 10, 11):
             # Always add divider; content optional
             collector.append(_build_divider_page(visible_num, display, company=company))
             if section == 9:
-                _append_item_or_brand_docs(
-                    collector, materials, mode_attr='catalogue_mode',
+                _append_item_or_brand_docs_grouped(
+                    collector, submittal, materials, visible_num, display, company, mode_attr='catalogue_mode',
                     get_item_pdf=services.get_catalogue_pdf, brand_doc_type='product_catalogue',
                 )
             elif section == 10:
-                _append_item_or_brand_docs(
-                    collector, materials, mode_attr='technical_mode',
+                _append_item_or_brand_docs_grouped(
+                    collector, submittal, materials, visible_num, display, company, mode_attr='technical_mode',
                     get_item_pdf=services.get_technical_pdf, brand_doc_type='technical_details',
                 )
             elif section == 11:
-                _append_item_or_brand_docs(
-                    collector, materials, mode_attr='test_cert_mode',
+                _append_item_or_brand_docs_grouped(
+                    collector, submittal, materials, visible_num, display, company, mode_attr='test_cert_mode',
                     get_item_pdf=lambda m: services.get_certifications(m, 'test_certificate'),
                     brand_doc_type='test_certificate',
                 )
@@ -2297,10 +2419,11 @@ def build_submittal_pdf(submittal_id: int) -> BytesIO:
         # Pulled once from the brand chosen on the title page.
         elif section in BRAND_DOC_SECTIONS:
             collector.append(_build_divider_page(visible_num, display, company=company))
-            brand = getattr(submittal, 'title_brand', None)
-            for path in services.get_brand_documents(brand, BRAND_DOC_SECTIONS[section]):
-                if path and os.path.exists(path):
-                    collector.append(path)
+            # Every brand selected on the title page contributes its documents.
+            for brand in submittal.get_title_brands():
+                for path in services.get_brand_documents(brand, BRAND_DOC_SECTIONS[section]):
+                    if path and os.path.exists(path):
+                        collector.append(path)
 
         page_count = sum(_count_pages(p) for p in collector.pieces)
         running_page += page_count

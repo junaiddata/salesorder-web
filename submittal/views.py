@@ -15,7 +15,7 @@ from .models import (
     BrandDocument,
 )
 from .forms import TitlePageForm
-from .services import get_history_values
+from .services import get_history_values, WIZARD_HIDDEN_COLUMN_KEYS
 from .pdf_builder import (
     build_submittal_pdf, DEFAULT_INDEX_ITEMS, DEFAULT_UNCHECKED_INDEX_ITEMS,
     needs_upload, FIXED_FIELD_KEYS,
@@ -41,6 +41,7 @@ def submittal_wizard(request, pk=None):
     existing_field_order = []
 
     existing_compliance_rows = []
+    existing_compliance_rows_by_brand = {}
     existing_compliance_brand_id = None
 
     if submittal:
@@ -50,7 +51,7 @@ def submittal_wizard(request, pk=None):
             'consultant': submittal.consultant,
             'main_contractor': submittal.main_contractor,
             'mep_contractor': submittal.mep_contractor,
-            'brand': submittal.title_brand_id,
+            'brand': [b.pk for b in submittal.get_title_brands()],
         }
         selected_material_ids = list(submittal.materials.values_list('pk', flat=True))
         existing_index_items = submittal.index_items or []
@@ -59,6 +60,7 @@ def submittal_wizard(request, pk=None):
             existing_uploads[up.index_label] = up.file.name.split('/')[-1] if up.file else ''
             existing_upload_pages[up.index_label] = up.page_range or ''
         existing_compliance_rows = submittal.compliance_rows or []
+        existing_compliance_rows_by_brand = submittal.compliance_rows_by_brand or {}
         existing_compliance_brand_id = submittal.compliance_brand_id
 
     title_form = TitlePageForm(initial=initial_title)
@@ -82,7 +84,7 @@ def submittal_wizard(request, pk=None):
     for b in brands:
         for col in (b.column_definitions or []):
             k = col.get('key')
-            if k and k not in seen:
+            if k and k not in seen and k not in WIZARD_HIDDEN_COLUMN_KEYS:
                 seen.add(k)
                 all_columns.append({'key': k, 'label': col.get('label', k)})
 
@@ -123,6 +125,7 @@ def submittal_wizard(request, pk=None):
         'remark_options_by_brand_json': remark_options_by_brand,
         'brand_remarks_mode_json': brand_remarks_mode,
         'existing_compliance_rows_json': existing_compliance_rows,
+        'existing_compliance_rows_by_brand_json': existing_compliance_rows_by_brand,
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'default_index_items': list(DEFAULT_INDEX_ITEMS),
         'default_unchecked_index_items': list(DEFAULT_UNCHECKED_INDEX_ITEMS),
@@ -150,6 +153,7 @@ def submittal_wizard(request, pk=None):
         'compliance_options_json': json.dumps(compliance_options),
         'remark_options_by_material_json': json.dumps(remark_options_by_material),
         'existing_compliance_rows_json': json.dumps(existing_compliance_rows),
+        'existing_compliance_rows_by_brand_json': json.dumps(existing_compliance_rows_by_brand),
         'existing_compliance_brand_id': existing_compliance_brand_id or '',
         'existing_warranty_brand_id': existing_warranty_brand_id or '',
         'existing_warranty_date_type': existing_warranty_date_type,
@@ -179,11 +183,15 @@ def submittal_save(request):
     submittal.consultant = title_form.cleaned_data['consultant']
     submittal.main_contractor = title_form.cleaned_data['main_contractor']
     submittal.mep_contractor = title_form.cleaned_data['mep_contractor']
-    brand = title_form.cleaned_data.get('brand')
-    submittal.title_brand = brand
-    # Keep the legacy `product` field populated with the brand name so existing
+    selected_brands = sorted(
+        title_form.cleaned_data.get('brand') or [],
+        key=lambda b: (b.display_order, b.name),
+    )
+    # title_brand keeps the first selected brand for older code that expects one.
+    submittal.title_brand = selected_brands[0] if selected_brands else None
+    # Keep the legacy `product` field populated with the brand name(s) so existing
     # history, search and compliance-statement rendering keep working.
-    submittal.product = brand.name if brand else ''
+    submittal.product = ', '.join(b.name for b in selected_brands)
 
     index_items_json = request.POST.get('index_items_json', '')
     if index_items_json:
@@ -229,6 +237,20 @@ def submittal_save(request):
     else:
         submittal.compliance_rows = []
 
+    # Per-brand compliance rows (only sent when several brands are selected)
+    by_brand = {}
+    by_brand_json = request.POST.get('compliance_rows_by_brand_json', '')
+    if by_brand_json:
+        try:
+            raw = json.loads(by_brand_json)
+        except (ValueError, TypeError):
+            raw = {}
+        if isinstance(raw, dict):
+            for bid, rows in raw.items():
+                if str(bid).isdigit() and isinstance(rows, list):
+                    by_brand[str(bid)] = [r for r in rows if isinstance(r, dict)]
+    submittal.compliance_rows_by_brand = by_brand
+
     compliance_brand_id = request.POST.get('compliance_brand_id', '')
     if compliance_brand_id and compliance_brand_id.isdigit():
         submittal.compliance_brand_id = int(compliance_brand_id)
@@ -260,6 +282,7 @@ def submittal_save(request):
         submittal.pdf_generated_at = None
 
     submittal.save()
+    submittal.title_brands.set(selected_brands)
 
     # Materials (M2M)
     material_ids = request.POST.getlist('material_ids')
@@ -492,8 +515,10 @@ def api_materials_search(request):
             Q(brand__name__icontains=q)
         )
         # Restrict to the brand chosen on the title page, when provided.
-        if brand_param.isdigit():
-            qs = qs.filter(brand_id=brand_param)
+        # The title page can select several brands: accept a comma-separated id list.
+        brand_ids = [x for x in brand_param.split(',') if x.strip().isdigit()]
+        if brand_ids:
+            qs = qs.filter(brand_id__in=brand_ids)
         qs = qs.order_by('display_order', 'model_no')[:20]
 
     def mat_data(m):

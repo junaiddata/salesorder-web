@@ -1841,8 +1841,31 @@ from django.contrib import messages
 def customer_list(request):
     customers = Customer.objects.all().order_by('customer_name')
     salesmen = Salesman.objects.all().order_by('salesman_name')
+
+    # Search / salesman filters are applied server-side so they work across
+    # every page, not just the rows currently on screen.
+    search_q = request.GET.get('q', '').strip()
+    salesman_id = request.GET.get('salesman', '').strip()
+    if search_q:
+        customers = customers.filter(
+            Q(customer_code__icontains=search_q) | Q(customer_name__icontains=search_q)
+        )
+    if salesman_id.isdigit():
+        customers = customers.filter(salesman_id=int(salesman_id))
+
+    paginator = Paginator(customers, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    params = request.GET.copy()
+    params.pop('page', None)
+
     return render(request, 'so/customers/customer_list.html', {
-        'customers': customers,
+        'customers': page_obj,
+        'page_obj': page_obj,
+        'total_customers': paginator.count,
+        'page_querystring': params.urlencode(),
+        'search_q': search_q,
+        'selected_salesman': salesman_id,
         'form': CustomerForm(),
         'salesmen':salesmen  # Empty form for adding new customers
     })

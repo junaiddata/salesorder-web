@@ -1,5 +1,9 @@
 from .models import CompanyDocuments, SubmittalMaterial, MaterialCertification, BrandDocument
 
+# Column keys that stay stored on the brand/material data but are not offered in the
+# wizard's Proposed Materials column list and are left out of the generated PDF tables.
+WIZARD_HIDDEN_COLUMN_KEYS = frozenset({'wras_number'})
+
 
 def get_company_documents():
     """Return the singleton CompanyDocuments instance."""

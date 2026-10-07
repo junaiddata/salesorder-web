@@ -18,6 +18,7 @@ from . import historical_sales_views
 from . import accounts_recording_views
 from . import brandwise_sales_analysis_views
 from . import brandwise_quotation_matrix_views
+from . import supplier_brandwise_item_analysis_views
 from . import api_item_quotation_totals_views
 from . import customer_item_monthwise_analysis_views
 from . import customer_item_yearwise_analysis_views
@@ -205,6 +206,7 @@ urlpatterns += [
     path('saparinvoices/item-quoted-analysis/', quotation_item_analysis_views.item_quoted_analysis, name='item_quoted_analysis'),
     path('saparinvoices/brandwise-quotation-analysis/', views.brandwise_quotation_analysis, name='brandwise_quotation_analysis'),
     path('saparinvoices/brandwise-quotation-matrix/', brandwise_quotation_matrix_views.brandwise_quotation_matrix, name='brandwise_quotation_matrix'),
+    path('saparinvoices/supplier-brandwise-item-analysis/', supplier_brandwise_item_analysis_views.supplier_brandwise_item_analysis, name='supplier_brandwise_item_analysis'),
     path('saparinvoices/brandwise-sales-analysis/', brandwise_sales_analysis_views.brandwise_sales_analysis, name='brandwise_sales_analysis'),
     path('saparinvoices/brandwise-sales-analysis/export-excel/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_excel, name='export_brandwise_sales_analysis_excel'),
     path('saparinvoices/brandwise-sales-analysis/export-pdf/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_pdf, name='export_brandwise_sales_analysis_pdf'),

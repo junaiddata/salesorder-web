@@ -40,11 +40,10 @@ class TitlePageForm(forms.Form):
             'placeholder': 'e.g. M/s. HEAT AND POWER TECHNICAL SERVICES LLC'
         })
     )
-    brand = forms.ModelChoiceField(
+    brand = forms.ModelMultipleChoiceField(
         queryset=SubmittalBrand.objects.all(),
         required=False,
-        empty_label='— Select Brand —',
-        widget=forms.Select(attrs={'class': 'form-control'}),
+        widget=forms.CheckboxSelectMultiple,
         label='Brand',
     )
 

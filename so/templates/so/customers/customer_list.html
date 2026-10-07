@@ -48,13 +48,14 @@
         <!-- Filter and Search Section -->
         <div class="card shadow-sm filter-section">
             <div class="card-body">
+                <form method="get" action="{% url 'customer_list' %}" id="customerFilterForm">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label for="searchInput" class="form-label">Search Customers</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="searchInput" 
+                            <input type="text" class="form-control" id="searchInput" name="q" value="{{ search_q }}"
                                    placeholder="Search by name or code">
-                            <button class="btn btn-outline-secondary" id="searchButton">
+                            <button type="submit" class="btn btn-outline-secondary" id="searchButton">
                                 <i class="bi bi-search"></i>
                             </button>
                         </div>
@@ -62,18 +63,19 @@
                     <div class="col-md-6">
                         <label for="salesmanFilter" class="form-label">Filter by Salesman</label>
                         <div class="input-group">
-                            <select class="form-select" id="salesmanFilter">
+                            <select class="form-select" id="salesmanFilter" name="salesman" onchange="this.form.submit()">
                                 <option value="">All Salesmen</option>
                                 {% for salesman in salesmen %}
-                                <option value="{{ salesman.id }}">{{ salesman.salesman_name }}</option>
+                                <option value="{{ salesman.id }}" {% if selected_salesman == salesman.id|stringformat:"s" %}selected{% endif %}>{{ salesman.salesman_name }}</option>
                                 {% endfor %}
                             </select>
-                            <button class="btn btn-outline-secondary" id="resetFilters">
+                            <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary" id="resetFilters">
                                 <i class="bi bi-x-lg"></i> Reset
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>
+                </form>
             </div>
         </div>
 
@@ -114,12 +116,39 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="text-center">No customers found</td>
+                                <td colspan="6" class="text-center">No customers found</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                    <div class="text-muted small">
+                        Showing {{ page_obj.start_index }}&ndash;{{ page_obj.end_index }} of {{ total_customers }} customers
+                    </div>
+                    <nav aria-label="Customer pages">
+                        <ul class="pagination pagination-sm mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page=1">&laquo;</a></li>
+                            <li class="page-item"><a class="page-link" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Prev</a></li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                            <li class="page-item disabled"><span class="page-link">Prev</span></li>
+                            {% endif %}
+                            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+                            {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a></li>
+                            <li class="page-item"><a class="page-link" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page={{ page_obj.paginator.num_pages }}">&raquo;</a></li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Next</span></li>
+                            <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -198,57 +227,6 @@
             
             document.getElementById('customerName').textContent = customerName;
             document.getElementById('deleteForm').action = `/customers/delete/${customerId}/`;
-        });
-
-        // Client-side filtering functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('searchInput');
-            const salesmanFilter = document.getElementById('salesmanFilter');
-            const searchButton = document.getElementById('searchButton');
-            const resetButton = document.getElementById('resetFilters');
-            const customerRows = document.querySelectorAll('#customerTable tbody tr');
-            
-            function filterCustomers() {
-                const searchTerm = searchInput.value.toLowerCase();
-                const salesmanId = salesmanFilter.value;
-                
-                customerRows.forEach(row => {
-                    if (row.querySelector('td')) { // Skip the "no customers" row if present
-                        const code = row.getAttribute('data-code');
-                        const name = row.getAttribute('data-name');
-                        const rowSalesman = row.getAttribute('data-salesman');
-                        
-                        const matchesSearch = searchTerm === '' || 
-                                             code.includes(searchTerm) || 
-                                             name.includes(searchTerm);
-                        
-                        const matchesSalesman = salesmanId === '' || 
-                                               rowSalesman === salesmanId;
-                        
-                        if (matchesSearch && matchesSalesman) {
-                            row.classList.remove('hidden-row');
-                        } else {
-                            row.classList.add('hidden-row');
-                        }
-                    }
-                });
-            }
-            
-            // Event listeners
-            searchButton.addEventListener('click', filterCustomers);
-            resetButton.addEventListener('click', function() {
-                searchInput.value = '';
-                salesmanFilter.value = '';
-                filterCustomers();
-            });
-            
-            searchInput.addEventListener('keyup', function(e) {
-                if (e.key === 'Enter') {
-                    filterCustomers();
-                }
-            });
-            
-            salesmanFilter.addEventListener('change', filterCustomers);
         });
     </script>
 </body>

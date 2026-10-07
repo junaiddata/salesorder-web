@@ -367,6 +367,11 @@ class Submittal(models.Model):
         help_text="Brand shown on the title page. Used to pull brand-level documents "
                   "(country of origin, authorization letter, previous approvals, previous projects)."
     )
+    title_brands = models.ManyToManyField(
+        'SubmittalBrand', blank=True, related_name='multi_title_submittals',
+        help_text="All brands selected on the title page. title_brand holds the first one "
+                  "(kept for older records and code that expects a single brand)."
+    )
     field_order = models.JSONField(
         default=list, blank=True,
         help_text="Order (and any custom additions) of the project-details block shown on the "
@@ -431,6 +436,12 @@ class Submittal(models.Model):
         default=list, blank=True,
         help_text="Compliance statement rows: [{specification, compliance, remarks}, ...]"
     )
+    compliance_rows_by_brand = models.JSONField(
+        default=dict, blank=True,
+        help_text="Compliance statement rows per brand when several brands are selected on the title "
+                  "page: {\"<brand id>\": [{specification, compliance, remarks}, ...]}. "
+                  "Empty = the single list in compliance_rows is used."
+    )
     compliance_brand = models.ForeignKey(
         'SubmittalBrand', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='compliance_submittals',
@@ -469,6 +480,15 @@ class Submittal(models.Model):
 
     def __str__(self):
         return f"Submittal: {self.project[:60]} ({self.created_at:%Y-%m-%d})" if self.created_at else f"Submittal: {self.project[:60]}"
+
+    def get_title_brands(self):
+        """Brands chosen on the title page, in brand display order. Falls back to the
+        single legacy title_brand for records saved before multi-brand support."""
+        if self.pk:
+            brands = list(self.title_brands.order_by('display_order', 'name'))
+            if brands:
+                return brands
+        return [self.title_brand] if self.title_brand_id else []
 
     def needs_verification(self):
         """True if this is an agent-created submittal a human hasn't reviewed

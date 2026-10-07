@@ -854,6 +854,23 @@
 
         .btn-add-custom:hover { background: var(--primary-dark); transform: translateY(-1px); }
 
+        .brand-multi { position: relative; }
+        .brand-multi-btn {
+            width: 100%; text-align: left; display: flex; align-items: center;
+            justify-content: space-between; gap: 8px; cursor: pointer; background: #fff;
+        }
+        .brand-multi-panel {
+            display: none; position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+            margin-top: 4px; max-height: 260px; overflow-y: auto; background: #fff;
+            border: 1px solid #d0d7e2; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+            padding: 6px;
+        }
+        .brand-multi-panel.show { display: block; }
+        .brand-multi-panel label {
+            display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 0;
+            border-radius: 6px; cursor: pointer; font-weight: 500;
+        }
+        .brand-multi-panel label:hover { background: #f1f5f9; }
         .helper-note {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -1178,10 +1195,23 @@
                         <span class="drag-handle-field" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
                         <div class="sortable-field-body">
                             <label class="field-label">{{ field.label }}</label>
-                            {{ field }}
+                            <div class="brand-multi" id="brandMulti">
+                                <button type="button" class="form-control brand-multi-btn" id="brandMultiBtn">
+                                    <span id="brandMultiText">— Select Brand(s) —</span>
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="brand-multi-panel" id="brandMultiPanel">
+                                    {% for choice in field.field.queryset %}
+                                    <label>
+                                        <input type="checkbox" name="brand" value="{{ choice.pk }}" data-name="{{ choice.name }}" {% if choice.pk in field.value %}checked{% endif %}>
+                                        <span>{{ choice.name }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
                             <div class="helper-note">
                                 <i class="fas fa-info-circle"></i>
-                                <span>Shown on the title page. Its brand-level documents (Country of Origin, Authorization Letter, Previous Approvals, Previous Projects) are pulled into the PDF automatically. Manage them under Admin → Brands.</span>
+                                <span>You can select more than one brand. Shown on the title page. The brand-level documents of every selected brand (Country of Origin, Authorization Letter, Previous Approvals, Previous Projects) are pulled into the PDF automatically, one brand after the other. Manage them under Admin → Brands.</span>
                             </div>
                         </div>
                     </div>
@@ -1402,6 +1432,10 @@
         const REMARK_OPTIONS_BY_BRAND = DATA.remark_options_by_brand_json || {};
         const BRAND_REMARKS_MODE = DATA.brand_remarks_mode_json || {};
         let complianceRows = DATA.existing_compliance_rows_json || [];
+        // Several brands selected: one list of rows per brand, {brandId: [rows]}.
+        // complianceRows always points at the list of the brand tab being edited.
+        let complianceRowsByBrand = DATA.existing_compliance_rows_by_brand_json || {};
+        let complianceActiveBrand = '';
         let complianceBrandId = DATA.existing_compliance_brand_id || '';
 
         const EXISTING_WARRANTY_BRAND_ID = DATA.existing_warranty_brand_id || '';
@@ -1692,7 +1726,7 @@
 
         const colDefs = (ALL_COLUMN_DEFS && ALL_COLUMN_DEFS.length) ? ALL_COLUMN_DEFS : [
             {key:'model_no',label:'Model No.'},{key:'item_description',label:'Item Description'},{key:'material',label:'Material'},
-            {key:'size',label:'Size'},{key:'wras_number',label:'WRAS No.'},{key:'brand',label:'Brand'},
+            {key:'size',label:'Size'},{key:'brand',label:'Brand'},
             {key:'pressure_rating',label:'Pressure Rating'},{key:'area_of_application',label:'Area of Application'}
         ];
 
@@ -1746,6 +1780,10 @@
         // ── Compliance form helpers ──
         const COMPLY_LABELS = new Set(['comply statement', 'comply statement with project specification']);
         function isComplyStatement(label) { return COMPLY_LABELS.has((label || '').trim().toLowerCase()); }
+        // "Project Specification" is its own Index item: it carries the uploaded specification PDF,
+        // while "Comply Statement" then keeps only the compliance form.
+        function isProjectSpec(label) { return (label || '').trim().toLowerCase() === 'project specification'; }
+        function hasSeparateProjectSpec() { return indexItems.some(i => i.included && isProjectSpec(i.label)); }
 
         // ── Warranty section data ──
 
@@ -1758,7 +1796,10 @@
         function getRemarkGroupsForSelected() {
             const groups = [];
             const brandGroupsAdded = new Set();
-            selectedMaterials.forEach(m => {
+            const scoped = (getSelectedBrands().length > 1 && complianceActiveBrand)
+                ? selectedMaterials.filter(m => String(m.brand_id) === String(complianceActiveBrand))
+                : selectedMaterials;
+            scoped.forEach(m => {
                 const mode = BRAND_REMARKS_MODE[m.brand_id] || 'item';
                 if (mode === 'brand') {
                     if (brandGroupsAdded.has(m.brand_id)) return;
@@ -1877,6 +1918,7 @@
                     if (confirm('Remove this row?')) {
                         complianceRows.splice(parseInt(btn.dataset.idx), 1);
                         renderComplianceTable();
+                        renderComplianceBrandTabs();
                         serializeComplianceRows();
                     }
                 });
@@ -1907,15 +1949,69 @@
 
         function serializeComplianceRows() {
             const el = document.getElementById('complianceRowsJson');
-            if (el) el.value = JSON.stringify(complianceRows);
+            const byBrandEl = document.getElementById('complianceRowsByBrandJson');
+            const brands = getSelectedBrands();
+            if (brands.length > 1) {
+                const byBrand = {};
+                brands.forEach(b => { byBrand[b.id] = complianceRowsByBrand[b.id] || []; });
+                if (byBrandEl) byBrandEl.value = JSON.stringify(byBrand);
+                // The single shared list stays in step with the first brand.
+                if (el) el.value = JSON.stringify(byBrand[brands[0].id]);
+            } else {
+                if (byBrandEl) byBrandEl.value = '';
+                if (el) el.value = JSON.stringify(complianceRows);
+            }
+        }
+
+        // One tab per selected brand above the compliance table.
+        function renderComplianceBrandTabs() {
+            const box = document.getElementById('complianceBrandTabs');
+            if (!box) return;
+            const brands = getSelectedBrands();
+            if (brands.length < 2) { box.innerHTML = ''; return; }
+            box.innerHTML = `
+                <div class="helper-note mb-2"><i class="fas fa-info-circle"></i><span>Several brands are selected: each brand has its own compliance statement. Pick a brand to edit its rows.</span></div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    ${brands.map(b => {
+                        const n = (complianceRowsByBrand[b.id] || []).length;
+                        const active = String(b.id) === String(complianceActiveBrand);
+                        return `<button type="button" class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline-secondary'} cs-brand-tab" data-brand="${escapeHtml(String(b.id))}">${escapeHtml(b.name)} <span style="opacity:.75;">(${n})</span></button>`;
+                    }).join('')}
+                </div>`;
+            box.querySelectorAll('.cs-brand-tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    complianceActiveBrand = btn.dataset.brand;
+                    complianceRows = complianceRowsByBrand[complianceActiveBrand];
+                    renderComplianceBrandTabs();
+                    renderComplianceTable();
+                    serializeComplianceRows();
+                });
+            });
         }
 
         function initComplianceForm() {
             document.getElementById('btnAddComplianceRow')?.addEventListener('click', () => {
                 complianceRows.push({ specification: '', compliance: '', remarks: '' });
                 renderComplianceTable();
+                renderComplianceBrandTabs();
                 serializeComplianceRows();
             });
+            const brands = getSelectedBrands();
+            if (brands.length > 1) {
+                // A submittal saved before multi-brand support keeps its single list on the first brand.
+                const hadBrandRows = Object.keys(complianceRowsByBrand).length > 0;
+                const legacyRows = Array.isArray(complianceRows) ? complianceRows : [];
+                brands.forEach((b, i) => {
+                    if (!Array.isArray(complianceRowsByBrand[b.id])) {
+                        complianceRowsByBrand[b.id] = (i === 0 && !hadBrandRows) ? legacyRows : [];
+                    }
+                });
+                if (!brands.some(b => String(b.id) === String(complianceActiveBrand))) {
+                    complianceActiveBrand = String(brands[0].id);
+                }
+                complianceRows = complianceRowsByBrand[complianceActiveBrand];
+                renderComplianceBrandTabs();
+            }
             serializeComplianceRows();
             renderComplianceTable();
         }
@@ -1949,7 +2045,7 @@
                     const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
                     const hasGeneratedFormat = warrantyBrandId && brandsWithFormat.includes(parseInt(warrantyBrandId));
 
-                    const brandOptions = BRANDS_LIST.map(b => {
+                    const brandOptions = warrantyBrandChoices().map(b => {
                         const hasFormat = brandsWithFormat.includes(b.pk);
                         const suffix = hasFormat ? ' ✦ generated' : '';
                         return `<option value="${b.pk}" ${String(b.pk) === warrantyBrandId ? 'selected' : ''}>${escapeHtml(b.name)}${suffix}</option>`;
@@ -1962,6 +2058,51 @@
                             ${escapeHtml(c.label)}
                         </label>`;
                     }).join('');
+
+                    // Several brands selected on the Title page: one warranty letter per
+                    // brand -- generated when the brand has a format, otherwise its own upload.
+                    const titleBrands = getSelectedBrands();
+                    if (titleBrands.length > 1) {
+                        const anyGenerated = titleBrands.some(b => brandsWithFormat.includes(parseInt(b.id, 10)));
+                        const perBrand = titleBrands.map(b => {
+                            if (brandsWithFormat.includes(parseInt(b.id, 10))) {
+                                return `<div class="mb-3">
+                                    <span class="field-label">${escapeHtml(b.name)}</span>
+                                    <div class="helper-note"><i class="fas fa-info-circle"></i><span>A warranty letter is generated for this brand.</span></div>
+                                </div>`;
+                            }
+                            const brandKey = `${safeKey}::${b.id}`;
+                            const existingBrand = existingUploads[brandKey] || '';
+                            return `<div class="mb-3">
+                                <span class="field-label">${escapeHtml(b.name)}</span>
+                                <input type="file" name="${escapeHtml(`section_upload__${brandKey}`)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                                ${existingBrand ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existingBrand)}</div>` : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Upload this brand\'s warranty PDF</span></div>'}
+                            </div>`;
+                        }).join('');
+                        return `
+                        <div class="upload-row warranty-section">
+                            <label><i class="fas fa-file-contract"></i> ${escapeHtml(it.label)}</label>
+                            <div class="helper-note mb-2"><i class="fas fa-info-circle"></i><span>Several brands are selected, so each brand gets its own warranty letter.</span></div>
+                            <div class="mb-3">
+                                ${perBrand}
+                                <input type="hidden" name="warranty_brand_id" value="${escapeHtml(String(titleBrands[0].id))}">
+
+                                <div style="margin-top:1rem;">
+                                    <span class="field-label">Warranty period wording</span>
+                                    <div class="mode-toggle">
+                                        <label><input type="radio" name="warranty_date_type" value="toc" ${warrantyDateType === 'toc' ? 'checked' : ''}> From date of TOC</label>
+                                        <label><input type="radio" name="warranty_date_type" value="invoice" ${warrantyDateType === 'invoice' ? 'checked' : ''}> From date of Invoice</label>
+                                    </div>
+                                </div>
+
+                                <div class="warranty-generate-area" style="${anyGenerated ? '' : 'display:none;'}margin-top:1rem;">
+                                    <span class="field-label">Columns in warranty materials table</span>
+                                    <div id="warrantyColumnCheckboxes" class="mt-1">${colCheckboxes}</div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="warrantyMaterialsColumnsJson" name="warranty_materials_columns_json" value="${escapeHtml(JSON.stringify(warrantyCols.length ? warrantyCols : warrantyColDefs.map(c => c.key)))}">
+                        </div>`;
+                    }
 
                     return `
                         <div class="upload-row warranty-section">
@@ -2032,7 +2173,10 @@
                                     <div class="helper-note"><i class="fas fa-info-circle"></i><span>Remarks come from the items selected in the Materials step. Choose a preset in a row's Remarks box, then edit the text as needed.</span></div>
                                     <input type="hidden" id="complianceBrandId" name="compliance_brand_id" value="${escapeHtml(String(complianceBrandId || ''))}">
                                     <input type="hidden" id="complianceRowsJson" name="compliance_rows_json" value="">
+                                    <input type="hidden" id="complianceRowsByBrandJson" name="compliance_rows_by_brand_json" value="">
                                 </div>
+
+                                <div id="complianceBrandTabs"></div>
 
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-sm" style="font-size:0.82rem;">
@@ -2052,6 +2196,25 @@
                                 <button type="button" id="btnAddComplianceRow" class="btn-add-custom" style="font-size:0.8rem;padding:0.45rem 1rem;">
                                     <i class="fas fa-plus"></i> Add Row
                                 </button>
+                            </div>
+                        </div>`;
+                }
+
+                // ── Project Specification section ──
+                if (isProjectSpec(it.label)) {
+                    const specPages = existingUploadPages[safeKey] || '';
+                    const specPagesName = `section_upload_pages__${safeKey}`;
+                    return `
+                        <div class="upload-row">
+                            <label><i class="fas fa-file-pdf"></i> ${escapeHtml(it.label)}</label>
+                            <input type="file" name="${escapeHtml(fieldName)}" class="form-control form-control-sm" accept=".pdf,.doc,.docx">
+                            ${existing
+                                ? `<div class="existing-file"><i class="fas fa-paperclip"></i> Currently: ${escapeHtml(existing)}</div>`
+                                : '<div class="helper-note"><i class="fas fa-info-circle"></i><span>Upload the project specification PDF (leave empty to skip)</span></div>'}
+                            <div class="mt-2" style="max-width:320px;">
+                                <span class="field-label" style="font-size:0.78rem;">Pages to include <span style="font-weight:400;color:var(--text-muted);">(optional)</span></span>
+                                <input type="text" name="${escapeHtml(specPagesName)}" class="form-control form-control-sm" placeholder="e.g. 2 or 1,3-5" value="${escapeHtml(specPages)}">
+                                <div class="helper-note mt-1"><i class="fas fa-info-circle"></i><span>Only these pages from the uploaded PDF are used. Leave empty to include all pages.</span></div>
                             </div>
                         </div>`;
                 }
@@ -2086,6 +2249,7 @@
             const brandsWithFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
 
             function toggleAreas() {
+                if (!brandSelect) return;  // several brands: per-brand blocks, nothing to toggle
                 const brandId = brandSelect?.value ? parseInt(brandSelect.value, 10) : null;
                 const hasFormat = brandId && brandsWithFormat.includes(brandId);
                 if (uploadArea) uploadArea.style.display = hasFormat ? 'none' : 'block';
@@ -2237,15 +2401,33 @@
         // ── Material search ──
         const searchInput = document.getElementById('materialSearchInput');
         const resultsDiv = document.getElementById('materialResults');
-        const brandSelect = document.getElementById('id_brand');
+        const brandBoxes = Array.from(document.querySelectorAll('#brandMultiPanel input[name="brand"]'));
+        const brandMultiBtn = document.getElementById('brandMultiBtn');
+        const brandMultiPanel = document.getElementById('brandMultiPanel');
+        const brandMultiText = document.getElementById('brandMultiText');
         const materialBrandHint = document.getElementById('materialBrandHint');
         let searchTimeout;
 
-        function getSelectedBrand() {
-            if (!brandSelect || !brandSelect.value) return null;
-            const opt = brandSelect.options[brandSelect.selectedIndex];
-            return { id: brandSelect.value, name: opt ? opt.text.trim() : '' };
+        // Brands ticked on the Title page, in list order.
+        function getSelectedBrands() {
+            return brandBoxes.filter(b => b.checked).map(b => ({ id: b.value, name: b.dataset.name || '' }));
         }
+        // Combined form used by the material search: comma-separated ids and joined names.
+        function getSelectedBrand() {
+            const list = getSelectedBrands();
+            return list.length ? { id: list.map(b => b.id).join(','), name: list.map(b => b.name).join(', ') } : null;
+        }
+        function updateBrandMultiText() {
+            const names = getSelectedBrands().map(b => b.name);
+            if (brandMultiText) brandMultiText.textContent = names.length ? names.join(', ') : '— Select Brand(s) —';
+        }
+        brandMultiBtn?.addEventListener('click', e => {
+            e.stopPropagation();
+            brandMultiPanel?.classList.toggle('show');
+        });
+        brandMultiPanel?.addEventListener('click', e => e.stopPropagation());
+        document.addEventListener('click', () => brandMultiPanel?.classList.remove('show'));
+        updateBrandMultiText();
 
         // Reflect the title-page brand on the Materials step and gate the search.
         function updateMaterialBrandHint() {
@@ -2267,10 +2449,11 @@
         updateMaterialBrandHint();
 
         // Refresh when the brand changes on the title page.
-        brandSelect?.addEventListener('change', () => {
+        brandBoxes.forEach(box => box.addEventListener('change', () => {
             clearTimeout(searchTimeout);
             searchInput.value = '';
             resultsDiv.classList.remove('show');
+            updateBrandMultiText();
             updateMaterialBrandHint();
 
             // Follow the title-page brand into the Warranty Draft Letter's
@@ -2278,15 +2461,39 @@
             // there themselves. Only patches the live select if the
             // Documents step has already been rendered; otherwise the value
             // is simply picked up the next time buildDynamicUploads() runs.
-            if (!warrantyBrandTouched) {
-                currentWarrantyBrandId = brandSelect.value || '';
-                const warrantySelect = document.getElementById('warrantyBrandSelect');
-                if (warrantySelect && warrantySelect.value !== currentWarrantyBrandId) {
-                    warrantySelect.value = currentWarrantyBrandId;
-                    warrantyToggleAreasFn?.();
-                }
+            refreshWarrantyBrandOptions();
+        }));
+
+        // The warranty brand can only be one of the brands selected on the Title page.
+        function warrantyBrandChoices() {
+            const ids = new Set(getSelectedBrands().map(b => String(b.id)));
+            if (currentWarrantyBrandId) ids.add(String(currentWarrantyBrandId));
+            return ids.size ? BRANDS_LIST.filter(b => ids.has(String(b.pk))) : BRANDS_LIST;
+        }
+        // Rebuild the live warranty Brand dropdown when the title-page brands change.
+        // Follows the first selected brand until the user picks one there themselves.
+        function refreshWarrantyBrandOptions() {
+            const sel = document.getElementById('warrantyBrandSelect');
+            const first = getSelectedBrands()[0];
+            if (!sel) {
+                if (!warrantyBrandTouched) currentWarrantyBrandId = first ? first.id : '';
+                return;
             }
-        });
+            const withFormat = WARRANTY_BRANDS_WITH_FORMAT || [];
+            const chosen = new Set(getSelectedBrands().map(b => String(b.id)));
+            const list = chosen.size ? BRANDS_LIST.filter(b => chosen.has(String(b.pk))) : BRANDS_LIST;
+            const previous = sel.value;
+            sel.innerHTML = '<option value="">— Upload PDF instead —</option>' + list.map(b =>
+                `<option value="${b.pk}">${escapeHtml(b.name)}${withFormat.includes(b.pk) ? ' ✦ generated' : ''}</option>`).join('');
+            if (warrantyBrandTouched && chosen.has(String(previous))) {
+                sel.value = previous;
+            } else {
+                warrantyBrandTouched = false;
+                sel.value = first ? String(first.id) : '';
+            }
+            currentWarrantyBrandId = sel.value || '';
+            warrantyToggleAreasFn?.();
+        }
 
         searchInput.addEventListener('input', () => {
             clearTimeout(searchTimeout);
