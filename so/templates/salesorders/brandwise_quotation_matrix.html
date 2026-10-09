@@ -10,6 +10,17 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    .src-badges { margin-top: 3px; display: flex; gap: 4px; }
+    .src-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .src-sap { background: #dbeafe; color: #1d4ed8; }
+    .src-app { background: #dcfce7; color: #15803d; }
     :root {
       --bg: #f8fafc;
       --surface: #ffffff;
@@ -656,6 +667,23 @@
                 </div>
               </div>
             </div>
+          </div>
+          <div class="field">
+            <label>Source</label>
+            <select name="source" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit; background: #fff;">
+              <option value="" {% if not filters.source %}selected{% endif %}>All (SAP + App)</option>
+              <option value="sap" {% if filters.source == 'sap' %}selected{% endif %}>SAP</option>
+              <option value="app" {% if filters.source == 'app' %}selected{% endif %}>App</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select name="status" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit; background: #fff;">
+              <option value="">All Statuses</option>
+              {% for st in status_options %}
+              <option value="{{ st }}" {% if st in filters.status %}selected{% endif %}>{{ st }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="field">
             <label>Start Date</label>

@@ -20,6 +20,10 @@
   <tr>
     <td class="sticky-col" style="left: 0;">
       <div class="item-code">{{ item.item_code|default:"—" }}</div>
+      <div class="src-badges">
+        {% if item.has_sap %}<span class="src-badge src-sap" title="Quoted in SAP">SAP</span>{% endif %}
+        {% if item.has_app %}<span class="src-badge src-app" title="Quoted in the app">App</span>{% endif %}
+      </div>
     </td>
     <td class="sticky-col item-description" style="left: 150px;">{{ item.item_description|default:"Unknown" }}</td>
     <td class="sticky-col" style="left: 350px;">{{ item.brand|default:"-" }}</td>
