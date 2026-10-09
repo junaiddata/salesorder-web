@@ -677,6 +677,14 @@
             </select>
           </div>
           <div class="field">
+            <label>Division</label>
+            <select name="division" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit; background: #fff;">
+              <option value="" {% if not filters.division %}selected{% endif %}>Excluding Alabama</option>
+              <option value="alabama" {% if filters.division == 'alabama' %}selected{% endif %}>Alabama only</option>
+              <option value="all" {% if filters.division == 'all' %}selected{% endif %}>All divisions</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Status</label>
             <select name="status" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit; background: #fff;">
               <option value="">All Statuses</option>
@@ -699,6 +707,14 @@
           </div>
         </div>
       </form>
+    </div>
+
+    <div class="card" style="padding: 12px 20px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; font-size: 0.875rem;">
+      <strong>Alabama division{% if not filters.division %} (not included in the table below){% endif %}:</strong>
+      {% for a in alabama_list %}
+        <span><span style="color: var(--text-secondary);">{{ a.year }}</span> &nbsp;{{ a.count }} quotation{{ a.count|pluralize }} &middot; {{ a.value|floatformat:2 }}</span>
+      {% endfor %}
+      <span style="margin-left: auto;"><strong>Total: {{ alabama_total_count }}</strong></span>
     </div>
 
     <div class="table-card">

@@ -128,15 +128,27 @@ def brandwise_quotation_matrix(request):
         qs = qs.filter(status_q)
         app_qs = app_qs.filter(status_q)
 
+    # Alabama division (app quotations only -- SAP quotations carry no division). By default it
+    # is left out of the grid and counted separately; "Alabama only" / "All divisions" bring it in.
+    division = request.GET.get('division', '').strip().lower()
+    if division not in ('alabama', 'all'):
+        division = ''
+    alabama_qs = app_qs.filter(division='ALABAMA') if include_app else Quotation.objects.none()
+    if division == '':
+        app_qs = app_qs.exclude(division='ALABAMA')
+    elif division == 'alabama':
+        app_qs = app_qs.filter(division='ALABAMA')
+        include_sap = False
+
     if not include_sap:
         qs = qs.none()
     if not include_app:
         app_qs = app_qs.none()
 
     quotes = qs.prefetch_related('items')
-    app_quotes = app_qs.prefetch_related(
-        Prefetch('items', queryset=QuotationItem.objects.select_related('item'))
-    )
+    app_prefetch = Prefetch('items', queryset=QuotationItem.objects.select_related('item'))
+    app_quotes = app_qs.prefetch_related(app_prefetch)
+    alabama_quotes = alabama_qs.prefetch_related(app_prefetch)
     all_item_codes = {
         str(item.item_no).strip()
         for quote in quotes
@@ -145,7 +157,7 @@ def brandwise_quotation_matrix(request):
     }
     all_item_codes |= {
         qi.item.item_code
-        for quote in app_quotes
+        for quote in list(app_quotes) + list(alabama_quotes)
         for qi in quote.items.all()
         if qi.item_id and qi.item.item_code
     }
@@ -256,6 +268,34 @@ def brandwise_quotation_matrix(request):
             lines.append((str(qi.item.item_code or '').strip(), qi.item.item_description, qty, row_total))
         process_quote(quote.quotation_date, quote.quotation_number, '', lines, 'App')
 
+    # Separate Alabama count: same filters (dates, salesman, status, brand, search) as the grid,
+    # tallied per year on its own so it never mixes with the main figures.
+    alabama_by_year = {year: {'numbers': set(), 'value': Decimal('0')} for year in years}
+    for quote in alabama_quotes:
+        if not quote.quotation_date or quote.quotation_date.year not in alabama_by_year:
+            continue
+        acc = alabama_by_year[quote.quotation_date.year]
+        for qi in quote.items.all():
+            if not qi.item_id:
+                continue
+            code = str(qi.item.item_code or '').strip()
+            description = qi.item.item_description or ''
+            if not code:
+                continue
+            master = item_lookup.get(code) or {}
+            item_brand = str(master.get('item_firm') or '').strip()
+            if selected_brand_set and item_brand.lower() not in selected_brand_set:
+                continue
+            if search_lower and search_lower not in code.lower() and search_lower not in description.lower():
+                continue
+            qty = Decimal(str(qi.quantity or 0))
+            acc['value'] += Decimal(str(qi.line_total)) if qi.line_total else (qty * Decimal(str(qi.price or 0)))
+            acc['numbers'].add(quote.quotation_number)
+    alabama_list = [
+        {'year': year, 'count': len(alabama_by_year[year]['numbers']), 'value': alabama_by_year[year]['value']}
+        for year in years
+    ]
+
     def finish(totals):
         # "total_sales" is the quoted value (name kept for the shared table keys).
         return {
@@ -357,6 +397,8 @@ def brandwise_quotation_matrix(request):
         'salesmen': salesmen,
         'firms': firms,
         'status_options': status_options,
+        'alabama_list': alabama_list,
+        'alabama_total_count': sum(a['count'] for a in alabama_list),
         'totals_list': totals_list,
         'stock_total': stock_total,
         'item_price_total': item_price_total,
@@ -369,6 +411,7 @@ def brandwise_quotation_matrix(request):
             'end': end_raw,
             'source': source,
             'status': selected_statuses,
+            'division': division,
         },
     }
     return render(request, 'salesorders/brandwise_quotation_matrix.html', context)
