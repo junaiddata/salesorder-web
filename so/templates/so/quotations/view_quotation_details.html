@@ -513,6 +513,43 @@
             }
         }
 
+        /* "Choose another item" -- search box under a group's suggestions. */
+        .sub-other { margin-top: 8px; }
+        .sub-other-panel { margin-top: 8px; }
+        .sub-other-q {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 13px;
+            border: 1px solid var(--sap-gray-400, #c9ccce);
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .sub-other-results {
+            margin-top: 6px;
+            background: #fff;
+            border: 1px solid var(--sap-gray-300, #d9d9d9);
+            border-radius: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .sub-other-results:empty { display: none; }
+        .sub-other-hit {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: 0;
+            border-top: 1px solid var(--sap-gray-200, #eaecee);
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12.5px;
+            color: var(--sap-gray-900, #32363a);
+        }
+        .sub-other-hit:first-child { border-top: 0; }
+        .sub-other-hit:hover { background: #fafbff; }
+        .sub-other-hit small { display: block; color: var(--sap-gray-500, #6a6d70); font-size: 11px; }
+        .sub-other-note { padding: 8px 12px; font-size: 12px; color: var(--sap-gray-500, #6a6d70); }
+
         /* SAP-style Cards */
         .sap-card {
             background-color: white;
@@ -1073,6 +1110,23 @@
                                     {% endif %}
                                 </div>
                                 {% endfor %}
+                            </div>
+
+                            {# None of the suggestions wanted -- search the item master and pick any item. #}
+                            <div class="sub-other" data-search-url="{% url 'items_search' %}">
+                                <button type="button" class="sub-btn sub-btn-quiet sub-other-toggle">
+                                    <i class="fas fa-search"></i>Choose another item
+                                </button>
+                                <div class="sub-other-panel" hidden>
+                                    <input type="text" class="sub-other-q" placeholder="Search item code or description..." autocomplete="off">
+                                    <div class="sub-other-results"></div>
+                                    <form method="post" class="sub-other-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="add_chosen_item">
+                                        <input type="hidden" name="enquiry_item_id" value="{{ group.enquiry_item_id }}">
+                                        <input type="hidden" name="item_id" value="">
+                                    </form>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -1870,10 +1924,75 @@
         
         // Auto-refresh if quotation is pending (every 30 seconds)
     </script>
+    <script>
+        // "Choose another item": live search of the item master, then post the pick.
+        (function () {
+            document.querySelectorAll('.sub-other').forEach(function (box) {
+                var toggle = box.querySelector('.sub-other-toggle');
+                var panel = box.querySelector('.sub-other-panel');
+                var input = box.querySelector('.sub-other-q');
+                var results = box.querySelector('.sub-other-results');
+                var form = box.querySelector('.sub-other-form');
+                var timer = null;
+
+                function note(text) {
+                    results.textContent = '';
+                    var d = document.createElement('div');
+                    d.className = 'sub-other-note';
+                    d.textContent = text;
+                    results.appendChild(d);
+                }
+
+                function search() {
+                    var q = input.value.trim();
+                    if (q.length < 2) { results.textContent = ''; return; }
+                    fetch(box.dataset.searchUrl + '?q=' + encodeURIComponent(q), {credentials: 'same-origin'})
+                        .then(function (r) { return r.json(); })
+                        .then(function (items) {
+                            if (input.value.trim() !== q) { return; }
+                            if (!items.length) { note('No items found.'); return; }
+                            results.textContent = '';
+                            items.forEach(function (it) {
+                                var b = document.createElement('button');
+                                b.type = 'button';
+                                b.className = 'sub-other-hit';
+                                b.appendChild(document.createTextNode(it.item_description || ''));
+                                var s = document.createElement('small');
+                                s.textContent = (it.item_code || '') + (it.item_firm ? ' · ' + it.item_firm : '') +
+                                    ' · stock ' + (it.item_stock === null || it.item_stock === undefined ? '-' : it.item_stock);
+                                b.appendChild(s);
+                                b.addEventListener('click', function () {
+                                    if (!confirm('Add ' + it.item_code + ' to this quotation for this line?')) { return; }
+                                    form.querySelector('[name=item_id]').value = it.id;
+                                    form.submit();
+                                });
+                                results.appendChild(b);
+                            });
+                        })
+                        .catch(function () { note('Search failed. Please try again.'); });
+                }
+
+                toggle.addEventListener('click', function () {
+                    panel.hidden = !panel.hidden;
+                    if (!panel.hidden) { input.focus(); }
+                });
+                input.addEventListener('input', function () {
+                    clearTimeout(timer);
+                    timer = setTimeout(search, 250);
+                });
+                input.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') { e.preventDefault(); }
+                });
+            });
+        })();
+    </script>
     {% if quotation.status == 'Pending' %}
     <script>
         setTimeout(function() {
-            window.location.reload();
+            // Don't wipe a search the reviewer has open.
+            var open = Array.prototype.some.call(
+                document.querySelectorAll('.sub-other-panel'), function (p) { return !p.hidden; });
+            if (!open) { window.location.reload(); }
         }, 30000);
     </script>
     {% endif %}

@@ -54,6 +54,22 @@ def _remap_q(q, old, new):
     return out
 
 
+def _to_quoted_total(lines, header_total):
+    """Scales the line values of ONE quotation so they add up to what was actually quoted
+    (the header total after any discount -- the figure the combined quotations page uses).
+    `lines` is [(code, description, qty, row_total), ...]; every line of the quotation must be
+    passed, even ones the page later skips, so the share is worked out against the whole
+    quotation. Each line keeps its proportion of the line sum. When the header total is
+    missing, or the lines sum to zero, the lines are returned unchanged."""
+    if header_total is None:
+        return lines
+    line_sum = sum((row_total for _, _, _, row_total in lines), Decimal('0'))
+    if not line_sum:
+        return lines
+    factor = Decimal(str(header_total)) / line_sum
+    return [(code, desc, qty, row_total * factor) for code, desc, qty, row_total in lines]
+
+
 def _status_q(statuses):
     """OR of case-insensitive exact matches on `status`, or None when nothing is selected."""
     q = Q()
@@ -245,6 +261,7 @@ def brandwise_quotation_matrix(request):
             qty = Decimal(str(item.quantity or 0))
             row_total = item.row_total if item.row_total is not None else (qty * Decimal(str(item.price or 0)))
             lines.append((code, item.description, qty, row_total))
+        lines = _to_quoted_total(lines, quote.document_total)
         process_quote(quote.posting_date, quote.q_number, quote.brand, lines, 'SAP')
 
     for quote in app_quotes:
@@ -252,11 +269,13 @@ def brandwise_quotation_matrix(request):
             continue
         lines = []
         for qi in quote.items.all():
-            if not qi.item_id:
-                continue
             qty = Decimal(str(qi.quantity or 0))
             row_total = Decimal(str(qi.line_total)) if qi.line_total else (qty * Decimal(str(qi.price or 0)))
-            lines.append((str(qi.item.item_code or '').strip(), qi.item.item_description, qty, row_total))
+            # A line with no catalog item has no code, so process_quote skips it -- but it still
+            # takes its share of the quotation total.
+            code = str(qi.item.item_code or '').strip() if qi.item_id else ''
+            lines.append((code, qi.item.item_description if qi.item_id else '', qty, row_total))
+        lines = _to_quoted_total(lines, quote.grand_total)
         process_quote(quote.quotation_date, quote.quotation_number, '', lines, 'App')
 
     def finish(totals):
