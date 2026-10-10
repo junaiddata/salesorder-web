@@ -1694,6 +1694,112 @@ def _add_suggested_item(request, quotation):
     )
 
 
+def _add_chosen_item(request, quotation):
+    """Puts an item the reviewer picked themselves (via "Choose another item")
+    onto `quotation` as the answer to an unquoted requirement line, when none of
+    the agent's suggested substitutes was wanted.
+
+    Same guarantees as _add_suggested_item, which this deliberately mirrors
+    without touching: the posted enquiry line must belong to this quotation's
+    own enquiry (and scope) and still be unquoted, the item must exist, and the
+    quantity is recomputed against the chosen item. The note carries the same
+    SUBSTITUTE_ACCEPTED_NOTE_PREFIX marker so Send Quotation discloses the
+    substitution to the client exactly as it does for an accepted suggestion."""
+    from emailagent.models import EnquiryItem
+    from emailagent.quotation_agent import (
+        SUBSTITUTE_ACCEPTED_NOTE_PREFIX, _resolve_quantity, build_match_notes,
+    )
+
+    draft = _agent_draft_for_quotation(quotation)
+    source_email = getattr(draft, 'tracked_email', None)
+    if not source_email:
+        messages.error(request, 'This quotation was not auto-drafted from an RFQ email, so there is nothing to add.')
+        return
+
+    try:
+        enquiry_item_id = int(request.POST.get('enquiry_item_id') or 0)
+        item_id = int(request.POST.get('item_id') or 0)
+    except (TypeError, ValueError):
+        enquiry_item_id = item_id = 0
+
+    enquiry_item = EnquiryItem.objects.filter(
+        id=enquiry_item_id, tracked_email=source_email,
+    ).select_related('matched_item').first()
+    if not enquiry_item:
+        messages.error(request, 'That requirement line does not belong to this quotation.')
+        return
+
+    scope = getattr(draft, 'source_attachment', None)
+    if scope is not None and (enquiry_item.source_attachment or '') != (scope or ''):
+        messages.error(request, 'That requirement line belongs to a different quotation for this enquiry.')
+        return
+
+    if enquiry_item.matched_item_id:
+        messages.info(
+            request,
+            f'"{enquiry_item.description[:60]}" is already quoted as '
+            f'{enquiry_item.matched_item.item_code} -- use Edit to change it.',
+        )
+        return
+
+    chosen = Items.objects.filter(pk=item_id).first()
+    if not chosen:
+        messages.error(request, 'The item you chose could not be found.')
+        return
+
+    quantity, quantity_note = _resolve_quantity(
+        enquiry_item.quantity, enquiry_item.unit, chosen,
+    )
+    price = chosen.item_price or 0.0
+    unit = enquiry_item.matched_unit if enquiry_item.matched_unit in ('pcs', 'ctn', 'roll') else 'pcs'
+
+    with transaction.atomic():
+        QuotationItem.objects.create(
+            quotation=quotation,
+            item=chosen,
+            quantity=quantity,
+            unit=unit,
+            price=price,
+            line_total=quantity * price,
+        )
+
+        enquiry_item.matched_item = chosen
+        enquiry_item.matched_price = price
+        enquiry_item.matched_quantity = quantity
+        enquiry_item.matched_unit = unit
+        enquiry_item.match_notes = build_match_notes(
+            enquiry_item.match_notes,
+            f"{SUBSTITUTE_ACCEPTED_NOTE_PREFIX}: {chosen.item_code} (chosen by reviewer instead of the suggestions)",
+            quantity_note,
+        )
+        enquiry_item.save(update_fields=[
+            'matched_item', 'matched_price', 'matched_quantity', 'matched_unit', 'match_notes',
+        ])
+
+        total = sum(qi.quantity * qi.price for qi in quotation.items.all())
+        quotation.total_amount = total
+        quotation.grand_total = total - (quotation.discount_amount or 0.0)
+        update_fields = ['total_amount', 'grand_total']
+
+        if quotation.status == 'Approved':
+            quotation.status = 'Pending'
+            update_fields.append('status')
+        quotation.save(update_fields=update_fields)
+
+        QuotationLog.objects.create(
+            quotation=quotation,
+            user=request.user if request.user.is_authenticated else None,
+            action='updated',
+        )
+
+    messages.success(
+        request,
+        f'Added {chosen.item_code} -- {chosen.item_description} '
+        f'({quantity} {unit} @ {price:.2f}) for "{enquiry_item.description[:60]}".'
+        + (f' {quantity_note}' if quantity_note else ''),
+    )
+
+
 def _attach_previous_prices(quotation, quotation_items):
     """Set item.previous_price / previous_price_source / previous_price_date on
     each line: the unit price on this customer's most recent SAP AR invoice
@@ -1894,6 +2000,11 @@ def view_quotation_details(request, quotation_id):
             # left unquoted -- the only way one of those ever reaches a
             # quotation.
             _add_suggested_item(request, quotation)
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
+        elif action == 'add_chosen_item':
+            # Reviewer rejected the agent's suggestions and picked their own item.
+            _add_chosen_item(request, quotation)
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
         elif action == 'update_license_name':
