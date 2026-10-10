@@ -725,6 +725,13 @@
                 <div class="search-box-container">
                   <input type="text" id="firm-search" class="search-box" placeholder="Search brands..." autocomplete="off">
                 </div>
+                <div id="firm-select-all-row" style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-right:12px;">
+                  <label class="option-label" style="font-weight:600; flex:1;">
+                    <input type="checkbox" id="firm-select-all">
+                    <span class="option-text">Select All</span>
+                  </label>
+                  <button type="button" id="firm-clear-all" style="background:none; border:none; color:var(--primary, #2563eb); font-size:0.8125rem; font-weight:600; cursor:pointer; padding:4px 0;">Clear All</button>
+                </div>
                 <div class="options-list" id="firm-options-list">
                   {% for firm in firms %}
                     <label class="option-label" data-value="{{ firm }}">
@@ -764,6 +771,12 @@
           <div class="field">
             <label>End Date</label>
             <input type="date" name="end" id="end-date" value="{{ filters.end }}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.875rem; font-family: inherit;">
+          </div>
+          <div class="field" style="align-self:end;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:10px 0; font-size:0.875rem;">
+              <input type="checkbox" name="hide_zero" value="1" {% if filters.hide_zero %}checked{% endif %}>
+              <span>Exclude 0-sales items</span>
+            </label>
           </div>
           <div class="field" style="display: flex; gap: 8px; align-self:end;">
             <button class="btn btn-secondary" type="button" id="clear-filters">Clear</button>
@@ -1079,11 +1092,38 @@
         }
       }
 
+      // "Select All" -- ticks every brand currently visible (so with a search
+      // typed it selects only the matches); unticking clears those same ones.
+      const firmSelectAll = document.getElementById('firm-select-all');
+      const getVisibleFirmCheckboxes = () => Array.from(getFirmLabels())
+        .filter(l => !l.classList.contains('hidden'))
+        .map(l => l.querySelector('input[type="checkbox"]'))
+        .filter(Boolean);
+
+      function syncFirmSelectAll() {
+        const visible = getVisibleFirmCheckboxes();
+        firmSelectAll.checked = visible.length > 0 && visible.every(c => c.checked);
+      }
+
+      firmSelectAll.addEventListener('change', function() {
+        const state = this.checked;
+        getVisibleFirmCheckboxes().forEach(c => { c.checked = state; });
+        updateFirmLabel();
+      });
+      document.getElementById('firm-clear-all').addEventListener('click', function() {
+        getFirmCheckboxes().forEach(c => { c.checked = false; });
+        firmSelectAll.checked = false;
+        updateFirmLabel();
+      });
+      firmSearch.addEventListener('input', syncFirmSelectAll);
+
       updateFirmLabel();
+      syncFirmSelectAll();
 
       getFirmCheckboxes().forEach(box => {
         box.addEventListener('change', function() {
           updateFirmLabel();
+          syncFirmSelectAll();
         });
       });
 

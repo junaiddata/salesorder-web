@@ -60,6 +60,7 @@ def customer_analysis(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
     category_filter = request.GET.get('category', 'All').strip()  # Business category filter
+    hide_zero_sales = request.GET.get('hide_zero') == '1'  # Exclude rows with 0 total sales
     
     # Get base querysets with salesman scope
     invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -475,10 +476,17 @@ def customer_analysis(request):
     
     # Filter out customers without customer_code (double check)
     customers_list = [cust for cust in customers_list if cust['customer_code'] and cust['customer_code'].strip()]
-    
+
+    # Optional: hide rows whose total sales (all years shown) is 0
+    if hide_zero_sales:
+        customers_list = [
+            cust for cust in customers_list
+            if sum(y['total_sales'] for y in cust['years_data'].values()) != 0
+        ]
+
     # Sort by total sales across all years (descending)
     customers_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
-    
+
     # Calculate totals for each year BEFORE pagination (from all customers)
     year_totals = {}
     for year in years:
@@ -608,9 +616,10 @@ def customer_analysis(request):
             'start': start_date,
             'end': end_date,
             'category': category_filter,
+            'hide_zero': hide_zero_sales,
         },
     }
-    
+
     return render(request, 'salesorders/customer_analysis.html', context)
 
 

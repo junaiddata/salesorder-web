@@ -57,6 +57,9 @@
     .salesman-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; cursor: pointer; }
     .salesman-dropdown label:hover { background: var(--border-light); }
     .salesman-dropdown input { width: 16px; height: 16px; accent-color: var(--primary); }
+    .salesman-dropdown input.salesman-search { position: sticky; top: 0; z-index: 1; width: 100%; height: auto; box-sizing: border-box; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; font-family: inherit; background: var(--surface); color: inherit; }
+    .salesman-dropdown input.salesman-search:focus { outline: none; border-color: var(--primary); }
+    .salesman-dropdown label.salesman-hidden { display: none; }
 
     /* Multi-select (brand) — same design as Item Quoted Analysis */
     .multi-select { position: relative; width: 320px; min-width: 220px; }
@@ -191,20 +194,22 @@
         <div class="field salesman-box">
           <label>Salesman</label>
           <button type="button" class="btn salesman-toggle" id="salesman-toggle">
-            <span>
-              {% if selected_salesmen %}{{ selected_salesmen|length }} selected{% else %}All salesmen{% endif %}
+            <span id="salesman-display" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              {% if selected_salesmen %}{{ selected_salesmen.0 }}{% if selected_salesmen|length > 1 %} +{{ selected_salesmen|length|add:"-1" }} more{% endif %}{% else %}All salesmen{% endif %}
             </span>
             <i class="fas fa-chevron-down"></i>
           </button>
           <div class="salesman-dropdown" id="salesman-dropdown">
+            <input type="text" id="salesman-search" class="salesman-search" placeholder="Search salesmen..." autocomplete="off">
             {% for sm in salesmen %}
-            <label>
+            <label class="salesman-option">
               <input type="checkbox" name="salesman" value="{{ sm }}" {% if sm in selected_salesmen %}checked{% endif %}>
               <span>{{ sm }}</span>
             </label>
             {% empty %}
             <div style="padding:8px;color:var(--text-muted);font-size:0.85rem;">No salesmen</div>
             {% endfor %}
+            <div id="salesman-no-results" style="display:none; padding:8px; color:var(--text-muted); font-size:0.85rem;">No matching salesmen</div>
           </div>
         </div>
 
@@ -245,6 +250,14 @@
         <div class="field">
           <label for="q">Item Search</label>
           <input type="text" name="q" id="q" value="{{ search_query }}" placeholder="Code / description / UPC" class="text-input">
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:500;height:38px;">
+            <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} style="width:16px;height:16px;accent-color:var(--primary);">
+            <span>Exclude 0-sales items</span>
+          </label>
         </div>
 
         <div class="field">
@@ -388,12 +401,53 @@
       var toggle = document.getElementById('salesman-toggle');
       var dropdown = document.getElementById('salesman-dropdown');
       if (!toggle || !dropdown) return;
+      var search = document.getElementById('salesman-search');
+      var display = document.getElementById('salesman-display');
+      var noResults = document.getElementById('salesman-no-results');
+
+      function resetSearch() {
+        if (!search) return;
+        search.value = '';
+        dropdown.querySelectorAll('label.salesman-option').forEach(function (l) { l.classList.remove('salesman-hidden'); });
+        if (noResults) noResults.style.display = 'none';
+      }
+
       toggle.addEventListener('click', function (e) {
         e.stopPropagation();
         dropdown.classList.toggle('open');
+        if (dropdown.classList.contains('open')) {
+          if (search) setTimeout(function () { search.focus(); }, 50);
+        } else {
+          resetSearch();
+        }
       });
       dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
-      document.addEventListener('click', function () { dropdown.classList.remove('open'); });
+      document.addEventListener('click', function () {
+        if (dropdown.classList.contains('open')) { dropdown.classList.remove('open'); resetSearch(); }
+      });
+
+      // Search by salesman name
+      if (search) {
+        search.addEventListener('input', function () {
+          var term = this.value.toLowerCase().trim();
+          var shown = 0;
+          dropdown.querySelectorAll('label.salesman-option').forEach(function (l) {
+            var match = !term || l.textContent.toLowerCase().indexOf(term) !== -1;
+            l.classList.toggle('salesman-hidden', !match);
+            if (match) shown++;
+          });
+          if (noResults) noResults.style.display = shown ? 'none' : 'block';
+        });
+      }
+
+      // Button text: the selected name (and "+N more"), not "N selected"
+      dropdown.addEventListener('change', function () {
+        var checked = Array.from(dropdown.querySelectorAll('input[name="salesman"]:checked'));
+        if (!display) return;
+        if (checked.length === 0) display.textContent = 'All salesmen';
+        else if (checked.length === 1) display.textContent = checked[0].value;
+        else display.textContent = checked[0].value + ' +' + (checked.length - 1) + ' more';
+      });
     })();
 
     // Month multi-select dropdown

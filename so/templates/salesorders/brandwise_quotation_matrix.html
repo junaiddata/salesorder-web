@@ -657,6 +657,13 @@
                 <div class="search-box-container">
                   <input type="text" id="firm-search" class="search-box" placeholder="Search brands..." autocomplete="off">
                 </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-right:12px;">
+                  <label class="option-label" style="font-weight:600; flex:1;">
+                    <input type="checkbox" id="firm-select-all">
+                    <span class="option-text">Select All</span>
+                  </label>
+                  <button type="button" id="firm-clear-all" style="background:none; border:none; color:var(--primary, #2563eb); font-size:0.8125rem; font-weight:600; cursor:pointer; padding:4px 0;">Clear All</button>
+                </div>
                 <div class="options-list" id="firm-options-list">
                   {% for firm in firms %}
                     <label class="option-label" data-value="{{ firm }}">
@@ -931,11 +938,39 @@
         }
       }
 
+      // "Select All" ticks every brand currently visible (only the matches when
+      // a search is typed); "Clear All" unticks every brand.
+      const firmSelectAll = document.getElementById('firm-select-all');
+      const firmClearAll = document.getElementById('firm-clear-all');
+      const getVisibleFirmCheckboxes = () => Array.from(getFirmLabels())
+        .filter(l => !l.classList.contains('hidden'))
+        .map(l => l.querySelector('input[type="checkbox"]'))
+        .filter(Boolean);
+
+      function syncFirmSelectAll() {
+        const visible = getVisibleFirmCheckboxes();
+        firmSelectAll.checked = visible.length > 0 && visible.every(c => c.checked);
+      }
+
+      firmSelectAll.addEventListener('change', function() {
+        const state = this.checked;
+        getVisibleFirmCheckboxes().forEach(c => { c.checked = state; });
+        updateFirmLabel();
+      });
+      firmClearAll.addEventListener('click', function() {
+        getFirmCheckboxes().forEach(c => { c.checked = false; });
+        firmSelectAll.checked = false;
+        updateFirmLabel();
+      });
+      firmSearch.addEventListener('input', syncFirmSelectAll);
+
       updateFirmLabel();
+      syncFirmSelectAll();
 
       getFirmCheckboxes().forEach(box => {
         box.addEventListener('change', function() {
           updateFirmLabel();
+          syncFirmSelectAll();
         });
       });
 

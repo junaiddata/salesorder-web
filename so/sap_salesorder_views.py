@@ -8712,11 +8712,12 @@ def item_analysis(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
     category_filter = request.GET.get('category', 'All').strip()  # Business category filter
-    
+    hide_zero_sales = request.GET.get('hide_zero') == '1'  # Exclude items with 0 total sales
+
     # Get base querysets with salesman scope
     invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
     creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
-    
+
     # Apply category filter (applies before salesman filter)
     category_salesmen_for_tiles = []  # Salesmen in selected category - for Power BI-style tiles (only when category != All)
     if category_filter and category_filter != 'All':
@@ -9075,10 +9076,17 @@ def item_analysis(request):
     
     # Filter out items without item_code (double check)
     items_list = [item for item in items_list if item['item_code'] and item['item_code'].strip()]
-    
+
+    # Optional: hide items whose total sales (all years shown) is 0
+    if hide_zero_sales:
+        items_list = [
+            item for item in items_list
+            if sum(y['total_sales'] for y in item['years_data'].values()) != 0
+        ]
+
     # Sort by total sales across all years (descending)
     items_list.sort(key=lambda x: sum(y['total_sales'] for y in x['years_data'].values()), reverse=True)
-    
+
     # Calculate totals for each year BEFORE pagination (from all items)
     year_totals = {}
     for year in years:
@@ -9089,7 +9097,7 @@ def item_analysis(request):
             'total_avg_rate': Decimal('0'),
             'total_gp_percent': Decimal('0')
         }
-        
+
         # Sum up all items for this year
         for item in items_list:
             if year in item['years_data']:
@@ -9097,20 +9105,20 @@ def item_analysis(request):
                 year_totals[year]['total_sales'] += year_data['total_sales']
                 year_totals[year]['total_gp'] += year_data['total_gp']
                 year_totals[year]['total_quantity'] += year_data['total_quantity']
-        
+
         # Calculate average rate (total sales / total quantity)
         if year_totals[year]['total_quantity'] and year_totals[year]['total_quantity'] != 0:
             year_totals[year]['total_avg_rate'] = year_totals[year]['total_sales'] / year_totals[year]['total_quantity']
-        
+
         # Calculate GP% (total GP / total sales * 100)
         if year_totals[year]['total_sales'] and year_totals[year]['total_sales'] != 0:
             year_totals[year]['total_gp_percent'] = (year_totals[year]['total_gp'] / year_totals[year]['total_sales']) * 100
-    
+
     # Create totals list in year order
     totals_list = []
     for year in years:
         totals_list.append(year_totals[year])
-    
+
     # Restructure data for easier template access - convert years_data to list of tuples
     for item in items_list:
         # Create a list with year data in order
@@ -9249,9 +9257,10 @@ def item_analysis(request):
             'start': start_date,
             'end': end_date,
             'category': category_filter,
+            'hide_zero': hide_zero_sales,
         },
     }
-    
+
     return render(request, 'salesorders/item_analysis.html', context)
 
 

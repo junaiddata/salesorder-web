@@ -81,6 +81,7 @@ def _analysis_data(request):
         b.strip() for b in request.GET.getlist('brand') if b and b.strip()
     ))
     search_query = request.GET.get('q', '').strip()
+    hide_zero = request.GET.get('hide_zero') == '1'  # Exclude items whose net sales is 0
 
     is_admin = _user_is_admin(request.user)
 
@@ -190,7 +191,11 @@ def _analysis_data(request):
         # Per-brand summary + ranked item lists (columns follow selection order)
         ranked = {}
         for brand in selected_brands:
-            items = sorted(data.get(brand, {}).values(), key=lambda x: x['sales'], reverse=True)
+            brand_items = data.get(brand, {}).values()
+            if hide_zero:
+                # Drop 0-net-sales items before ranking so the list closes up
+                brand_items = [i for i in brand_items if i['sales'] != 0]
+            items = sorted(brand_items, key=lambda x: x['sales'], reverse=True)
             ranked[brand] = items
             sales = sum((i['sales'] for i in items), Decimal('0'))
             gp = sum((i['gp'] for i in items), Decimal('0'))
@@ -240,6 +245,7 @@ def _analysis_data(request):
         'brands': brands,
         'selected_brands': selected_brands,
         'search_query': search_query,
+        'hide_zero': hide_zero,
         'is_admin': is_admin,
         'brand_summaries': brand_summaries,
         'rank_rows': rank_rows,
