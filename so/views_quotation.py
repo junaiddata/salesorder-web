@@ -3216,7 +3216,7 @@ def generate_junaid_quotation(buffer, quotation):
     elements.append(Spacer(1, 0.2 * inch))
 
     # --- Items Table ---
-    items_header = ['#', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
+    items_header = ['#', 'Item Code', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
     items_data = [items_header]
     subtotal = 0.0
 
@@ -3232,8 +3232,13 @@ def generate_junaid_quotation(buffer, quotation):
         if upc_raw is None: upc_raw = ""
         upc_para = Paragraph(str(upc_raw), styles['ItemCode'])
 
+        code_raw = getattr(item.item, 'item_code', '')
+        if code_raw is None: code_raw = ""
+        code_para = Paragraph(str(code_raw), styles['ItemCode'])
+
         items_data.append([
             str(idx),
+            code_para,
             upc_para,
             description_para,
             f"{item.quantity} {item.unit}",
@@ -3245,11 +3250,12 @@ def generate_junaid_quotation(buffer, quotation):
         items_data,
         colWidths=[
             main_table_width * 0.05,
-            main_table_width * 0.15,
-            main_table_width * 0.43,
+            main_table_width * 0.12,
+            main_table_width * 0.13,
+            main_table_width * 0.36,
             main_table_width * 0.07,
-            main_table_width * 0.15,
-            main_table_width * 0.15
+            main_table_width * 0.14,
+            main_table_width * 0.13
         ],
         repeatRows=1
     )
@@ -3262,9 +3268,9 @@ def generate_junaid_quotation(buffer, quotation):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [ROW_BG_COLOR, white]),
-        ('ALIGN', (0, 1), (1, -1), 'CENTER'),
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),
-        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 1), (2, -1), 'CENTER'),
+        ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+        ('ALIGN', (5, 1), (-1, -1), 'RIGHT'),
     ]))
     
     elements.append(items_table)
@@ -3430,7 +3436,7 @@ def generate_alabama_quotation(buffer, quotation):
     elements.append(Spacer(1, 0.2 * inch))
 
     # --- Items Table ---
-    items_header = ['#', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
+    items_header = ['#', 'Item Code', 'UPC Code', 'Description', 'Qty', 'Unit Price', 'Total']
     items_data = [items_header]
     subtotal = 0.0
 
@@ -3449,8 +3455,13 @@ def generate_alabama_quotation(buffer, quotation):
         if upc_raw is None: upc_raw = ""
         upc_para = Paragraph(str(upc_raw), styles['ItemCode'])
 
+        code_raw = getattr(item.item, 'item_code', '')
+        if code_raw is None: code_raw = ""
+        code_para = Paragraph(str(code_raw), styles['ItemCode'])
+
         items_data.append([
             str(idx),
+            code_para,
             upc_para,
             description_para,
             f"{item.quantity} {item.unit}",
@@ -3462,11 +3473,12 @@ def generate_alabama_quotation(buffer, quotation):
         items_data,
         colWidths=[
             main_table_width * 0.05,
-            main_table_width * 0.15,
-            main_table_width * 0.43,
+            main_table_width * 0.12,
+            main_table_width * 0.13,
+            main_table_width * 0.36,
             main_table_width * 0.07,
-            main_table_width * 0.15,
-            main_table_width * 0.15
+            main_table_width * 0.14,
+            main_table_width * 0.13
         ],
         repeatRows=1
     )
@@ -3479,9 +3491,9 @@ def generate_alabama_quotation(buffer, quotation):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#808080')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [ROW_BG_COLOR, white]),
-        ('ALIGN', (0, 1), (1, -1), 'CENTER'),
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'),
-        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 1), (2, -1), 'CENTER'),
+        ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+        ('ALIGN', (5, 1), (-1, -1), 'RIGHT'),
         ('FONTSIZE', (0, 1), (-1, -1), 8),  # Set row content fontsize to 9
     ]))
     
