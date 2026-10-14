@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PO Updates {{ purchaseorder.po_number }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #2C5530;
+      --primary-dark: #1e3d21;
+      --primary-light: #e8f5e9;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+      --transition: 150ms ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .header-left h1 { font-size: 1.75rem; font-weight: 700; display: flex; align-items: center; gap: 12px; }
+    .header-left p { color: var(--text-secondary); font-size: 0.938rem; margin-top: 4px; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; transition: all var(--transition); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); border-color: var(--text-muted); }
+    .badge { display: inline-flex; padding: 4px 12px; font-size: 0.813rem; font-weight: 600; border-radius: 20px; }
+    .badge-open { background: var(--success-light); color: var(--success); }
+    .badge-closed { background: var(--surface-alt); color: var(--text-secondary); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); font-weight: 600; font-size: 1rem; }
+    .card-body { padding: 20px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
+    .info-label { font-size: 0.813rem; color: var(--text-muted); font-weight: 500; }
+    .info-value { font-size: 0.938rem; font-weight: 600; }
+    .totals-list { display: grid; gap: 10px; }
+    .totals-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+    .totals-label { font-size: 0.875rem; color: var(--text-secondary); font-weight: 700; }
+    .totals-value { font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .totals-row.grand { background: var(--primary-light); border-color: rgba(44, 85, 48, 0.2); }
+    .totals-row.grand .totals-value { color: var(--primary); }
+    .table-wrap { overflow-x: auto; }
+    thead th { padding: 12px 14px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: var(--surface-alt); border-bottom: 1px solid var(--border); text-align: left; }
+    tbody td { padding: 12px 14px; font-size: 0.875rem; border-bottom: 1px solid var(--border-light); }
+    tbody tr:hover { background: var(--surface-alt); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .item-badge { display: inline-flex; padding: 2px 8px; font-size: 0.688rem; font-weight: 600; border-radius: 12px; }
+    .item-badge-open { background: var(--success-light); color: var(--success); }
+    .item-badge-closed { background: var(--surface-alt); color: var(--text-muted); }
+    .footer-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    @media (min-width: 768px) {
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+    .input { padding: 9px 11px; font-size: 0.875rem; font-family: inherit; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); width: 100%; transition: border-color var(--transition), box-shadow var(--transition); }
+    .input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(44,85,48,0.12); }
+    .btn-sm { padding: 6px 12px; font-size: 0.78rem; border-radius: 6px; }
+    .btn-outline { background: var(--surface); color: var(--primary); border: 1px solid var(--primary); }
+    .btn-outline:hover { background: var(--primary-light); }
+    .btn-ghost { background: none; border: none; color: var(--primary); font-weight: 600; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; font-family: inherit; }
+    .btn-ghost:hover { background: var(--primary-light); }
+    .btn-ghost.danger { color: #dc3545; }
+    .btn-ghost.danger:hover { background: #fdecee; }
+    .msg { font-size: 0.78rem; min-height: 1.1em; }
+    .msg.err { color: #dc3545; } .msg.ok { color: var(--success); }
+    .row-actions { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+    .bal { font-weight: 700; }
+    .bal.ok { color: var(--success); } .bal.pending { color: #b45309; } .bal.neg { color: #dc3545; }
+    .hist-count-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--primary-light); color: var(--primary); font-size: 0.7rem; font-weight: 700; }
+    .modal.wide { max-width: 720px; }
+    .modal-sub { font-size: 0.82rem; color: var(--text-secondary); font-weight: 500; margin-top: 2px; }
+    .modal-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .modal-summary div { background: var(--surface-alt); border: 1px solid var(--border-light); border-radius: 8px; padding: 8px 12px; }
+    .modal-summary small { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+    .modal-summary strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+    .hist-table { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .hist-table thead th { padding: 8px 12px; font-size: 0.7rem; }
+    .hist-table tbody td { padding: 8px 12px; font-size: 0.82rem; }
+    .hist-qty { color: var(--success); font-weight: 700; }
+    .recv-sub { font-size: 0.65rem; line-height: 1.2; color: var(--text-muted); font-weight: 400; white-space: nowrap; cursor: help; }
+    .tag { display: inline-flex; padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+    .tag.posted { background: var(--success-light); color: var(--success); }
+    .tag.partial { background: #fef3c7; color: #b45309; }
+    .tag.pending { background: #fff1f2; color: #be123c; }
+    .sync-note { color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; }
+    .hist-scroll { max-height: 55vh; overflow-y: auto; }
+    .hist-empty { color: var(--text-secondary); font-size: 0.875rem; text-align: center; padding: 16px 0; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .modal-backdrop.show { display: flex; }
+    .modal { background: var(--surface); border-radius: var(--radius); box-shadow: 0 20px 40px rgba(0,0,0,0.2); width: 100%; max-width: 440px; overflow: hidden; }
+    .modal-head { padding: 16px 20px; border-bottom: 1px solid var(--border-light); font-weight: 700; font-size: 1.05rem; }
+    .modal-body { padding: 20px; display: grid; gap: 14px; }
+    .modal-body label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .modal-body p { font-size: 0.9rem; color: var(--text); }
+    .modal-foot { padding: 14px 20px; background: var(--surface-alt); border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 8px; }
+    .btn-danger { background: #dc3545; color: #fff; } .btn-danger:hover { background: #b92b39; }
+    #edit-modal, #del-modal { z-index: 1100; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-left">
+        <h1>
+          {{ purchaseorder.po_number }}
+          {% if status_label == 'Open' %}<span class="badge badge-open">Open</span>{% else %}<span class="badge badge-closed">Closed</span>{% endif %}
+        </h1>
+        <p>{{ purchaseorder.supplier_name }}</p>
+        {% if last_synced %}<div class="sync-note">SAP data last synced: {{ last_synced|date:"d.m.y H:i" }}</div>{% endif %}
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'po_receiving_list' %}">Back to List</a>
+      </div>
+    </header>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">Order Information</div>
+        <div class="card-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Supplier</span>
+              <span class="info-value">{{ purchaseorder.supplier_name }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Supplier Code</span>
+              <span class="info-value">{{ purchaseorder.supplier_code|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Purchaser</span>
+              <span class="info-value">{{ purchaseorder.salesman_name|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Posting Date</span>
+              <span class="info-value">{{ purchaseorder.posting_date|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">BP Reference No</span>
+              <span class="info-value">{{ purchaseorder.bp_reference_no|default:"—" }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Status</span>
+              <span class="info-value">{{ status_label }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if show_price %}
+      <div class="card">
+        <div class="card-header">Order Totals</div>
+        <div class="card-body">
+          <div class="totals-list">
+            <div class="totals-row">
+              <div class="totals-label">Pending Total</div>
+              <div class="totals-value">{{ pending_total|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Subtotal</div>
+              <div class="totals-value">{{ subtotal|floatformat:2 }}</div>
+            </div>
+            {% if discount_percentage != 0 %}
+            <div class="totals-row">
+              <div class="totals-label">Discount ({{ discount_percentage|floatformat:1 }}%)</div>
+              <div class="totals-value">-{{ discount_amount|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row">
+              <div class="totals-label">Total Before Tax</div>
+              <div class="totals-value">{{ total_before_tax|floatformat:2 }}</div>
+            </div>
+            {% endif %}
+            <div class="totals-row">
+              <div class="totals-label">VAT</div>
+              <div class="totals-value">{{ vat_sum|floatformat:2 }}</div>
+            </div>
+            <div class="totals-row grand">
+              <div class="totals-label">Grand Total</div>
+              <div class="totals-value">{{ grand_total|floatformat:2 }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if purchaseorder.closing_remarks %}
+    <div class="card">
+      <div class="card-header">Closing Remarks</div>
+      <div class="card-body">
+        <p style="white-space: pre-wrap;">{{ purchaseorder.closing_remarks }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header">Line Items ({{ items|length }})</div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap">
+          <table id="lines-table">
+            <thead>
+              <tr>
+                <th>Item No</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th class="num">Qty</th>
+                {% if show_price %}
+                <th class="num">Unit Price</th>
+                <th class="num">Row Total</th>
+                {% endif %}
+                <th class="num">Open Qty</th>
+                {% if show_price %}
+                <th class="num">Pending Amt</th>
+                {% endif %}
+                <th class="num">Received</th>
+                <th class="num">Balance</th>
+                <th>Last Update</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in items %}
+              <tr class="line-row" data-line="{{ it.line_no }}" data-item="{{ it.item_no }}" data-open="{{ it.open_qty|stringformat:'f' }}" data-absorbed="{{ it.absorbed|stringformat:'f' }}" data-can="{{ it.can_receive|yesno:'1,0' }}" data-receipts="{{ it.receipts_json }}">
+                <td><strong>{{ it.item_no }}</strong></td>
+                <td>{{ it.description }}</td>
+                <td>{% if it.can_receive %}<span class="item-badge item-badge-open">Open</span>{% else %}<span class="item-badge item-badge-closed">Closed</span>{% endif %}</td>
+                <td class="num">{{ it.quantity|floatformat:2 }}</td>
+                {% if show_price %}
+                <td class="num">{{ it.unit_price|floatformat:2 }}</td>
+                <td class="num">{{ it.row_total|default_if_none:"0"|floatformat:2 }}</td>
+                {% endif %}
+                <td class="num">{{ it.open_qty|floatformat:2 }}</td>
+                {% if show_price %}
+                <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+                {% endif %}
+                <td class="num"><span class="recv-total">{{ it.received_total|floatformat:2 }}</span><div class="recv-sub"></div></td>
+                <td class="num"><span class="bal"></span></td>
+                <td class="last-info" style="font-size:0.8rem;color:var(--text-secondary);white-space:nowrap;"></td>
+                <td>
+                  <div class="row-actions">
+                    {% if it.can_receive %}<button type="button" class="btn btn-outline btn-sm btn-receive">Update</button>{% endif %}
+                    <button type="button" class="btn-ghost btn-history">History<span class="hist-count-pill">{{ it.receipts|length }}</span></button>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="{% if show_price %}12{% else %}9{% endif %}" class="empty-state">No line items found</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <a class="btn btn-secondary" href="{% url 'po_receiving_list' %}">Back to PO Updates</a>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="hist-modal">
+    <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="hist-title">
+      <div class="modal-head"><div id="hist-title">Receipt History</div><div class="modal-sub" id="hist-sub"></div></div>
+      <div class="modal-body">
+        <div class="modal-summary" id="hist-summary"></div>
+        <div class="hist-scroll" id="hist-list"></div>
+        <div class="msg" id="hist-msg"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary btn-sm" id="hist-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="edit-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+      <div class="modal-head"><div id="edit-title">Update Received Qty</div><div class="modal-sub" id="edit-sub"></div></div>
+      <div class="modal-body">
+        <div class="modal-summary" id="edit-summary"></div>
+        <div><label for="edit-qty">Quantity received</label><input class="input" id="edit-qty" type="number" step="0.01" min="0.01" placeholder="0.00"></div>
+        <div><label for="edit-date">Received date</label><input class="input" id="edit-date" type="date"></div>
+        <div><label for="edit-rem">Remarks</label><input class="input" id="edit-rem" type="text" maxlength="1000" placeholder="Optional note"></div>
+        <div class="msg err" id="edit-msg"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary btn-sm" id="edit-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="edit-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="del-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-title">
+      <div class="modal-head" id="del-title">Delete Receipt</div>
+      <div class="modal-body"><p id="del-text">Are you sure you want to delete this receipt? This cannot be undone.</p></div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary btn-sm" id="del-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" id="del-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  const PO = "{{ purchaseorder.po_number|escapejs }}";
+  const TODAY = "{{ today }}";
+  const base = '/po-updates/' + encodeURIComponent(PO) + '/';
+
+  function csrf() {
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function fmt(n) { return Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML.replace(/"/g, '&quot;'); }
+  function post(url, payload) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest'},
+      body: JSON.stringify(payload)
+    }).then(r => r.json().catch(() => ({success: false, error: 'Server error'})));
+  }
+  const $ = id => document.getElementById(id);
+
+  const receiptsOf = row => JSON.parse(row.dataset.receipts || '[]');
+  const stats = row => {
+    const rs = receiptsOf(row), open = parseFloat(row.dataset.open) || 0;
+    const absorbed = parseFloat(row.dataset.absorbed) || 0;
+    const received = rs.reduce((a, r) => a + r.qty, 0);
+    const pending = Math.max(0, received - absorbed);
+    return {rs, open, received, absorbed, pending, balance: open - pending};
+  };
+  function setRow(row, d) {
+    row.dataset.receipts = JSON.stringify(d.receipts);
+    row.dataset.open = d.open_qty;
+    row.dataset.absorbed = d.absorbed;
+    paint(row);
+  }
+
+  function paint(row) {
+    const s = stats(row);
+    row.querySelector('.recv-total').textContent = fmt(s.received);
+    const bal = row.querySelector('.bal');
+    const sub = row.querySelector('.recv-sub');
+    const q = n => Number(n).toLocaleString(undefined, {maximumFractionDigits: 2});
+    const inSap = Math.min(s.received, s.absorbed);
+    sub.textContent = s.received > 0 && row.dataset.can === '1' ? 'SAP ' + q(inSap) + ' · Pend ' + q(s.pending) : '';
+    sub.title = s.received > 0 ? q(inSap) + ' posted in SAP, ' + q(s.pending) + ' pending in SAP' : '';
+    if (row.dataset.can !== '1') { bal.textContent = '—'; bal.className = 'bal'; }
+    else {
+      bal.textContent = fmt(s.balance);
+      bal.className = 'bal ' + (s.balance < 0 ? 'neg' : (s.balance === 0 ? 'ok' : 'pending'));
+    }
+    row.querySelector('.hist-count-pill').textContent = s.rs.length;
+    const last = s.rs[s.rs.length - 1];
+    row.querySelector('.last-info').textContent = last ? last.date_display + ' · ' + last.user : '—';
+  }
+
+  function summaryHtml(s) {
+    return '<div><small>Open Qty</small><strong>' + fmt(s.open) + '</strong></div>' +
+           '<div><small>Pending in app</small><strong>' + fmt(s.pending) + '</strong></div>' +
+           '<div><small>Balance</small><strong>' + fmt(s.balance) + '</strong></div>';
+  }
+
+  // ---- generic modal helpers
+  const histModal = $('hist-modal'), editModal = $('edit-modal'), delModal = $('del-modal');
+  let histRow = null, editHandler = null, delHandler = null;
+  function closeTop() {
+    if (delModal.classList.contains('show')) { delModal.classList.remove('show'); delHandler = null; }
+    else if (editModal.classList.contains('show')) { editModal.classList.remove('show'); editHandler = null; }
+    else { histModal.classList.remove('show'); histRow = null; }
+  }
+
+  function renderHistory() {
+    if (!histRow) return;
+    const s = stats(histRow);
+    $('hist-summary').innerHTML = summaryHtml(s);
+    if (!s.rs.length) { $('hist-list').innerHTML = '<div class="hist-empty">No deliveries recorded yet.</div>'; return; }
+    let h = '<table class="hist-table"><thead><tr><th>Received Date</th><th class="num">Qty</th><th>Remarks</th><th>SAP</th><th>Updated By</th><th>Updated On</th><th></th></tr></thead><tbody>';
+    let cum = 0;
+    const tagged = s.rs.map(r => {
+      const before = cum; cum += r.qty;
+      const tag = cum <= s.absorbed + 1e-9 ? ['posted', 'Posted in SAP']
+                : (before < s.absorbed ? ['partial', 'Partly in SAP'] : ['pending', 'Pending in SAP']);
+      return Object.assign({}, r, {tag});
+    });
+    tagged.slice().reverse().forEach(r => {
+      h += '<tr data-id="' + r.id + '" data-date="' + esc(r.date) + '" data-qty="' + r.qty + '" data-rem="' + esc(r.remarks) + '" data-dd="' + esc(r.date_display) + '">' +
+        '<td>' + esc(r.date_display) + '</td><td class="num hist-qty">+' + fmt(r.qty) + '</td>' +
+        '<td>' + (r.remarks ? esc(r.remarks) : '<span style="color:var(--text-muted)">—</span>') + '</td>' +
+        '<td><span class="tag ' + r.tag[0] + '">' + r.tag[1] + '</span></td>' +
+        '<td>' + esc(r.user) + '</td><td style="white-space:nowrap">' + esc(r.created_at) + '</td>' +
+        '<td style="white-space:nowrap"><button type="button" class="btn-ghost h-edit">Edit</button><button type="button" class="btn-ghost danger h-del">Delete</button></td></tr>';
+    });
+    $('hist-list').innerHTML = h + '</tbody></table>';
+  }
+
+  function applyData(row, d) {
+    setRow(row, d);
+    renderHistory();
+  }
+
+  function openEdit(opts, handler) {
+    $('edit-title').textContent = opts.title;
+    $('edit-sub').textContent = opts.sub || '';
+    $('edit-summary').innerHTML = opts.summary || '';
+    $('edit-qty').value = opts.qty; $('edit-date').value = opts.date; $('edit-rem').value = opts.rem;
+    $('edit-msg').textContent = '';
+    editHandler = handler; editModal.classList.add('show'); $('edit-qty').focus(); $('edit-qty').select();
+  }
+  function openDelete(text, handler) {
+    $('del-text').textContent = text; delHandler = handler; delModal.classList.add('show');
+  }
+
+  $('edit-cancel').onclick = closeTop;
+  $('del-cancel').onclick = closeTop;
+  $('hist-close').onclick = closeTop;
+  $('edit-save').onclick = function() {
+    if (!editHandler) return;
+    const btn = this; btn.disabled = true;
+    editHandler({qty_received: $('edit-qty').value, received_date: $('edit-date').value, remarks: $('edit-rem').value},
+      msg => { btn.disabled = false; $('edit-msg').textContent = msg; },
+      () => { btn.disabled = false; closeTop(); });
+  };
+  $('del-confirm').onclick = function() { const h = delHandler; closeTop(); if (h) h(); };
+  [histModal, editModal, delModal].forEach(m => m.addEventListener('click', e => { if (e.target === m) closeTop(); }));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeTop();
+    if (e.key === 'Enter' && editModal.classList.contains('show') && e.target.tagName === 'INPUT') $('edit-save').click();
+  });
+
+  document.querySelectorAll('.line-row').forEach(paint);
+
+  $('lines-table').addEventListener('click', function(e) {
+    const t = e.target.closest('button');
+    if (!t) return;
+    const row = t.closest('.line-row');
+    if (!row) return;
+
+    if (t.classList.contains('btn-history')) {
+      histRow = row;
+      $('hist-sub').textContent = (row.dataset.item || '') + ' · line ' + row.dataset.line;
+      $('hist-msg').textContent = '';
+      renderHistory();
+      histModal.classList.add('show');
+      return;
+    }
+
+    if (t.classList.contains('btn-receive')) {
+      const s = stats(row);
+      openEdit({title: 'Update Received Qty', sub: (row.dataset.item || '') + ' · line ' + row.dataset.line,
+                summary: summaryHtml(s), qty: '', date: TODAY, rem: ''},
+        (payload, showErr, done) => {
+          post(base + 'add/', Object.assign({line_no: row.dataset.line}, payload)).then(d => {
+            if (!d.success) return showErr(d.error || 'Failed');
+            setRow(row, d); done();
+          }).catch(() => showErr('Network error'));
+        });
+    }
+  });
+
+  $('hist-list').addEventListener('click', function(e) {
+    const t = e.target.closest('button');
+    const tr = t && t.closest('tr[data-id]');
+    if (!tr || !histRow) return;
+    const row = histRow, id = tr.dataset.id;
+    const fail = d => { $('hist-msg').className = 'msg err'; $('hist-msg').textContent = d.error || 'Failed'; };
+    $('hist-msg').textContent = '';
+
+    if (t.classList.contains('h-del')) {
+      openDelete('Delete the receipt of ' + fmt(tr.dataset.qty) + ' dated ' + tr.dataset.dd + '? This cannot be undone.',
+        () => post(base + id + '/delete/', {}).then(d => d.success ? applyData(row, d) : fail(d)));
+    } else if (t.classList.contains('h-edit')) {
+      openEdit({title: 'Edit Receipt', sub: (row.dataset.item || '') + ' · ' + tr.dataset.dd,
+                summary: '', qty: tr.dataset.qty, date: tr.dataset.date, rem: tr.dataset.rem},
+        (payload, showErr, done) => {
+          post(base + id + '/edit/', payload).then(d => {
+            if (!d.success) return showErr(d.error || 'Failed');
+            applyData(row, d); done();
+          }).catch(() => showErr('Network error'));
+        });
+    }
+  });
+})();
+</script>
+</body>
+</html>

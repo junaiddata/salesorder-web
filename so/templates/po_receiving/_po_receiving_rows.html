@@ -1,0 +1,26 @@
+{% for item in page_obj %}
+<tr>
+  <td class="col-narrow">
+    <a class="po-link" href="{% url 'po_receiving_detail' item.purchaseorder.po_number %}">{{ item.purchaseorder.po_number }}</a>
+  </td>
+  <td class="col-narrow"><span class="badge badge-open">O</span></td>
+  <td class="col-date">{{ item.purchaseorder.posting_date|date:"d.m.y"|default:"-" }}</td>
+  <td class="col-narrow">{{ item.purchaseorder.supplier_code|default:"—" }}</td>
+  <td class="col-customer">{{ item.purchaseorder.supplier_name }}</td>
+  <td class="col-narrow">{{ item.item_no|default:"—" }}</td>
+  <td>{{ item.description|truncatechars:30 }}</td>
+  <td class="num">{{ item.quantity|default_if_none:"0"|floatformat:2 }}</td>
+  <td class="num">{{ item.open_qty|floatformat:2 }}</td>
+  <td class="num">{{ item.received_total|floatformat:2 }}</td>
+  <td class="num"><strong>{{ item.balance|floatformat:2 }}</strong></td>
+  {% if show_price %}
+  <td class="num">{{ item.price|default_if_none:"0"|floatformat:2 }}</td>
+  {% endif %}
+</tr>
+{% empty %}
+<tr>
+  <td colspan="{% if show_price %}12{% else %}11{% endif %}" class="empty-state">
+    No open purchase order items found
+  </td>
+</tr>
+{% endfor %}

@@ -5,6 +5,8 @@ from . import views_quotation
 from . import sap_salesorder_views
 from . import sap_purchaseorder_views
 from . import sap_purchaseorder_pdf_export
+from . import po_receiving_views
+from . import po_updates_export
 from . import finance_statement_views
 from . import finance_statement_pdf_export
 from . import customer_analysis_views
@@ -163,6 +165,14 @@ urlpatterns += [
     path('sappurchaseorders/ajax/', sap_purchaseorder_views.purchaseorder_search, name='purchaseorder_search'),
     path('sappurchaseorders/export-excel/', sap_purchaseorder_views.export_purchaseorder_list_excel, name='export_purchaseorder_list_excel'),
     path('sappurchaseorders/export-pdf/', sap_purchaseorder_pdf_export.export_purchaseorder_list_pdf, name='export_purchaseorder_list_pdf'),
+    path('po-updates/', po_receiving_views.po_receiving_list, name='po_receiving_list'),
+    path('po-updates/ajax/', po_receiving_views.po_receiving_search, name='po_receiving_search'),
+    path('po-updates/export-excel/', po_updates_export.export_po_updates_excel, name='export_po_updates_excel'),
+    path('po-updates/export-pdf/', po_updates_export.export_po_updates_pdf, name='export_po_updates_pdf'),
+    path('po-updates/<str:po_number>/', po_receiving_views.po_receiving_detail, name='po_receiving_detail'),
+    path('po-updates/<str:po_number>/add/', po_receiving_views.po_receiving_add, name='po_receiving_add'),
+    path('po-updates/<str:po_number>/<int:receipt_id>/edit/', po_receiving_views.po_receiving_edit, name='po_receiving_edit'),
+    path('po-updates/<str:po_number>/<int:receipt_id>/delete/', po_receiving_views.po_receiving_delete, name='po_receiving_delete'),
     path('sappurchaseorders/<str:po_number>/', sap_purchaseorder_views.purchaseorder_detail, name='purchaseorder_detail'),
     path('sappurchaseorders/<str:po_number>/export/', sap_purchaseorder_views.export_sap_purchaseorder_pdf, name='export_sap_purchaseorder_pdf'),
     path('sappurchaseorders/<str:po_number>/export-open/', sap_purchaseorder_views.export_sap_purchaseorder_open_items_pdf, name='export_sap_purchaseorder_open_items_pdf'),

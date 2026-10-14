@@ -243,7 +243,7 @@
         <div class="stats-section">
             <a href="{% url 'sales_analysis_dashboard' %}" class="stats-button">
                 <i class="fas fa-chart-pie"></i>
-                <span>View Stats & Analysis</span>
+                <span>View Status & Analysis</span>
             </a>
         </div>
 
@@ -387,6 +387,14 @@
                 <div class="action-title">Purchase (Import)</div>
                 <div class="action-description">View All Purchase Orders</div>
             </a>
+            <a href="{% url 'po_receiving_list' %}" class="action-button view-quotation">
+                <span class="live-badge-small">LIVE</span>
+                <div class="action-icon">
+                    <i class="fas fa-clipboard-check"></i>
+                </div>
+                <div class="action-title">PO Updates</div>
+                <div class="action-description">Open POs &amp; Received Qty Updates</div>
+            </a>
             <a href="{% url 'emailagent:review_queue' %}" class="action-button view-quotation">
                 <div class="action-icon">
                     <i class="fas fa-envelope-open-text"></i>
@@ -394,6 +402,7 @@
                 <div class="action-title">Agents</div>
                 <div class="action-description">Email, Quotation &amp; LPO Agents</div>
             </a>
+            
         </div>
 
         <div class="logout-section">

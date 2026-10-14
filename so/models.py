@@ -696,6 +696,70 @@ class SAPPurchaseOrderItem(models.Model):
         return f"{self.purchaseorder.po_number} - {self.description}"
 
 
+class POReceipt(models.Model):
+    """
+    Goods-received entry against a SAP PO line (one row per delivery).
+    Keyed by plain po_number/line_no (no FK) because the PO sync deletes and
+    recreates SAPPurchaseOrder/SAPPurchaseOrderItem rows.
+    """
+    po_number = models.CharField(max_length=100, db_index=True)
+    line_no = models.IntegerField(default=1)
+    item_no = models.CharField(max_length=100, blank=True, default='')
+    qty_received = models.DecimalField(max_digits=12, decimal_places=2)
+    received_date = models.DateField()
+    remarks = models.TextField(blank=True, default='')
+    received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='po_receipts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['po_number', 'line_no'])]
+        ordering = ['received_date', 'id']
+
+    def __str__(self):
+        return f"{self.po_number}/{self.line_no} +{self.qty_received}"
+
+
+class POLineBaseline(models.Model):
+    """
+    SAP 'delivered' qty (Quantity - RemainingOpenQuantity) of a PO line at the time its
+    first app receipt was recorded. Lets us tell which app receipts SAP has since
+    absorbed (GRPO posted) so they are not subtracted from SAP Open Qty twice.
+    Also serves as the per-line row lock when saving receipts.
+    """
+    po_number = models.CharField(max_length=100)
+    line_no = models.IntegerField(default=1)
+    sap_delivered_at_start = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['po_number', 'line_no'], name='uniq_po_line_baseline')]
+
+    def __str__(self):
+        return f"{self.po_number}/{self.line_no} base={self.sap_delivered_at_start}"
+
+
+class POReceiptLog(models.Model):
+    """Audit trail of add / edit / delete actions on POReceipt."""
+    ACTION_CHOICES = [('add', 'Added'), ('edit', 'Edited'), ('delete', 'Deleted')]
+    po_number = models.CharField(max_length=100, db_index=True)
+    line_no = models.IntegerField(default=1)
+    receipt_id = models.IntegerField(null=True, blank=True)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    old_qty = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    new_qty = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    old_date = models.DateField(null=True, blank=True)
+    new_date = models.DateField(null=True, blank=True)
+    old_remarks = models.TextField(blank=True, default='')
+    new_remarks = models.TextField(blank=True, default='')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='po_receipt_logs')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+
 # SAP Proforma Invoice (PI) Models
 def cheque_upload_path(instance, filename):
     """Generate upload path for cheque attachments: cheques/PI_NUMBER/filename"""
