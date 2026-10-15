@@ -285,7 +285,7 @@ class _StampBelow(Flowable):
 def _exporter_cell(pi):
     cell = [Paragraph('<b>CONFIRMED AND ACCEPTED BY EXPORTER:</b>', S_BASE)]
     seal = BangladeshPISeal.get_instance()
-    sig = _seal_image(seal.signature, 110, 46) if pi.add_signature else None
+    sig = _seal_image(seal.signature, 110, 46, remove_bg=True) if pi.add_signature else None
     pics = [sig] if sig is not None else []
     if pics:
         t = Table([pics], colWidths=[p.drawWidth + 10 for p in pics], rowHeights=[52])
