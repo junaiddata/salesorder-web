@@ -1,0 +1,78 @@
+{% extends 'bangladeshpi/base.html' %}
+
+{% block title %}Bangladesh PIs{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-invoice-dollar" style="opacity:.85"></i> Bangladesh PIs</h1>
+            <p>Create Proforma Invoices for IMAA Corporation, Bangladesh and download them as PDF on the company letterhead.</p>
+            <div class="hero-actions">
+                <a href="{% url 'bangladeshpi:new' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> New PI</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Proforma Invoices <span class="count">({{ pis|length }})</span></h2>
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search ref no…">
+            <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+        </form>
+    </div>
+
+    {% if pis %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x">
+            <thead>
+                <tr>
+                    <th>Ref No</th>
+                    <th>Date</th>
+                    <th>Destination</th>
+                    <th>Items</th>
+                    <th>Total CFR (USD)</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pis %}
+                <tr>
+                    <td>{{ p.ref_no }}</td>
+                    <td>{{ p.date|date:"d M Y" }}</td>
+                    <td>{{ p.destination|default:"—" }}</td>
+                    <td>{{ p.items.all|length }}</td>
+                    <td>{{ p.grand_total|floatformat:2 }}</td>
+                    <td class="actions">
+                        <a href="{% url 'bangladeshpi:pdf' p.pk %}" class="btn-x sm" title="Download the customer copy"><i class="fas fa-download"></i> Customer PDF</a>
+                        {% if p.has_bank_prices %}
+                        <a href="{% url 'bangladeshpi:pdf' p.pk %}?copy=bank" class="btn-x sm" title="Download the bank copy"><i class="fas fa-building-columns"></i> Bank PDF</a>
+                        {% else %}
+                        <span class="btn-x sm" style="opacity:.45;cursor:not-allowed" title="Add bank prices to enable"><i class="fas fa-building-columns"></i> Bank PDF</span>
+                        {% endif %}
+                        <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x sm" title="Edit"><i class="fas fa-pen"></i></a>
+                        <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"
+                              onsubmit="return confirm('Delete PI {{ p.ref_no }}? This cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x sm btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-file-invoice-dollar"></i></div>
+            <h3>No Bangladesh PIs yet</h3>
+            <p>Create your first Proforma Invoice.</p>
+            <a href="{% url 'bangladeshpi:new' %}" class="btn-x btn-primary-x lg"><i class="fas fa-plus"></i> Create PI</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

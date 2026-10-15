@@ -1,0 +1,102 @@
+import os
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+
+from so.models import Items
+
+from .models import BangladeshPI
+
+
+class BangladeshPITests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user('tester', password='x')
+        self.client.force_login(self.user)
+
+    def _post(self, suffix='07A', bank=('17.00', '23.00')):
+        return self.client.post(reverse('bangladeshpi:new'), {
+            'ref_suffix': suffix, 'date': '2026-10-15',
+            'port_of_origin': 'ANY ITALIAN PORT', 'country_of_origin': 'ITALY',
+            'transport': '1 x 40\' FCL, BY SEA', 'insurance': 'COVERED BY BUYER',
+            'destination': 'CFR, CHATTOGRAM PORT', 'final_destination': 'CFR, CHATTOGRAM, BANGLADESH',
+            'shipment': 'OCT-2023', 'validity': '31st OCT 2023',
+            'payment': 'IRREVOCABLE & CONFIRMED L/C AT SIGHT & BALANCE ADVANCE T/T',
+            'freight_charges': '1800', 'freight_valid_till': 'Dec -2023',
+            'bank_terms_text': 'THE LATEST SHIPPING DATE MUST BE AT LEAST 2 MONTHS FROM THE DATE OF ISSUE.\nPARTIAL AND TRANSHIPMENT TO BE ALLOWED',
+            'bank_payment': 'IRREVOCABLE & CONFIRMED L/C AT SIGHT', 'bank_insurance': 'BY THE BUYER',
+            'item_kind': ['heading', 'item', 'item'],
+            'item_code': ['', '3100635', '3201435'],
+            'item_description': ['ARISTON BRAND ELECTRIC STORAGE WATER HEATERS (HS CODE NO.: 8516.10.90)',
+                                 'ANDRIS R 30/3', 'PRO 1 R 50 V/S'],
+            'item_qty': ['', '450', '100'],
+            'item_price': ['', '82.15', '91.19'],
+            'item_bank_price': ['', *bank],
+        })
+
+    def test_requires_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse('bangladeshpi:list')).status_code, 302)
+
+    def test_create_and_pdf(self):
+        r = self._post()
+        self.assertEqual(r.status_code, 302)
+        pi = BangladeshPI.objects.get()
+        self.assertEqual(pi.ref_no, 'BD/IMAA/2026/07A')
+        self.assertEqual(pi.items_total, Decimal('450') * Decimal('82.15') + Decimal('100') * Decimal('91.19'))
+        self.assertEqual(pi.grand_total, pi.items_total + Decimal('1800'))
+        for url in (reverse('bangladeshpi:list'), reverse('bangladeshpi:edit', args=[pi.pk])):
+            self.assertEqual(self.client.get(url).status_code, 200)
+        r = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.content.startswith(b'%PDF'))
+        out = os.environ.get('BDPI_SAMPLE_OUT')
+        if out:
+            with open(out, 'wb') as f:
+                f.write(r.content)
+
+    def test_duplicate_ref_rejected(self):
+        self._post()
+        r = self._post()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(BangladeshPI.objects.count(), 1)
+
+    def test_items_search_by_upc_code_and_description(self):
+        Items.objects.create(item_code='A100', item_description='ANDRIS R 30/3 HEATER', item_upvc='3100635', item_firm='ARISTON')
+        Items.objects.create(item_code='B200', item_description='PRO 1 R 50 V/S', item_upvc='', item_firm='ARISTON')
+        url = reverse('bangladeshpi:items_search')
+
+        def hit(q, **kw):
+            return self.client.get(url, {'q': q, **kw}).json()
+
+        self.assertEqual([r['upc'] for r in hit('3100635')['results']], ['3100635'])      # by UPC
+        self.assertEqual(len(hit('B200')['results']), 1)                                   # by item code
+        self.assertEqual(len(hit('heater andris')['results']), 1)                          # words, any order
+        self.assertEqual(hit('PRO 1')['results'][0]['upc'], '')                            # blank UPC returned as ''
+        self.assertEqual(hit('ariston', brand='OTHER')['total'], 0)                        # brand filter
+        self.assertEqual(hit('a')['results'], [])                                          # too short
+
+    def test_bank_pdf(self):
+        self._post()
+        pi = BangladeshPI.objects.get()
+        self.assertTrue(pi.has_bank_prices)
+        self.assertEqual(pi.bank_items_total, Decimal('450') * 17 + Decimal('100') * 23)
+        r = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), {'copy': 'bank'})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('_Bank.pdf', r['Content-Disposition'])
+        out = os.environ.get('BDPI_SAMPLE_OUT')
+        if out:
+            with open(out.replace('.pdf', '_bank.pdf'), 'wb') as f:
+                f.write(r.content)
+
+    def test_bank_pdf_blocked_without_prices_and_partial_rejected(self):
+        self._post(bank=('', ''))
+        pi = BangladeshPI.objects.get()
+        self.assertFalse(pi.has_bank_prices)
+        r = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), {'copy': 'bank'})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).status_code, 200)  # customer still fine
+        r = self._post(suffix='08', bank=('17.00', ''))   # partial bank prices
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(BangladeshPI.objects.count(), 1)

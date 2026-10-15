@@ -1,0 +1,273 @@
+{% extends 'bangladeshpi/base.html' %}
+
+{% block title %}{% if pi %}Edit{% else %}New{% endif %} PI | Bangladesh PIs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+    .ref-wrap { display: flex; align-items: stretch; }
+    .ref-prefix { background: #eef1f6; border: 1px solid #d5dbe6; border-right: 0; border-radius: 8px 0 0 8px;
+                  padding: .55rem .75rem; font-weight: 600; white-space: nowrap; }
+    .ref-wrap .input-x { border-radius: 0 8px 8px 0; }
+    .items-scroll { overflow-x: auto; }
+    table.items-tbl { width: 100%; min-width: 760px; border-collapse: collapse; }
+    table.items-tbl th { font-size: .75rem; text-transform: uppercase; padding: .4rem; text-align: left; }
+    table.items-tbl td { padding: .25rem; vertical-align: top; }
+    table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
+    .row-heading td { background: #f6f7fb; }
+    .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
+    .totals-box { max-width: 380px; margin-left: auto; font-size: .95rem; }
+    .totals-box div { display: flex; justify-content: space-between; padding: .2rem 0; }
+    .totals-box .grand { font-weight: 700; border-top: 1px solid #ccc; margin-top: .3rem; padding-top: .4rem; }
+    #catDrop { position: fixed; z-index: 2000; background: #fff; border: 1px solid #cfd6e4; border-radius: 8px;
+               box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: 320px; overflow-y: auto; display: none; min-width: 420px; }
+    #catDrop .opt { padding: .45rem .7rem; cursor: pointer; border-bottom: 1px solid #f0f2f7; font-size: .85rem; }
+    #catDrop .opt:hover { background: #eef3ff; }
+    #catDrop .opt small { color: #7a8294; }
+    #catDrop .nouc { color: #b45309; font-weight: 600; }
+    #catDrop .foot { padding: .4rem .7rem; font-size: .78rem; color: #9a5b00; background: #fff8e6; }
+    #catDrop .none { padding: .6rem .7rem; color: #7a8294; font-size: .85rem; }
+    input.no-upc { border-color: #dc2626 !important; background: #fff5f5; }
+    .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head"><h2>{% if pi %}Edit PI {{ pi.ref_no }}{% else %}New Bangladesh PI{% endif %}</h2></div>
+
+    {% if errors %}
+    <div class="err-box"><ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+    {% endif %}
+
+    <form method="post" id="piForm">
+        {% csrf_token %}
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="grid-2">
+                <div class="field-x">
+                    <label class="label-x">Ref No</label>
+                    <div class="ref-wrap">
+                        <span class="ref-prefix">{{ ref_prefix }}</span>
+                        <input type="text" name="ref_suffix" class="input-x" required placeholder="e.g. 07A"
+                               value="{{ values.ref_suffix }}">
+                    </div>
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Date</label>
+                    <input type="date" name="date" class="input-x" required
+                           value="{{ values.date }}">
+                </div>
+            </div>
+            <div class="grid-2 mt-3">
+                <div class="fixed-box"><b>Exporter (fixed)</b><br>JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING LLC<br>PO BOX NO: 34862, DIP - 2, DUBAI - U.A.E</div>
+                <div class="fixed-box"><b>Importer / Client (fixed)</b><br>IMAA CORPORATION<br>316, Chowdhury Machinery Market, Jubilee Road, Enayet Bazar, Chattogram, Bangladesh</div>
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="grid-2">
+                {% include 'bangladeshpi/_field.html' with name='port_of_origin' label='Port of Origin' %}
+                {% include 'bangladeshpi/_field.html' with name='country_of_origin' label='Country of Origin' %}
+                {% include 'bangladeshpi/_field.html' with name='transport' label='Transport' %}
+                {% include 'bangladeshpi/_field.html' with name='insurance' label='Insurance' %}
+                {% include 'bangladeshpi/_field.html' with name='destination' label='Destination' %}
+                {% include 'bangladeshpi/_field.html' with name='final_destination' label='Final Destination' %}
+                {% include 'bangladeshpi/_field.html' with name='shipment' label='Shipment' %}
+                {% include 'bangladeshpi/_field.html' with name='validity' label='Validity' %}
+            </div>
+            <div class="mt-3">
+                {% include 'bangladeshpi/_field.html' with name='payment' label='Payment' %}
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="u-spread mb-2">
+                <h5 class="mb-0">Items <small class="u-muted">(currency: USD)</small></h5>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn-x sm" id="addHeading"><i class="fas fa-heading"></i> Add group heading</button>
+                    <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button>
+                </div>
+            </div>
+            <div class="field-x mb-2" style="max-width:320px">
+                <label class="label-x">Catalog brand filter (optional)</label>
+                <select id="brandFilter" class="input-x">
+                    <option value="">All brands</option>
+                    {% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+                </select>
+            </div>
+            <p class="u-muted mb-2" style="font-size:.8rem">Type in the UPC or Description box to search the catalog by UPC, item code or description; pick a result to fill both. You can also type manually.</p>
+            <div class="items-scroll">
+                <table class="items-tbl">
+                    <thead><tr>
+                        <th style="width:14%">UPC Code</th><th>Description</th>
+                        <th style="width:8%">Qty</th><th style="width:12%">Unit Price</th>
+                        <th style="width:12%">Amount</th>
+                        <th style="width:13%" title="Used only in the Bank PDF">Bank Unit Price</th>
+                        <th style="width:4%"></th>
+                    </tr></thead>
+                    <tbody id="itemsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="grid-2 mt-3">
+                <div>
+                    <div class="field-x">
+                        <label class="label-x">Inland and Sea Freight Charges (USD)</label>
+                        <input type="number" step="0.01" min="0" name="freight_charges" id="freight" class="input-x"
+                               value="{{ values.freight_charges }}">
+                    </div>
+                    {% include 'bangladeshpi/_field.html' with name='freight_valid_till' label='Freight Rate Valid Till (optional)' %}
+                </div>
+                <div class="totals-box">
+                    <div><span>Total Ex-Works</span><span id="tExw">0.00</span></div>
+                    <div><span>Inland &amp; Sea Freight</span><span id="tFrt">0.00</span></div>
+                    <div class="grand"><span>Customer total (CFR Chattogram)</span><span id="tCfr">0.00</span></div>
+                    <div class="grand"><span>Bank total (no freight)</span><span id="tBank">0.00</span></div>
+                </div>
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <h5 class="mb-1">Bank copy only</h5>
+            <p class="u-muted" style="font-size:.85rem">Used only in the <b>Bank PDF</b>. To enable the Bank PDF, enter a <b>Bank Unit Price</b> for every item above (leave them all empty if this PI has no bank copy).</p>
+            <div class="grid-2">
+                {% include 'bangladeshpi/_field.html' with name='bank_payment' label='Payment (bank copy) — blank = same as above' %}
+                {% include 'bangladeshpi/_field.html' with name='bank_insurance' label='Insurance (bank copy) — blank = same as above' %}
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Terms &amp; Conditions for issuing L/C <small class="u-muted">(one point per line)</small></label>
+                <textarea name="bank_terms_text" rows="6" class="input-x">{{ values.bank_terms_text }}</textarea>
+            </div>
+            <p class="u-muted mt-2 mb-0" style="font-size:.8rem">The Important Note, confirmation blocks and bank account details are added automatically to both PDFs.</p>
+        </div></div>
+
+        <div class="d-flex gap-2 mb-5">
+            <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save PI</button>
+            <a href="{% url 'bangladeshpi:list' %}" class="btn-x lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ items_data|json_script:"itemsData" }}
+<script>
+(function () {
+    const body = document.getElementById('itemsBody');
+    const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    function addRow(d) {
+        d = d || {};
+        const heading = d.kind === 'heading';
+        const tr = document.createElement('tr');
+        tr.className = heading ? 'row-heading' : 'row-item';
+        tr.innerHTML = `
+            <td><input type="hidden" name="item_kind" value="${heading ? 'heading' : 'item'}">
+                <input type="text" name="item_code" class="input-x" ${heading ? 'disabled style="visibility:hidden"' : ''}></td>
+            <td><textarea name="item_description" rows="${heading ? 1 : 2}" class="input-x"
+                 placeholder="${heading ? 'Group heading, e.g. BRAND ... (HS CODE NO. ...)' : 'Description'}"></textarea></td>
+            <td><input type="number" step="any" min="0" name="item_qty" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td><input type="number" step="any" min="0" name="item_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td class="amt pt-2">${heading ? '' : '0.00'}</td>
+            <td><input type="number" step="any" min="0" name="item_bank_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td><button type="button" class="btn-x sm btn-danger-x rm"><i class="fas fa-xmark"></i></button></td>`;
+        const q = n => tr.querySelector(`[name="${n}"]`);
+        if (!heading) q('item_code').value = d.code || '';
+        q('item_description').value = d.description || '';
+        if (!heading) {
+            q('item_qty').value = d.qty != null && d.qty !== '' ? parseFloat(d.qty) : '';
+            q('item_price').value = d.unit_price != null && d.unit_price !== '' ? parseFloat(d.unit_price) : '';
+            q('item_bank_price').value = d.bank_unit_price != null && d.bank_unit_price !== '' ? parseFloat(d.bank_unit_price) : '';
+        }
+        tr.querySelector('.rm').onclick = () => { tr.remove(); recalc(); };
+        tr.addEventListener('input', recalc);
+        body.appendChild(tr);
+        recalc();
+    }
+
+    function recalc() {
+        let sum = 0, bankSum = 0;
+        body.querySelectorAll('tr.row-item').forEach(tr => {
+            bankSum += (parseFloat(tr.querySelector('[name=item_qty]').value) || 0) *
+                       (parseFloat(tr.querySelector('[name=item_bank_price]').value) || 0);
+            const a = (parseFloat(tr.querySelector('[name=item_qty]').value) || 0) *
+                      (parseFloat(tr.querySelector('[name=item_price]').value) || 0);
+            tr.querySelector('.amt').textContent = fmt(a);
+            sum += a;
+        });
+        const f = parseFloat(document.getElementById('freight').value) || 0;
+        document.getElementById('tExw').textContent = fmt(sum);
+        document.getElementById('tFrt').textContent = fmt(f);
+        document.getElementById('tCfr').textContent = fmt(sum + f);
+        document.getElementById('tBank').textContent = fmt(bankSum);
+    }
+
+    // ── Catalog search dropdown (read-only; own endpoint) ──
+    const drop = document.createElement('div');
+    drop.id = 'catDrop';
+    document.body.appendChild(drop);
+    let timer = null, seq = 0, activeRow = null;
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    function hideDrop() { drop.style.display = 'none'; activeRow = null; }
+
+    function showDrop(input, data) {
+        const r = input.getBoundingClientRect();
+        drop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 440)) + 'px';
+        drop.style.top = (r.bottom + 2) + 'px';
+        if (!data.results.length) {
+            drop.innerHTML = '<div class="none">No catalog match — you can keep typing manually.</div>';
+        } else {
+            drop.innerHTML = data.results.map((x, i) =>
+                `<div class="opt" data-i="${i}"><b>${x.upc ? esc(x.upc) : '<span class="nouc">no UPC</span>'}</b> — ${esc(x.description)}<br><small>Item code: ${esc(x.item_code)} · ${esc(x.brand)}</small></div>`
+            ).join('') + (data.total > data.results.length
+                ? `<div class="foot">Showing first ${data.results.length} of ${data.total} matches — type more to narrow down.</div>` : '');
+        }
+        drop.style.display = 'block';
+        drop._data = data.results;
+    }
+
+    drop.addEventListener('mousedown', e => {
+        const opt = e.target.closest('.opt');
+        if (!opt || !activeRow) return;
+        e.preventDefault();
+        const x = drop._data[+opt.dataset.i];
+        const code = activeRow.querySelector('[name=item_code]');
+        code.value = x.upc;
+        code.classList.toggle('no-upc', !x.upc);   // blank UPC: leave empty, highlight for manual entry
+        activeRow.querySelector('[name=item_description]').value = x.description;
+        hideDrop();
+        if (!x.upc) code.focus();
+    });
+
+    body.addEventListener('input', e => {
+        const el = e.target;
+        if (el.name === 'item_code') el.classList.remove('no-upc');
+        const tr = el.closest('tr.row-item');
+        if (!tr || (el.name !== 'item_code' && el.name !== 'item_description')) return;
+        const q = el.value.trim();
+        clearTimeout(timer);
+        if (q.length < 2) { hideDrop(); return; }
+        timer = setTimeout(() => {
+            const my = ++seq;
+            const brand = document.getElementById('brandFilter').value;
+            fetch('{% url "bangladeshpi:items_search" %}?q=' + encodeURIComponent(q) + '&brand=' + encodeURIComponent(brand))
+                .then(r => r.json())
+                .then(d => { if (my === seq) { activeRow = tr; showDrop(el, d); } })
+                .catch(hideDrop);
+        }, 250);
+    });
+    body.addEventListener('focusout', () => setTimeout(() => { if (!drop.matches(':hover')) hideDrop(); }, 150));
+    window.addEventListener('scroll', e => { if (!drop.contains(e.target)) hideDrop(); }, true);
+
+    document.getElementById('addItem').onclick = () => addRow({kind: 'item'});
+    document.getElementById('addHeading').onclick = () => addRow({kind: 'heading'});
+    document.getElementById('freight').addEventListener('input', recalc);
+
+    const initial = JSON.parse(document.getElementById('itemsData').textContent);
+    if (initial.length) initial.forEach(addRow); else addRow({kind: 'item'});
+})();
+</script>
+{% endblock %}

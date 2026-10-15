@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'submittal',
     'warranty',
     'emailagent',
+    'bangladeshpi',
 
     'django.contrib.humanize',
     

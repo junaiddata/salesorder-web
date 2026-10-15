@@ -29,4 +29,5 @@ urlpatterns = [
     path('submittal/', include('submittal.urls')),
     path('warranty/', include('warranty.urls')),
     path('emailagent/', include('emailagent.urls')),
+    path('bangladesh-pis/', include('bangladeshpi.urls')),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

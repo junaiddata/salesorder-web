@@ -1,0 +1,61 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bangladesh PIs{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="app-nav" id="appNav">
+        <div class="app-nav-inner">
+            <a class="app-brand" href="{% url 'bangladeshpi:list' %}">
+                <span class="logo"><i class="fas fa-file-invoice-dollar"></i></span>
+                <span>
+                    <span class="name">Bangladesh PIs</span><br>
+                    <span class="sub">Proforma Invoices for Bangladesh</span>
+                </span>
+            </a>
+            <button class="app-nav-toggle" id="navToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+            {% with url_name=request.resolver_match.url_name %}
+            <div class="app-nav-links">
+                <a href="{% url 'bangladeshpi:list' %}" class="app-nav-link {% if url_name == 'list' %}active{% endif %}">
+                    <i class="fas fa-table-columns"></i> All PIs
+                </a>
+                <a href="{% url 'bangladeshpi:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
+                    <i class="fas fa-plus-circle"></i> New PI
+                </a>
+            </div>
+            <div class="app-nav-right">
+                <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>
+            </div>
+            {% endwith %}
+        </div>
+    </nav>
+
+    {% if messages %}
+    <div class="flash-stack" id="flashStack">
+        {% for msg in messages %}
+        <div class="flash {{ msg.tags }}">
+            <span>{{ msg }}</span>
+            <button class="close" onclick="this.parentElement.remove()" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('navToggle')?.addEventListener('click', function () {
+            document.getElementById('appNav').classList.toggle('open');
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
