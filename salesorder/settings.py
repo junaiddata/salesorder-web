@@ -161,6 +161,12 @@ TELEGRAM_APPROVE_CHAT_ID = os.getenv('TELEGRAM_APPROVE_CHAT_ID', '')
 TELEGRAM_MD_APPROVAL_BOT_TOKEN = os.getenv('TELEGRAM_MD_APPROVAL_BOT_TOKEN', '')  # Bot for MD Approvals group
 TELEGRAM_MD_APPROVAL_CHAT_ID = os.getenv('TELEGRAM_MD_APPROVAL_CHAT_ID', '')  # "MD Approvals" group chat ID
 
+# Finance approval gate (non-cash customers): finance must approve before manager/MD.
+# Off by default so the existing approval flow is unchanged until explicitly enabled.
+FINANCE_APPROVAL_REQUIRED = os.getenv('FINANCE_APPROVAL_REQUIRED', 'True').lower() in ('1', 'true', 'yes')
+# Admin-role usernames allowed to set the finance status (comma separated).
+FINANCE_APPROVER_USERNAMES = [u.strip().lower() for u in os.getenv('FINANCE_APPROVER_USERNAMES', 'accounts1,accounts2').split(',') if u.strip()]
+
 WHATSAPP_API_VERSION = os.getenv('WHATSAPP_API_VERSION', 'v22.0')  # Or your preferred, active version
 WHATSAPP_ACCESS_TOKEN = os.getenv('WHATSAPP_ACCESS_TOKEN', '')
 WHATSAPP_PHONE_NUMBER_ID = os.getenv('WHATSAPP_PHONE_NUMBER_ID', '')

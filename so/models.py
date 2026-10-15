@@ -531,6 +531,12 @@ APPROVAL_STATUS_CHOICES = [
     ('MD Approval Required', 'MD Approval Required'),
 ]
 
+FINANCE_STATUS_CHOICES = [
+    ('Pending', 'Pending'),
+    ('Approved', 'Approved'),
+    ('Rejected', 'Rejected'),
+]
+
 
 class SAPSalesorder(models.Model):
     so_number = models.CharField(max_length=100, unique=True)  # Document Number
@@ -576,6 +582,21 @@ class SAPSalesorder(models.Model):
         help_text="User who last updated approval status",
     )
     approval_updated_at = models.DateTimeField(null=True, blank=True, help_text="When approval status was last updated")
+    finance_status = models.CharField(
+        max_length=20,
+        choices=FINANCE_STATUS_CHOICES,
+        default='Pending',
+        help_text="Finance approval (required before manager/MD for non-cash customers when enabled)",
+    )
+    finance_updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sapsalesorder_finance_approvals',
+    )
+    finance_updated_at = models.DateTimeField(null=True, blank=True)
+    finance_remarks = models.TextField(blank=True, null=True)
 
     def extract_quotation_number(self):
         """Extract quotation number from NFRef string.

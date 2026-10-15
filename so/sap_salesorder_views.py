@@ -54,7 +54,7 @@ def _ar_detail_list_back_context(request, *, default_list_url_name, list_back_la
 
 
 # Import models
-from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList, APPROVAL_STATUS_CHOICES, AccountsRecordingEntry
+from .models import SAPSalesorder, SAPSalesorderItem, SAPProformaInvoice, SAPProformaInvoiceLine, ProformaInvoiceLog, SAPQuotation, SAPQuotationItem, Customer, SAPARInvoice, SAPARInvoiceItem, SAPARCreditMemo, SAPARCreditMemoItem, Items, IgnoreList, APPROVAL_STATUS_CHOICES, FINANCE_STATUS_CHOICES,AccountsRecordingEntry
 
 # Import shared utilities
 from .views import get_stock_costs, SALES_USER_MAP, salesman_scope_q, get_last_six_months
@@ -63,7 +63,8 @@ from .sap_salesorder_pdf import (
     generate_sap_ar_invoice_pdf_bytes,
     generate_sap_salesorder_pdf_bytes,
 )
-from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram
+from .telegram_remarks import can_send_remarks_telegram, send_remarks_to_salesman_telegram, send_remarks_with_pdf_to_salesman_telegram, send_approval_status_change_telegram, send_finance_status_change_telegram
+from .finance_approval import finance_block_message, finance_gate_applies, is_finance_approver, GATED_STATUSES as FINANCE_GATED_STATUSES
 from .utils import get_client_ip, label_network, parse_device_info
 from .api_client import SAPAPIClient
 from .combined_ar_query import (
@@ -1612,6 +1613,12 @@ def salesorder_detail(request, so_number):
         approval_status_choices = [c for c in APPROVAL_STATUS_CHOICES if c[0] not in MANAGER_ONLY_STATUSES]
         if salesorder.approval_status in MANAGER_ONLY_STATUSES:
             approval_status_choices = [(salesorder.approval_status, salesorder.approval_status)] + approval_status_choices
+    # Finance gate: options manager/MD cannot pick until finance approves (server also enforces)
+    finance_gate_active = finance_gate_applies(salesorder)
+    finance_blocked_statuses = (
+        [s for s in FINANCE_GATED_STATUSES if s != salesorder.approval_status]
+        if finance_gate_active and salesorder.finance_status != 'Approved' else []
+    )
     monthly_pending_data = []
     credit_limit = Decimal("0")
     payment_terms = ""
@@ -1663,6 +1670,10 @@ def salesorder_detail(request, so_number):
         'is_admin': is_admin,
         'is_salesman': is_salesman,
         'approval_status_choices': approval_status_choices,
+        'finance_gate_active': finance_gate_active,
+        'finance_blocked_statuses': finance_blocked_statuses,
+        'finance_status_choices': FINANCE_STATUS_CHOICES,
+        'is_finance_approver': is_finance_approver(request.user),
         'monthly_pending_data': monthly_pending_data,
         'credit_limit': credit_limit,
         'payment_terms': payment_terms,
@@ -2586,6 +2597,12 @@ def salesorder_update_approval(request, so_number):
             messages.error(request, "Only the manager can set Approved or Rejected status.")
             return redirect("salesorder_detail", so_number=salesorder.so_number)
 
+    # Finance gate (non-cash customers, only when FINANCE_APPROVAL_REQUIRED is on)
+    block_msg = finance_block_message(salesorder, new_status)
+    if block_msg:
+        messages.error(request, block_msg)
+        return redirect("salesorder_detail", so_number=salesorder.so_number)
+
     from django.utils import timezone
     old_status = salesorder.approval_status or ""
 
@@ -2607,6 +2624,43 @@ def salesorder_update_approval(request, so_number):
             logger.warning("Approval status Telegram notification failed for SO %s: %s", salesorder.so_number, err)
 
     messages.success(request, f"Approval status updated to {new_status}.")
+    return redirect("salesorder_detail", so_number=salesorder.so_number)
+
+
+@login_required
+@require_POST
+def salesorder_update_finance_approval(request, so_number):
+    """Set finance approval status (finance approvers only). Finance can change its decision at any time."""
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+
+    if not is_finance_approver(request.user):
+        messages.error(request, "Only Finance users can change finance approval.")
+        return redirect("salesorder_detail", so_number=so_number)
+
+    valid_statuses = [c[0] for c in FINANCE_STATUS_CHOICES]
+    new_status = (request.POST.get("finance_status") or "").strip()
+    if new_status not in valid_statuses:
+        messages.error(request, "Invalid finance status.")
+        return redirect("salesorder_detail", so_number=so_number)
+
+    from django.utils import timezone
+    old_status = salesorder.finance_status or ""
+    salesorder.finance_status = new_status
+    salesorder.finance_updated_by = request.user
+    salesorder.finance_updated_at = timezone.now()
+    update_fields = ["finance_status", "finance_updated_by", "finance_updated_at"]
+    if "finance_remarks" in request.POST:
+        text = (request.POST.get("finance_remarks") or "").strip()
+        salesorder.finance_remarks = text or None
+        update_fields.append("finance_remarks")
+    salesorder.save(update_fields=update_fields)
+
+    if old_status != new_status:
+        ok, err = send_finance_status_change_telegram(salesorder, old_status, new_status, changed_by=request.user)
+        if not ok:
+            logger.warning("Finance status Telegram notification failed for SO %s: %s", salesorder.so_number, err)
+
+    messages.success(request, f"Finance approval updated to {new_status}.")
     return redirect("salesorder_detail", so_number=salesorder.so_number)
 
 

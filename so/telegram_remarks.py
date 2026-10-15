@@ -404,3 +404,38 @@ def send_approval_status_change_telegram(salesorder, old_status, new_status, cha
     if ok:
         return True, None
     return False, err or "Unknown error"
+
+def send_finance_status_change_telegram(salesorder, old_status, new_status, changed_by=None):
+    """
+    Notify the salesman's Telegram group when Finance approval status changes.
+    Returns (success: bool, error: str | None).
+    """
+    chat_id = get_chat_id_for_salesman(salesorder.salesman_name)
+    if not chat_id:
+        return False, "No Telegram group for this salesman"
+
+    emoji = {"Approved": "✅", "Rejected": "❌"}.get(new_status, "⏳")
+    changed_by_str = ""
+    if changed_by:
+        name = getattr(changed_by, 'get_full_name', lambda: '')() or getattr(changed_by, 'username', 'Unknown')
+        changed_by_str = _escape_html(name)
+
+    lines = [
+        f"{emoji} <b>Finance Approval Changed</b>",
+        "━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"📄 <b>SO:</b>  <code>{_escape_html(salesorder.so_number or '—')}</code>",
+        f"🏢 <b>Customer:</b>  {_escape_html(salesorder.customer_name or '—')}",
+        f"💰 <b>Total (excl. VAT):</b>  <b>{_format_currency(getattr(salesorder, 'document_total', None))}</b>",
+        "",
+        f"🔄 <b>Finance:</b>  {_escape_html(old_status or '—')}  ➜  <b>{_escape_html(new_status)}</b> {emoji}",
+    ]
+    if changed_by_str:
+        lines.append(f"👤 <b>Changed by:</b>  {changed_by_str}")
+    remarks_raw = (getattr(salesorder, "finance_remarks", None) or "").strip()
+    if remarks_raw:
+        lines += ["", "💬 <b>Finance remarks:</b>", "", f"<blockquote>{_escape_html(remarks_raw[:3500])}</blockquote>"]
+
+    token = getattr(settings, 'TELEGRAM_MD_APPROVAL_BOT_TOKEN', '') or settings.TELEGRAM_BOT_TOKEN
+    ok, err = send_telegram_message(chat_id, "\n".join(lines), parse_mode="HTML", token=token)
+    return (True, None) if ok else (False, err or "Unknown error")

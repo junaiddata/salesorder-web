@@ -552,7 +552,7 @@
                   {# requestSubmit() fires submit/onsubmit; form.submit() does NOT — that was clearing remarks #}
                   <select name="approval_status" onchange="(function(sel){var f=sel.form;var r=document.getElementById('remarks-textarea');var h=document.getElementById('approval-sync-remarks');if(r&&h){h.value=r.value;}if(typeof f.requestSubmit==='function'){f.requestSubmit();}else{f.submit();}})(this);" class="select-sm">
                     {% for value, label in approval_status_choices %}
-                      <option value="{{ value }}" {% if salesorder.approval_status == value %}selected{% endif %}>{{ label }}</option>
+                      <option value="{{ value }}" {% if salesorder.approval_status == value %}selected{% endif %}{% if value in finance_blocked_statuses %} disabled{% endif %}>{{ label }}{% if value in finance_blocked_statuses %} (needs Finance approval){% endif %}</option>
                     {% endfor %}
                   </select>
                   {% if salesorder.approval_updated_at %}
@@ -565,6 +565,37 @@
                   </span>
                   {% endif %}
                 </form>
+              </span>
+            </div>
+            {% endif %}
+            {% if finance_gate_active and is_admin or finance_gate_active and is_finance_approver %}
+            <div class="info-item">
+              <span class="info-label">Finance Approval</span>
+              <span class="info-value">
+                {% if is_finance_approver %}
+                <form method="post" action="{% url 'salesorder_update_finance_approval' salesorder.so_number %}" style="display:flex; flex-direction:column; gap:2px;">
+                  {% csrf_token %}
+                  <select name="finance_status" class="select-sm">
+                    {% for value, label in finance_status_choices %}
+                      <option value="{{ value }}" {% if salesorder.finance_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <input type="text" name="finance_remarks" value="{{ salesorder.finance_remarks|default:'' }}" placeholder="Finance remarks (optional)" class="select-sm">
+                  <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </form>
+                {% else %}
+                  {{ salesorder.finance_status }}
+                  {% if salesorder.finance_remarks %}<br><span class="meta-note">{{ salesorder.finance_remarks }}</span>{% endif %}
+                {% endif %}
+                {% if salesorder.finance_updated_at %}
+                {% load tz %}
+                <span class="meta-note">
+                  by {% if salesorder.finance_updated_by %}{{ salesorder.finance_updated_by.get_full_name|default:salesorder.finance_updated_by.username }}{% else %}—{% endif %}
+                  {% timezone "Asia/Dubai" %}
+                    · {{ salesorder.finance_updated_at|date:"d M Y" }}, {{ salesorder.finance_updated_at|time:"g:i A" }} UAE
+                  {% endtimezone %}
+                </span>
+                {% endif %}
               </span>
             </div>
             {% endif %}

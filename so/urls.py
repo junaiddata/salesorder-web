@@ -194,6 +194,7 @@ urlpatterns += [
     path('sapsalesorders/item/revised-price/', sap_salesorder_views.salesorder_item_save_revised_price, name='salesorder_item_save_revised_price'),
     path('sapsalesorders/<str:so_number>/revised-margin.json', sap_salesorder_views.salesorder_revised_margin_json, name='salesorder_revised_margin_json'),
     path('sapsalesorders/<str:so_number>/approval/', sap_salesorder_views.salesorder_update_approval, name='salesorder_update_approval'),
+    path('sapsalesorders/<str:so_number>/finance-approval/', sap_salesorder_views.salesorder_update_finance_approval, name='salesorder_update_finance_approval'),
     
     # SAP AR Invoice URLs
     path('saparinvoices/sync-api/', sap_salesorder_views.sync_arinvoices_from_api, name='sync_arinvoices_api'),
