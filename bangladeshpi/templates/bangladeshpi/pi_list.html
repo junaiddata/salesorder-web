@@ -54,7 +54,8 @@
                         {% endif %}
                         <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x sm" title="Edit"><i class="fas fa-pen"></i></a>
                         <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"
-                              onsubmit="return confirm('Delete PI {{ p.ref_no }}? This cannot be undone.');">
+                              data-confirm="Are you sure you want to delete PI {{ p.ref_no }}? This cannot be undone."
+                              data-confirm-title="Delete Proforma Invoice" data-confirm-ok="Delete">
                             {% csrf_token %}
                             <button type="submit" class="btn-x sm btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
                         </form>

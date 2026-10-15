@@ -8,6 +8,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    <style>
+        .bd-confirm .modal-dialog { max-width: 340px; }
+        .bd-confirm .modal-content { border: none; border-radius: 18px; padding: 1.8rem 1.6rem 1.5rem; text-align: center;
+            box-shadow: 0 24px 48px -12px rgba(15,23,42,.28), 0 8px 20px -8px rgba(15,23,42,.14); position: relative; }
+        .bd-confirm .bd-x { position: absolute; top: .7rem; right: .7rem; width: 28px; height: 28px; border-radius: 50%;
+            border: none; background: transparent; color: #94a3b8; cursor: pointer; }
+        .bd-confirm .bd-x:hover { background: #f1f5f9; color: #475569; }
+        .bd-confirm .bd-ic { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto .95rem; display: flex;
+            align-items: center; justify-content: center; font-size: 1.25rem; background: #fef2f2; color: #dc2626;
+            box-shadow: 0 0 0 6px rgba(220,38,38,.08); }
+        .bd-confirm h5 { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin: 0 0 .45rem; }
+        .bd-confirm p { font-size: .86rem; line-height: 1.55; color: #64748b; margin: 0 0 1.4rem; word-break: break-word; }
+        .bd-confirm .bd-actions { display: flex; gap: .55rem; }
+        .bd-confirm .bd-btn { flex: 1; cursor: pointer; font: inherit; font-size: .85rem; font-weight: 600;
+            padding: .62rem .9rem; border-radius: 10px; line-height: 1.2; }
+        .bd-confirm .bd-btn.ghost { background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; }
+        .bd-confirm .bd-btn.ghost:hover { background: #f1f5f9; }
+        .bd-confirm .bd-btn.danger { background: #dc2626; color: #fff; border: 1px solid #dc2626;
+            box-shadow: 0 4px 10px -2px rgba(220,38,38,.4); }
+        .bd-confirm .bd-btn.danger:hover { filter: brightness(1.06); }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -50,10 +71,41 @@
 
     {% block body %}{% endblock %}
 
+    <!-- Confirmation dialog (replaces the browser's native confirm()) -->
+    <div class="modal fade bd-confirm" id="bdConfirm" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <button type="button" class="bd-x" data-bs-dismiss="modal" aria-label="Close"><i class="fas fa-xmark"></i></button>
+                <div class="bd-ic"><i class="fas fa-trash"></i></div>
+                <h5 id="bdConfirmTitle">Please confirm</h5>
+                <p id="bdConfirmMsg"></p>
+                <div class="bd-actions">
+                    <button type="button" class="bd-btn ghost" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="bd-btn danger" id="bdConfirmOk">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.getElementById('navToggle')?.addEventListener('click', function () {
             document.getElementById('appNav').classList.toggle('open');
+        });
+
+        // <form data-confirm="..."> shows the dialog above before submitting.
+        document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (form.dataset.confirmed === '1') return;
+                e.preventDefault();
+                document.getElementById('bdConfirmTitle').textContent = form.dataset.confirmTitle || 'Please confirm';
+                document.getElementById('bdConfirmMsg').textContent = form.dataset.confirm;
+                document.getElementById('bdConfirmOk').textContent = form.dataset.confirmOk || 'Confirm';
+                var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('bdConfirm'));
+                var ok = document.getElementById('bdConfirmOk');
+                ok.onclick = function () { modal.hide(); form.dataset.confirmed = '1'; form.submit(); };
+                modal.show();
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}
