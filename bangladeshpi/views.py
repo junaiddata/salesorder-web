@@ -20,6 +20,12 @@ TEXT_FIELDS = [
     'freight_valid_till', 'bank_terms_text', 'bank_payment', 'bank_insurance',
 ]
 
+# Pre-filled on a NEW PI only; all editable. Insurance applies to both copies
+# (the bank copy falls back to it when its own Insurance box is blank).
+DEFAULT_PAYMENT = 'IRREVOCABLE & CONFIRMED L/C AT SIGHT & BALANCE ADVANCE T/T'
+DEFAULT_INSURANCE = 'BY THE BUYER'
+DEFAULT_BANK_PAYMENT = 'IRREVOCABLE & CONFIRMED L/C AT SIGHT'
+
 DEFAULT_BANK_TERMS = (
     'THE LATEST SHIPPING DATE MUST BE AT LEAST 2 MONTHS FROM THE DATE OF ISSUE.\n'
     'THE EXPIRY DATE MUST BE AT LEAST 15 DAYS FROM THE LATEST SHIPPING DATE.\n'
@@ -166,7 +172,9 @@ def pi_form(request, pk=None):
         values.update(ref_suffix=pi.ref_suffix, date=pi.date.isoformat(), freight_charges=pi.freight_charges)
     else:
         values = {'date': timezone.localdate().isoformat(), 'freight_charges': '0',
-                  'bank_terms_text': DEFAULT_BANK_TERMS}
+                  'bank_terms_text': DEFAULT_BANK_TERMS,
+                  'payment': DEFAULT_PAYMENT, 'insurance': DEFAULT_INSURANCE,
+                  'bank_payment': DEFAULT_BANK_PAYMENT}
 
     return render(request, 'bangladeshpi/pi_form.html', {
         'pi': pi,

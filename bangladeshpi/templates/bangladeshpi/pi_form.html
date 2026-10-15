@@ -16,6 +16,8 @@
     table.items-tbl td { padding: .25rem; vertical-align: top; }
     table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
     .row-heading td { background: #f6f7fb; }
+    .hd-fixed { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; padding-top: .3rem; }
+    .hd-fixed input.hs { width: 150px; display: inline-block; }
     .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
     .totals-box { max-width: 380px; margin-left: auto; font-size: .95rem; }
     .totals-box div { display: flex; justify-content: space-between; padding: .2rem 0; }
@@ -76,6 +78,14 @@
                 {% include 'bangladeshpi/_field.html' with name='final_destination' label='Final Destination' %}
                 {% include 'bangladeshpi/_field.html' with name='shipment' label='Shipment' %}
                 {% include 'bangladeshpi/_field.html' with name='validity' label='Validity' %}
+                <div class="field-x">
+                    <label class="label-x">Currency</label>
+                    <input type="text" class="input-x" value="USD" readonly tabindex="-1" style="background:#f6f7fb">
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Incoterms</label>
+                    <input type="text" class="input-x" value="CFR Cost and Freight CHATTOGRAM" readonly tabindex="-1" style="background:#f6f7fb">
+                </div>
             </div>
             <div class="mt-3">
                 {% include 'bangladeshpi/_field.html' with name='payment' label='Payment' %}
@@ -86,16 +96,17 @@
             <div class="u-spread mb-2">
                 <h5 class="mb-0">Items <small class="u-muted">(currency: USD)</small></h5>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn-x sm" id="addHeading"><i class="fas fa-heading"></i> Add group heading</button>
+                    <button type="button" class="btn-x sm" id="addHeading"><i class="fas fa-heading"></i> Add product heading</button>
                     <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button>
                 </div>
             </div>
             <div class="field-x mb-2" style="max-width:320px">
                 <label class="label-x">Catalog brand filter (optional)</label>
-                <select id="brandFilter" class="input-x">
-                    <option value="">All brands</option>
-                    {% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
-                </select>
+                <input type="text" id="brandFilter" class="input-x" list="brandList" autocomplete="off"
+                       placeholder="All brands — type to search, or clear to show all">
+                <datalist id="brandList">
+                    {% for b in brands %}<option value="{{ b }}"></option>{% endfor %}
+                </datalist>
             </div>
             <p class="u-muted mb-2" style="font-size:.8rem">Type in the UPC or Description box to search the catalog by UPC, item code or description; pick a result to fill both. You can also type manually.</p>
             <div class="items-scroll">
@@ -158,16 +169,24 @@
     const body = document.getElementById('itemsBody');
     const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    function addRow(d) {
+    const HEADING_PREFIX = 'ARISTON BRAND ELECTRIC STORAGE WATER HEATERS';
+
+    function addRow(d, atTop) {
         d = d || {};
         const heading = d.kind === 'heading';
+        // Standard heading: fixed product name + editable HS code. A saved heading with
+        // different custom text keeps its plain editable box instead.
+        const fixedHeading = heading && (!d.description || d.description.toUpperCase().startsWith(HEADING_PREFIX));
         const tr = document.createElement('tr');
         tr.className = heading ? 'row-heading' : 'row-item';
         tr.innerHTML = `
             <td><input type="hidden" name="item_kind" value="${heading ? 'heading' : 'item'}">
-                <input type="text" name="item_code" class="input-x" ${heading ? 'disabled style="visibility:hidden"' : ''}></td>
-            <td><textarea name="item_description" rows="${heading ? 1 : 2}" class="input-x"
-                 placeholder="${heading ? 'Group heading, e.g. BRAND ... (HS CODE NO. ...)' : 'Description'}"></textarea></td>
+                <input type="text" name="item_code" class="input-x" ${heading ? 'readonly tabindex="-1" style="visibility:hidden"' : ''}></td>
+            <td>${fixedHeading
+                ? `<div class="hd-fixed"><b>${HEADING_PREFIX}</b> (HS CODE NO. - <input type="text" class="input-x hs" placeholder="e.g. 8516.10.90">)</div>
+                   <input type="hidden" name="item_description">`
+                : `<textarea name="item_description" rows="${heading ? 1 : 2}" class="input-x"
+                     placeholder="${heading ? 'Group heading' : 'Description'}"></textarea>`}</td>
             <td><input type="number" step="any" min="0" name="item_qty" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
             <td><input type="number" step="any" min="0" name="item_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
             <td class="amt pt-2">${heading ? '' : '0.00'}</td>
@@ -175,7 +194,19 @@
             <td><button type="button" class="btn-x sm btn-danger-x rm"><i class="fas fa-xmark"></i></button></td>`;
         const q = n => tr.querySelector(`[name="${n}"]`);
         if (!heading) q('item_code').value = d.code || '';
-        q('item_description').value = d.description || '';
+        if (fixedHeading) {
+            const hs = tr.querySelector('.hs');
+            const m = (d.description || '').match(/\(\s*HS\s*CODE\s*NO\.?\s*[-:]?\s*(.*?)\s*\)\s*$/i);
+            hs.value = m ? m[1] : '';
+            const sync = () => {
+                const v = hs.value.trim();
+                q('item_description').value = HEADING_PREFIX + (v ? ` (HS CODE NO. - ${v})` : '');
+            };
+            hs.addEventListener('input', sync);
+            sync();
+        } else {
+            q('item_description').value = d.description || '';
+        }
         if (!heading) {
             q('item_qty').value = d.qty != null && d.qty !== '' ? parseFloat(d.qty) : '';
             q('item_price').value = d.unit_price != null && d.unit_price !== '' ? parseFloat(d.unit_price) : '';
@@ -183,7 +214,7 @@
         }
         tr.querySelector('.rm').onclick = () => { tr.remove(); recalc(); };
         tr.addEventListener('input', recalc);
-        body.appendChild(tr);
+        if (atTop && body.firstChild) body.insertBefore(tr, body.firstChild); else body.appendChild(tr);
         recalc();
     }
 
@@ -252,7 +283,11 @@
         if (q.length < 2) { hideDrop(); return; }
         timer = setTimeout(() => {
             const my = ++seq;
-            const brand = document.getElementById('brandFilter').value;
+            // Only apply the filter when it matches a real brand exactly (case-insensitive),
+            // so a half-typed brand name doesn't hide every result.
+            const typed = document.getElementById('brandFilter').value.trim().toLowerCase();
+            const hit = Array.from(document.querySelectorAll('#brandList option')).find(o => o.value.toLowerCase() === typed);
+            const brand = hit ? hit.value : '';
             fetch('{% url "bangladeshpi:items_search" %}?q=' + encodeURIComponent(q) + '&brand=' + encodeURIComponent(brand))
                 .then(r => r.json())
                 .then(d => { if (my === seq) { activeRow = tr; showDrop(el, d); } })
@@ -263,11 +298,13 @@
     window.addEventListener('scroll', e => { if (!drop.contains(e.target)) hideDrop(); }, true);
 
     document.getElementById('addItem').onclick = () => addRow({kind: 'item'});
-    document.getElementById('addHeading').onclick = () => addRow({kind: 'heading'});
+    // The product heading always goes at the top of the table, above the items.
+    document.getElementById('addHeading').onclick = () => addRow({kind: 'heading'}, true);
     document.getElementById('freight').addEventListener('input', recalc);
 
     const initial = JSON.parse(document.getElementById('itemsData').textContent);
-    if (initial.length) initial.forEach(addRow); else addRow({kind: 'item'});
+    if (initial.length) initial.forEach(d => addRow(d));
+    else { addRow({kind: 'heading'}); addRow({kind: 'item'}); }   // new PI starts with the heading on top
 })();
 </script>
 {% endblock %}

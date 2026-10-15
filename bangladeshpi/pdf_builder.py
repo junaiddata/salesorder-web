@@ -43,6 +43,8 @@ IMPORTER_LINES = [
     'Enayet Bazar, Chattogram, Bangladesh',
     'PH: 0088-02-41360491, FAX: 0088-031-610095',
 ]
+CURRENCY = 'USD'
+INCOTERM = 'CFR Cost and Freight CHATTOGRAM'
 IMPORTANT_NOTE = (
     '<b>IMPORTANT NOTE :</b> ONCE THE ORDER IS CONFIRMED, NO REVISION IS ALLOWED. '
     'IF REVISION IS INEVITABLE, THEN THE NEW DELIVERY DATE WILL BE 45 DAYS UPON '
@@ -124,13 +126,14 @@ def _details_table(pi, variant='customer'):
         [lab('TRANSPORT'), _p(pi.transport), lab('INSURANCE'), _p(insurance)],
         [lab('DESTINATION'), _p(pi.destination), lab('FINAL DESTINATION'), _p(pi.final_destination)],
         [lab('SHIPMENT'), _p(pi.shipment), lab('VALIDITY'), _p(pi.validity)],
+        [lab('CURRENCY'), _p(CURRENCY), lab('INCOTERMS'), _p(INCOTERM)],
         [lab('PAYMENT'), _p(payment), '', ''],
     ]
     t = Table(rows, colWidths=w)
     t.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 0.6, colors.black),
         ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
-        ('SPAN', (1, 4), (3, 4)),
+        ('SPAN', (1, 5), (3, 5)),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),

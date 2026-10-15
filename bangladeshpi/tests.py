@@ -100,3 +100,8 @@ class BangladeshPITests(TestCase):
         r = self._post(suffix='08', bank=('17.00', ''))   # partial bank prices
         self.assertEqual(r.status_code, 200)
         self.assertEqual(BangladeshPI.objects.count(), 1)
+
+    def test_new_form_prefills_defaults(self):
+        html = self.client.get(reverse('bangladeshpi:new')).content.decode()
+        self.assertIn('IRREVOCABLE &amp; CONFIRMED L/C AT SIGHT &amp; BALANCE ADVANCE T/T', html)
+        self.assertIn('BY THE BUYER', html)
