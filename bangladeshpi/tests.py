@@ -15,8 +15,8 @@ class BangladeshPITests(TestCase):
         self.user = get_user_model().objects.create_user('tester', password='x')
         self.client.force_login(self.user)
 
-    def _post(self, suffix='07A', bank=('17.00', '23.00')):
-        return self.client.post(reverse('bangladeshpi:new'), {
+    def _payload(self, suffix='07A', bank=('17.00', '23.00')):
+        return {
             'ref_suffix': suffix, 'date': '2026-10-15',
             'port_of_origin': 'ANY ITALIAN PORT', 'country_of_origin': 'ITALY',
             'transport': '1 x 40\' FCL, BY SEA', 'insurance': 'COVERED BY BUYER',
@@ -33,7 +33,10 @@ class BangladeshPITests(TestCase):
             'item_qty': ['', '450', '100'],
             'item_price': ['', '82.15', '91.19'],
             'item_bank_price': ['', *bank],
-        })
+        }
+
+    def _post(self, suffix='07A', bank=('17.00', '23.00')):
+        return self.client.post(reverse('bangladeshpi:new'), self._payload(suffix, bank))
 
     def test_requires_login(self):
         self.client.logout()
@@ -105,3 +108,61 @@ class BangladeshPITests(TestCase):
         html = self.client.get(reverse('bangladeshpi:new')).content.decode()
         self.assertIn('IRREVOCABLE &amp; CONFIRMED L/C AT SIGHT &amp; BALANCE ADVANCE T/T', html)
         self.assertIn('BY THE BUYER', html)
+
+
+import io
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image, ImageDraw
+
+
+def _png(color, size=(300, 120), text=None):
+    img = Image.new('RGBA', size, (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((5, 5, size[0] - 5, size[1] - 5), outline=color, width=6)
+    buf = io.BytesIO()
+    img.save(buf, 'PNG')
+    return SimpleUploadedFile('x.png', buf.getvalue(), content_type='image/png')
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class SealTests(BangladeshPITests):
+    def test_upload_and_print_signature_stamp(self):
+        from .models import BangladeshPISeal
+        r = self.client.post(reverse('bangladeshpi:seal_settings'),
+                             {'signature': _png('blue'), 'stamp': _png('purple', (200, 200))})
+        self.assertEqual(r.status_code, 302)
+        seal = BangladeshPISeal.get_instance()
+        self.assertTrue(seal.signature and seal.stamp)
+
+        r = self.client.post(reverse('bangladeshpi:seal_settings'), {'signature': SimpleUploadedFile('bad.png', b'not an image')})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(BangladeshPISeal.get_instance().signature)       # bad upload didn't replace it
+
+        self.client.post(reverse('bangladeshpi:new'), {**self._payload(), 'add_signature': 'on', 'add_stamp': 'on'})
+        pi = BangladeshPI.objects.get()
+        self.assertTrue(pi.add_signature and pi.add_stamp)
+        plain = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).content
+        self.assertTrue(plain.startswith(b'%PDF'))
+        out = os.environ.get('BDPI_SAMPLE_OUT')
+        if out:
+            with open(out.replace('.pdf', '_seal.pdf'), 'wb') as f:
+                f.write(plain)
+        # remove one
+        self.client.post(reverse('bangladeshpi:seal_settings'), {'remove_stamp': '1'})
+        self.assertFalse(BangladeshPISeal.get_instance().stamp)
+        self.assertEqual(self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).status_code, 200)  # missing image never breaks PDF
+
+
+class StripBackgroundTests(TestCase):
+    def test_white_becomes_transparent_ink_stays(self):
+        from .pdf_builder import _strip_white_background
+        img = Image.new('RGB', (4, 1), 'white')
+        img.putpixel((1, 0), (0, 0, 200))      # blue ink
+        img.putpixel((2, 0), (250, 250, 250))  # near-white paper noise
+        out = _strip_white_background(img)
+        self.assertEqual(out.getpixel((0, 0))[3], 0)
+        self.assertEqual(out.getpixel((1, 0))[3], 255)
+        self.assertEqual(out.getpixel((2, 0))[3], 0)

@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from so.models import Items
-from .models import REF_PREFIX, BangladeshPI, BangladeshPIItem
+from .models import REF_PREFIX, BangladeshPI, BangladeshPIItem, BangladeshPISeal
 from .pdf_builder import build_pi_pdf
 
 TEXT_FIELDS = [
@@ -147,6 +147,8 @@ def pi_form(request, pk=None):
                 pi.ref_suffix = suffix
                 pi.date = pi_date
                 pi.freight_charges = _dec(posted.get('freight_charges'))
+                pi.add_signature = posted.get('add_signature') == 'on'
+                pi.add_stamp = posted.get('add_stamp') == 'on'
                 for f in TEXT_FIELDS:
                     setattr(pi, f, (posted.get(f) or '').strip())
                 pi.save()
@@ -167,9 +169,11 @@ def pi_form(request, pk=None):
 
     if posted is not None:
         values = {k: posted.get(k, '') for k in ['ref_suffix', 'date', 'freight_charges'] + TEXT_FIELDS}
+        values.update(add_signature=posted.get('add_signature') == 'on', add_stamp=posted.get('add_stamp') == 'on')
     elif pi:
         values = {k: getattr(pi, k) for k in TEXT_FIELDS}
-        values.update(ref_suffix=pi.ref_suffix, date=pi.date.isoformat(), freight_charges=pi.freight_charges)
+        values.update(ref_suffix=pi.ref_suffix, date=pi.date.isoformat(), freight_charges=pi.freight_charges,
+                      add_signature=pi.add_signature, add_stamp=pi.add_stamp)
     else:
         values = {'date': timezone.localdate().isoformat(), 'freight_charges': '0',
                   'bank_terms_text': DEFAULT_BANK_TERMS,
@@ -182,6 +186,7 @@ def pi_form(request, pk=None):
         'errors': errors,
         'values': values,
         'items_data': items_data,
+        'seal': BangladeshPISeal.get_instance(),
         'brands': list(Items.objects.order_by('item_firm').values_list('item_firm', flat=True).distinct()),
     })
 
@@ -211,3 +216,39 @@ def pi_pdf(request, pk):
     )
     resp['Cache-Control'] = 'no-store'
     return resp
+
+
+MAX_SEAL_BYTES = 5 * 1024 * 1024
+
+
+@login_required
+def seal_settings(request):
+    """Upload / replace / remove the company signature and stamp images."""
+    seal = BangladeshPISeal.get_instance()
+    if request.method == 'POST':
+        changed = False
+        for field, label in (('signature', 'Signature'), ('stamp', 'Stamp')):
+            if request.POST.get(f'remove_{field}') == '1' and getattr(seal, field):
+                getattr(seal, field).delete(save=False)
+                changed = True
+            f = request.FILES.get(field)
+            if f:
+                if f.size > MAX_SEAL_BYTES:
+                    messages.error(request, f'{label} image is too large (max 5 MB).')
+                    continue
+                try:
+                    from PIL import Image
+                    Image.open(f).verify()
+                    f.seek(0)
+                except Exception:
+                    messages.error(request, f'{label}: please upload a valid image (PNG or JPG).')
+                    continue
+                if getattr(seal, field):
+                    getattr(seal, field).delete(save=False)
+                getattr(seal, field).save(f.name, f, save=False)
+                changed = True
+        if changed:
+            seal.save()
+            messages.success(request, 'Signature & stamp updated.')
+        return redirect('bangladeshpi:seal_settings')
+    return render(request, 'bangladeshpi/seal_settings.html', {'seal': seal})

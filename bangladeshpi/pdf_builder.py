@@ -13,13 +13,14 @@ from io import BytesIO
 from xml.sax.saxutils import escape
 
 from django.conf import settings
+from PIL import Image as PILImage
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (
-    BaseDocTemplate, Frame, KeepTogether, PageTemplate, Paragraph, Spacer,
+    BaseDocTemplate, Flowable, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer,
     Table, TableStyle,
 )
 
@@ -28,6 +29,8 @@ MARGIN_X = 36
 TOP_RESERVED = 100      # letterhead logo band
 BOTTOM_RESERVED = 95    # letterhead contact footer starts ~75pt from the bottom edge
 CONTENT_W = PAGE_W - 2 * MARGIN_X
+
+from .models import BangladeshPISeal  # noqa: E402
 
 LETTERHEAD_PATH = os.path.join(settings.MEDIA_ROOT, 'BDLetterhead.pdf')
 
@@ -207,9 +210,98 @@ def _terms_flowables(pi):
     return out
 
 
-def _signature_and_bank():
+def _strip_white_background(img):
+    """Make white / near-white pixels transparent (soft edge) so only the ink shows."""
+    img = img.convert('RGBA')
+    # lowest channel: 255 = white paper, small = ink. Fully transparent from 240 up,
+    # fully opaque from 200 down, linear in between.
+    px = img.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            pr, pg, pb, pa = px[x, y]
+            m = min(pr, pg, pb)
+            if m >= 240:
+                alpha = 0
+            elif m <= 200:
+                alpha = 255
+            else:
+                alpha = int(255 * (240 - m) / 40)
+            px[x, y] = (pr, pg, pb, min(pa, alpha))
+    return img
+
+
+def _seal_image(field_file, max_w, max_h, remove_bg=False):
+    """Read an uploaded seal image into a ReportLab Image scaled to fit the box."""
+    if not field_file:
+        return None
+    try:
+        with field_file.open('rb') as fh:
+            data = fh.read()
+        pil = PILImage.open(BytesIO(data))
+        if remove_bg:
+            pil.thumbnail((900, 900))   # plenty for print, keeps the pixel pass fast
+            pil = _strip_white_background(pil)
+            buf = BytesIO()
+            pil.save(buf, 'PNG')
+            data = buf.getvalue()
+        w, h = pil.size
+        scale = min(max_w / w, max_h / h)
+        return Image(BytesIO(data), width=w * scale, height=h * scale, mask='auto')
+    except Exception:
+        return None  # a missing/corrupt file must never break the PDF
+
+
+class _StampBelow(Flowable):
+    """Draws the company stamp just under the bank details box, at the left.
+
+    The letterhead footer only occupies the right-hand side of the page, so the
+    stamp is allowed to hang below the text frame into that empty bottom-left
+    corner. The flowable itself takes almost no height.
+    """
+    GAP = 6
+
+    def __init__(self, img):
+        super().__init__()
+        self.img = img
+        self.width = 0
+        self.height = 1
+
+    def wrap(self, availWidth, availHeight):
+        return availWidth, 1
+
+    def draw(self):
+        # Never let the stamp run off the bottom of the page: shrink it if the
+        # bank box happens to sit very low.
+        room = self.canv.absolutePosition(0, 0)[1] - self.GAP - 8
+        h = self.img.drawHeight
+        if h > room > 0:
+            k = room / h
+            self.img.drawWidth *= k
+            self.img.drawHeight *= k
+        self.img.drawOn(self.canv, 0, -self.GAP - self.img.drawHeight)
+
+
+def _exporter_cell(pi):
+    cell = [Paragraph('<b>CONFIRMED AND ACCEPTED BY EXPORTER:</b>', S_BASE)]
+    seal = BangladeshPISeal.get_instance()
+    sig = _seal_image(seal.signature, 110, 46) if pi.add_signature else None
+    pics = [sig] if sig is not None else []
+    if pics:
+        t = Table([pics], colWidths=[p.drawWidth + 10 for p in pics], rowHeights=[52])
+        t.hAlign = 'LEFT'
+        t.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        cell.append(t)
+    return cell
+
+
+def _signature_and_bank(pi):
     sig = Table(
-        [[Paragraph('<b>CONFIRMED AND ACCEPTED BY EXPORTER:</b>', S_BASE),
+        [[_exporter_cell(pi),
           Paragraph('<b>CONFIRMED AND ACCEPTED BY BUYER:</b>', S_BASE)]],
         colWidths=[CONTENT_W * 0.5, CONTENT_W * 0.5], rowHeights=[68],
     )
@@ -225,7 +317,12 @@ def _signature_and_bank():
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
     ]))
-    return KeepTogether([sig, Spacer(1, 12), bank])
+    parts = [sig, Spacer(1, 12), bank]
+    seal = BangladeshPISeal.get_instance()
+    stamp = _seal_image(seal.stamp, 190, 100, remove_bg=True) if pi.add_stamp else None
+    if stamp is not None:
+        parts.append(_StampBelow(stamp))
+    return KeepTogether(parts)
 
 
 def _body(pi, variant='customer'):
@@ -245,7 +342,7 @@ def _body(pi, variant='customer'):
         story.append(Paragraph(f'<b>Freight Rate Valid Till {escape(pi.freight_valid_till)} only</b>', S_NOTE))
     if variant == 'bank':
         story += _terms_flowables(pi)
-    story += [Spacer(1, 10), _signature_and_bank()]
+    story += [Spacer(1, 10), _signature_and_bank(pi)]
     return story
 
 

@@ -1,0 +1,47 @@
+{% extends 'bangladeshpi/base.html' %}
+
+{% block title %}Signature &amp; Stamp | Bangladesh PIs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .seal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 768px) { .seal-grid { grid-template-columns: 1fr; } }
+    .seal-preview { height: 150px; border: 1px dashed #c9d0de; border-radius: 10px; background: #fafbfd;
+                    display: flex; align-items: center; justify-content: center; margin-bottom: .75rem; overflow: hidden; }
+    .seal-preview img { max-width: 90%; max-height: 90%; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head"><h2>Signature &amp; Stamp</h2></div>
+    <p class="u-muted">Upload them once. On each PI you then tick <b>Add signature</b> / <b>Add stamp</b> to print them in the
+        "Confirmed and accepted by exporter" area of both the customer and bank PDFs. A PNG with a transparent background looks best.</p>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="seal-grid">
+            <div class="card-x"><div class="card-x-body">
+                <h5>Digital Signature</h5>
+                <div class="seal-preview">
+                    {% if seal.signature %}<img src="{{ seal.signature.url }}" alt="Signature">{% else %}<span class="u-muted">No signature uploaded</span>{% endif %}
+                </div>
+                <input type="file" name="signature" accept="image/png,image/jpeg" class="input-x">
+                {% if seal.signature %}<label class="mt-2 d-block"><input type="checkbox" name="remove_signature" value="1"> Remove current signature</label>{% endif %}
+            </div></div>
+            <div class="card-x"><div class="card-x-body">
+                <h5>Company Stamp</h5>
+                <div class="seal-preview">
+                    {% if seal.stamp %}<img src="{{ seal.stamp.url }}" alt="Stamp">{% else %}<span class="u-muted">No stamp uploaded</span>{% endif %}
+                </div>
+                <input type="file" name="stamp" accept="image/png,image/jpeg" class="input-x">
+                {% if seal.stamp %}<label class="mt-2 d-block"><input type="checkbox" name="remove_stamp" value="1"> Remove current stamp</label>{% endif %}
+            </div></div>
+        </div>
+        <div class="d-flex gap-2 mt-3 mb-5">
+            <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save</button>
+            <a href="{% url 'bangladeshpi:list' %}" class="btn-x lg">Back</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -31,6 +31,10 @@ class BangladeshPI(models.Model):
     bank_terms_text = models.TextField(blank=True)
     bank_payment = models.CharField(max_length=400, blank=True)
     bank_insurance = models.CharField(max_length=300, blank=True)
+    # Digital signature / stamp (images are kept once in BangladeshPISeal;
+    # these flags choose whether this PI's PDFs print them).
+    add_signature = models.BooleanField(default=False)
+    add_stamp = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name='+',
@@ -89,3 +93,23 @@ class BangladeshPIItem(models.Model):
     @property
     def bank_amount(self):
         return (self.qty or Decimal('0')) * (self.bank_unit_price or Decimal('0'))
+
+
+def signature_upload_to(instance, filename):
+    return f'bangladeshpi/seals/signature/{filename}'
+
+
+def stamp_upload_to(instance, filename):
+    return f'bangladeshpi/seals/stamp/{filename}'
+
+
+class BangladeshPISeal(models.Model):
+    """Single row holding the company signature and stamp images."""
+
+    signature = models.ImageField(upload_to=signature_upload_to, blank=True, null=True)
+    stamp = models.ImageField(upload_to=stamp_upload_to, blank=True, null=True)
+
+    @classmethod
+    def get_instance(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

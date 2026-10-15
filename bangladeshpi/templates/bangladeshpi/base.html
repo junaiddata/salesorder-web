@@ -50,6 +50,9 @@
                 <a href="{% url 'bangladeshpi:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
                     <i class="fas fa-plus-circle"></i> New PI
                 </a>
+                <a href="{% url 'bangladeshpi:seal_settings' %}" class="app-nav-link {% if url_name == 'seal_settings' %}active{% endif %}">
+                    <i class="fas fa-stamp"></i> Signature &amp; Stamp
+                </a>
             </div>
             <div class="app-nav-right">
                 <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>

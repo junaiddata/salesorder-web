@@ -154,6 +154,16 @@
             <p class="u-muted mt-2 mb-0" style="font-size:.8rem">The Important Note, confirmation blocks and bank account details are added automatically to both PDFs.</p>
         </div></div>
 
+        <div class="card-x mb-3"><div class="card-x-body">
+            <h5 class="mb-1">Signature &amp; Stamp</h5>
+            <p class="u-muted" style="font-size:.85rem">Printed in the "Confirmed and accepted by exporter" area of both PDFs.
+                Images are uploaded once on the <a href="{% url 'bangladeshpi:seal_settings' %}" target="_blank">Signature &amp; Stamp</a> page.</p>
+            <label class="me-4"><input type="checkbox" name="add_signature" {% if values.add_signature %}checked{% endif %} {% if not seal.signature %}disabled{% endif %}>
+                Add signature {% if not seal.signature %}<small class="u-muted">(none uploaded yet)</small>{% endif %}</label>
+            <label><input type="checkbox" name="add_stamp" {% if values.add_stamp %}checked{% endif %} {% if not seal.stamp %}disabled{% endif %}>
+                Add stamp {% if not seal.stamp %}<small class="u-muted">(none uploaded yet)</small>{% endif %}</label>
+        </div></div>
+
         <div class="d-flex gap-2 mb-5">
             <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save PI</button>
             <a href="{% url 'bangladeshpi:list' %}" class="btn-x lg">Cancel</a>
