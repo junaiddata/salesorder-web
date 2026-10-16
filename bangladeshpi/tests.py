@@ -127,7 +127,11 @@ def _png(color, size=(300, 120), text=None):
     return SimpleUploadedFile('x.png', buf.getvalue(), content_type='image/png')
 
 
-@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+_PRIVATE = tempfile.mkdtemp()
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), BANGLADESH_PI_PRIVATE_ROOT=_PRIVATE,
+                   BANGLADESH_PI_SEAL_USERS=['tester', 'md'])
 class SealTests(BangladeshPITests):
     def test_upload_and_print_signature_stamp(self):
         from .models import BangladeshPISeal
@@ -166,3 +170,67 @@ class StripBackgroundTests(TestCase):
         self.assertEqual(out.getpixel((0, 0))[3], 0)
         self.assertEqual(out.getpixel((1, 0))[3], 255)
         self.assertEqual(out.getpixel((2, 0))[3], 0)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), BANGLADESH_PI_PRIVATE_ROOT=tempfile.mkdtemp(),
+                   BANGLADESH_PI_SEAL_USERS=['tester', 'md'])
+class SealSecurityTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.boss = User.objects.create_user('MD', password='x')       # case-insensitive match
+        self.staff = User.objects.create_user('staff1', password='x')
+        self.client.force_login(self.boss)
+        self.client.post(reverse('bangladeshpi:seal_settings'),
+                         {'signature': _png('blue'), 'stamp': _png('purple', (200, 200))})
+        base = BangladeshPITests()
+        base.client = self.client
+        self.client.post(reverse('bangladeshpi:new'), {**BangladeshPITests._payload(base), 'add_signature': 'on', 'add_stamp': 'on'})
+        self.pi = BangladeshPI.objects.get()
+
+    def _images(self, user):
+        import fitz
+        self.client.force_login(user)
+        r = self.client.get(reverse('bangladeshpi:pdf', args=[self.pi.pk]))
+        self.assertEqual(r.status_code, 200)
+        return len(fitz.open(stream=r.content, filetype='pdf')[0].get_images())
+
+    def test_files_are_private_and_have_no_url(self):
+        from django.conf import settings
+        from .models import BangladeshPISeal
+        seal = BangladeshPISeal.get_instance()
+        self.assertTrue(seal.signature.storage.exists(seal.signature.name))
+        self.assertTrue(os.path.abspath(seal.signature.path).startswith(os.path.abspath(settings.BANGLADESH_PI_PRIVATE_ROOT)))
+        self.assertFalse(os.path.exists(os.path.join(settings.MEDIA_ROOT, seal.signature.name)))
+        with self.assertRaises(ValueError):
+            seal.signature.url
+
+    def test_only_authorised_users_manage_seals(self):
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(reverse('bangladeshpi:seal_settings')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('bangladeshpi:seal_settings'), {'remove_stamp': '1'}).status_code, 403)
+        from .models import BangladeshPISeal
+        self.assertTrue(BangladeshPISeal.get_instance().stamp)
+
+    def test_page_shows_no_image_or_link(self):
+        self.client.force_login(self.boss)
+        html = self.client.get(reverse('bangladeshpi:seal_settings')).content.decode()
+        self.assertNotIn('<img', html)
+        self.assertNotIn('/media/', html)
+        self.assertNotIn('.png', html.lower())
+        self.assertIn('Signature uploaded', html)
+
+    def test_unauthorised_user_gets_unsigned_pdf_and_cannot_tick(self):
+        with_seals = self._images(self.boss)
+        without = self._images(self.staff)
+        self.assertGreater(with_seals, without)
+        # staff cannot switch the flags off or on
+        self.client.force_login(self.staff)
+        base = BangladeshPITests(); base.client = self.client
+        payload = BangladeshPITests._payload(base)
+        self.client.post(reverse('bangladeshpi:edit', args=[self.pi.pk]), payload)   # no tick-boxes sent
+        self.pi.refresh_from_db()
+        self.assertTrue(self.pi.add_signature and self.pi.add_stamp)
+        # and the form tells them why
+        html = self.client.get(reverse('bangladeshpi:edit', args=[self.pi.pk])).content.decode()
+        self.assertIn('Only authorised users', html)
+        self.assertNotIn('Signature &amp; Stamp</a>', html)   # no nav link to the seal page

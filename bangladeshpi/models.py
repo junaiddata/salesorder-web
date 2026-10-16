@@ -4,6 +4,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .storage import get_private_storage
+
 REF_PREFIX = 'BD/IMAA/2026/'
 
 
@@ -106,8 +108,9 @@ def stamp_upload_to(instance, filename):
 class BangladeshPISeal(models.Model):
     """Single row holding the company signature and stamp images."""
 
-    signature = models.ImageField(upload_to=signature_upload_to, blank=True, null=True)
-    stamp = models.ImageField(upload_to=stamp_upload_to, blank=True, null=True)
+    # Private storage: outside MEDIA_ROOT, never served by URL.
+    signature = models.ImageField(upload_to=signature_upload_to, storage=get_private_storage, blank=True, null=True)
+    stamp = models.ImageField(upload_to=stamp_upload_to, storage=get_private_storage, blank=True, null=True)
 
     @classmethod
     def get_instance(cls):

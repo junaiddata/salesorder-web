@@ -26,13 +26,13 @@ from reportlab.platypus import (
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 36
-TOP_RESERVED = 100      # letterhead logo band
-BOTTOM_RESERVED = 95    # letterhead contact footer starts ~75pt from the bottom edge
+TOP_RESERVED = 72       # letterhead logo band (BD_letter.pdf: logo ends ~46pt from the top)
+BOTTOM_RESERVED = 69    # letterhead contact footer (BD_letter.pdf: starts ~49pt from the bottom edge)
 CONTENT_W = PAGE_W - 2 * MARGIN_X
 
 from .models import BangladeshPISeal  # noqa: E402
 
-LETTERHEAD_PATH = os.path.join(settings.MEDIA_ROOT, 'BDLetterhead.pdf')
+LETTERHEAD_PATH = os.path.join(settings.MEDIA_ROOT, 'BD_letter.pdf')   # old BDLetterhead.pdf kept as a backup
 
 EXPORTER_LINES = [
     'JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING LLC',
@@ -115,7 +115,7 @@ def _header_block(pi):
     return t
 
 
-def _details_table(pi, variant='customer'):
+def _details_table(pi, variant='customer', tight=False):
     def lab(t):
         return Paragraph(t, S_BOLD)
 
@@ -138,13 +138,13 @@ def _details_table(pi, variant='customer'):
         ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
         ('SPAN', (1, 5), (3, 5)),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5 if tight else 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5 if tight else 3),
     ]))
     return t
 
 
-def _items_table(pi, variant='customer'):
+def _items_table(pi, variant='customer', tight=False):
     bank = variant == 'bank'
     w = [CONTENT_W * 0.14, CONTENT_W * 0.38, CONTENT_W * 0.14, CONTENT_W * 0.17, CONTENT_W * 0.17]
     rows = [
@@ -156,8 +156,8 @@ def _items_table(pi, variant='customer'):
         ('GRID', (0, 0), (-1, -1), 0.6, colors.black),
         ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5 if tight else 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5 if tight else 3),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f2f2f2')),
     ]
     for it in pi.items.all():
@@ -211,24 +211,53 @@ def _terms_flowables(pi):
 
 
 def _strip_white_background(img):
-    """Make white / near-white pixels transparent (soft edge) so only the ink shows."""
-    img = img.convert('RGBA')
-    # lowest channel: 255 = white paper, small = ink. Fully transparent from 240 up,
-    # fully opaque from 200 down, linear in between.
-    px = img.load()
-    w, h = img.size
-    for y in range(h):
-        for x in range(w):
-            pr, pg, pb, pa = px[x, y]
-            m = min(pr, pg, pb)
-            if m >= 240:
-                alpha = 0
-            elif m <= 200:
-                alpha = 255
-            else:
-                alpha = int(255 * (240 - m) / 40)
-            px[x, y] = (pr, pg, pb, min(pa, alpha))
-    return img
+    """Remove the paper background of a photographed/scanned signature or stamp.
+
+    The paper may be grey or unevenly lit, so the background level is estimated
+    locally (a blurred "max brightness" map), every pixel is divided by it, and
+    only pixels clearly darker than the paper keep any opacity. The result is
+    the ink on a transparent background, with the grey cast removed.
+    """
+    import numpy as np
+    from PIL import ImageFilter
+
+    rgba = img.convert('RGBA')
+    w, h = rgba.size
+    rgb = np.asarray(rgba.convert('RGB'), dtype=np.float32)
+    old_alpha = np.asarray(rgba.getchannel('A'), dtype=np.float32)
+
+    gray = rgba.convert('L')
+    sw, sh = max(1, w // 8), max(1, h // 8)
+    bg = gray.resize((sw, sh), PILImage.BILINEAR).filter(ImageFilter.MaxFilter(9))
+    bg = bg.filter(ImageFilter.GaussianBlur(2)).resize((w, h), PILImage.BICUBIC)
+    bg = np.maximum(np.asarray(bg, dtype=np.float32), 60.0)      # avoid dividing by ~0
+
+    norm = np.clip(rgb * 255.0 / bg[..., None], 0, 255)           # paper -> white
+    lum = norm @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    # transparent at/above 232, opaque at/below 185, smooth in between
+    alpha = np.clip((232.0 - lum) / (232.0 - 185.0), 0, 1) * 255.0
+    alpha = np.minimum(alpha, old_alpha)
+
+    # Photos often have a dark shadow line along the edges of the paper: ignore the outer border.
+    by, bx = max(1, int(h * 0.03)), max(1, int(w * 0.03))
+    if h > 40 and w > 40:
+        alpha[:by, :] = 0
+        alpha[-by:, :] = 0
+        alpha[:, :bx] = 0
+        alpha[:, -bx:] = 0
+
+    # Slightly stronger, darker ink so thin pen strokes still print clearly when shrunk.
+    alpha = 255.0 * (alpha / 255.0) ** 0.6
+    norm = norm * 0.85
+
+    out = PILImage.fromarray(np.dstack([norm, alpha]).astype(np.uint8), 'RGBA')
+    # Trim the empty margins so the ink (not the photo of the paper) fills the box.
+    box = PILImage.fromarray((alpha > 25).astype(np.uint8) * 255).getbbox()
+    if box:
+        pad = 6
+        out = out.crop((max(0, box[0] - pad), max(0, box[1] - pad),
+                        min(w, box[2] + pad), min(h, box[3] + pad)))
+    return out
 
 
 def _seal_image(field_file, max_w, max_h, remove_bg=False):
@@ -252,43 +281,38 @@ def _seal_image(field_file, max_w, max_h, remove_bg=False):
         return None  # a missing/corrupt file must never break the PDF
 
 
-class _StampBelow(Flowable):
-    """Draws the company stamp just under the bank details box, at the left.
+class _Mark(Flowable):
+    """Zero-size marker that records which page it lands on (layout probing)."""
 
-    The letterhead footer only occupies the right-hand side of the page, so the
-    stamp is allowed to hang below the text frame into that empty bottom-left
-    corner. The flowable itself takes almost no height.
-    """
-    GAP = 6
-
-    def __init__(self, img):
+    def __init__(self, marks, name):
         super().__init__()
-        self.img = img
-        self.width = 0
-        self.height = 1
+        self.marks, self.name = marks, name
+        self.width = self.height = 0
 
     def wrap(self, availWidth, availHeight):
-        return availWidth, 1
+        return 0, 0
 
     def draw(self):
-        # Never let the stamp run off the bottom of the page: shrink it if the
-        # bank box happens to sit very low.
-        room = self.canv.absolutePosition(0, 0)[1] - self.GAP - 8
-        h = self.img.drawHeight
-        if h > room > 0:
-            k = room / h
-            self.img.drawWidth *= k
-            self.img.drawHeight *= k
-        self.img.drawOn(self.canv, 0, -self.GAP - self.img.drawHeight)
+        self.marks[self.name] = self.canv.getPageNumber()
 
 
-def _exporter_cell(pi):
+def _seal_row_height(pi, compact):
+    """Height of the signature/stamp strip under the 'Confirmed ... EXPORTER' line."""
+    if pi.add_stamp:
+        return 52 if compact else 84
+    return 44 if compact else 58
+
+
+def _exporter_cell(pi, compact=False):
+    """Heading, then the signature with the stamp right after it (same strip)."""
     cell = [Paragraph('<b>CONFIRMED AND ACCEPTED BY EXPORTER:</b>', S_BASE)]
     seal = BangladeshPISeal.get_instance()
-    sig = _seal_image(seal.signature, 110, 46, remove_bg=True) if pi.add_signature else None
-    pics = [sig] if sig is not None else []
+    row_h = _seal_row_height(pi, compact)
+    sig = _seal_image(seal.signature, 150, row_h - 6, remove_bg=True) if pi.add_signature else None
+    stamp = _seal_image(seal.stamp, 125, row_h - 4, remove_bg=True) if pi.add_stamp else None
+    pics = [p for p in (sig, stamp) if p is not None]
     if pics:
-        t = Table([pics], colWidths=[p.drawWidth + 10 for p in pics], rowHeights=[52])
+        t = Table([pics], colWidths=[p.drawWidth + 12 for p in pics], rowHeights=[row_h])
         t.hAlign = 'LEFT'
         t.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -299,11 +323,11 @@ def _exporter_cell(pi):
     return cell
 
 
-def _signature_and_bank(pi):
+def _signature_and_bank(pi, compact=False, marks=None):
     sig = Table(
-        [[_exporter_cell(pi),
+        [[_exporter_cell(pi, compact),
           Paragraph('<b>CONFIRMED AND ACCEPTED BY BUYER:</b>', S_BASE)]],
-        colWidths=[CONTENT_W * 0.5, CONTENT_W * 0.5], rowHeights=[68],
+        colWidths=[CONTENT_W * 0.5, CONTENT_W * 0.5], rowHeights=[16 + _seal_row_height(pi, compact) if (pi.add_signature or pi.add_stamp) else (52 if compact else 68)],
     )
     sig.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
 
@@ -313,55 +337,73 @@ def _signature_and_bank(pi):
     bank.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
         ('LINEBELOW', (0, 0), (-1, 0), 0.6, colors.black),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1 if compact else 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1 if compact else 2),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
     ]))
-    parts = [sig, Spacer(1, 12), bank]
-    seal = BangladeshPISeal.get_instance()
-    stamp = _seal_image(seal.stamp, 190, 100, remove_bg=True) if pi.add_stamp else None
-    if stamp is not None:
-        parts.append(_StampBelow(stamp))
+    parts = [sig, Spacer(1, 6 if compact else 12), bank]
+    if marks is not None:
+        parts.insert(0, _Mark(marks, 'block'))
     return KeepTogether(parts)
 
 
-def _body(pi, variant='customer'):
+def _body(pi, variant='customer', mode='normal', marks=None):
+    """mode: 'normal' | 'compact' (tighter signature/bank block) |
+    'together' (notes, terms, signature and bank kept together on one page)."""
+    compact = mode == 'compact'
     story = [
         Paragraph('<u>PROFORMA INVOICE</u>', S_TITLE),
         Spacer(1, 6),
         _header_block(pi),
         Spacer(1, 4),
-        _details_table(pi, variant),
+        _details_table(pi, variant, compact),
         Spacer(1, 4),
-        _items_table(pi, variant),
+        _items_table(pi, variant, compact),
         Spacer(1, 10),
-        Paragraph(IMPORTANT_NOTE, S_NOTE),
     ]
+    tail = [Paragraph(IMPORTANT_NOTE, S_NOTE)]
+    if marks is not None:
+        tail.append(_Mark(marks, 'note'))
     if variant == 'customer' and pi.freight_valid_till:
-        story.append(Spacer(1, 6))
-        story.append(Paragraph(f'<b>Freight Rate Valid Till {escape(pi.freight_valid_till)} only</b>', S_NOTE))
+        tail.append(Spacer(1, 6))
+        tail.append(Paragraph(f'<b>Freight Rate Valid Till {escape(pi.freight_valid_till)} only</b>', S_NOTE))
     if variant == 'bank':
-        story += _terms_flowables(pi)
-    story += [Spacer(1, 10), _signature_and_bank(pi)]
+        tail += _terms_flowables(pi)
+    tail += [Spacer(1, 5 if compact else 10), _signature_and_bank(pi, compact, marks)]
+    if mode == 'together':
+        story.append(KeepTogether(tail))
+    else:
+        story += tail
     return story
 
 
-def build_pi_pdf(pi, variant='customer'):
+def build_pi_pdf(pi, variant='customer', with_seals=True):
     """Return the finished PDF (letterhead + content) as bytes.
 
     variant: 'customer' (Ex-Works/freight/CFR totals) or 'bank' (bank unit
     prices, single total, L/C terms).
     """
-    body_buf = BytesIO()
-    doc = BaseDocTemplate(
-        body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
-        topMargin=TOP_RESERVED, bottomMargin=BOTTOM_RESERVED,
-        title=f'Proforma Invoice {pi.ref_no}',
-    )
-    frame = Frame(MARGIN_X, BOTTOM_RESERVED, CONTENT_W, PAGE_H - TOP_RESERVED - BOTTOM_RESERVED,
-                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
-    doc.build(_body(pi, variant))
+    # Layout tiers: if the signature/bank block would land alone on a new page,
+    # first retry with a tighter block, then keep the notes/terms with it so the
+    # last page is never just the signature and bank box.
+    if not with_seals:
+        # Viewer isn't authorised to use the signature/stamp: print an unsigned copy.
+        pi.add_signature = pi.add_stamp = False   # in-memory only, never saved
+    for mode in ('normal', 'compact', 'together'):
+        marks = {}
+        body_buf = BytesIO()
+        doc = BaseDocTemplate(
+            body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
+            topMargin=TOP_RESERVED, bottomMargin=BOTTOM_RESERVED,
+            title=f'Proforma Invoice {pi.ref_no}',
+        )
+        frame = Frame(MARGIN_X, BOTTOM_RESERVED, CONTENT_W, PAGE_H - TOP_RESERVED - BOTTOM_RESERVED,
+                      leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+        doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
+        doc.build(_body(pi, variant, mode, marks))
+        orphaned = marks.get('block', 0) > marks.get('note', 0)
+        if mode == 'together' or not orphaned:
+            break
     body_buf.seek(0)
 
     body_reader = PdfReader(body_buf)

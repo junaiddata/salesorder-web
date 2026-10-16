@@ -1,3 +1,4 @@
+import logging
 from datetime import date as date_cls
 from decimal import Decimal, InvalidOperation
 
@@ -5,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -13,6 +15,9 @@ from django.views.decorators.http import require_POST
 from so.models import Items
 from .models import REF_PREFIX, BangladeshPI, BangladeshPIItem, BangladeshPISeal
 from .pdf_builder import build_pi_pdf
+from .permissions import can_use_seal
+
+audit_log = logging.getLogger('bangladeshpi.audit')
 
 TEXT_FIELDS = [
     'port_of_origin', 'country_of_origin', 'transport', 'insurance',
@@ -147,8 +152,9 @@ def pi_form(request, pk=None):
                 pi.ref_suffix = suffix
                 pi.date = pi_date
                 pi.freight_charges = _dec(posted.get('freight_charges'))
-                pi.add_signature = posted.get('add_signature') == 'on'
-                pi.add_stamp = posted.get('add_stamp') == 'on'
+                if can_use_seal(request.user):   # everyone else leaves the existing choice untouched
+                    pi.add_signature = posted.get('add_signature') == 'on'
+                    pi.add_stamp = posted.get('add_stamp') == 'on'
                 for f in TEXT_FIELDS:
                     setattr(pi, f, (posted.get(f) or '').strip())
                 pi.save()
@@ -170,6 +176,8 @@ def pi_form(request, pk=None):
     if posted is not None:
         values = {k: posted.get(k, '') for k in ['ref_suffix', 'date', 'freight_charges'] + TEXT_FIELDS}
         values.update(add_signature=posted.get('add_signature') == 'on', add_stamp=posted.get('add_stamp') == 'on')
+        if not can_use_seal(request.user) and pi:
+            values.update(add_signature=pi.add_signature, add_stamp=pi.add_stamp)
     elif pi:
         values = {k: getattr(pi, k) for k in TEXT_FIELDS}
         values.update(ref_suffix=pi.ref_suffix, date=pi.date.isoformat(), freight_charges=pi.freight_charges,
@@ -187,6 +195,7 @@ def pi_form(request, pk=None):
         'values': values,
         'items_data': items_data,
         'seal': BangladeshPISeal.get_instance(),
+        'can_seal': can_use_seal(request.user),
         'brands': list(Items.objects.order_by('item_firm').values_list('item_firm', flat=True).distinct()),
     })
 
@@ -208,7 +217,11 @@ def pi_pdf(request, pk):
     if variant == 'bank' and not pi.has_bank_prices:
         messages.error(request, 'Add a Bank Unit Price for every item (Edit PI) to enable the Bank PDF.')
         return redirect('bangladeshpi:list')
-    pdf = build_pi_pdf(pi, variant)
+    with_seals = can_use_seal(request.user)
+    pdf = build_pi_pdf(pi, variant, with_seals=with_seals)
+    if with_seals and (pi.add_signature or pi.add_stamp):
+        audit_log.info('Signed PDF generated: user=%s pi=%s copy=%s signature=%s stamp=%s',
+                       request.user.username, pi.ref_no, variant, pi.add_signature, pi.add_stamp)
     resp = HttpResponse(pdf, content_type='application/pdf')
     disp = 'inline' if request.GET.get('inline') == '1' else 'attachment'
     resp['Content-Disposition'] = (
@@ -224,6 +237,8 @@ MAX_SEAL_BYTES = 5 * 1024 * 1024
 @login_required
 def seal_settings(request):
     """Upload / replace / remove the company signature and stamp images."""
+    if not can_use_seal(request.user):
+        raise PermissionDenied
     seal = BangladeshPISeal.get_instance()
     if request.method == 'POST':
         changed = False
@@ -249,6 +264,7 @@ def seal_settings(request):
                 changed = True
         if changed:
             seal.save()
+            audit_log.info('Signature/stamp changed by user=%s', request.user.username)
             messages.success(request, 'Signature & stamp updated.')
         return redirect('bangladeshpi:seal_settings')
     return render(request, 'bangladeshpi/seal_settings.html', {'seal': seal})

@@ -2,38 +2,24 @@
 
 {% block title %}Signature &amp; Stamp | Bangladesh PIs{% endblock %}
 
-{% block extra_css %}
-<style>
-    .seal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
-    @media (max-width: 768px) { .seal-grid { grid-template-columns: 1fr; } }
-    .seal-preview { height: 150px; border: 1px dashed #c9d0de; border-radius: 10px; background: #fafbfd;
-                    display: flex; align-items: center; justify-content: center; margin-bottom: .75rem; overflow: hidden; }
-    .seal-preview img { max-width: 90%; max-height: 90%; }
-</style>
-{% endblock %}
-
 {% block body %}
 <div class="u-wrap u-page">
     <div class="sec-head"><h2>Signature &amp; Stamp</h2></div>
-    <p class="u-muted">Upload them once. On each PI you then tick <b>Add signature</b> / <b>Add stamp</b> to print them in the
+    <p class="u-muted">For security the images are stored privately and are never shown or linked here. Upload them once; uploading again replaces the current one. On each PI you then tick <b>Add signature</b> / <b>Add stamp</b> to print them in the
         "Confirmed and accepted by exporter" area of both the customer and bank PDFs. A PNG with a transparent background looks best.</p>
 
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="seal-grid">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem">
             <div class="card-x"><div class="card-x-body">
                 <h5>Digital Signature</h5>
-                <div class="seal-preview">
-                    {% if seal.signature %}<img src="{{ seal.signature.url }}" alt="Signature">{% else %}<span class="u-muted">No signature uploaded</span>{% endif %}
-                </div>
+                <p class="mb-3">{% if seal.signature %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Signature uploaded</span>{% else %}<span class="chip-x gray">No signature uploaded</span>{% endif %}</p>
                 <input type="file" name="signature" accept="image/png,image/jpeg" class="input-x">
                 {% if seal.signature %}<label class="mt-2 d-block"><input type="checkbox" name="remove_signature" value="1"> Remove current signature</label>{% endif %}
             </div></div>
             <div class="card-x"><div class="card-x-body">
                 <h5>Company Stamp</h5>
-                <div class="seal-preview">
-                    {% if seal.stamp %}<img src="{{ seal.stamp.url }}" alt="Stamp">{% else %}<span class="u-muted">No stamp uploaded</span>{% endif %}
-                </div>
+                <p class="mb-3">{% if seal.stamp %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Stamp uploaded</span>{% else %}<span class="chip-x gray">No stamp uploaded</span>{% endif %}</p>
                 <input type="file" name="stamp" accept="image/png,image/jpeg" class="input-x">
                 {% if seal.stamp %}<label class="mt-2 d-block"><input type="checkbox" name="remove_stamp" value="1"> Remove current stamp</label>{% endif %}
             </div></div>
