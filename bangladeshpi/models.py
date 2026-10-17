@@ -66,7 +66,8 @@ class BangladeshPI(models.Model):
     @property
     def has_bank_prices(self):
         """Bank copy is available only when every item row has a bank price."""
-        rows = [i for i in self.items.all() if i.kind == 'item']
+        # FOC rows are free on both copies, so they never need a bank price.
+        rows = [i for i in self.items.all() if i.kind == 'item' and not i.is_foc]
         return bool(rows) and all(i.bank_unit_price is not None for i in rows)
 
     def __str__(self):
@@ -84,16 +85,23 @@ class BangladeshPIItem(models.Model):
     qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     bank_unit_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # Free of charge: printed as "FOC" instead of a price/amount on both the
+    # customer and the bank copy, and counted as 0 in every total.
+    is_foc = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['position', 'id']
 
     @property
     def amount(self):
+        if self.is_foc:
+            return Decimal('0')
         return (self.qty or Decimal('0')) * (self.unit_price or Decimal('0'))
 
     @property
     def bank_amount(self):
+        if self.is_foc:
+            return Decimal('0')
         return (self.qty or Decimal('0')) * (self.bank_unit_price or Decimal('0'))
 
 

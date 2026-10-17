@@ -130,12 +130,20 @@ def build_pi_xlsx(pi, variant='customer'):
             ws[f'A{r}'] = it.code
             ws[f'B{r}'] = it.description
             ws[f'C{r}'] = float(it.qty)
-            ws[f'D{r}'] = float(price or 0)
-            ws[f'E{r}'] = f'=C{r}*D{r}'
+            if it.is_foc:
+                # text, so the SUM() totals simply skip it
+                ws[f'D{r}'] = 'FOC'
+                ws[f'E{r}'] = 'FOC'
+                ws[f'D{r}'].alignment = ws[f'E{r}'].alignment = Alignment(horizontal='right', vertical='center')
+            else:
+                ws[f'D{r}'] = float(price or 0)
+                ws[f'E{r}'] = f'=C{r}*D{r}'
             for col in 'ABCDE':
                 ws[f'{col}{r}'].font = NORMAL
             ws[f'C{r}'].number_format = QTY
             ws[f'D{r}'].number_format = ws[f'E{r}'].number_format = MONEY
+            if it.is_foc:
+                ws[f'D{r}'].font = ws[f'E{r}'].font = BOLD
             ws[f'C{r}'].alignment = Alignment(horizontal='center', vertical='center')
         for col in 'AB':
             ws[f'{col}{r}'].alignment = WRAP

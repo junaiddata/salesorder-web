@@ -122,28 +122,32 @@ def pi_form(request, pk=None):
         qtys = posted.getlist('item_qty')
         prices = posted.getlist('item_price')
         bank_prices = posted.getlist('item_bank_price')
+        focs = posted.getlist('item_foc')
         rows = []
         for i, kind in enumerate(kinds):
             code = (codes[i] if i < len(codes) else '').strip()
             desc = (descs[i] if i < len(descs) else '').strip()
             if not code and not desc:
                 continue
+            is_foc = kind != 'heading' and (focs[i] if i < len(focs) else '0') == '1'
             rows.append({
                 'kind': 'heading' if kind == 'heading' else 'item',
                 'code': code, 'description': desc,
                 'qty': _dec(qtys[i] if i < len(qtys) else 0),
-                'unit_price': _dec(prices[i] if i < len(prices) else 0),
+                # a FOC row carries no prices at all
+                'unit_price': Decimal('0') if is_foc else _dec(prices[i] if i < len(prices) else 0),
                 'bank_unit_price': (
-                    _dec_or_none(bank_prices[i] if i < len(bank_prices) else '')
-                    if kind != 'heading' else None
-                ),
+                    None if is_foc else _dec_or_none(bank_prices[i] if i < len(bank_prices) else '')
+                ) if kind != 'heading' else None,
+                'is_foc': is_foc,
             })
         item_rows = [r for r in rows if r['kind'] == 'item']
         if not item_rows:
             errors.append('Please add at least one item.')
         # Bank copy is all-or-nothing: either no bank prices, or one for every item.
-        n_bank = sum(1 for r in item_rows if r['bank_unit_price'] is not None)
-        if 0 < n_bank < len(item_rows):
+        priced_rows = [r for r in item_rows if not r['is_foc']]
+        n_bank = sum(1 for r in priced_rows if r['bank_unit_price'] is not None)
+        if 0 < n_bank < len(priced_rows):
             errors.append('Bank copy: please enter a Bank Unit Price for every item, or clear them all.')
 
         if not errors:
@@ -170,7 +174,8 @@ def pi_form(request, pk=None):
     else:
         items_data = [
             {'kind': it.kind, 'code': it.code, 'description': it.description,
-             'qty': it.qty, 'unit_price': it.unit_price, 'bank_unit_price': it.bank_unit_price}
+             'qty': it.qty, 'unit_price': it.unit_price, 'bank_unit_price': it.bank_unit_price,
+             'is_foc': it.is_foc}
             for it in (pi.items.all() if pi else [])
         ]
 

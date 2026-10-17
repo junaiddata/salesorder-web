@@ -16,6 +16,9 @@
     table.items-tbl td { padding: .25rem; vertical-align: top; }
     table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
     .row-heading td { background: #f6f7fb; }
+    .foc-lbl { font-size: .8rem; font-weight: 600; display: inline-flex; align-items: center; gap: .3rem; padding-top: .45rem; white-space: nowrap; cursor: pointer; }
+    input.foc-locked { background: #f1f5f9; color: #94a3b8; }
+    tr.is-foc .amt { font-weight: 700; color: #0f766e; }
     .hd-fixed { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; padding-top: .3rem; }
     .hd-fixed input.hs { width: 150px; display: inline-block; }
     .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
@@ -45,7 +48,7 @@
         table.items-tbl td:last-child { grid-column: 1 / -1; text-align: right; }
         .row-heading { grid-template-columns: 1fr; }
         .row-heading td[data-label="UPC Code"], .row-heading td[data-label="Qty"], .row-heading td[data-label="Unit Price"],
-        .row-heading td[data-label="Amount"], .row-heading td[data-label="Bank Unit Price"] { display: none; }
+        .row-heading td[data-label="Amount"], .row-heading td[data-label="Bank Unit Price"], .row-heading td[data-label="FOC"] { display: none; }
         #brandFilter { max-width: 100%; }
     }
     .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
@@ -133,6 +136,7 @@
                         <th style="width:8%">Qty</th><th style="width:12%">Unit Price</th>
                         <th style="width:12%">Amount</th>
                         <th style="width:13%" title="Used only in the Bank PDF">Bank Unit Price</th>
+                        <th style="width:6%" title="Free of charge: prints FOC instead of a price on both copies">FOC</th>
                         <th style="width:4%"></th>
                     </tr></thead>
                     <tbody id="itemsBody"></tbody>
@@ -223,6 +227,8 @@
             <td data-label="Unit Price"><input type="number" step="any" min="0" name="item_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
             <td class="amt pt-2" data-label="Amount">${heading ? '' : '0.00'}</td>
             <td data-label="Bank Unit Price"><input type="number" step="any" min="0" name="item_bank_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td data-label="FOC" class="c-foc">${heading ? '<input type="hidden" name="item_foc" value="0">'
+                : '<input type="hidden" name="item_foc" value="0"><label class="foc-lbl"><input type="checkbox" class="foc-chk"> FOC</label>'}</td>
             <td><button type="button" class="btn-x sm btn-danger-x rm"><i class="fas fa-xmark"></i></button></td>`;
         const q = n => tr.querySelector(`[name="${n}"]`);
         if (!heading) q('item_code').value = d.code || '';
@@ -243,6 +249,25 @@
             q('item_qty').value = d.qty != null && d.qty !== '' ? parseFloat(d.qty) : '';
             q('item_price').value = d.unit_price != null && d.unit_price !== '' ? parseFloat(d.unit_price) : '';
             q('item_bank_price').value = d.bank_unit_price != null && d.bank_unit_price !== '' ? parseFloat(d.bank_unit_price) : '';
+            // FOC: one tick-box for both copies. Prices are cleared and locked (readonly, not disabled,
+            // so every row still submits the same fields in the same order).
+            const chk = tr.querySelector('.foc-chk');
+            const applyFoc = () => {
+                const on = chk.checked;
+                q('item_foc').value = on ? '1' : '0';
+                ['item_price', 'item_bank_price'].forEach(n => {
+                    const el = q(n);
+                    if (on) el.value = '';
+                    el.readOnly = on;
+                    el.tabIndex = on ? -1 : 0;
+                    el.classList.toggle('foc-locked', on);
+                    el.placeholder = on ? 'FOC' : '';
+                });
+                tr.classList.toggle('is-foc', on);
+                recalc();
+            };
+            chk.addEventListener('change', applyFoc);
+            if (d.is_foc) { chk.checked = true; applyFoc(); }
         }
         tr.querySelector('.rm').onclick = () => { tr.remove(); recalc(); };
         tr.addEventListener('input', recalc);
@@ -257,7 +282,8 @@
                        (parseFloat(tr.querySelector('[name=item_bank_price]').value) || 0);
             const a = (parseFloat(tr.querySelector('[name=item_qty]').value) || 0) *
                       (parseFloat(tr.querySelector('[name=item_price]').value) || 0);
-            tr.querySelector('.amt').textContent = fmt(a);
+            const foc = tr.querySelector('.foc-chk')?.checked;
+            tr.querySelector('.amt').textContent = foc ? 'FOC' : fmt(a);
             sum += a;
         });
         const f = parseFloat(document.getElementById('freight').value) || 0;

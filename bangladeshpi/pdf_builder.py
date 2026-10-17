@@ -167,11 +167,15 @@ def _items_table(pi, variant='customer', tight=False):
             rows.append([Paragraph(escape(text), S_BOLD), '', '', '', ''])
             style.append(('SPAN', (0, r), (-1, r)))
             continue
+        if it.is_foc:
+            unit_cell = amt_cell = Paragraph('FOC', S_RIGHT_B)
+        else:
+            unit_cell = Paragraph(_money(it.bank_unit_price if bank else it.unit_price), S_RIGHT)
+            amt_cell = Paragraph(_money(it.bank_amount if bank else it.amount), S_RIGHT)
         rows.append([
             _p(it.code), _p(it.description),
             Paragraph(_qty(it.qty), S_CENTER),
-            Paragraph(_money(it.bank_unit_price if bank else it.unit_price), S_RIGHT),
-            Paragraph(_money(it.bank_amount if bank else it.amount), S_RIGHT),
+            unit_cell, amt_cell,
         ])
 
     country = (pi.country_of_origin or '').upper()

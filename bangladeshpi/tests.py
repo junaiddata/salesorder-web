@@ -277,3 +277,58 @@ class ExcelExportTests(BangladeshPITests):
         pi = BangladeshPI.objects.get()
         self.client.logout()
         self.assertEqual(self.client.get(reverse('bangladeshpi:excel', args=[pi.pk])).status_code, 302)
+
+
+class FOCTests(BangladeshPITests):
+    def _payload_foc(self, suffix='F1', foc=('0', '0', '1'), bank=('17.00', '23.00', '')):
+        data = self._payload(suffix=suffix)
+        # heading + 3 items; the last item is FOC (prices are ignored for FOC rows)
+        data.update({
+            'item_kind': ['heading', 'item', 'item', 'item'],
+            'item_code': ['', '3100635', '3201435', '3201438'],
+            'item_description': ['ARISTON BRAND ELECTRIC STORAGE WATER HEATERS (HS CODE NO. - 8516)',
+                                 'ANDRIS R 30/3', 'PRO 1 R 50 V/S', 'FREE SAMPLE HEATER'],
+            'item_qty': ['', '450', '100', '5'],
+            'item_price': ['', '82.15', '91.19', '99'],            # 99 must be ignored for the FOC row
+            'item_bank_price': ['', bank[0], bank[1], bank[2]],
+            'item_foc': ['0', *foc],
+        })
+        return data
+
+    def test_foc_saved_and_totals_ignore_it(self):
+        r = self.client.post(reverse('bangladeshpi:new'), self._payload_foc())
+        self.assertEqual(r.status_code, 302)
+        pi = BangladeshPI.objects.get()
+        foc = pi.items.get(code='3201438')
+        self.assertTrue(foc.is_foc)
+        self.assertEqual(foc.unit_price, 0)
+        self.assertIsNone(foc.bank_unit_price)
+        self.assertEqual(pi.items_total, Decimal('450') * Decimal('82.15') + Decimal('100') * Decimal('91.19'))
+        self.assertEqual(pi.bank_items_total, Decimal('450') * 17 + Decimal('100') * 23)
+        self.assertTrue(pi.has_bank_prices)          # the FOC row doesn't block the Bank copy
+
+    def test_partial_bank_prices_still_rejected_but_foc_not_counted(self):
+        # one real item missing its bank price -> rejected; the FOC row is not what triggers it
+        r = self.client.post(reverse('bangladeshpi:new'), self._payload_foc(bank=('17.00', '', '')))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(BangladeshPI.objects.count(), 0)
+
+    def test_pdf_and_excel_show_foc(self):
+        import fitz, openpyxl
+        self.client.post(reverse('bangladeshpi:new'), self._payload_foc())
+        pi = BangladeshPI.objects.get()
+        for q in ({}, {'copy': 'bank'}):
+            pdf = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), q)
+            self.assertEqual(pdf.status_code, 200)
+            text = fitz.open(stream=pdf.content, filetype='pdf')[0].get_text()
+            self.assertEqual(text.count('FOC'), 2, text)       # unit price + amount cells
+            xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), q)
+            ws = openpyxl.load_workbook(io.BytesIO(xl.content)).active
+            cells = [c.value for row in ws.iter_rows() for c in row]
+            self.assertEqual(cells.count('FOC'), 2)
+
+    def test_edit_form_prefills_foc(self):
+        self.client.post(reverse('bangladeshpi:new'), self._payload_foc())
+        pi = BangladeshPI.objects.get()
+        html = self.client.get(reverse('bangladeshpi:edit', args=[pi.pk])).content.decode()
+        self.assertIn('&quot;is_foc&quot;: true', html.replace('"is_foc": true', '&quot;is_foc&quot;: true'))
