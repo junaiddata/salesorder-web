@@ -2,6 +2,35 @@
 
 {% block title %}Bangladesh PIs{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* The shared table style forces the actions onto one long line; allow them to wrap instead. */
+    .pi-table .actions { white-space: normal; }
+    .pi-table td, .pi-table th { vertical-align: middle; }
+    .pi-table .ref { font-weight: 600; white-space: nowrap; }
+    .pi-table .nowrap { white-space: nowrap; }
+    .act { display: flex; flex-wrap: wrap; gap: .45rem .9rem; align-items: center; }
+    .act-group { display: inline-flex; align-items: center; gap: .3rem; }
+    .act-label { font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
+    .act .btn-x { padding: .3rem .6rem; font-size: .76rem; white-space: nowrap; }
+    .act-group.end { margin-left: auto; }
+    .btn-x.disabled-x { opacity: .45; cursor: not-allowed; }
+
+    @media (max-width: 991px) {
+        /* Phones / tablets: each PI becomes a card, nothing scrolls sideways. */
+        .pi-table thead { display: none; }
+        .pi-table, .pi-table tbody, .pi-table tr, .pi-table td { display: block; width: 100%; }
+        .pi-table tr { padding: .75rem .9rem; border-bottom: 1px solid #e2e8f0; }
+        .pi-table td { padding: .2rem 0; border: none; background: transparent !important; }
+        .pi-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 118px;
+            font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
+        .pi-table td.actions { padding-top: .6rem; }
+        .act-group.end { margin-left: 0; }
+        .pi-table .ref, .pi-table .nowrap { white-space: normal; overflow-wrap: anywhere; }
+    }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="hero">
     <div class="hero-inner u-spread">
@@ -26,7 +55,7 @@
 
     {% if pis %}
     <div class="tbl-x-wrap">
-        <table class="tbl-x">
+        <table class="tbl-x pi-table">
             <thead>
                 <tr>
                     <th>Ref No</th>
@@ -40,31 +69,39 @@
             <tbody>
                 {% for p in pis %}
                 <tr>
-                    <td>{{ p.ref_no }}</td>
-                    <td>{{ p.date|date:"d M Y" }}</td>
-                    <td>{{ p.destination|default:"—" }}</td>
-                    <td>{{ p.items.all|length }}</td>
-                    <td>{{ p.grand_total|floatformat:2 }}</td>
+                    <td class="ref" data-label="Ref No">{{ p.ref_no }}</td>
+                    <td class="nowrap" data-label="Date">{{ p.date|date:"d M Y" }}</td>
+                    <td data-label="Destination">{{ p.destination|default:"—" }}</td>
+                    <td data-label="Items">{{ p.items.all|length }}</td>
+                    <td class="nowrap" data-label="Total CFR (USD)">{{ p.grand_total|floatformat:2 }}</td>
                     <td class="actions">
-                        <a href="{% url 'bangladeshpi:pdf' p.pk %}" class="btn-x sm" title="Download the customer copy"><i class="fas fa-download"></i> Customer PDF</a>
-                        {% if p.has_bank_prices %}
-                        <a href="{% url 'bangladeshpi:pdf' p.pk %}?copy=bank" class="btn-x sm" title="Download the bank copy"><i class="fas fa-building-columns"></i> Bank PDF</a>
-                        {% else %}
-                        <span class="btn-x sm" style="opacity:.45;cursor:not-allowed" title="Add bank prices to enable"><i class="fas fa-building-columns"></i> Bank PDF</span>
-                        {% endif %}
-                        <a href="{% url 'bangladeshpi:excel' p.pk %}" class="btn-x sm" title="Download the customer copy as Excel"><i class="fas fa-file-excel"></i> Customer Excel</a>
-                        {% if p.has_bank_prices %}
-                        <a href="{% url 'bangladeshpi:excel' p.pk %}?copy=bank" class="btn-x sm" title="Download the bank copy as Excel"><i class="fas fa-file-excel"></i> Bank Excel</a>
-                        {% else %}
-                        <span class="btn-x sm" style="opacity:.45;cursor:not-allowed" title="Add bank prices to enable"><i class="fas fa-file-excel"></i> Bank Excel</span>
-                        {% endif %}
-                        <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x sm" title="Edit"><i class="fas fa-pen"></i></a>
-                        <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"
-                              data-confirm="Are you sure you want to delete PI {{ p.ref_no }}? This cannot be undone."
-                              data-confirm-title="Delete Proforma Invoice" data-confirm-ok="Delete">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-x sm btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
-                        </form>
+                        <div class="act">
+                            <span class="act-group">
+                                <a href="{% url 'bangladeshpi:pdf' p.pk %}" class="btn-x" title="Download the customer copy as PDF"><i class="fas fa-download"></i> Customer PDF</a>
+                                {% if p.has_bank_prices %}
+                                <a href="{% url 'bangladeshpi:pdf' p.pk %}?copy=bank" class="btn-x" title="Download the bank copy as PDF"><i class="fas fa-building-columns"></i> Bank PDF</a>
+                                {% else %}
+                                <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-building-columns"></i> Bank PDF</span>
+                                {% endif %}
+                            </span>
+                            <span class="act-group">
+                                <a href="{% url 'bangladeshpi:excel' p.pk %}" class="btn-x" title="Download the customer copy as Excel"><i class="fas fa-file-excel"></i> Customer Excel</a>
+                                {% if p.has_bank_prices %}
+                                <a href="{% url 'bangladeshpi:excel' p.pk %}?copy=bank" class="btn-x" title="Download the bank copy as Excel"><i class="fas fa-file-excel"></i> Bank Excel</a>
+                                {% else %}
+                                <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-file-excel"></i> Bank Excel</span>
+                                {% endif %}
+                            </span>
+                            <span class="act-group end">
+                                <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
+                                <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"
+                                      data-confirm="Are you sure you want to delete PI {{ p.ref_no }}? This cannot be undone."
+                                      data-confirm-title="Delete Proforma Invoice" data-confirm-ok="Delete">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn-x btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </span>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

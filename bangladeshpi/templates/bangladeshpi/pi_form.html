@@ -20,7 +20,7 @@
     .hd-fixed input.hs { width: 150px; display: inline-block; }
     .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
     .totals-box { max-width: 380px; margin-left: auto; font-size: .95rem; }
-    .totals-box div { display: flex; justify-content: space-between; padding: .2rem 0; }
+    .totals-box div { display: flex; justify-content: space-between; gap: 1rem; padding: .2rem 0; }
     .totals-box .grand { font-weight: 700; border-top: 1px solid #ccc; margin-top: .3rem; padding-top: .4rem; }
     #catDrop { position: fixed; z-index: 2000; background: #fff; border: 1px solid #cfd6e4; border-radius: 8px;
                box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: 320px; overflow-y: auto; display: none; min-width: 420px; }
@@ -31,6 +31,23 @@
     #catDrop .foot { padding: .4rem .7rem; font-size: .78rem; color: #9a5b00; background: #fff8e6; }
     #catDrop .none { padding: .6rem .7rem; color: #7a8294; font-size: .85rem; }
     input.no-upc { border-color: #dc2626 !important; background: #fff5f5; }
+    @media (max-width: 768px) {
+        /* Phones: each item row becomes a small card instead of a sideways-scrolling table. */
+        .items-scroll { overflow-x: visible; }
+        table.items-tbl, table.items-tbl tbody { display: block; min-width: 0; width: 100%; }
+        table.items-tbl thead { display: none; }
+        table.items-tbl tr { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .6rem; padding: .7rem;
+            border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: .7rem; }
+        table.items-tbl td { display: block; padding: 0; }
+        table.items-tbl td[data-label]::before { content: attr(data-label); display: block; font-size: .66rem;
+            font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: .1rem; }
+        table.items-tbl td.c-desc { grid-column: 1 / -1; }
+        table.items-tbl td:last-child { grid-column: 1 / -1; text-align: right; }
+        .row-heading { grid-template-columns: 1fr; }
+        .row-heading td[data-label="UPC Code"], .row-heading td[data-label="Qty"], .row-heading td[data-label="Unit Price"],
+        .row-heading td[data-label="Amount"], .row-heading td[data-label="Bank Unit Price"] { display: none; }
+        #brandFilter { max-width: 100%; }
+    }
     .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
 </style>
 {% endblock %}
@@ -100,7 +117,7 @@
                     <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button>
                 </div>
             </div>
-            <div class="field-x mb-2" style="max-width:320px">
+            <div class="field-x mb-2" style="max-width:420px">
                 <label class="label-x">Catalog brand filter (optional)</label>
                 <input type="text" id="brandFilter" class="input-x" list="brandList" autocomplete="off"
                        placeholder="All brands — type to search, or clear to show all">
@@ -195,17 +212,17 @@
         const tr = document.createElement('tr');
         tr.className = heading ? 'row-heading' : 'row-item';
         tr.innerHTML = `
-            <td><input type="hidden" name="item_kind" value="${heading ? 'heading' : 'item'}">
+            <td data-label="UPC Code"><input type="hidden" name="item_kind" value="${heading ? 'heading' : 'item'}">
                 <input type="text" name="item_code" class="input-x" ${heading ? 'readonly tabindex="-1" style="visibility:hidden"' : ''}></td>
-            <td>${fixedHeading
+            <td data-label="Description" class="c-desc">${fixedHeading
                 ? `<div class="hd-fixed"><b>${HEADING_PREFIX}</b> (HS CODE NO. - <input type="text" class="input-x hs" placeholder="e.g. 8516.10.90">)</div>
                    <input type="hidden" name="item_description">`
                 : `<textarea name="item_description" rows="${heading ? 1 : 2}" class="input-x"
                      placeholder="${heading ? 'Group heading' : 'Description'}"></textarea>`}</td>
-            <td><input type="number" step="any" min="0" name="item_qty" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
-            <td><input type="number" step="any" min="0" name="item_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
-            <td class="amt pt-2">${heading ? '' : '0.00'}</td>
-            <td><input type="number" step="any" min="0" name="item_bank_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td data-label="Qty"><input type="number" step="any" min="0" name="item_qty" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td data-label="Unit Price"><input type="number" step="any" min="0" name="item_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
+            <td class="amt pt-2" data-label="Amount">${heading ? '' : '0.00'}</td>
+            <td data-label="Bank Unit Price"><input type="number" step="any" min="0" name="item_bank_price" class="input-x" ${heading ? 'style="visibility:hidden"' : ''}></td>
             <td><button type="button" class="btn-x sm btn-danger-x rm"><i class="fas fa-xmark"></i></button></td>`;
         const q = n => tr.querySelector(`[name="${n}"]`);
         if (!heading) q('item_code').value = d.code || '';

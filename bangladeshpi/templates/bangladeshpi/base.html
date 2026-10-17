@@ -29,6 +29,14 @@
             box-shadow: 0 4px 10px -2px rgba(220,38,38,.4); }
         .bd-confirm .bd-btn.danger:hover { filter: brightness(1.06); }
     </style>
+    <style>
+        /* Use the full browser width on every Bangladesh PI page (the shared UI caps it at 1140px). */
+        .u-wrap, .hero-inner, .app-nav-inner, .crumbs-inner { max-width: none; }
+        .u-wrap, .hero-inner, .app-nav-inner { padding-left: 1.5rem; padding-right: 1.5rem; }
+        @media (max-width: 768px) { .u-wrap, .hero-inner, .app-nav-inner { padding-left: 1rem; padding-right: 1rem; } }
+        body { overflow-x: hidden; }
+        input, select, textarea { max-width: 100%; }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
