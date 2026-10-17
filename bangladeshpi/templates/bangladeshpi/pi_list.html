@@ -52,6 +52,12 @@
                         {% else %}
                         <span class="btn-x sm" style="opacity:.45;cursor:not-allowed" title="Add bank prices to enable"><i class="fas fa-building-columns"></i> Bank PDF</span>
                         {% endif %}
+                        <a href="{% url 'bangladeshpi:excel' p.pk %}" class="btn-x sm" title="Download the customer copy as Excel"><i class="fas fa-file-excel"></i> Customer Excel</a>
+                        {% if p.has_bank_prices %}
+                        <a href="{% url 'bangladeshpi:excel' p.pk %}?copy=bank" class="btn-x sm" title="Download the bank copy as Excel"><i class="fas fa-file-excel"></i> Bank Excel</a>
+                        {% else %}
+                        <span class="btn-x sm" style="opacity:.45;cursor:not-allowed" title="Add bank prices to enable"><i class="fas fa-file-excel"></i> Bank Excel</span>
+                        {% endif %}
                         <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x sm" title="Edit"><i class="fas fa-pen"></i></a>
                         <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"
                               data-confirm="Are you sure you want to delete PI {{ p.ref_no }}? This cannot be undone."

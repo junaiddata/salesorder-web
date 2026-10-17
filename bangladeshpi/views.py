@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 
 from so.models import Items
 from .models import REF_PREFIX, BangladeshPI, BangladeshPIItem, BangladeshPISeal
+from .excel_builder import build_pi_xlsx
 from .pdf_builder import build_pi_pdf
 from .permissions import can_use_seal
 
@@ -227,6 +228,23 @@ def pi_pdf(request, pk):
     resp['Content-Disposition'] = (
         f'{disp}; filename="PI_{pi.ref_no.replace("/", "-")}_{variant.capitalize()}.pdf"'
     )
+    resp['Cache-Control'] = 'no-store'
+    return resp
+
+
+@login_required
+def pi_excel(request, pk):
+    """Excel version of the customer or bank copy (same data as the PDF)."""
+    pi = get_object_or_404(BangladeshPI.objects.prefetch_related('items'), pk=pk)
+    variant = 'bank' if request.GET.get('copy') == 'bank' else 'customer'
+    if variant == 'bank' and not pi.has_bank_prices:
+        messages.error(request, 'Add a Bank Unit Price for every item (Edit PI) to enable the Bank Excel.')
+        return redirect('bangladeshpi:list')
+    resp = HttpResponse(
+        build_pi_xlsx(pi, variant),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resp['Content-Disposition'] = f'attachment; filename="PI_{pi.ref_no.replace("/", "-")}_{variant.capitalize()}.xlsx"'
     resp['Cache-Control'] = 'no-store'
     return resp
 

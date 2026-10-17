@@ -234,3 +234,46 @@ class SealSecurityTests(TestCase):
         html = self.client.get(reverse('bangladeshpi:edit', args=[self.pi.pk])).content.decode()
         self.assertIn('Only authorised users', html)
         self.assertNotIn('Signature &amp; Stamp</a>', html)   # no nav link to the seal page
+
+
+class ExcelExportTests(BangladeshPITests):
+    def _wb(self, pi, **q):
+        import openpyxl
+        r = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), q)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('spreadsheetml', r['Content-Type'])
+        return r, openpyxl.load_workbook(io.BytesIO(r.content))
+
+    def test_customer_and_bank_excel(self):
+        self._post()
+        pi = BangladeshPI.objects.get()
+        r, wb = self._wb(pi)
+        self.assertIn('_Customer.xlsx', r['Content-Disposition'])
+        ws = wb.active
+        cells = {c.value for row in ws.iter_rows() for c in row if c.value is not None}
+        self.assertIn('BD/IMAA/2026/07A'.join(['NO.   ', '']), cells)
+        self.assertTrue(any(str(v).startswith('=SUM(') for v in cells))        # live total formula
+        self.assertIn('TOTAL EX-WORKS, ITALY', cells)
+        self.assertIn(1800.0, cells)                                           # freight value
+        self.assertTrue(any('ARISTON BRAND' in str(v) for v in cells))
+        self.assertNotIn('TERMS & CONDITIONS FOR ISSUING L/C:', cells)         # bank only
+
+        r, wb = self._wb(pi, copy='bank')
+        self.assertIn('_Bank.xlsx', r['Content-Disposition'])
+        cells = {c.value for row in wb.active.iter_rows() for c in row if c.value is not None}
+        self.assertIn('TERMS & CONDITIONS FOR ISSUING L/C:', cells)
+        self.assertIn(17.0, cells)                                             # bank unit price
+        self.assertNotIn(82.15, cells)                                         # customer price absent
+        self.assertFalse(any('INLAND AND SEA FREIGHT' in str(v) for v in cells))
+
+    def test_bank_excel_blocked_without_bank_prices(self):
+        self._post(bank=('', ''))
+        pi = BangladeshPI.objects.get()
+        self.assertEqual(self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), {'copy': 'bank'}).status_code, 302)
+        self.assertEqual(self.client.get(reverse('bangladeshpi:excel', args=[pi.pk])).status_code, 200)
+
+    def test_requires_login_excel(self):
+        self._post()
+        pi = BangladeshPI.objects.get()
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse('bangladeshpi:excel', args=[pi.pk])).status_code, 302)

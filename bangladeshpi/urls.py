@@ -12,4 +12,5 @@ urlpatterns = [
     path('<int:pk>/edit/', views.pi_form, name='edit'),
     path('<int:pk>/delete/', views.pi_delete, name='delete'),
     path('<int:pk>/pdf/', views.pi_pdf, name='pdf'),
+    path('<int:pk>/excel/', views.pi_excel, name='excel'),
 ]
