@@ -1,0 +1,415 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Detailed Purchase Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --surface-hover: #fafbfc;
+      --text: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
+      --border: #e2e8f0; --border-light: #f1f5f9;
+      --primary: #2C5530; --primary-dark: #1e3d21;
+      --success: #10b981; --success-light: #ecfdf5;
+      --danger: #b91c1c; --danger-light: #fef2f2;
+      --radius: 12px; --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .header h1 { font-size: 1.5rem; font-weight: 700; }
+    .header p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 2px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .filters-card { margin-bottom: 16px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; padding: 16px 18px; align-items: end; }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .input, .select { width: 100%; padding: 9px 11px; font-size: 0.875rem; font-family: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44,85,48,0.12); }
+    .stats-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); }
+    .stat-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 0.813rem; }
+    .stat-label { color: var(--text-secondary); }
+    .stat-value { font-weight: 700; }
+    .table-card { overflow: hidden; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+    thead th { padding: 6px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    tbody td { padding: 6px 10px; font-size: 0.8rem; line-height: 1.35; border-bottom: 1px solid var(--border-light); }
+    tbody tr:hover { background: var(--surface-hover); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .nowrap { white-space: nowrap; }
+    .po-link { color: var(--primary); font-weight: 600; text-decoration: none; }
+    .po-link:hover { text-decoration: underline; }
+    .badge { display: inline-flex; padding: 2px 6px; font-size: 0.688rem; font-weight: 600; border-radius: 4px; }
+    .badge-open { background: var(--success-light); color: var(--success); }
+    .badge-closed { background: var(--danger-light); color: var(--danger); }
+    .badge-wh { background: #eef2ff; color: #3730a3; }
+    .table-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); font-size: 0.813rem; color: var(--text-secondary); }
+    .pagination { display: flex; gap: 6px; align-items: center; }
+    .pagination a { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; font-weight: 500; }
+    .pagination a:hover { border-color: var(--primary); color: var(--primary); }
+    .multi-select { position: relative; }
+    .select-box { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 11px; font-size: 0.875rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+    .select-box::after { content: 'BE'; font-size: 0.75rem; color: var(--text-muted); margin-left: 6px; }
+    .options-container { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 260px; max-height: 280px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.12); z-index: 100; }
+    .options-container.active { display: block; }
+    .option-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; }
+    .option-label:hover { background: var(--bg); }
+    .option-label input { width: 14px; height: 14px; accent-color: var(--primary); }
+    .option-label.option-hidden { display: none; }
+    .search-box-container { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; }
+    .search-box { width: 100%; padding: 6px 10px; font-size: 0.813rem; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .options-actions { display: flex; justify-content: space-between; margin-top: 6px; }
+    .options-action-btn { font-size: 0.68rem; font-weight: 700; font-family: inherit; color: var(--primary); background: none; border: none; cursor: pointer; padding: 3px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .options-action-btn:hover { background: #e8f5e9; }
+    .options-action-btn.danger { color: #b91c1c; }
+    .options-action-btn.danger:hover { background: #fef2f2; }
+    .view-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; background: var(--surface); }
+    .view-switch a { padding: 8px 16px; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); text-decoration: none; border-right: 1px solid var(--border); }
+    .view-switch a:last-child { border-right: 0; }
+    .view-switch a:hover { background: var(--bg); }
+    .view-switch a.active { background: var(--primary); color: #fff; }
+    .section-title { font-size: 1.05rem; font-weight: 700; margin: 4px 0 10px; }
+    .bw-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 22px; }
+    .bw-scroll { overflow-x: auto; }
+    table.bw { border-collapse: collapse; width: 100%; font-size: 0.85rem; white-space: nowrap; min-width: 0; }
+    table.bw thead th { background: var(--border-light); color: var(--text-secondary); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 11px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+    table.bw thead th.col-brand { text-align: left; }
+    table.bw tbody td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border-light); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+    table.bw tbody td.col-brand { text-align: left; font-weight: 600; }
+    table.bw tbody tr:hover td { background: #fafcff; }
+    table.bw .col-brand { position: sticky; left: 0; background: var(--surface); z-index: 1; border-right: 1px solid var(--border); }
+    table.bw thead th.col-brand { z-index: 3; background: var(--border-light); }
+    table.bw thead th.brand-group { text-align: center; border-left: 2px solid var(--border); color: var(--primary-dark); background: #e8f5e9; }
+    .brand-start { border-left: 2px solid var(--border); }
+    table.bw thead th.col-item, table.bw td.col-item { text-align: left; max-width: 260px; white-space: normal; }
+    .item-desc { display: block; font-size: 0.72rem; color: var(--text-secondary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+    .zero { color: var(--text-muted); }
+    table.bw th.col-docs, table.bw td.col-docs { text-align: left; font-size: 0.78rem; line-height: 1.5; }
+    .pager { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; border-top: 1px solid var(--border-light); }
+    .pager a, .pager .disabled { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none; color: var(--text); background: var(--surface); }
+    .pager a:hover { background: var(--border-light); }
+    .pager .disabled { color: var(--text-muted); background: var(--bg); }
+    .pager-info { font-size: 0.85rem; color: var(--text-secondary); }
+    .empty-state { text-align: center; padding: 28px 20px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Detailed Purchase Analysis</h1>
+        <p>Open and closed purchase orders, item level, with warehouse{% if selected_year %} &middot; {{ selected_year }}{% else %} &middot; All years{% endif %}</p>
+      </div>
+      <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+    </header>
+
+    <div class="card filters-card">
+      <form class="filters-grid" method="get">
+        {% if view_mode == 'lines' %}<input type="hidden" name="view" value="lines">{% endif %}
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="PO No, Supplier, Item, LPO...">
+        </div>
+        <div class="field">
+          <label>Year</label>
+          <select class="select" name="year">
+            <option value="all" {% if not selected_year %}selected{% endif %}>All Years</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select class="select" name="status">
+            <option value="">All</option>
+            <option value="O" {% if filters.status == 'O' %}selected{% endif %}>Open</option>
+            <option value="C" {% if filters.status == 'C' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Warehouse</label>
+          <select class="select" name="warehouse">
+            <option value="">All</option>
+            {% for w in warehouses %}
+              <option value="{{ w }}" {% if filters.warehouse == w %}selected{% endif %}>{{ w }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Purchaser</label>
+          <div class="multi-select" id="purchaser-wrapper">
+            <div class="select-box" id="purchaser-trigger"><span id="purchaser-text">All Purchasers</span></div>
+            <div class="options-container" id="purchaser-options">
+              <div class="search-box-container">
+                <input type="text" id="purchaser-search" class="search-box" placeholder="Search purchasers..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              {% for p in purchasers %}
+                <label class="option-label">
+                  <input type="checkbox" name="purchaser" value="{{ p }}" {% if p in filters.purchaser_filter %}checked{% endif %}>
+                  <span class="option-text">{{ p }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <div class="multi-select" id="brand-wrapper">
+            <div class="select-box" id="brand-trigger"><span id="brand-text">All Brands</span></div>
+            <div class="options-container" id="brand-options">
+              <div class="search-box-container">
+                <input type="text" id="brand-search" class="search-box" placeholder="Search brands..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              <div id="brand-options-list">
+                <label class="option-label">
+                  <input type="checkbox" name="brand" value="{{ no_brand }}" {% if no_brand in filters.brand_filter %}checked{% endif %}>
+                  <span class="option-text"><em>{{ no_brand_label }}</em></span>
+                </label>
+                {% for b in brands %}
+                  <label class="option-label">
+                    <input type="checkbox" name="brand" value="{{ b }}" {% if b in filters.brand_filter %}checked{% endif %}>
+                    <span class="option-text">{{ b }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Start</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+        <div class="field">
+          <label>End</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
+        </div>
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}">
+        </div>
+        <div class="field" style="display:flex;gap:8px;">
+          <a class="btn btn-secondary" href="{% url 'detailed_purchase_analysis_list' %}">Clear</a>
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+      <div class="stats-bar">
+        <div class="stat-item"><span class="stat-label">Purchase Orders:</span><span class="stat-value">{{ po_count }}</span></div>
+        <div class="stat-item"><span class="stat-label">Items:</span><span class="stat-value">{{ line_count }}</span></div>
+        {% if show_price %}
+        <div class="stat-item"><span class="stat-label">Row Total:</span><span class="stat-value">{{ totals.row_total|floatformat:2 }}</span></div>
+        <div class="stat-item"><span class="stat-label">Pending:</span><span class="stat-value">{{ totals.pending|floatformat:2 }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="view-switch">
+      <a href="?{{ querystring_noview }}" class="{% if view_mode == 'brand' %}active{% endif %}">Brand comparison</a>
+      <a href="?{{ querystring_noview }}{% if querystring_noview %}&{% endif %}view=lines" class="{% if view_mode == 'lines' %}active{% endif %}">All line items</a>
+    </div>
+
+    {% if view_mode == 'brand' %}
+      {% if not filters.brand_filter %}
+      <div class="bw-card">
+        <div class="empty-state" style="padding:48px 20px;">
+          <p>Select one or more brands and click Apply to compare them side by side.</p>
+          <p style="margin-top:6px;font-size:0.85rem;">Or switch to <strong>All line items</strong> to see every PO line.</p>
+        </div>
+      </div>
+      {% else %}
+      <h2 class="section-title">Brand comparison</h2>
+      <div class="bw-card">
+        <div class="bw-scroll">
+          <table class="bw">
+            <thead>
+              <tr>
+                <th class="col-brand">Metric</th>
+                {% for b in brand_summaries %}<th>{{ b.brand }}</th>{% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="col-brand">Purchase Orders</td>{% for b in brand_summaries %}<td>{{ b.po_count|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Open POs</td>{% for b in brand_summaries %}<td>{{ b.open_po|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Closed POs</td>{% for b in brand_summaries %}<td>{{ b.closed_po|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Items</td>{% for b in brand_summaries %}<td>{{ b.item_count|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Quantity</td>{% for b in brand_summaries %}<td>{{ b.qty|floatformat:"-2"|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Open Quantity</td>{% for b in brand_summaries %}<td>{{ b.open_qty|floatformat:"-2"|intcomma }}</td>{% endfor %}</tr>
+              {% if show_price %}
+              <tr><td class="col-brand">Total Value</td>{% for b in brand_summaries %}<td>{{ b.value|floatformat:2|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Pending Value</td>{% for b in brand_summaries %}<td>{{ b.pending|floatformat:2|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Average Rate</td>{% for b in brand_summaries %}<td>{{ b.avg_rate|floatformat:2|intcomma }}</td>{% endfor %}</tr>
+              <tr><td class="col-brand">Share of Selected</td>{% for b in brand_summaries %}<td>{{ b.share|floatformat:1 }}%</td>{% endfor %}</tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h2 class="section-title">All items per brand ({% if show_price %}ranked by value{% else %}ranked by quantity{% endif %})</h2>
+      <div class="bw-card">
+        {% if rank_rows %}
+        <div class="bw-scroll">
+          <table class="bw">
+            <thead>
+              <tr>
+                <th class="col-brand" rowspan="2">#</th>
+                {% for b in brand_summaries %}
+                <th colspan="{% if show_price %}6{% else %}4{% endif %}" class="brand-group">{{ b.brand }}</th>
+                {% endfor %}
+              </tr>
+              <tr>
+                {% for b in brand_summaries %}
+                <th class="col-item brand-start">Item</th>
+                <th class="col-docs">Doc No</th>
+                <th>Qty</th>
+                <th>Open Qty</th>
+                {% if show_price %}<th>Value</th><th>Pending</th>{% endif %}
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rank_rows %}
+              <tr>
+                <td class="col-brand">{{ row.rank }}</td>
+                {% for c in row.cells %}
+                {% if c %}
+                <td class="col-item brand-start"><strong>{{ c.item_code }}</strong><span class="item-desc" title="{{ c.description }}">{{ c.description }}</span></td>
+                <td class="col-docs" title="{{ c.doc_all }}">{% for d in c.doc_list %}<a class="po-link" href="{% url 'detailed_purchase_analysis_detail' d %}">{{ d }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if c.doc_more %}<br><span class="zero">+{{ c.doc_more }} more</span>{% endif %}</td>
+                <td>{{ c.qty|floatformat:"-2"|intcomma }}</td>
+                <td>{{ c.open_qty|floatformat:"-2"|intcomma }}</td>
+                {% if show_price %}<td>{{ c.value|floatformat:2|intcomma }}</td><td>{{ c.pending|floatformat:2|intcomma }}</td>{% endif %}
+                {% else %}
+                <td class="col-item brand-start zero">&ndash;</td>
+                <td class="zero">&ndash;</td><td class="zero">&ndash;</td><td class="zero">&ndash;</td>
+                {% if show_price %}<td class="zero">&ndash;</td><td class="zero">&ndash;</td>{% endif %}
+                {% endif %}
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pager">
+          {% if page_obj.has_previous %}<a href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">&laquo; Prev</a>{% else %}<span class="disabled">&laquo; Prev</span>{% endif %}
+          <span class="pager-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} &middot; {{ total_count|intcomma }} ranks</span>
+          {% if page_obj.has_next %}<a href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Next &raquo;</a>{% else %}<span class="disabled">Next &raquo;</span>{% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="empty-state" style="padding:40px 20px;">No purchase orders found for the selected brands and filters.</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% else %}
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Doc No</th><th>Status</th><th>Date</th><th>Supplier Code</th><th>Supplier Name</th>
+              <th>Item No</th><th>Description</th><th>Brand</th><th>Whs</th>
+              <th style="text-align:right">Qty</th><th style="text-align:right">Open Qty</th>
+              {% if show_price %}<th style="text-align:right">Price</th><th style="text-align:right">Pending</th><th style="text-align:right">Row Total</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
+            <tr>
+              <td class="nowrap"><a class="po-link" href="{% url 'detailed_purchase_analysis_detail' item.purchaseorder.po_number %}">{{ item.purchaseorder.po_number }}</a></td>
+              <td>{% if item.purchaseorder.status == 'O' %}<span class="badge badge-open">Open</span>{% else %}<span class="badge badge-closed">Closed</span>{% endif %}</td>
+              <td class="nowrap">{{ item.purchaseorder.posting_date|date:"d.m.y"|default:"-" }}</td>
+              <td class="nowrap">{{ item.purchaseorder.supplier_code|default:"—" }}</td>
+              <td>{{ item.purchaseorder.supplier_name|truncatechars:30 }}</td>
+              <td class="nowrap">{{ item.item_no|default:"—" }}</td>
+              <td>{{ item.description|truncatechars:35 }}</td>
+              <td class="nowrap">{{ item.brand|default:"—" }}</td>
+              <td>{% if item.warehouse_code %}<span class="badge badge-wh">{{ item.warehouse_code }}</span>{% else %}—{% endif %}</td>
+              <td class="num">{{ item.quantity|floatformat:0 }}</td>
+              <td class="num">{{ item.remaining_open_quantity|default_if_none:"0"|floatformat:0 }}</td>
+              {% if show_price %}
+              <td class="num">{{ item.price|floatformat:2 }}</td>
+              <td class="num">{{ item.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+              <td class="num">{{ item.row_total|default_if_none:"0"|floatformat:2 }}</td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="{% if show_price %}14{% else %}11{% endif %}" class="empty-state">No purchase order items found</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <div class="pagination">
+          {% if page_obj.has_previous %}<a href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">&laquo; Prev</a>{% endif %}
+          <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          {% if page_obj.has_next %}<a href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Next &raquo;</a>{% endif %}
+        </div>
+        <div>Showing <strong>{{ page_obj|length }}</strong> of <strong>{{ total_count }}</strong> items</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <script>
+    function initMultiSelect(id, allText) {
+      var trigger = document.getElementById(id + '-trigger');
+      var options = document.getElementById(id + '-options');
+      var text = document.getElementById(id + '-text');
+      var search = document.getElementById(id + '-search');
+      var boxes = options.querySelectorAll('input[type="checkbox"]');
+      function label() {
+        var checked = Array.prototype.filter.call(boxes, function (b) { return b.checked; });
+        text.textContent = checked.length === 0 ? allText : checked.length === 1 ? checked[0].closest('.option-label').textContent.trim() : checked.length + ' Selected';
+      }
+      label();
+      boxes.forEach(function (b) { b.addEventListener('change', label); });
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('.options-container.active').forEach(function (o) { if (o !== options) o.classList.remove('active'); });
+        options.classList.toggle('active');
+        if (options.classList.contains('active')) search.focus();
+      });
+      options.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { options.classList.remove('active'); });
+      options.querySelectorAll('.options-action-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var selectAll = btn.getAttribute('data-action') === 'select-all';
+          boxes.forEach(function (b) {
+            var lbl = b.closest('.option-label');
+            // Select all only ticks options currently visible (respects the search box); Clear all clears everything
+            if (selectAll) { if (!lbl.classList.contains('option-hidden')) b.checked = true; }
+            else { b.checked = false; }
+          });
+          label();
+        });
+      });
+      search.addEventListener('input', function () {
+        var term = this.value.toLowerCase().trim();
+        options.querySelectorAll('.option-label').forEach(function (l) {
+          l.classList.toggle('option-hidden', term !== '' && l.textContent.toLowerCase().indexOf(term) === -1);
+        });
+      });
+    }
+    initMultiSelect('brand', 'All Brands');
+    initMultiSelect('purchaser', 'All Purchasers');
+  </script>
+</body>
+</html>

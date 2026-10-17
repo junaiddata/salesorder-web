@@ -717,6 +717,65 @@ class SAPPurchaseOrderItem(models.Model):
         return f"{self.purchaseorder.po_number} - {self.description}"
 
 
+# Detailed Purchase Analysis models (open + closed POs, with warehouse).
+# Separate tables from SAPPurchaseOrder so the open-only sync is never affected.
+class DetailedPurchaseOrder(models.Model):
+    po_number = models.CharField(max_length=100, unique=True)  # SAP DocNum
+    internal_number = models.CharField(max_length=100, blank=True, null=True)
+    posting_date = models.DateField(blank=True, null=True)
+    supplier_code = models.CharField(max_length=100, blank=True, null=True)
+    supplier_name = models.CharField(max_length=255, blank=True, default='')
+    supplier_address = models.TextField(blank=True, null=True)
+    supplier_phone = models.CharField(max_length=50, blank=True, null=True)
+    vat_number = models.CharField(max_length=100, blank=True, null=True)
+    bp_reference_no = models.CharField(max_length=255, blank=True, null=True)
+    salesman_name = models.CharField(max_length=255, blank=True, null=True, help_text="Purchaser name")
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    document_total = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True, help_text="Full DocTotal from SAP")
+    row_total_sum = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    vat_sum = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    total_discount = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    status = models.CharField(max_length=10, blank=True, default='C', help_text="O = Open, C = Closed")
+    closing_remarks = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.po_number} - {self.supplier_name}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["posting_date"]),
+            models.Index(fields=["supplier_name"]),
+            models.Index(fields=["status"]),
+        ]
+
+
+class DetailedPurchaseOrderItem(models.Model):
+    purchaseorder = models.ForeignKey(DetailedPurchaseOrder, related_name='items', on_delete=models.CASCADE)
+    line_no = models.IntegerField(default=1)
+    item_no = models.CharField(max_length=100, blank=True, null=True)
+    description = models.CharField(max_length=255, blank=True, default='')
+    warehouse_code = models.CharField(max_length=20, blank=True, default='', help_text="WarehouseCode from SAP line")
+    quantity = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    row_total = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    row_status = models.CharField(max_length=10, blank=True, default='C', help_text="O = Open, C = Closed")
+    remaining_open_quantity = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    pending_amount = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['purchaseorder', 'line_no']),
+            models.Index(fields=['item_no']),
+            models.Index(fields=['row_status']),
+            models.Index(fields=['warehouse_code']),
+        ]
+
+    def __str__(self):
+        return f"{self.purchaseorder.po_number} - {self.description}"
+
+
 class POReceipt(models.Model):
     """
     Goods-received entry against a SAP PO line (one row per delivery).

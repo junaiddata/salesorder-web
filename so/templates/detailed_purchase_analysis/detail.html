@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Purchase Order {{ po.po_number }} - Detailed Purchase Analysis</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#f8fafc; --surface:#fff; --text:#1e293b; --text-secondary:#64748b; --border:#e2e8f0; --border-light:#f1f5f9; --primary:#2C5530; --success:#10b981; --success-light:#ecfdf5; --danger:#b91c1c; --danger-light:#fef2f2; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+    .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .header h1 { font-size: 1.4rem; }
+    .btn { display: inline-flex; padding: 9px 16px; font-size: 0.875rem; font-weight: 600; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; padding: 16px 18px; }
+    .info-grid dt { font-size: 0.75rem; color: var(--text-secondary); }
+    .info-grid dd { font-size: 0.9rem; font-weight: 500; }
+    .badge { display: inline-flex; padding: 2px 8px; font-size: 0.75rem; font-weight: 600; border-radius: 4px; }
+    .badge-open { background: var(--success-light); color: var(--success); }
+    .badge-closed { background: var(--danger-light); color: var(--danger); }
+    .badge-wh { background: #eef2ff; color: #3730a3; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 800px; }
+    th { padding: 8px 10px; font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; }
+    td { padding: 8px 10px; font-size: 0.82rem; border-bottom: 1px solid var(--border-light); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PO {{ po.po_number }}
+        {% if po.status == 'O' %}<span class="badge badge-open">{{ status_label }}</span>{% else %}<span class="badge badge-closed">{{ status_label }}</span>{% endif %}
+      </h1>
+      <a class="btn" href="{% url 'detailed_purchase_analysis_list' %}">Back to Detailed Purchase Analysis</a>
+    </div>
+
+    <div class="card">
+      <dl class="info-grid">
+        <div><dt>Date</dt><dd>{{ po.posting_date|date:"d.m.Y"|default:"—" }}</dd></div>
+        <div><dt>Supplier</dt><dd>{{ po.supplier_code }} - {{ po.supplier_name }}</dd></div>
+        <div><dt>Purchaser</dt><dd>{{ po.salesman_name|default:"—" }}</dd></div>
+        <div><dt>LPO / BP Reference</dt><dd>{{ po.bp_reference_no|default:"—" }}</dd></div>
+        <div><dt>Phone</dt><dd>{{ po.supplier_phone|default:"—" }}</dd></div>
+        <div><dt>VAT No</dt><dd>{{ po.vat_number|default:"—" }}</dd></div>
+        {% if show_price %}
+        <div><dt>Document Total</dt><dd>{{ po.document_total|default_if_none:"0"|floatformat:2 }}</dd></div>
+        <div><dt>Pending Total</dt><dd>{{ pending_total|floatformat:2 }}</dd></div>
+        {% endif %}
+        {% if po.closing_remarks %}<div><dt>Closing Remarks</dt><dd>{{ po.closing_remarks|linebreaksbr }}</dd></div>{% endif %}
+      </dl>
+    </div>
+
+    <div class="card table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Status</th><th>Item No</th><th>Description</th><th>Brand</th><th>Whs</th>
+            <th class="num">Qty</th><th class="num">Open Qty</th>
+            {% if show_price %}<th class="num">Price</th><th class="num">Pending</th><th class="num">Row Total</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+          <tr>
+            <td>{{ it.line_no }}</td>
+            <td>{% if it.row_status == 'O' %}<span class="badge badge-open">Open</span>{% else %}<span class="badge badge-closed">Closed</span>{% endif %}</td>
+            <td>{{ it.item_no|default:"—" }}</td>
+            <td>{{ it.description }}</td>
+            <td>{{ it.brand|default:"—" }}</td>
+            <td>{% if it.warehouse_code %}<span class="badge badge-wh">{{ it.warehouse_code }}</span>{% else %}—{% endif %}</td>
+            <td class="num">{{ it.quantity|floatformat:0 }}</td>
+            <td class="num">{{ it.remaining_open_quantity|default_if_none:"0"|floatformat:0 }}</td>
+            {% if show_price %}
+            <td class="num">{{ it.price|floatformat:2 }}</td>
+            <td class="num">{{ it.pending_amount|default_if_none:"0"|floatformat:2 }}</td>
+            <td class="num">{{ it.row_total|default_if_none:"0"|floatformat:2 }}</td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" style="text-align:center;padding:20px;color:var(--text-secondary)">No lines</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
