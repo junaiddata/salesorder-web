@@ -330,7 +330,7 @@
             <tr>
               <th class="col-brand" rowspan="2">#</th>
               {% for b in brand_summaries %}
-              <th colspan="{% if is_admin %}6{% else %}4{% endif %}" class="brand-group">{{ b.brand }}</th>
+              <th colspan="{% if is_admin %}7{% else %}4{% endif %}" class="brand-group">{{ b.brand }}</th>
               {% endfor %}
             </tr>
             <tr>
@@ -338,6 +338,7 @@
               <th class="col-item brand-start">Item</th>
               <th>Qty</th>
               <th>Stock</th>
+              {% if is_admin %}<th>Cost</th>{% endif %}
               <th>Sales</th>
               {% if is_admin %}<th>GP</th><th>GP %</th>{% endif %}
               {% endfor %}
@@ -352,12 +353,14 @@
               <td class="col-item brand-start"><strong>{{ c.item_code }}</strong><span class="item-desc" title="{{ c.description }}">{{ c.description }}</span></td>
               <td>{{ c.qty|floatformat:"-2"|intcomma }}</td>
               <td>{% if c.stock is not None %}{{ c.stock|floatformat:"-2"|intcomma }}{% else %}&ndash;{% endif %}</td>
+              {% if is_admin %}<td>{% if c.cost is not None %}{{ c.cost|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td>{% endif %}
               <td>{{ c.sales|floatformat:2|intcomma }}</td>
               {% if is_admin %}<td>{{ c.gp|floatformat:2|intcomma }}</td><td>{{ c.gp_pct|floatformat:2 }}%</td>{% endif %}
               {% else %}
               <td class="col-item brand-start zero">&ndash;</td>
               <td class="zero">&ndash;</td>
               <td class="zero">&ndash;</td>
+              {% if is_admin %}<td class="zero">&ndash;</td>{% endif %}
               <td class="zero">&ndash;</td>
               {% if is_admin %}<td class="zero">&ndash;</td><td class="zero">&ndash;</td>{% endif %}
               {% endif %}

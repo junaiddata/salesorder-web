@@ -182,11 +182,14 @@ def _analysis_data(request):
         ranked_codes = set()
         for brand_items in data.values():
             ranked_codes.update(brand_items.keys())
-        item_stock = {
-            code: stk
-            for code, stk in Items.objects.filter(item_code__in=ranked_codes)
-            .values_list('item_code', 'total_available_stock')
-        }
+        item_stock = {}
+        item_cost = {}  # current unit cost from the item master (Items.item_cost)
+        for code, stk, cost in (
+            Items.objects.filter(item_code__in=ranked_codes)
+            .values_list('item_code', 'total_available_stock', 'item_cost')
+        ):
+            item_stock[code] = stk
+            item_cost[code] = Decimal(str(cost or 0))
 
         # Per-brand summary + ranked item lists (columns follow selection order)
         ranked = {}
@@ -227,6 +230,7 @@ def _analysis_data(request):
                         'description': it['description'],
                         'qty': it['qty'],
                         'stock': item_stock.get(it['item_code']),
+                        'cost': item_cost.get(it['item_code']),
                         'sales': it['sales'],
                         'gp': it['gp'],
                         'gp_pct': _pct(it['gp'], it['sales']),
@@ -352,7 +356,10 @@ def export_supplier_brandwise_item_analysis_excel(request):
 
     # Item comparison sheet: one block of columns per brand
     ws2 = wb.create_sheet('Item Comparison')
-    sub_cols = ['Item Code', 'Description', 'Qty', 'Stock', 'Sales']
+    sub_cols = ['Item Code', 'Description', 'Qty', 'Stock']
+    if is_admin:
+        sub_cols += ['Cost']
+    sub_cols += ['Sales']
     if is_admin:
         sub_cols += ['GP', 'GP %']
     n = len(sub_cols)
@@ -380,8 +387,10 @@ def export_supplier_brandwise_item_analysis_excel(request):
             c0 = 2 + bi * n
             if c:
                 vals = [c['item_code'], c['description'], float(c['qty']),
-                        float(c['stock']) if c['stock'] is not None else None,
-                        float(c['sales'])]
+                        float(c['stock']) if c['stock'] is not None else None]
+                if is_admin:
+                    vals += [float(c['cost']) if c['cost'] is not None else None]
+                vals += [float(c['sales'])]
                 if is_admin:
                     vals += [float(c['gp']), float(c['gp_pct'])]
             else:
@@ -392,13 +401,13 @@ def export_supplier_brandwise_item_analysis_excel(request):
                 name = sub_cols[si]
                 if name in ('Qty', 'Stock'):
                     cell.number_format = '#,##0.##'
-                elif name in ('Sales', 'GP'):
+                elif name in ('Sales', 'GP', 'Cost'):
                     cell.number_format = '#,##0.00'
                 elif name == 'GP %':
                     cell.number_format = '0.00"%"'
     ws2.column_dimensions['A'].width = 7
     widths = {'Item Code': 16, 'Description': 34, 'Qty': 10, 'Stock': 10,
-              'Sales': 14, 'GP': 12, 'GP %': 8}
+              'Sales': 14, 'GP': 12, 'GP %': 8, 'Cost': 12}
     for bi in range(len(summaries)):
         for si, name in enumerate(sub_cols):
             ws2.column_dimensions[get_column_letter(2 + bi * n + si)].width = widths[name]
@@ -465,7 +474,8 @@ def export_supplier_brandwise_item_analysis_pdf(request):
     story += [t, Spacer(1, 14)]
 
     # Item comparison: brands are split into chunks so the columns stay readable
-    sub_cols = ['Item', 'Qty', 'Stock', 'Sales'] + (['GP', 'GP %'] if is_admin else [])
+    sub_cols = (['Item', 'Qty', 'Stock'] + (['Cost'] if is_admin else [])
+                + ['Sales'] + (['GP', 'GP %'] if is_admin else []))
     n = len(sub_cols)
     per_chunk = 2 if is_admin else 3
     cell_style = ParagraphStyle('cell', parent=small, fontSize=6.5, leading=7.5)
@@ -475,7 +485,10 @@ def export_supplier_brandwise_item_analysis_pdf(request):
             return [''] * n
         label = Paragraph(f"<b>{c['item_code']}</b><br/>{(c['description'] or '')[:40]}", cell_style)
         vals = [label, _num(c['qty'], 0),
-                _num(c['stock'], 0) if c['stock'] is not None else '-', _num(c['sales'])]
+                _num(c['stock'], 0) if c['stock'] is not None else '-']
+        if is_admin:
+            vals += [_num(c['cost']) if c['cost'] is not None else '-']
+        vals += [_num(c['sales'])]
         if is_admin:
             vals += [_num(c['gp']), f"{_num(c['gp_pct'])}%"]
         return vals
