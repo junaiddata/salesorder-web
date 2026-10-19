@@ -3484,7 +3484,7 @@ SALES_USER_MAP = {
     "retailnah": ["R.NAH"],
     "alabamaadmin": ["KADER","MUSHARAF","AIJAZ","CASH"],
     "alabamaaijaz": ["AIJAZ"],
-    "alabamasreejith": ["A.SREEJITH", "A. SREEJITH"],
+    "alabamasreejith": ["SREEJITH","A.SREEJITH", "A. SREEJITH"],
     "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
     "alabamakadar": ["KADER", "A.KADER", "A. KADER"],
     "alabamamusharaf": ["MUSHARAF", "A.MUSHARAF", "A. MUSHARAF"],
