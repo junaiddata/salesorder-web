@@ -1,0 +1,96 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}Quotations{% endblock %}
+
+{% block extra_css %}
+<style>
+    .qt-table td, .qt-table th { vertical-align: middle; }
+    .qt-table .ref { font-weight: 600; white-space: nowrap; }
+    .qt-table .nowrap { white-space: nowrap; }
+    .qt-table .actions { white-space: normal; }
+    .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+    @media (max-width: 991px) {
+        .qt-table thead { display: none; }
+        .qt-table, .qt-table tbody, .qt-table tr, .qt-table td { display: block; width: 100%; }
+        .qt-table tr { padding: .75rem .9rem; border-bottom: 1px solid #e2e8f0; }
+        .qt-table td { padding: .2rem 0; border: none; background: transparent !important; }
+        .qt-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 110px;
+            font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
+        .qt-table td.actions { padding-top: .6rem; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-file-lines" style="opacity:.85"></i> Quotations</h1>
+            <p>Create customer quotations in AED and download them as PDF on the Junaid Galleria letterhead.</p>
+            <div class="hero-actions">
+                <a href="{% url 'quotation:new' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> New Quotation</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>All Quotations <span class="count">({{ quotations|length }})</span></h2>
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search QTN no…">
+            <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+        </form>
+    </div>
+
+    {% if quotations %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x qt-table">
+            <thead>
+                <tr>
+                    <th>QTN No</th>
+                    <th>Date</th>
+                    <th>To</th>
+                    <th>Items</th>
+                    <th>Grand Total (AED)</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for qt in quotations %}
+                <tr>
+                    <td class="ref" data-label="QTN No">{{ qt.qtn_no }}</td>
+                    <td class="nowrap" data-label="Date">{{ qt.date|date:"d M Y" }}</td>
+                    <td data-label="To">{{ qt.to_text|truncatechars:60|default:"—" }}</td>
+                    <td data-label="Items">{{ qt.items.all|length }}</td>
+                    <td class="nowrap" data-label="Grand Total (AED)" title="Total {{ qt.total|floatformat:2 }} + VAT 5% {{ qt.vat_amount|floatformat:2 }}">{{ qt.grand_total|floatformat:2 }}</td>
+                    <td class="actions">
+                        <div class="act">
+                            <a href="{% url 'quotation:pdf' qt.pk %}" class="btn-x" title="Download as PDF, A4 portrait"><i class="fas fa-download"></i> PDF Portrait</a>
+                            <a href="{% url 'quotation:pdf' qt.pk %}?orientation=landscape" class="btn-x" title="Download as PDF, A4 landscape"><i class="fas fa-download"></i> PDF Landscape</a>
+                            <a href="{% url 'quotation:edit' qt.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
+                            <form method="post" action="{% url 'quotation:delete' qt.pk %}" style="display:inline;"
+                                  data-confirm="Are you sure you want to delete quotation {{ qt.qtn_no }}? Its datasheet links will stop working. This cannot be undone."
+                                  data-confirm-title="Delete Quotation" data-confirm-ok="Delete">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-x btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-x">
+        <div class="empty-x">
+            <div class="ic"><i class="fas fa-file-lines"></i></div>
+            <h3>No quotations yet</h3>
+            <p>Create your first quotation.</p>
+            <a href="{% url 'quotation:new' %}" class="btn-x btn-primary-x lg"><i class="fas fa-plus"></i> Create Quotation</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

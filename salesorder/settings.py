@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'warranty',
     'emailagent',
     'bangladeshpi',
+    'quotation',
 
     'django.contrib.humanize',
     

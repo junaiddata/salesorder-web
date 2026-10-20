@@ -1,0 +1,235 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}{% if quotation %}Edit{% else %}New{% endif %} Quotation | Quotations{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .items-scroll { overflow-x: auto; }
+    table.items-tbl { width: 100%; min-width: 1180px; border-collapse: collapse; }
+    table.items-tbl th { font-size: .72rem; text-transform: uppercase; padding: .4rem; text-align: left; white-space: nowrap; }
+    table.items-tbl td { padding: .25rem; vertical-align: top; }
+    table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
+    table.items-tbl input[type=file] { font-size: .72rem; max-width: 150px; }
+    input.row-no { text-align: center; font-weight: 600; }
+    .amt { padding-top: .55rem !important; text-align: right; font-weight: 600; white-space: nowrap; }
+    .thumb { width: 64px; height: 64px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; display: block; margin-bottom: .3rem; }
+    .ds-name { font-size: .74rem; word-break: break-all; margin-bottom: .25rem; }
+    .mini { padding: .15rem .45rem; font-size: .7rem; }
+    .totals-box { max-width: 380px; margin-left: auto; font-size: 1rem; margin-top: .8rem; border-top: 1px solid #ccc; padding-top: .4rem; }
+    .totals-box div { display: flex; justify-content: space-between; gap: 1rem; padding: .15rem 0; }
+    .totals-box .grand { font-weight: 700; border-top: 1px solid #ccc; margin-top: .25rem; padding-top: .4rem; }
+    .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
+    .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
+    @media (max-width: 768px) {
+        /* Phones: each item row becomes a small card instead of a sideways-scrolling table. */
+        .items-scroll { overflow-x: visible; }
+        table.items-tbl, table.items-tbl tbody { display: block; min-width: 0; width: 100%; }
+        table.items-tbl thead { display: none; }
+        table.items-tbl tr { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .6rem; padding: .7rem;
+            border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: .7rem; }
+        table.items-tbl td { display: block; padding: 0; }
+        table.items-tbl td[data-label]::before { content: attr(data-label); display: block; font-size: .66rem;
+            font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: .1rem; }
+        table.items-tbl td.c-desc, table.items-tbl td.c-ds, table.items-tbl td.c-photo { grid-column: 1 / -1; }
+        table.items-tbl td:last-child { grid-column: 1 / -1; text-align: right; }
+        .amt { text-align: left; padding-top: 0 !important; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head"><h2>{% if quotation %}Edit Quotation {{ quotation.qtn_no }}{% else %}New Quotation{% endif %}</h2></div>
+
+    {% if errors %}
+    <div class="err-box"><ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+    {% endif %}
+
+    <form method="post" id="qtForm" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="grid-2">
+                <div class="field-x">
+                    <label class="label-x">QTN No</label>
+                    <input type="text" name="qtn_no" class="input-x" required placeholder="e.g. QTN-2026-001" value="{{ values.qtn_no }}">
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Date</label>
+                    <input type="date" name="date" class="input-x" required value="{{ values.date }}">
+                </div>
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Project Reference <small class="u-muted">(printed under the date, optional)</small></label>
+                <input type="text" name="project_reference" class="input-x" value="{{ values.project_reference }}">
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">To <small class="u-muted">(company, address, phone, email — one per line)</small></label>
+                <textarea name="to_text" rows="5" class="input-x" placeholder="Customer name&#10;Address&#10;PH: ...&#10;EMAIL: ...">{{ values.to_text }}</textarea>
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="u-spread mb-2">
+                <h5 class="mb-0">Items <small class="u-muted">(currency: AED)</small></h5>
+                <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button>
+            </div>
+            <p class="u-muted mb-2" style="font-size:.8rem">Item No is optional (e.g. H12) — leave it blank to print 1, 2, 3…. Upload a datasheet (PDF, JPG or PNG) to give the row a "Download Datasheet" link in the PDF. It is saved as a JPEG, and customers can download it from that link without logging in. Photos: JPG/PNG, max 5 MB. Datasheets: max 10 MB (PDFs up to 10 pages).</p>
+            <div class="items-scroll">
+                <table class="items-tbl">
+                    <thead><tr>
+                        <th style="width:5%">Item No</th><th style="width:8%">Model No</th><th style="width:9%">Photo</th><th style="width:8%">Brand</th>
+                        <th style="width:17%">Description</th><th style="width:8%">Size</th><th style="width:7%">Color</th>
+                        <th style="width:6%">Qty</th><th style="width:9%">Unit Price (AED)</th><th style="width:9%">Total (AED)</th>
+                        <th style="width:12%">Datasheet (Link)</th><th style="width:7%">Warranty</th><th style="width:2%"></th>
+                    </tr></thead>
+                    <tbody id="itemsBody"></tbody>
+                </table>
+            </div>
+            <div class="totals-box">
+                <div><span>Total (AED)</span><span id="tTotal">0.00</span></div>
+                <div class="vat"><span>VAT 5% (AED)</span><span id="tVat">0.00</span></div>
+                <div class="grand"><span>Grand Total (AED)</span><span id="tGrand">0.00</span></div>
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="field-x">
+                <label class="label-x">Terms and Conditions <small class="u-muted">(one point per line — numbers 1, 2, 3… are added automatically)</small></label>
+                <textarea name="remarks" rows="4" class="input-x" placeholder="DEPOSIT BEFORE PRODUCTION, BALANCE AFTER CONFIRM BY COPY&#10;PORT OF LOADING : SHENZHEN OR SHANTOU PORT, CHINA&#10;NET PACKING AND STRONG CARTON PACKING">{{ values.remarks }}</textarea>
+            </div>
+            <div class="grid-3 mt-3">
+                <div class="field-x"><label class="label-x">Validity</label>
+                    <input type="text" name="validity" class="input-x" value="{{ values.validity }}"></div>
+                <div class="field-x"><label class="label-x">Stock Availability</label>
+                    <input type="date" name="stock_availability" class="input-x" value="{{ values.stock_availability }}"></div>
+                <div class="field-x"><label class="label-x">Country of Origin</label>
+                    <input type="text" name="country_of_origin" class="input-x" value="{{ values.country_of_origin }}"></div>
+            </div>
+            <div class="fixed-box mt-3"><b>Bank details (fixed — printed automatically)</b><br>
+                NATIONAL BANK OF FUJAIRAH, P.O BOX: 2979, DUBAI - U.A.E. · SWIFT: NBFUAEAFDXB · A/C NO: 012001111025 ·
+                A/C NAME: JUNAID GALLERIA TRADING LLC · IBAN: AE88 0380 0000 1200 1111 025</div>
+            <div class="grid-3 mt-3">
+                <div class="field-x"><label class="label-x">Sales Person</label>
+                    <input type="text" name="sales_person" class="input-x" value="{{ values.sales_person }}"></div>
+                <div class="field-x"><label class="label-x">Email</label>
+                    <input type="text" name="email" class="input-x" value="{{ values.email }}"></div>
+                <div class="field-x"><label class="label-x">Contact Number</label>
+                    <input type="text" name="contact_number" class="input-x" value="{{ values.contact_number }}"></div>
+            </div>
+        </div></div>
+
+        <div class="d-flex gap-2 mb-5">
+            <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save Quotation</button>
+            <a href="{% url 'quotation:list' %}" class="btn-x lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ items_data|json_script:"itemsData" }}
+<script>
+(function () {
+    const body = document.getElementById('itemsBody');
+    const fmt = n => n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let counter = 0;
+
+    function addRow(d) {
+        d = d || {};
+        // The row key ties each row to its own file inputs (photo_<key> / ds_<key>), so rows without files can't shift the others.
+        const key = d.item_id ? 'e' + d.item_id : 'n' + (++counter);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td data-label="Item No"><input type="text" name="item_no" class="input-x row-no"></td>
+            <td data-label="Model No"><input type="text" name="item_model" class="input-x"></td>
+            <td class="c-photo" data-label="Photo">
+                <input type="hidden" name="row_key" value="${key}">
+                <input type="hidden" name="item_id" value="${esc(d.item_id || '')}">
+                <input type="hidden" name="remove_photo" value="0">
+                <input type="hidden" name="remove_ds" value="0">
+                <img class="thumb" ${d.photo_url ? `src="${esc(d.photo_url)}"` : 'style="display:none"'} alt="">
+                <input type="file" name="photo_${key}" accept="image/*">
+                <button type="button" class="btn-x sm btn-danger-x mini rm-photo mt-1" ${d.photo_url ? '' : 'style="display:none"'}>Remove photo</button>
+            </td>
+            <td data-label="Brand"><input type="text" name="item_brand" class="input-x"></td>
+            <td class="c-desc" data-label="Description"><textarea name="item_description" rows="3" class="input-x"></textarea></td>
+            <td data-label="Size"><input type="text" name="item_size" class="input-x"></td>
+            <td data-label="Color"><input type="text" name="item_color" class="input-x"></td>
+            <td data-label="Qty"><input type="number" step="any" min="0" name="item_qty" class="input-x"></td>
+            <td data-label="Unit Price (AED)"><input type="number" step="any" min="0" name="item_price" class="input-x"></td>
+            <td class="amt" data-label="Total (AED)">0.00</td>
+            <td class="c-ds" data-label="Datasheet (Link)">
+                <div class="ds-info" ${d.datasheet_name ? '' : 'style="display:none"'}>
+                    <div class="ds-name"><i class="fas fa-file-pdf"></i> <span>${esc(d.datasheet_name || '')}</span></div>
+                    <button type="button" class="btn-x sm mini copy-link" data-url="${esc(d.share_url || '')}"><i class="fas fa-copy"></i> Copy link</button>
+                    <button type="button" class="btn-x sm btn-danger-x mini rm-ds">Remove</button>
+                </div>
+                <input type="file" name="ds_${key}" accept="application/pdf,image/*,.pdf" class="mt-1">
+            </td>
+            <td data-label="Warranty"><input type="text" name="item_warranty" class="input-x"></td>
+            <td><button type="button" class="btn-x sm btn-danger-x rm"><i class="fas fa-xmark"></i></button></td>`;
+        const q = n => tr.querySelector(`[name="${n}"]`);
+        q('item_no').value = d.item_no || '';
+        q('item_model').value = d.model_no || '';
+        q('item_brand').value = d.brand || '';
+        q('item_description').value = d.description || '';
+        q('item_size').value = d.size || '';
+        q('item_color').value = d.color || '';
+        q('item_qty').value = d.qty !== undefined && d.qty !== '' ? parseFloat(d.qty) : '';
+        q('item_price').value = d.unit_price !== undefined && d.unit_price !== '' ? parseFloat(d.unit_price) : '';
+        q('item_warranty').value = d.warranty || '';
+
+        const thumb = tr.querySelector('.thumb'), rmPhoto = tr.querySelector('.rm-photo');
+        q('photo_' + key).addEventListener('change', e => {
+            const f = e.target.files[0];
+            q('remove_photo').value = '0';
+            if (f) { thumb.src = URL.createObjectURL(f); thumb.style.display = 'block'; rmPhoto.style.display = ''; }
+        });
+        rmPhoto.onclick = () => {
+            q('remove_photo').value = '1';
+            q('photo_' + key).value = '';
+            thumb.style.display = 'none'; rmPhoto.style.display = 'none';
+        };
+        const dsInfo = tr.querySelector('.ds-info');
+        tr.querySelector('.rm-ds').onclick = () => { q('remove_ds').value = '1'; dsInfo.style.display = 'none'; };
+        q('ds_' + key).addEventListener('change', () => { q('remove_ds').value = '0'; });
+        tr.querySelector('.copy-link').onclick = e => {
+            const b = e.currentTarget;
+            if (navigator.clipboard && b.dataset.url) {
+                navigator.clipboard.writeText(b.dataset.url);
+                b.textContent = 'Copied';
+            }
+        };
+        tr.querySelector('.rm').onclick = () => { tr.remove(); recalc(); };
+        tr.addEventListener('input', recalc);
+        body.appendChild(tr);
+        recalc();
+    }
+
+    function recalc() {
+        let sum = 0;
+        body.querySelectorAll('tr').forEach((tr, i) => {
+            tr.querySelector('.row-no').placeholder = i + 1;   // printed when Item No is left blank
+            // each line is rounded to the cent, like the PDF, so the amounts add up to the total
+            const a = Math.round(((parseFloat(tr.querySelector('[name=item_qty]').value) || 0) *
+                                  (parseFloat(tr.querySelector('[name=item_price]').value) || 0)) * 100) / 100;
+            tr.querySelector('.amt').textContent = fmt(a);
+            sum += a;
+        });
+        const vat = Math.round(sum * 5) / 100;    // 5% VAT, to the cent
+        document.getElementById('tTotal').textContent = fmt(sum);
+        document.getElementById('tVat').textContent = fmt(vat);
+        document.getElementById('tGrand').textContent = fmt(sum + vat);
+    }
+
+    document.getElementById('addItem').onclick = () => addRow({});
+    const initial = JSON.parse(document.getElementById('itemsData').textContent);
+    if (initial.length) initial.forEach(addRow); else addRow({});
+})();
+</script>
+{% endblock %}

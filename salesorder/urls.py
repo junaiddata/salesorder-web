@@ -30,4 +30,5 @@ urlpatterns = [
     path('warranty/', include('warranty.urls')),
     path('emailagent/', include('emailagent.urls')),
     path('bangladesh-pis/', include('bangladeshpi.urls')),
+    path('quote-builder/', include('quotation.urls')),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

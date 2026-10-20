@@ -1,0 +1,115 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Quotations{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    <style>
+        .qt-confirm .modal-dialog { max-width: 340px; }
+        .qt-confirm .modal-content { border: none; border-radius: 18px; padding: 1.8rem 1.6rem 1.5rem; text-align: center;
+            box-shadow: 0 24px 48px -12px rgba(15,23,42,.28), 0 8px 20px -8px rgba(15,23,42,.14); position: relative; }
+        .qt-confirm .qt-x { position: absolute; top: .7rem; right: .7rem; width: 28px; height: 28px; border-radius: 50%;
+            border: none; background: transparent; color: #94a3b8; cursor: pointer; }
+        .qt-confirm .qt-x:hover { background: #f1f5f9; color: #475569; }
+        .qt-confirm .qt-ic { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto .95rem; display: flex;
+            align-items: center; justify-content: center; font-size: 1.25rem; background: #fef2f2; color: #dc2626;
+            box-shadow: 0 0 0 6px rgba(220,38,38,.08); }
+        .qt-confirm h5 { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin: 0 0 .45rem; }
+        .qt-confirm p { font-size: .86rem; line-height: 1.55; color: #64748b; margin: 0 0 1.4rem; word-break: break-word; }
+        .qt-confirm .qt-actions { display: flex; gap: .55rem; }
+        .qt-confirm .qt-btn { flex: 1; cursor: pointer; font: inherit; font-size: .85rem; font-weight: 600;
+            padding: .62rem .9rem; border-radius: 10px; line-height: 1.2; }
+        .qt-confirm .qt-btn.ghost { background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; }
+        .qt-confirm .qt-btn.danger { background: #dc2626; color: #fff; border: 1px solid #dc2626; }
+    </style>
+    <style>
+        /* Use the full browser width (the shared UI caps it at 1140px). */
+        .u-wrap, .hero-inner, .app-nav-inner, .crumbs-inner { max-width: none; }
+        .u-wrap, .hero-inner, .app-nav-inner { padding-left: 1.5rem; padding-right: 1.5rem; }
+        @media (max-width: 768px) { .u-wrap, .hero-inner, .app-nav-inner { padding-left: 1rem; padding-right: 1rem; } }
+        body { overflow-x: hidden; }
+        input, select, textarea { max-width: 100%; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="app-nav" id="appNav">
+        <div class="app-nav-inner">
+            <a class="app-brand" href="{% url 'quotation:list' %}">
+                <span class="logo"><i class="fas fa-file-lines"></i></span>
+                <span>
+                    <span class="name">Quotations</span><br>
+                    <span class="sub">Customer quotations in AED</span>
+                </span>
+            </a>
+            <button class="app-nav-toggle" id="navToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+            {% with url_name=request.resolver_match.url_name %}
+            <div class="app-nav-links">
+                <a href="{% url 'quotation:list' %}" class="app-nav-link {% if url_name == 'list' %}active{% endif %}">
+                    <i class="fas fa-table-columns"></i> All Quotations
+                </a>
+                <a href="{% url 'quotation:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
+                    <i class="fas fa-plus-circle"></i> New Quotation
+                </a>
+            </div>
+            <div class="app-nav-right">
+                <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>
+            </div>
+            {% endwith %}
+        </div>
+    </nav>
+
+    {% if messages %}
+    <div class="flash-stack" id="flashStack">
+        {% for msg in messages %}
+        <div class="flash {{ msg.tags }}">
+            <span>{{ msg }}</span>
+            <button class="close" onclick="this.parentElement.remove()" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    <div class="modal fade qt-confirm" id="qtConfirm" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <button type="button" class="qt-x" data-bs-dismiss="modal" aria-label="Close"><i class="fas fa-xmark"></i></button>
+                <div class="qt-ic"><i class="fas fa-trash"></i></div>
+                <h5 id="qtConfirmTitle">Please confirm</h5>
+                <p id="qtConfirmMsg"></p>
+                <div class="qt-actions">
+                    <button type="button" class="qt-btn ghost" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="qt-btn danger" id="qtConfirmOk">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('navToggle')?.addEventListener('click', function () {
+            document.getElementById('appNav').classList.toggle('open');
+        });
+        // <form data-confirm="..."> shows the dialog above before submitting.
+        document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (form.dataset.confirmed === '1') return;
+                e.preventDefault();
+                document.getElementById('qtConfirmTitle').textContent = form.dataset.confirmTitle || 'Please confirm';
+                document.getElementById('qtConfirmMsg').textContent = form.dataset.confirm;
+                document.getElementById('qtConfirmOk').textContent = form.dataset.confirmOk || 'Confirm';
+                var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('qtConfirm'));
+                document.getElementById('qtConfirmOk').onclick = function () { modal.hide(); form.dataset.confirmed = '1'; form.submit(); };
+                modal.show();
+            });
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
