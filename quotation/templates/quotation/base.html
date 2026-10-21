@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static quotation_extras %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -55,6 +55,11 @@
                 <a href="{% url 'quotation:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
                     <i class="fas fa-plus-circle"></i> New Quotation
                 </a>
+                {% if request.user|can_use_stamp %}
+                <a href="{% url 'quotation:stamp_settings' %}" class="app-nav-link {% if url_name == 'stamp_settings' %}active{% endif %}">
+                    <i class="fas fa-stamp"></i> Stamp
+                </a>
+                {% endif %}
             </div>
             <div class="app-nav-right">
                 <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>

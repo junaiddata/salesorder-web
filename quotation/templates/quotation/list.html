@@ -61,7 +61,7 @@
                 <tr>
                     <td class="ref" data-label="QTN No">{{ qt.qtn_no }}</td>
                     <td class="nowrap" data-label="Date">{{ qt.date|date:"d M Y" }}</td>
-                    <td data-label="To">{{ qt.to_text|truncatechars:60|default:"—" }}</td>
+                    <td data-label="To">{{ qt.customer_name|default:qt.to_text|truncatechars:60|default:"—" }}</td>
                     <td data-label="Items">{{ qt.items.all|length }}</td>
                     <td class="nowrap" data-label="Grand Total (AED)" title="Total {{ qt.total|floatformat:2 }} + VAT 5% {{ qt.vat_amount|floatformat:2 }}">{{ qt.grand_total|floatformat:2 }}</td>
                     <td class="actions">

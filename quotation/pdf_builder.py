@@ -16,12 +16,13 @@ from django.conf import settings
 from PIL import Image as PILImage, ImageOps
 from PyPDF2 import PageObject, PdfReader, PdfWriter, Transformation
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus.doctemplate import LayoutError
 
-from .models import VAT_RATE
+from .models import VAT_RATE, QuotationStamp
+from .words import amount_in_words
 from reportlab.platypus import (
     BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer,
     Table, TableStyle,
@@ -86,8 +87,11 @@ S_BASE = _base
 S_BOLD = ParagraphStyle('qbold', parent=_base, fontName='Helvetica-Bold')
 S_TITLE = ParagraphStyle('qtitle', parent=_base, fontName='Helvetica-Bold',
                          fontSize=13, leading=16, alignment=TA_CENTER)
-S_HEAD_C = ParagraphStyle('qheadc', parent=S_BOLD, fontSize=6.5, leading=8, alignment=TA_CENTER,
-                          textColor=colors.white)
+# Plain design: no coloured fills and no boxes. Table headings are bold dark text with one thin line under them.
+S_HEAD_C = ParagraphStyle('qheadc', parent=S_BOLD, fontSize=6.5, leading=8, alignment=TA_CENTER)
+S_HEAD_L = ParagraphStyle('qheadl', parent=S_HEAD_C, alignment=TA_LEFT)
+S_HEAD_R = ParagraphStyle('qheadr', parent=S_HEAD_C, alignment=TA_RIGHT)
+S_SECTION = ParagraphStyle('qsection', parent=_base, fontName='Helvetica-Bold', fontSize=8.5, leading=11)
 S_CELL = ParagraphStyle('qcell', parent=_base, fontSize=7, leading=8.6)
 S_CELL_C = ParagraphStyle('qcellc', parent=S_CELL, alignment=TA_CENTER)
 S_RIGHT = ParagraphStyle('qright', parent=S_CELL, alignment=TA_RIGHT)
@@ -95,13 +99,11 @@ S_RIGHT_B = ParagraphStyle('qrightb', parent=S_RIGHT, fontName='Helvetica-Bold',
 S_LINK = ParagraphStyle('qlink', parent=_base, fontSize=7, leading=9, alignment=TA_CENTER)
 S_ADDR = ParagraphStyle('qaddr', parent=_base, fontSize=8.5, leading=11.5)
 S_ADDR_R = ParagraphStyle('qaddrr', parent=S_ADDR, alignment=TA_RIGHT)
+S_WORDS = ParagraphStyle('qwords', parent=_base, fontSize=8, leading=10.5)
 S_POINT = ParagraphStyle('qpoint', parent=_base, leftIndent=16, firstLineIndent=-16)
 
-HEADER_BG = colors.HexColor('#1f3a5f')
-TOTAL_BG = colors.HexColor('#eef1f6')
-
 # Relative widths of: Item no, Model no, Photo, Brand, Description, Size, Color, Qty, Unit price, Total, Link, Warranty
-_WEIGHTS = [24, 42, 50, 40, 98, 56, 40, 24, 42, 50, 52, 52]
+_WEIGHTS = [22, 38, 46, 52, 86, 56, 54, 22, 42, 48, 48, 52]
 
 
 def _p(text, style=S_BASE):
@@ -150,22 +152,90 @@ def _link_cell(item, base_url):
     return Paragraph(f'<link href={quoteattr(url)} color="#1d4ed8"><u>Download<br/>Datasheet</u></link>', S_LINK)
 
 
+S_LBL = ParagraphStyle('qlbl', parent=_base, fontName='Helvetica-Bold', fontSize=8, leading=10)
+S_VAL = ParagraphStyle('qval', parent=_base, fontSize=8.5, leading=10.5, wordWrap='CJK')      # CJK: long emails wrap
+S_VAL_B = ParagraphStyle('qvalb', parent=S_VAL, fontName='Helvetica-Bold')
+S_MID_LBL = ParagraphStyle('qmidlbl', parent=_base, fontName='Helvetica-Bold', fontSize=7.5, leading=9)
+S_MID_VAL = ParagraphStyle('qmidval', parent=_base, fontSize=9, leading=11, wordWrap='CJK')
+
+
 def _header_block(q, lay):
-    left = [Paragraph('<b>TO:</b>', S_ADDR)]
-    left += [Paragraph(escape(ln) or '&nbsp;', S_ADDR) for ln in (q.to_text or '').splitlines()]
-    right = [
-        Paragraph(f'<b>QTN NO:</b> {escape(q.qtn_no)}', S_ADDR_R),
-        Paragraph(f'<b>DATE:</b> {q.date.strftime("%d.%m.%Y")}', S_ADDR_R),
+    """The three sections under the title, each in its own box (all the same height):
+
+    1. To: customer name, address, contact, TRN.
+    2. Quotation no., customer ref., salesperson, email, contact, project reference.
+    3. Date, validity, delivery availability.
+    """
+    sep = 6                                          # the space between the three boxes
+    avail = lay.content_w - 2 * sep
+    w1, w2, w3 = avail * 0.40, avail * 0.38, avail * 0.22
+    gap = 14      # a box's left + right padding (7 + 7), taken off the width available to what is inside it
+
+    # -- 1. To: every detail has its label (Customer name, Contact, Address, TRN number), shown even when blank
+    def val(text, bold=False):
+        return Paragraph(escape((text or '').strip()), S_VAL_B if bold else S_VAL)
+
+    address = '<br/>'.join(escape(ln.strip()) for ln in (q.customer_address or '').splitlines() if ln.strip())
+    to_rows = [
+        ('Customer name', val(q.customer_name, bold=True)),
+        ('Contact', val(q.customer_contact)),
+        ('Address', Paragraph(address, S_VAL)),
+        ('TRN number', val(q.customer_trn)),
     ]
-    if (q.project_reference or '').strip():
-        right.append(Paragraph(f'<b>PROJECT REF:</b> {escape(q.project_reference.strip())}', S_ADDR_R))
-    t = Table([[left, right]], colWidths=[lay.content_w * 0.66, lay.content_w * 0.34])
-    t.setStyle(TableStyle([
+    to_table = Table([[Paragraph(label, S_LBL), value] for label, value in to_rows],
+                     colWidths=[(w1 - gap) * 0.34, (w1 - gap) * 0.66])
+    to_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+    ]))
+    to = [Paragraph('<b>TO:</b>', S_ADDR), Spacer(1, 2), to_table]
+    # older quotations (and any extra lines) typed in the free-text box come under the labelled details
+    to += [Paragraph(escape(ln) or '&nbsp;', S_ADDR) for ln in (q.to_text or '').splitlines()]
+
+    # -- 2. reference details: bold label, value beside it
+    ref_rows = [
+        ('Quotation no.', val(q.qtn_no, bold=True)), ('Customer ref.', val(q.customer_ref)),
+        ('Salesperson', val(q.sales_person)), ('Email', val(q.email)), ('Contact', val(q.contact_number)),
+        ('Project reference', val(q.project_reference)),
+    ]
+    ref = Table([[Paragraph(label, S_LBL), value] for label, value in ref_rows],
+                colWidths=[(w2 - gap) * 0.36, (w2 - gap) * 0.64])
+    ref.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+    ]))
+
+    # -- 3. date, validity, delivery availability: small bold label with its value under it
+    mid = [
+        ('Date', q.date.strftime('%d.%m.%Y')), ('Validity', q.validity),
+        ('Delivery availability', q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''),
+    ]
+    mid_rows = []
+    for label, value in mid:
+        mid_rows += [[Paragraph(label, S_MID_LBL)], [Paragraph(escape((value or '').strip()) or '&nbsp;', S_MID_VAL)]]
+    right = Table(mid_rows, colWidths=[w3 - gap])
+    right.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 1), (0, 1), 5), ('BOTTOMPADDING', (0, 3), (0, 3), 5),
     ]))
-    return t
+
+    # columns 0, 2 and 4 are the boxes; 1 and 3 are the empty gaps between them. One row, so the boxes are equally tall.
+    outer = Table([[to, '', ref, '', right]], colWidths=[w1, sep, w2, sep, w3])
+    outer.setStyle(TableStyle([
+        ('BOX', (0, 0), (0, 0), 0.8, colors.black),
+        ('BOX', (2, 0), (2, 0), 0.8, colors.black),
+        ('BOX', (4, 0), (4, 0), 0.8, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7), ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (1, 0), (1, 0), 0), ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('LEFTPADDING', (3, 0), (3, 0), 0), ('RIGHTPADDING', (3, 0), (3, 0), 0),
+    ]))
+    return outer
 
 
 def _split_description(text, lay):
@@ -192,17 +262,19 @@ def _split_description(text, lay):
 def _items_table(q, base_url, lay, split_rows=False):
     heads = ['ITEM<br/>NO.', 'MODEL<br/>NO.', 'PHOTO', 'BRAND', 'DESCRIPTION', 'SIZE', 'COLOR', 'QTY',
              f'UNIT PRICE<br/>{CURRENCY}', f'TOTAL<br/>AMOUNT {CURRENCY}', 'LINK', 'WARRANTY']
-    rows = [[Paragraph(h, S_HEAD_C) for h in heads]]
-    # Vertical lines run through every row; horizontal lines are drawn only under the header and under the LAST
-    # row of each item, so the continuation rows of a very long description look like one tall cell.
+    # heading alignment follows the column: text left, numbers right, short codes centred
+    head_style = [S_HEAD_C, S_HEAD_L, S_HEAD_C, S_HEAD_L, S_HEAD_L, S_HEAD_L, S_HEAD_L, S_HEAD_C, S_HEAD_R, S_HEAD_R,
+                  S_HEAD_C, S_HEAD_L]
+    rows = [[Paragraph(h, hs) for h, hs in zip(heads, head_style)]]
+    # No box, no vertical lines and no lines between rows: just one thin line under the headings and one under the
+    # last item (above the totals). Spacing does the rest.
     style = [
-        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
-        ('LINEBEFORE', (1, 0), (-1, -1), 0.6, colors.black),
-        ('LINEBELOW', (0, 0), (-1, 0), 0.6, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-        ('BACKGROUND', (0, 0), (-1, 0), HEADER_BG),
+        ('LEFTPADDING', (0, 0), (0, -1), 0),
+        ('LINEABOVE', (0, 0), (-1, 0), 0.8, colors.black),     # the headings sit between two thin lines
+        ('LINEBELOW', (0, 0), (-1, 0), 0.8, colors.black),
     ]
     items = list(q.items.all())
     for n, it in enumerate(items, 1):
@@ -213,7 +285,7 @@ def _items_table(q, base_url, lay, split_rows=False):
             Paragraph(escape(it.item_no) if it.item_no else str(n), S_CELL_C),
             _p(it.model_no, S_CELL),
             _photo(it.photo, lay.col_w[2] - 6, 52),
-            _p(it.brand, S_CELL), pieces[0], _p(it.size, S_CELL), _p(it.color, S_CELL),
+            _p((it.brand or '').upper(), S_CELL), pieces[0], _p(it.size, S_CELL), _p((it.color or '').upper(), S_CELL),
             Paragraph(_qty(it.qty), S_CELL_C),
             Paragraph(_money(it.unit_price), S_RIGHT),
             Paragraph(_money(it.amount), S_RIGHT),
@@ -222,23 +294,34 @@ def _items_table(q, base_url, lay, split_rows=False):
         ])
         for piece in pieces[1:]:
             rows.append(['', '', '', '', piece] + [''] * 7)
-        style.append(('LINEBELOW', (0, len(rows) - 1), (-1, len(rows) - 1), 0.6, colors.black))
-    # Totals: item total, VAT 5% on it, then the grand total (VAT included). NOSPLIT keeps the last item row and the
-    # three totals rows on one page, so the totals are never left alone at the top of a new page.
-    style.append(('NOSPLIT', (0, len(rows) - 1), (-1, len(rows) + 2)))
-    for label, value, bold in ((f'TOTAL ({CURRENCY})', q.total, False),
-                               (f'VAT {VAT_PERCENT}% ({CURRENCY})', q.vat_amount, False),
-                               (f'GRAND TOTAL ({CURRENCY})', q.grand_total, True)):
+    # Totals: [total, discount,] total excluding VAT, VAT 5% on it, grand total, then the amount in words. The first
+    # two lines only appear when there is a discount (otherwise they would just repeat the next line).
+    first_total_row = len(rows)
+    if first_total_row > 1:      # a thin line under the last item, above the totals
+        style.append(('LINEBELOW', (0, first_total_row - 1), (-1, first_total_row - 1), 0.6, colors.black))
+    discount = q.discount_amount
+    lines = []
+    if discount:
+        pct = f' {q.discount_value.normalize():f}%' if q.discount_type == 'percent' else ''
+        lines += [(f'TOTAL ({CURRENCY})', q.total, False, ''),
+                  (f'DISCOUNT{pct} ({CURRENCY})', discount, False, '- ')]
+    lines += [(f'TOTAL AMOUNT EXCL. VAT ({CURRENCY})', q.net_total, False, ''),
+              (f'VAT {VAT_PERCENT}% ({CURRENCY})', q.vat_amount, False, ''),
+              (f'GRAND TOTAL ({CURRENCY})', q.grand_total, True, '')]
+    for label, value, bold, sign in lines:
         r = len(rows)
         s_label, s_value = (S_RIGHT_B, S_RIGHT_B) if bold else (S_RIGHT, S_RIGHT)
-        rows.append([Paragraph(label, s_label)] + [''] * 8 + [Paragraph(_money(value), s_value)] + ['', ''])
-        style += [
-            ('SPAN', (0, r), (8, r)),
-            ('SPAN', (10, r), (11, r)),
-            ('BACKGROUND', (0, r), (-1, r), TOTAL_BG),
-        ]
-        if not bold:
-            style.append(('LINEBELOW', (0, r), (-1, r), 0.4, colors.grey))
+        # the label sits right-aligned across the Size..Unit price columns, the amount in the Total column
+        rows.append([''] * 5 + [Paragraph(label, s_label)] + [''] * 3 + [Paragraph(sign + _money(value), s_value)] + ['', ''])
+        style += [('SPAN', (5, r), (8, r)), ('TOPPADDING', (0, r), (-1, r), 2), ('BOTTOMPADDING', (0, r), (-1, r), 2)]
+        if bold:    # one thin line above the grand total
+            style += [('LINEABOVE', (5, r), (9, r), 0.6, colors.black), ('TOPPADDING', (0, r), (-1, r), 4)]
+    r = len(rows)
+    rows.append([Paragraph(f'<b>{CURRENCY} : {escape(amount_in_words(q.grand_total))}</b>', S_WORDS)] + [''] * 11)   # AED : <words>
+    style += [('SPAN', (0, r), (-1, r)), ('TOPPADDING', (0, r), (-1, r), 8)]
+    # NOSPLIT keeps the last item row and all the totals rows on one page, so the totals are never left alone at the
+    # top of a new page.
+    style.append(('NOSPLIT', (0, first_total_row - 1), (-1, len(rows) - 1)))
     # A row never splits across pages: if it doesn't fit it moves whole to the next page. (split_rows is only the
     # last-resort fallback used when some other cell, not the description, is taller than a page.)
     t = Table(rows, colWidths=lay.col_w, repeatRows=1, splitInRow=1 if split_rows else 0)
@@ -246,28 +329,80 @@ def _items_table(q, base_url, lay, split_rows=False):
     return t
 
 
-def _boxed(title, body_rows, lay, label_w=None):
-    """A bordered block: optional bold title row, then label/value or plain text rows."""
+def _boxed(title, body_rows, lay, label_w=None, box=False):
+    """A block with an optional bold heading, then label/value or plain text rows. Plain (no border) unless box=True."""
     rows = list(body_rows)
-    first = 0
     if title:
-        rows.insert(0, [Paragraph(f'<b>{title}</b>', S_BASE)] + [''] * (1 if label_w else 0))
-        first = 1
+        rows.insert(0, [Paragraph(title, S_SECTION)] + [''] * (1 if label_w else 0))
     widths = [label_w, lay.content_w - label_w] if label_w else [lay.content_w]
     t = Table(rows, colWidths=widths, splitInRow=1)   # text-only rows: a very long point may continue on the next page
     style = [
-        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
     ]
     if title:
-        style += [('LINEBELOW', (0, 0), (-1, 0), 0.6, colors.black), ('BACKGROUND', (0, 0), (-1, 0), TOTAL_BG)]
-    if label_w:
-        if title:
+        style.append(('BOTTOMPADDING', (0, 0), (-1, 0), 4))
+        if label_w:
             style.append(('SPAN', (0, 0), (1, 0)))
-        style.append(('INNERGRID', (0, first), (-1, -1), 0.4, colors.grey))
+    if box:
+        style += [('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+                  ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                  ('TOPPADDING', (0, 0), (-1, 0), 6), ('BOTTOMPADDING', (0, -1), (-1, -1), 6)]
     t.setStyle(TableStyle(style))
+    return t
+
+
+def _stamp_image(max_w, max_h):
+    """The uploaded company stamp as a ReportLab Image (white paper made transparent), or None."""
+    try:
+        stamp = QuotationStamp.get_instance().stamp
+        if not stamp:
+            return None
+        with stamp.open('rb') as fh:
+            pil = PILImage.open(BytesIO(fh.read()))
+        pil = ImageOps.exif_transpose(pil).convert('RGBA')
+        pil.thumbnail((700, 700))
+        alpha = pil.getchannel('A')
+        if alpha.getextrema()[0] == 255:      # no transparency of its own: make the paper transparent
+            lum = pil.convert('L')
+            w, h = lum.size
+            m = max(2, min(w, h) // 20)       # the paper level = the median brightness of the outer border
+            border = sorted(p for strip in (lum.crop((0, 0, w, m)), lum.crop((0, h - m, w, h)),
+                                            lum.crop((0, 0, m, h)), lum.crop((w - m, 0, w, h)))
+                            for p in strip.getdata())
+            paper = border[len(border) // 2]
+            if paper >= 150:                  # a dark background is left alone
+                lo, hi = paper - 50, paper - 10    # darker than lo: solid ink, brighter than hi: paper
+                pil.putalpha(lum.point(lambda v: 0 if v >= hi else 255 if v <= lo else int((hi - v) * 255 / (hi - lo))))
+        buf = BytesIO()
+        pil.save(buf, 'PNG')
+        buf.seek(0)
+        w, h = pil.size
+        scale = min(max_w / w, max_h / h)
+        return Image(buf, width=w * scale, height=h * scale, mask='auto')
+    except Exception:
+        return None   # a missing/corrupt stamp must never break the PDF
+
+
+def _bank_box(lay, stamp):
+    """Bank details in a box; with a stamp it sits at the right-hand side inside the box."""
+    rows = [[_p(ln)] for ln in BANK_LINES]
+    if stamp is None:
+        return _boxed('BANK ACCOUNT DETAILS', rows, lay, box=True)
+    stamp_w = stamp.drawWidth + 44            # the right-hand section, with room around the stamp
+    data = [[Paragraph('BANK ACCOUNT DETAILS', S_SECTION), stamp]] + [[_p(ln), ''] for ln in BANK_LINES]
+    t = Table(data, colWidths=[lay.content_w - stamp_w, stamp_w])
+    t.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+        ('SPAN', (1, 0), (1, -1)),                # the stamp's cell runs the full height of the box ...
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),     # ... and the stamp is centred in it, sideways
+        ('VALIGN', (1, 0), (1, -1), 'MIDDLE'),    # ... and up/down
+        ('VALIGN', (0, 0), (0, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('TOPPADDING', (0, 0), (-1, 0), 6), ('BOTTOMPADDING', (0, 0), (-1, 0), 4), ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]))
     return t
 
 
@@ -288,29 +423,32 @@ def _info_rows(pairs):
     return [[Paragraph(f'<b>{k}</b>', S_BASE), _p(v)] for k, v in pairs]
 
 
-def _body(q, base_url, lay, split_rows=False):
+def _body(q, base_url, lay, split_rows=False, with_stamp=False):
     story = [
         Paragraph('<u>QUOTATION</u>', S_TITLE),
         Spacer(1, 8),
         _header_block(q, lay),
-        Spacer(1, 8),
-        _items_table(q, base_url, lay, split_rows),
         Spacer(1, 10),
+        _items_table(q, base_url, lay, split_rows),
+        Spacer(1, 14),
     ]
-    points = _numbered_points(q.remarks)   # the editable "remarks" text: one numbered point per line
-    if points:
-        story += [_boxed('TERMS AND CONDITIONS', points, lay), Spacer(1, 8)]
+    # Terms and conditions: the numbered points (the editable "terms" text, one point per line), then Validity,
+    # Delivery availability, Country of Origin and Warranty inside the same box (Validity and Delivery availability
+    # are shown in the top block too). Blank ones are left out.
+    points = _numbered_points(q.remarks)
+    facts = [(label, value) for label, value in (
+        ('VALIDITY', q.validity),
+        ('DELIVERY AVAILABILITY', q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''),
+        ('COUNTRY OF ORIGIN', q.country_of_origin),
+        ('WARRANTY', q.warranty),
+    ) if (value or '').strip()]
+    if points or facts:
+        group = [_boxed('TERMS AND CONDITIONS', points, lay)]
+        if facts:   # directly under the points
+            group += [Spacer(1, 4), _boxed(None, _info_rows(facts), lay, label_w=130)]
+        story += [KeepTogether(group), Spacer(1, 14)]
     tail = [
-        _boxed(None, _info_rows([
-            ('VALIDITY', q.validity), ('STOCK AVAILABILITY', q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''),
-            ('COUNTRY OF ORIGIN', q.country_of_origin),
-        ]), lay, label_w=130),
-        Spacer(1, 8),
-        _boxed('BANK ACCOUNT DETAILS', [[_p(ln)] for ln in BANK_LINES], lay),
-        Spacer(1, 8),
-        _boxed('CONTACT', _info_rows([
-            ('SALES PERSON', q.sales_person), ('EMAIL', q.email), ('CONTACT NUMBER', q.contact_number),
-        ]), lay, label_w=130),
+        _bank_box(lay, _stamp_image(110, 82) if (with_stamp and q.add_stamp) else None),
     ]
     story.append(KeepTogether(tail))
     return story
@@ -348,11 +486,12 @@ def _letterhead_page(lay):
     return PdfReader(BytesIO(doc.tobytes())).pages[0]
 
 
-def build_quotation_pdf(quotation, base_url, orientation='portrait'):
+def build_quotation_pdf(quotation, base_url, orientation='portrait', with_stamp=True):
     """Return the finished PDF (letterhead + content) as bytes.
 
     base_url: scheme + host (no trailing slash) used for the datasheet download links.
     orientation: 'portrait' or 'landscape' (A4 either way).
+    with_stamp: False prints an unstamped copy even if the quotation has "Add stamp" ticked (for users not allowed to stamp).
     """
     lay = Layout('landscape' if orientation == 'landscape' else 'portrait')
     for split_rows in (False, True):
@@ -366,7 +505,7 @@ def build_quotation_pdf(quotation, base_url, orientation='portrait'):
                       leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
         doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
         try:
-            doc.build(_body(quotation, base_url.rstrip('/'), lay, split_rows))
+            doc.build(_body(quotation, base_url.rstrip('/'), lay, split_rows, with_stamp))
             break
         except LayoutError:
             # A single row (an extremely long description) is taller than a page: retry letting rows split.

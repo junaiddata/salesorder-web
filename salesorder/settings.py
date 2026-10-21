@@ -284,6 +284,8 @@ EMAILAGENT_TRIAGE_MODEL = os.getenv('EMAILAGENT_TRIAGE_MODEL', 'claude-haiku-4-5
 EMAILAGENT_CONFIDENCE_THRESHOLD = float(os.getenv('EMAILAGENT_CONFIDENCE_THRESHOLD', '0.75'))
 CONSOLIDATED_API_KEY  = os.getenv('CONSOLIDATED_API_KEY', '')
 BANGLADESH_PI_SEAL_USERS = ['manager', 'so']
+# Who may upload / print the company stamp on Junaid Galleria quotations (everyone else gets unstamped PDFs).
+QUOTATION_STAMP_USERS = ['md', 'manager', 'so']
 
 
 

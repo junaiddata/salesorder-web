@@ -13,6 +13,7 @@
     table.items-tbl td { padding: .25rem; vertical-align: top; }
     table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
     table.items-tbl input[type=file] { font-size: .72rem; max-width: 150px; }
+    input.caps { text-transform: uppercase; }
     input.row-no { text-align: center; font-weight: 600; }
     .amt { padding-top: .55rem !important; text-align: right; font-weight: 600; white-space: nowrap; }
     .thumb { width: 64px; height: 64px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; display: block; margin-bottom: .3rem; }
@@ -20,6 +21,9 @@
     .mini { padding: .15rem .45rem; font-size: .7rem; }
     .totals-box { max-width: 380px; margin-left: auto; font-size: 1rem; margin-top: .8rem; border-top: 1px solid #ccc; padding-top: .4rem; }
     .totals-box div { display: flex; justify-content: space-between; gap: 1rem; padding: .15rem 0; }
+    .totals-box .disc-in { display: inline-flex; gap: .4rem; }
+    .totals-box .disc-in select { width: 78px; padding: .3rem .4rem; font-size: .85rem; }
+    .totals-box .disc-in input { width: 110px; padding: .3rem .5rem; font-size: .85rem; text-align: right; }
     .totals-box .grand { font-weight: 700; border-top: 1px solid #ccc; margin-top: .25rem; padding-top: .4rem; }
     .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
     .fixed-box { background: #f6f7fb; border: 1px dashed #c9d0de; border-radius: 8px; padding: .75rem 1rem; font-size: .85rem; }
@@ -55,20 +59,46 @@
             <div class="grid-2">
                 <div class="field-x">
                     <label class="label-x">QTN No</label>
-                    <input type="text" name="qtn_no" class="input-x" required placeholder="e.g. QTN-2026-001" value="{{ values.qtn_no }}">
+                    <input type="text" class="input-x" readonly tabindex="-1" style="background:#f6f7fb;font-weight:600" value="{{ qtn_no_shown }}">
+                    {% if not quotation %}<small class="u-muted">Assigned automatically when you save (the year follows the date).</small>{% endif %}
                 </div>
                 <div class="field-x">
                     <label class="label-x">Date</label>
                     <input type="date" name="date" class="input-x" required value="{{ values.date }}">
                 </div>
             </div>
-            <div class="field-x mt-3">
-                <label class="label-x">Project Reference <small class="u-muted">(printed under the date, optional)</small></label>
-                <input type="text" name="project_reference" class="input-x" value="{{ values.project_reference }}">
+            <div class="grid-2 mt-3">
+                <div class="field-x">
+                    <label class="label-x">Customer Ref. <small class="u-muted">(the customer's own reference, optional)</small></label>
+                    <input type="text" name="customer_ref" class="input-x" value="{{ values.customer_ref }}">
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Project Reference <small class="u-muted">(optional)</small></label>
+                    <input type="text" name="project_reference" class="input-x" value="{{ values.project_reference }}">
+                </div>
+            </div>
+            <h6 class="mt-4 mb-2">To <small class="u-muted">(the customer this quotation is for)</small></h6>
+            <div class="grid-2">
+                <div class="field-x">
+                    <label class="label-x">Customer Name</label>
+                    <input type="text" name="customer_name" class="input-x" placeholder="e.g. JUNAID SANITARY &amp; ELECTRICAL REQUISITES TRADING LLC" value="{{ values.customer_name }}">
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Contact <small class="u-muted">(person / phone / email)</small></label>
+                    <input type="text" name="customer_contact" class="input-x" placeholder="e.g. Mr. Ahmed, +971 50 123 4567" value="{{ values.customer_contact }}">
+                </div>
             </div>
             <div class="field-x mt-3">
-                <label class="label-x">To <small class="u-muted">(company, address, phone, email — one per line)</small></label>
-                <textarea name="to_text" rows="5" class="input-x" placeholder="Customer name&#10;Address&#10;PH: ...&#10;EMAIL: ...">{{ values.to_text }}</textarea>
+                <label class="label-x">Address <small class="u-muted">(one line per row)</small></label>
+                <textarea name="customer_address" rows="3" class="input-x" placeholder="PO BOX 34862&#10;DUBAI INVESTMENT PARK 2, DUBAI, UAE">{{ values.customer_address }}</textarea>
+            </div>
+            <div class="field-x mt-3" style="max-width:420px">
+                <label class="label-x">TRN Number</label>
+                <input type="text" name="customer_trn" class="input-x" placeholder="e.g. 100123456700003" value="{{ values.customer_trn }}">
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Other details <small class="u-muted">(optional — printed after the lines above, one per line)</small></label>
+                <textarea name="to_text" rows="2" class="input-x">{{ values.to_text }}</textarea>
             </div>
         </div></div>
 
@@ -91,9 +121,22 @@
             </div>
             <div class="totals-box">
                 <div><span>Total (AED)</span><span id="tTotal">0.00</span></div>
+                <div class="disc">
+                    <span>Discount <small class="u-muted">(optional)</small></span>
+                    <span class="disc-in">
+                        <select name="discount_type" id="discType" class="input-x">
+                            <option value="amount" {% if values.discount_type != 'percent' %}selected{% endif %}>AED</option>
+                            <option value="percent" {% if values.discount_type == 'percent' %}selected{% endif %}>%</option>
+                        </select>
+                        <input type="number" step="any" min="0" name="discount_value" id="discValue" class="input-x" placeholder="0" value="{{ values.discount_value }}">
+                    </span>
+                </div>
+                <div class="sub"><span>Discount (AED)</span><span id="tDisc">0.00</span></div>
+                <div><span>Total amount excl. VAT (AED)</span><span id="tNet">0.00</span></div>
                 <div class="vat"><span>VAT 5% (AED)</span><span id="tVat">0.00</span></div>
                 <div class="grand"><span>Grand Total (AED)</span><span id="tGrand">0.00</span></div>
             </div>
+            <p class="u-muted mt-2 mb-0" style="font-size:.8rem;text-align:right">The amount in words is added to the PDF automatically.</p>
         </div></div>
 
         <div class="card-x mb-3"><div class="card-x-body">
@@ -101,17 +144,31 @@
                 <label class="label-x">Terms and Conditions <small class="u-muted">(one point per line — numbers 1, 2, 3… are added automatically)</small></label>
                 <textarea name="remarks" rows="4" class="input-x" placeholder="DEPOSIT BEFORE PRODUCTION, BALANCE AFTER CONFIRM BY COPY&#10;PORT OF LOADING : SHENZHEN OR SHANTOU PORT, CHINA&#10;NET PACKING AND STRONG CARTON PACKING">{{ values.remarks }}</textarea>
             </div>
-            <div class="grid-3 mt-3">
+            <p class="u-muted mt-3 mb-1" style="font-size:.8rem"><b>Validity</b> and <b>Delivery Availability</b> are printed in the top block of the PDF (next to the date) and again in the Terms and Conditions box.
+                <b>Country of Origin</b> and <b>Warranty</b> are printed in the Terms and Conditions box. In the box they follow your points in this order: Validity, Delivery Availability, Country of Origin, Warranty; leave one blank to leave it out.</p>
+            <div class="grid-2">
                 <div class="field-x"><label class="label-x">Validity</label>
                     <input type="text" name="validity" class="input-x" value="{{ values.validity }}"></div>
-                <div class="field-x"><label class="label-x">Stock Availability</label>
+                <div class="field-x"><label class="label-x">Delivery Availability <small class="u-muted">(date)</small></label>
                     <input type="date" name="stock_availability" class="input-x" value="{{ values.stock_availability }}"></div>
                 <div class="field-x"><label class="label-x">Country of Origin</label>
                     <input type="text" name="country_of_origin" class="input-x" value="{{ values.country_of_origin }}"></div>
+                <div class="field-x"><label class="label-x">Warranty</label>
+                    <input type="text" name="warranty" class="input-x" placeholder="e.g. 2 years against manufacturing defects" value="{{ values.warranty }}"></div>
             </div>
             <div class="fixed-box mt-3"><b>Bank details (fixed — printed automatically)</b><br>
                 NATIONAL BANK OF FUJAIRAH, P.O BOX: 2979, DUBAI - U.A.E. · SWIFT: NBFUAEAFDXB · A/C NO: 012001111025 ·
                 A/C NAME: JUNAID GALLERIA TRADING LLC · IBAN: AE88 0380 0000 1200 1111 025</div>
+            <div class="mt-2">
+                {% if has_stamp %}
+                <label><input type="checkbox" name="add_stamp" {% if values.add_stamp %}checked{% endif %} {% if not can_stamp %}disabled{% endif %}>
+                    Add company stamp inside the bank details</label>
+                {% if not can_stamp %}<small class="u-muted"> — only authorised users can add the stamp; your PDFs are generated without it.</small>{% endif %}
+                {% else %}
+                <small class="u-muted"><i class="fas fa-stamp"></i> No stamp uploaded yet.
+                    {% if can_stamp %}<a href="{% url 'quotation:stamp_settings' %}" target="_blank">Upload the stamp</a> to be able to add it here.{% endif %}</small>
+                {% endif %}
+            </div>
             <div class="grid-3 mt-3">
                 <div class="field-x"><label class="label-x">Sales Person</label>
                     <input type="text" name="sales_person" class="input-x" value="{{ values.sales_person }}"></div>
@@ -156,10 +213,10 @@
                 <input type="file" name="photo_${key}" accept="image/*">
                 <button type="button" class="btn-x sm btn-danger-x mini rm-photo mt-1" ${d.photo_url ? '' : 'style="display:none"'}>Remove photo</button>
             </td>
-            <td data-label="Brand"><input type="text" name="item_brand" class="input-x"></td>
+            <td data-label="Brand"><input type="text" name="item_brand" class="input-x caps" autocapitalize="characters"></td>
             <td class="c-desc" data-label="Description"><textarea name="item_description" rows="3" class="input-x"></textarea></td>
             <td data-label="Size"><input type="text" name="item_size" class="input-x"></td>
-            <td data-label="Color"><input type="text" name="item_color" class="input-x"></td>
+            <td data-label="Color"><input type="text" name="item_color" class="input-x caps" autocapitalize="characters"></td>
             <td data-label="Qty"><input type="number" step="any" min="0" name="item_qty" class="input-x"></td>
             <td data-label="Unit Price (AED)"><input type="number" step="any" min="0" name="item_price" class="input-x"></td>
             <td class="amt" data-label="Total (AED)">0.00</td>
@@ -176,10 +233,10 @@
         const q = n => tr.querySelector(`[name="${n}"]`);
         q('item_no').value = d.item_no || '';
         q('item_model').value = d.model_no || '';
-        q('item_brand').value = d.brand || '';
+        q('item_brand').value = (d.brand || '').toUpperCase();
         q('item_description').value = d.description || '';
         q('item_size').value = d.size || '';
-        q('item_color').value = d.color || '';
+        q('item_color').value = (d.color || '').toUpperCase();
         q('item_qty').value = d.qty !== undefined && d.qty !== '' ? parseFloat(d.qty) : '';
         q('item_price').value = d.unit_price !== undefined && d.unit_price !== '' ? parseFloat(d.unit_price) : '';
         q('item_warranty').value = d.warranty || '';
@@ -206,6 +263,11 @@
             }
         };
         tr.querySelector('.rm').onclick = () => { tr.remove(); recalc(); };
+        // Brand and Color are always capitals: convert as you type (the caret stays where it was)
+        tr.querySelectorAll('input.caps').forEach(el => el.addEventListener('input', () => {
+            const at = el.selectionStart, end = el.selectionEnd, up = el.value.toUpperCase();
+            if (up !== el.value) { el.value = up; try { el.setSelectionRange(at, end); } catch (e) {} }
+        }));
         tr.addEventListener('input', recalc);
         body.appendChild(tr);
         recalc();
@@ -221,12 +283,21 @@
             tr.querySelector('.amt').textContent = fmt(a);
             sum += a;
         });
-        const vat = Math.round(sum * 5) / 100;    // 5% VAT, to the cent
+        // optional discount (AED amount, or % of the total), never more than the total; then 5% VAT on what is left
+        const dv = Math.max(parseFloat(document.getElementById('discValue').value) || 0, 0);
+        let disc = document.getElementById('discType').value === 'percent' ? Math.round(sum * Math.min(dv, 100)) / 100 : dv;
+        disc = Math.min(disc, sum);
+        const net = Math.round((sum - disc) * 100) / 100;
+        const vat = Math.round(net * 5) / 100;    // 5% VAT, to the cent
         document.getElementById('tTotal').textContent = fmt(sum);
+        document.getElementById('tDisc').textContent = disc ? '- ' + fmt(disc) : fmt(0);
+        document.getElementById('tNet').textContent = fmt(net);
         document.getElementById('tVat').textContent = fmt(vat);
-        document.getElementById('tGrand').textContent = fmt(sum + vat);
+        document.getElementById('tGrand').textContent = fmt(net + vat);
     }
 
+    document.getElementById('discType').addEventListener('change', recalc);
+    document.getElementById('discValue').addEventListener('input', recalc);
     document.getElementById('addItem').onclick = () => addRow({});
     const initial = JSON.parse(document.getElementById('itemsData').textContent);
     if (initial.length) initial.forEach(addRow); else addRow({});

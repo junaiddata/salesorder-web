@@ -1,0 +1,28 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}Stamp | Quotations{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head"><h2>Company Stamp</h2></div>
+    <p class="u-muted">For security the image is stored privately and is never shown or linked here. Upload it once; uploading again replaces the current one.
+        On each quotation you then tick <b>Add company stamp</b> to print it inside the Bank Account Details box of the PDF.
+        A PNG with a transparent background looks best; a stamp on white paper also works, as the white is removed automatically.
+        This stamp is used only on quotations.</p>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="card-x" style="max-width:520px"><div class="card-x-body">
+            <h5>Stamp image</h5>
+            <p class="mb-3">{% if stamp.stamp %}<span class="chip-x green"><i class="fas fa-circle-check"></i> Stamp uploaded</span>{% else %}<span class="chip-x gray">No stamp uploaded</span>{% endif %}</p>
+            <input type="file" name="stamp" accept="image/png,image/jpeg" class="input-x">
+            <small class="u-muted">PNG or JPG, max 5 MB.</small>
+            {% if stamp.stamp %}<label class="mt-2 d-block"><input type="checkbox" name="remove_stamp" value="1"> Remove current stamp</label>{% endif %}
+        </div></div>
+        <div class="d-flex gap-2 mt-3 mb-5">
+            <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save</button>
+            <a href="{% url 'quotation:list' %}" class="btn-x lg">Back</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

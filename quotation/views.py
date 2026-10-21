@@ -7,7 +7,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,13 +16,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
-from .models import Quotation, QuotationItem, new_share_token
+from .models import Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
+from .permissions import can_use_stamp
 from .pdf_builder import build_quotation_pdf
 
 log = logging.getLogger('quotation')
 
 TEXT_FIELDS = [
-    'to_text', 'project_reference', 'remarks', 'validity', 'country_of_origin',
+    'customer_name', 'customer_contact', 'customer_address', 'customer_trn', 'to_text', 'customer_ref', 'project_reference', 'remarks', 'validity', 'country_of_origin', 'warranty',
     'sales_person', 'email', 'contact_number',
 ]
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
@@ -76,6 +78,24 @@ def _delete_item_files(item):
         item.datasheet.delete(save=False)
 
 
+def _save_with_next_number(quotation):
+    """Save a new quotation under the next free JG-<year>-NNN number.
+
+    If two people save at the same moment the unique constraint rejects the second one; it then simply takes the
+    next number.
+    """
+    for _ in range(10):
+        quotation.qtn_no = Quotation.next_qtn_no(quotation.date.year)
+        try:
+            with transaction.atomic():
+                quotation.save()
+            return
+        except IntegrityError:
+            quotation.pk = None
+            quotation._state.adding = True
+    raise IntegrityError('Could not allocate a quotation number.')
+
+
 def _item_json(request, old, posted_row):
     """One row for the form's JS. `old` = the saved item (or None), `posted_row` = what was submitted."""
     def get(field):
@@ -115,11 +135,8 @@ def quotation_form(request, pk=None):
 
     if request.method == 'POST':
         posted = request.POST
-        qtn_no = (posted.get('qtn_no') or '').strip()
-        if not qtn_no:
-            errors.append('Please enter the QTN No.')
-        elif Quotation.objects.filter(qtn_no__iexact=qtn_no).exclude(pk=quotation.pk if quotation else None).exists():
-            errors.append(f'QTN No {qtn_no} already exists.')
+        # The QTN No is never typed: a new quotation is numbered automatically when it is saved, and an existing one
+        # keeps its number.
         try:
             qdate = date_cls.fromisoformat(posted.get('date') or '')
         except ValueError:
@@ -152,8 +169,8 @@ def quotation_form(request, pk=None):
                 'item_id': _at(ids, i).strip(),
                 'item_no': _at(item_nos, i).strip(),
                 'model_no': _at(models_, i).strip(),
-                'brand': _at(brands, i).strip(), 'description': _at(descs, i).strip(),
-                'size': _at(sizes, i).strip(), 'color': _at(colors, i).strip(),
+                'brand': _at(brands, i).strip().upper(), 'description': _at(descs, i).strip(),   # brand and color: capitals
+                'size': _at(sizes, i).strip(), 'color': _at(colors, i).strip().upper(),
                 'qty': _dec(_at(qtys, i, 0)), 'unit_price': _dec(_at(prices, i, 0)),
                 'warranty': _at(warranties, i).strip(),
                 'remove_photo': _at(rm_photo, i, '0') == '1',
@@ -181,17 +198,32 @@ def quotation_form(request, pk=None):
             rows.append(row)
         if not rows:
             errors.append('Please add at least one item.')
+        discount_type = 'percent' if posted.get('discount_type') == 'percent' else 'amount'
+        discount_value = _dec(posted.get('discount_value'))
+        if discount_value < 0:
+            errors.append('The discount cannot be negative.')
+        elif discount_type == 'percent' and discount_value > 100:
+            errors.append('A percentage discount cannot be more than 100%.')
+        elif discount_type == 'amount' and discount_value > sum((line_amount(r['qty'], r['unit_price']) for r in rows), Decimal('0')):
+            errors.append('The discount cannot be more than the total of the items.')
 
         if not errors:
             with transaction.atomic():
-                if not quotation:
+                is_new = quotation is None
+                if is_new:
                     quotation = Quotation(created_by=request.user)
-                quotation.qtn_no = qtn_no
                 quotation.date = qdate
+                if can_use_stamp(request.user):   # everyone else leaves the existing choice untouched
+                    quotation.add_stamp = posted.get('add_stamp') == 'on'
                 quotation.stock_availability = stock_date
+                quotation.discount_type = discount_type
+                quotation.discount_value = discount_value
                 for f in TEXT_FIELDS:
                     setattr(quotation, f, (posted.get(f) or '').strip())
-                quotation.save()
+                if is_new:
+                    _save_with_next_number(quotation)
+                else:
+                    quotation.save()
                 current = {str(i.pk): i for i in quotation.items.all()}
                 for pos, r in enumerate(rows):
                     # Rows are updated in place (not recreated) so photos, datasheets and share tokens survive edits.
@@ -225,18 +257,36 @@ def quotation_form(request, pk=None):
         items_data = [_item_json(request, it, None) for it in (quotation.items.all() if quotation else [])]
 
     if posted is not None:
-        values = {k: posted.get(k, '') for k in ['qtn_no', 'date', 'stock_availability'] + TEXT_FIELDS}
+        values = {k: posted.get(k, '') for k in ['date', 'stock_availability'] + TEXT_FIELDS}
+        values['discount_type'] = 'percent' if posted.get('discount_type') == 'percent' else 'amount'
+        values['discount_value'] = posted.get('discount_value', '')
+        values['add_stamp'] = (posted.get('add_stamp') == 'on') if can_use_stamp(request.user) else bool(quotation and quotation.add_stamp)
     elif quotation:
         values = {k: getattr(quotation, k) for k in TEXT_FIELDS}
-        values.update(qtn_no=quotation.qtn_no, date=quotation.date.isoformat(),
+        values['add_stamp'] = quotation.add_stamp
+        values['discount_type'] = quotation.discount_type
+        values['discount_value'] = quotation.discount_value or ''   # blank rather than 0.00
+        values.update(date=quotation.date.isoformat(),
                       stock_availability=quotation.stock_availability.isoformat() if quotation.stock_availability else '')
     else:
-        values = {'date': timezone.localdate().isoformat(),
+        values = {'date': timezone.localdate().isoformat(), 'discount_type': 'amount', 'discount_value': '',
                   'sales_person': request.user.get_full_name() or request.user.get_username(),
                   'email': request.user.email}
 
+    if quotation:
+        qtn_no_shown = quotation.qtn_no
+    else:   # preview of the number this quotation will get (the year follows the quotation date)
+        try:
+            year = date_cls.fromisoformat(values.get('date') or '').year
+        except ValueError:
+            year = timezone.localdate().year
+        qtn_no_shown = Quotation.next_qtn_no(year)
+
     return render(request, 'quotation/form.html', {
         'quotation': quotation,
+        'qtn_no_shown': qtn_no_shown,
+        'has_stamp': bool(QuotationStamp.get_instance().stamp),
+        'can_stamp': can_use_stamp(request.user),
         'errors': errors,
         'values': values,
         'items_data': items_data,
@@ -259,7 +309,10 @@ def quotation_delete(request, pk):
 def quotation_pdf(request, pk):
     quotation = get_object_or_404(Quotation.objects.prefetch_related('items'), pk=pk)
     orientation = 'landscape' if request.GET.get('orientation') == 'landscape' else 'portrait'
-    pdf = build_quotation_pdf(quotation, _public_base_url(request), orientation)
+    with_stamp = can_use_stamp(request.user)
+    pdf = build_quotation_pdf(quotation, _public_base_url(request), orientation, with_stamp=with_stamp)
+    if with_stamp and quotation.add_stamp:
+        log.info('Stamped quotation PDF generated: user=%s qtn=%s', request.user.username, quotation.qtn_no)
     resp = HttpResponse(pdf, content_type='application/pdf')
     disp = 'inline' if request.GET.get('inline') == '1' else 'attachment'
     safe = ''.join(c if c.isalnum() or c in '-_' else '-' for c in quotation.qtn_no)
@@ -279,6 +332,38 @@ def item_photo(request, item_pk):
     resp = FileResponse(item.photo.open('rb'))
     resp['Cache-Control'] = 'private, max-age=3600'
     return resp
+
+
+MAX_STAMP_BYTES = 5 * 1024 * 1024
+
+
+@login_required
+def stamp_settings(request):
+    """Upload / replace / remove the company stamp. The image is private: it is only ever printed into PDFs."""
+    if not can_use_stamp(request.user):
+        raise PermissionDenied
+    stamp = QuotationStamp.get_instance()
+    if request.method == 'POST':
+        changed = False
+        if request.POST.get('remove_stamp') == '1' and stamp.stamp:
+            stamp.stamp.delete(save=False)
+            changed = True
+        f = request.FILES.get('stamp')
+        if f:
+            err = _check_photo(f, 'Stamp')
+            if err:
+                messages.error(request, err.replace('photo is too large', 'image is too large'))
+            else:
+                if stamp.stamp:
+                    stamp.stamp.delete(save=False)
+                stamp.stamp.save(f.name, f, save=False)
+                changed = True
+        if changed:
+            stamp.save()
+            log.info('Quotation stamp changed by user=%s', request.user.username)
+            messages.success(request, 'Stamp updated.')
+        return redirect('quotation:stamp_settings')
+    return render(request, 'quotation/stamp_settings.html', {'stamp': stamp})
 
 
 @require_GET
