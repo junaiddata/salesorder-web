@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Quotation, QuotationItem
+from .models import Product, Quotation, QuotationItem
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ('model_no', 'brand', 'updated_at')
+    search_fields = ('model_no', 'brand')
 
 
 class ItemInline(admin.TabularInline):

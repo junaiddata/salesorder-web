@@ -127,6 +127,50 @@ class QuotationStamp(models.Model):
         return obj
 
 
+def product_key(text):
+    """How a Model No (or a file name) is compared: capitals, no outer spaces, '/' and '\\' as '-' (AB/12 = AB-12)."""
+    return (text or '').strip().upper().replace('/', '-').replace('\\', '-')
+
+
+def product_photo_upload_to(instance, filename):
+    return f'library/photos/{secrets.token_hex(8)}_{filename}'
+
+
+def product_datasheet_upload_to(instance, filename):
+    return f'library/datasheets/{secrets.token_hex(8)}_{filename}'
+
+
+class Product(models.Model):
+    """Product library: model no, brand, description, photo and datasheet entered once.
+
+    Typing a Model No in a quotation copies these into the quotation row. The quotation keeps its own copy of the
+    files, so changing or deleting a product here never alters a quotation that was already made or sent.
+    """
+
+    model_no = models.CharField(max_length=100)
+    model_key = models.CharField(max_length=100, unique=True, editable=False)   # product_key(model_no): one product per model
+    brand = models.CharField(max_length=150, blank=True)
+    description = models.TextField(blank=True)
+    photo = models.ImageField(upload_to=product_photo_upload_to, storage=get_private_storage, blank=True, null=True)
+    datasheet = models.FileField(upload_to=product_datasheet_upload_to, storage=get_private_storage, blank=True, null=True)   # always a JPEG
+    # File names given in the Excel "Photo file" / "Datasheet file" columns, used when the files are uploaded later.
+    photo_name = models.CharField(max_length=200, blank=True)
+    datasheet_name = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['model_key']
+
+    def save(self, *args, **kwargs):
+        self.model_no = (self.model_no or '').strip()
+        self.model_key = product_key(self.model_no)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.model_no
+
+
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='items')
     position = models.PositiveIntegerField(default=0)

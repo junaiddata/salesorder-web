@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
-from .models import Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
+from .models import Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
 from .permissions import can_use_stamp
 from .pdf_builder import build_quotation_pdf
 
@@ -96,6 +96,36 @@ def _save_with_next_number(quotation):
     raise IntegrityError('Could not allocate a quotation number.')
 
 
+def _read_file(field_file):
+    try:
+        with field_file.open('rb') as fh:
+            return fh.read()
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _copy_from_library(item, row):
+    """A row filled from the product library gets its OWN copy of the product's photo and datasheet, so later changes
+    to the library never alter this quotation, and its datasheet link (own token) keeps working.
+    A file uploaded or removed on the row itself always wins over the library's."""
+    lib = row.get('lib')
+    if not lib:
+        return
+    if lib.photo and not row['photo_file'] and not row['remove_photo']:
+        data = _read_file(lib.photo)
+        if data is not None:
+            if item.photo:
+                item.photo.delete(save=False)
+            item.photo.save(_display_name(lib.photo), ContentFile(data), save=False)
+    if lib.datasheet and not ('ds_jpeg' in row and row['ds_jpeg']) and not row['remove_ds']:
+        data = _read_file(lib.datasheet)
+        if data is not None:
+            if item.datasheet:
+                item.datasheet.delete(save=False)
+            item.datasheet.save(_display_name(lib.datasheet), ContentFile(data), save=False)
+            item.share_token = item.share_token or new_share_token()
+
+
 def _item_json(request, old, posted_row):
     """One row for the form's JS. `old` = the saved item (or None), `posted_row` = what was submitted."""
     def get(field):
@@ -104,7 +134,11 @@ def _item_json(request, old, posted_row):
     share_url = ''
     if old and old.datasheet and old.share_token:
         share_url = f'{_public_base_url(request)}{reverse("quotation:datasheet", args=[old.share_token])}'
+    lib = posted_row.get('lib') if posted_row else None   # form re-shown after an error: keep the library choice
     return {
+        'lib_id': lib.pk if lib else '',
+        'lib_photo_url': reverse('quotation:product_photo', args=[lib.pk]) if lib and lib.photo else '',
+        'lib_datasheet_name': _display_name(lib.datasheet) if lib and lib.datasheet else '',
         'item_id': old.pk if old else '',
         'item_no': get('item_no'), 'model_no': get('model_no'),
         'brand': get('brand'), 'description': get('description'), 'size': get('size'),
@@ -162,6 +196,8 @@ def quotation_form(request, pk=None):
         warranties = posted.getlist('item_warranty')
         rm_photo = posted.getlist('remove_photo')
         rm_ds = posted.getlist('remove_ds')
+        lib_ids = posted.getlist('lib_id')   # set when the row was filled from the product library
+        library = Product.objects.in_bulk([int(x) for x in lib_ids if x.strip().isdigit()])
         rows = []
         for i, key in enumerate(keys):
             row = {
@@ -175,6 +211,7 @@ def quotation_form(request, pk=None):
                 'warranty': _at(warranties, i).strip(),
                 'remove_photo': _at(rm_photo, i, '0') == '1',
                 'remove_ds': _at(rm_ds, i, '0') == '1',
+                'lib': library.get(int(_at(lib_ids, i).strip())) if _at(lib_ids, i).strip().isdigit() else None,
                 # one file input per row, named after the row key, so rows without a file can't shift the others
                 'photo_file': request.FILES.get(f'photo_{key}'),
                 'ds_file': request.FILES.get(f'ds_{key}'),
@@ -245,6 +282,7 @@ def quotation_form(request, pk=None):
                         ds_name, ds_bytes = r['ds_jpeg']
                         item.datasheet.save(ds_name, ContentFile(ds_bytes), save=False)
                         item.share_token = item.share_token or new_share_token()
+                    _copy_from_library(item, r)
                     item.save()
                 for gone in current.values():   # rows removed from the form
                     _delete_item_files(gone)

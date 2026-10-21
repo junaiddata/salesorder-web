@@ -12,7 +12,7 @@ from django.urls import reverse
 from PIL import Image
 from PyPDF2 import PdfReader
 
-from .models import Quotation, QuotationItem
+from .models import Product, Quotation, QuotationItem
 
 TMP_ROOT = tempfile.mkdtemp(prefix='qtn_test_')
 
@@ -753,3 +753,121 @@ class QuotationTests(TestCase):
     def test_other_apps_untouched(self):
         # The new app must not interfere with the Bangladesh PI routes.
         self.assertEqual(self.client.get(reverse('bangladeshpi:list')).status_code, 200)
+
+
+def xlsx_file(rows, name='products.xlsx'):
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    for r in rows:
+        ws.append(r)
+    buf = BytesIO()
+    wb.save(buf)
+    return SimpleUploadedFile(name, buf.getvalue(), content_type='application/octet-stream')
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT, QUOTATION_PUBLIC_BASE_URL='https://example.test',
+                   QUOTATION_STAMP_USERS=())
+class ProductLibraryTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user('libuser', password='x')
+        self.client.force_login(self.user)
+
+    def _excel(self, rows):
+        return self.client.post(reverse('quotation:product_import_excel'), {'excel': xlsx_file(rows)})
+
+    def _payload(self, **extra):
+        return QuotationTests('_payload')._payload(**extra)
+
+    def test_excel_import_creates_updates_and_never_wipes(self):
+        head = ['Model No', 'Brand', 'Description', 'Photo file', 'Datasheet file']
+        self._excel([head, ['H12', 'jomix', 'Basin mixer', '', ''], ['ab/12', 'x', 'Hose', 'IMG_1.jpg', ''],
+                     [None, None, None, None, None], ['h12', 'a', 'dup', '', '']])
+        self.assertEqual(Product.objects.count(), 2)
+        h12 = Product.objects.get(model_key='H12')
+        self.assertEqual((h12.brand, h12.description), ('JOMIX', 'Basin mixer'))
+        self.assertEqual(Product.objects.get(model_key='AB-12').photo_name, 'IMG_1.jpg')
+        self._excel([head, ['H12', '', 'New text', '', '']])   # blank brand keeps JOMIX; description updates
+        h12.refresh_from_db()
+        self.assertEqual((h12.brand, h12.description), ('JOMIX', 'New text'))
+        self.assertEqual(Product.objects.count(), 2)
+
+    def test_bad_excel_is_rejected(self):
+        resp = self.client.post(reverse('quotation:product_import_excel'),
+                                {'excel': SimpleUploadedFile('x.xlsx', b'junk')}, follow=True)
+        self.assertContains(resp, 'could not be read')
+        self.assertEqual(Product.objects.count(), 0)
+
+    def test_files_attach_by_name_and_by_hint_and_report_unmatched(self):
+        Product.objects.create(model_no='H12')
+        Product.objects.create(model_no='AB/12')
+        Product.objects.create(model_no='X1', photo_name='IMG_9.png')
+        url = reverse('quotation:product_import_files')
+        resp = self.client.post(url, {'kind': 'photo', 'files': [
+            png_file('h12.PNG'), png_file('AB-12.png'), png_file('IMG_9.png'), png_file('ZZ.png')]})
+        res = {r['name']: r['status'] for r in resp.json()['results']}
+        self.assertEqual(res, {'h12.PNG': 'ok', 'AB-12.png': 'ok', 'IMG_9.png': 'ok', 'ZZ.png': 'unmatched'})
+        self.assertTrue(all(Product.objects.get(model_key=k).photo for k in ('H12', 'AB-12', 'X1')))
+        resp = self.client.post(url, {'kind': 'datasheet', 'files': [SimpleUploadedFile('H12.pdf', PDF_BYTES, 'application/pdf')]})
+        self.assertEqual(resp.json()['results'][0]['status'], 'ok')
+        self.assertEqual(jpeg_size(Product.objects.get(model_key='H12').datasheet.open('rb').read())[0], 1240)
+        bad = self.client.post(url, {'kind': 'datasheet', 'files': [SimpleUploadedFile('H12.pdf', b'nope')]})
+        self.assertEqual(bad.json()['results'][0]['status'], 'error')
+        self.assertTrue(Product.objects.get(model_key='H12').datasheet)   # a bad file never removes the good one
+
+    def test_model_no_is_unique_in_the_form(self):
+        Product.objects.create(model_no='H12')
+        resp = self.client.post(reverse('quotation:product_new'), {'model_no': ' h12 ', 'brand': 'a'})
+        self.assertContains(resp, 'already exists')
+        self.assertEqual(Product.objects.count(), 1)
+        self.client.post(reverse('quotation:product_new'),
+                         {'model_no': 'H13', 'brand': 'grohe', 'description': 'd', 'photo': png_file()})
+        p = Product.objects.get(model_key='H13')
+        self.assertEqual(p.brand, 'GROHE')
+        self.assertTrue(p.photo)
+
+    def test_search_prefers_models_starting_with_the_text(self):
+        for m in ('XH1', 'H12', 'H13'):
+            Product.objects.create(model_no=m, brand='B')
+        names = [r['model_no'] for r in self.client.get(reverse('quotation:product_search') + '?q=h1').json()['results']]
+        self.assertEqual(names, ['H12', 'H13', 'XH1'])
+        self.assertEqual(self.client.get(reverse('quotation:product_search') + '?q=').json()['results'], [])
+
+    def test_quotation_row_gets_its_own_copy_unaffected_by_library_changes(self):
+        p = Product.objects.create(model_no='H12', brand='JOMIX', description='Mixer')
+        url = reverse('quotation:product_import_files')
+        self.client.post(url, {'kind': 'photo', 'files': [png_file('H12.png')]})
+        self.client.post(url, {'kind': 'datasheet', 'files': [SimpleUploadedFile('H12.pdf', PDF_BYTES, 'application/pdf')]})
+        p.refresh_from_db()
+        self.client.post(reverse('quotation:new'), self._payload(lib_id=[str(p.pk), '']))
+        item = QuotationItem.objects.get(brand='ARISTON')
+        self.assertTrue(item.photo and item.datasheet and item.share_token)
+        self.assertNotEqual(item.photo.name, p.photo.name)
+        self.assertNotEqual(item.datasheet.name, p.datasheet.name)
+        token, ds_bytes = item.share_token, item.datasheet.open('rb').read()
+        # change, then delete the product: the quotation and the datasheet link already sent stay as they were
+        self.client.post(url, {'kind': 'datasheet', 'files': [SimpleUploadedFile('H12.pdf', make_pdf('Other', 3), 'application/pdf')]})
+        self.client.post(reverse('quotation:product_delete', args=[p.pk]))
+        item.refresh_from_db()
+        self.assertEqual(item.datasheet.open('rb').read(), ds_bytes)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse('quotation:datasheet', args=[token])).status_code, 200)
+
+    def test_row_removal_beats_library(self):
+        p = Product.objects.create(model_no='H12')
+        self.client.post(reverse('quotation:product_import_files'), {'kind': 'photo', 'files': [png_file('H12.png')]})
+        self.client.post(reverse('quotation:new'), self._payload(lib_id=[str(p.pk), ''], remove_photo=['1', '0']))
+        self.assertFalse(QuotationItem.objects.get(brand='ARISTON').photo)
+
+    def test_library_pages_need_login(self):
+        self.client.logout()
+        for name in ('product_list', 'product_new', 'product_search', 'product_template'):
+            self.assertEqual(self.client.get(reverse(f'quotation:{name}')).status_code, 302, name)
+        self.assertEqual(self.client.post(reverse('quotation:product_import_files'), {'kind': 'photo'}).status_code, 302)
+
+    def test_pages_render_and_template_downloads(self):
+        Product.objects.create(model_no='H12', brand='JOMIX')
+        self.assertContains(self.client.get(reverse('quotation:product_list')), 'H12')
+        self.assertEqual(self.client.get(reverse('quotation:product_edit', args=[Product.objects.get().pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('quotation:product_template')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('quotation:new')).status_code, 200)

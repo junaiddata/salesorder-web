@@ -55,6 +55,9 @@
                 <a href="{% url 'quotation:new' %}" class="app-nav-link {% if url_name == 'new' or url_name == 'edit' %}active{% endif %}">
                     <i class="fas fa-plus-circle"></i> New Quotation
                 </a>
+                <a href="{% url 'quotation:product_list' %}" class="app-nav-link {% if 'product' in url_name %}active{% endif %}">
+                    <i class="fas fa-boxes-stacked"></i> Products
+                </a>
                 {% if request.user|can_use_stamp %}
                 <a href="{% url 'quotation:stamp_settings' %}" class="app-nav-link {% if url_name == 'stamp_settings' %}active{% endif %}">
                     <i class="fas fa-stamp"></i> Stamp

@@ -1,0 +1,51 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}{% if product %}Edit{% else %}New{% endif %} Product | Quotations{% endblock %}
+
+{% block extra_css %}
+<style>
+    .thumb-lg { width: 110px; height: 110px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; display: block; margin-bottom: .4rem; }
+    .err-box { background: #fde8e8; color: #9b1c1c; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head"><h2>{% if product %}Edit Product {{ product.model_no }}{% else %}New Product{% endif %}</h2></div>
+    {% if errors %}<div class="err-box"><ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+
+    <form method="post" enctype="multipart/form-data" style="max-width:760px">
+        {% csrf_token %}
+        <div class="card-x mb-3"><div class="card-x-body">
+            <div class="field-x">
+                <label class="label-x">Model No <small class="u-muted">(unique — each product once)</small></label>
+                <input type="text" name="model_no" class="input-x" required maxlength="100" value="{{ values.model_no }}">
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Brand <small class="u-muted">(saved in capitals)</small></label>
+                <input type="text" name="brand" class="input-x" maxlength="150" style="text-transform:uppercase" value="{{ values.brand }}">
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Description</label>
+                <textarea name="description" rows="5" class="input-x">{{ values.description }}</textarea>
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Photo <small class="u-muted">(JPG / PNG, max 5 MB)</small></label>
+                {% if product.photo %}<img class="thumb-lg" src="{% url 'quotation:product_photo' product.pk %}?v={{ product.updated_at|date:'U' }}" alt="">{% endif %}
+                <input type="file" name="photo" accept="image/*" class="input-x">
+                {% if product.photo %}<label class="mt-1 d-block"><input type="checkbox" name="remove_photo" value="1"> Remove current photo</label>{% endif %}
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Datasheet <small class="u-muted">(PDF / JPG / PNG, max 10 MB — saved as a JPEG)</small></label>
+                {% if product.datasheet %}<div class="mb-1"><span class="chip-x green"><i class="fas fa-circle-check"></i> Datasheet uploaded</span></div>{% endif %}
+                <input type="file" name="datasheet" accept="application/pdf,image/*,.pdf" class="input-x">
+                {% if product.datasheet %}<label class="mt-1 d-block"><input type="checkbox" name="remove_ds" value="1"> Remove current datasheet</label>{% endif %}
+            </div>
+        </div></div>
+        <div class="d-flex gap-2 mb-5">
+            <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save Product</button>
+            <a href="{% url 'quotation:product_list' %}" class="btn-x lg">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

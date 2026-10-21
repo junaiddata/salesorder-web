@@ -203,15 +203,16 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td data-label="Item No"><input type="text" name="item_no" class="input-x row-no"></td>
-            <td data-label="Model No"><input type="text" name="item_model" class="input-x"></td>
+            <td data-label="Model No"><input type="text" name="item_model" class="input-x" autocomplete="off" placeholder="type to search library"></td>
             <td class="c-photo" data-label="Photo">
                 <input type="hidden" name="row_key" value="${key}">
+                <input type="hidden" name="lib_id" value="${esc(d.lib_id || '')}">
                 <input type="hidden" name="item_id" value="${esc(d.item_id || '')}">
                 <input type="hidden" name="remove_photo" value="0">
                 <input type="hidden" name="remove_ds" value="0">
-                <img class="thumb" ${d.photo_url ? `src="${esc(d.photo_url)}"` : 'style="display:none"'} alt="">
+                <img class="thumb" ${(d.photo_url || d.lib_photo_url) ? `src="${esc(d.photo_url || d.lib_photo_url)}"` : 'style="display:none"'} alt="">
                 <input type="file" name="photo_${key}" accept="image/*">
-                <button type="button" class="btn-x sm btn-danger-x mini rm-photo mt-1" ${d.photo_url ? '' : 'style="display:none"'}>Remove photo</button>
+                <button type="button" class="btn-x sm btn-danger-x mini rm-photo mt-1" ${(d.photo_url || d.lib_photo_url) ? '' : 'style="display:none"'}>Remove photo</button>
             </td>
             <td data-label="Brand"><input type="text" name="item_brand" class="input-x caps" autocapitalize="characters"></td>
             <td class="c-desc" data-label="Description"><textarea name="item_description" rows="3" class="input-x"></textarea></td>
@@ -221,9 +222,9 @@
             <td data-label="Unit Price (AED)"><input type="number" step="any" min="0" name="item_price" class="input-x"></td>
             <td class="amt" data-label="Total (AED)">0.00</td>
             <td class="c-ds" data-label="Datasheet (Link)">
-                <div class="ds-info" ${d.datasheet_name ? '' : 'style="display:none"'}>
-                    <div class="ds-name"><i class="fas fa-file-pdf"></i> <span>${esc(d.datasheet_name || '')}</span></div>
-                    <button type="button" class="btn-x sm mini copy-link" data-url="${esc(d.share_url || '')}"><i class="fas fa-copy"></i> Copy link</button>
+                <div class="ds-info" ${(d.datasheet_name || d.lib_datasheet_name) ? '' : 'style="display:none"'}>
+                    <div class="ds-name"><i class="fas fa-file-pdf"></i> <span>${esc(d.datasheet_name || d.lib_datasheet_name || '')}</span></div>
+                    <button type="button" class="btn-x sm mini copy-link" data-url="${esc(d.share_url || '')}" ${d.share_url ? '' : 'style="display:none"'}><i class="fas fa-copy"></i> Copy link</button>
                     <button type="button" class="btn-x sm btn-danger-x mini rm-ds">Remove</button>
                 </div>
                 <input type="file" name="ds_${key}" accept="application/pdf,image/*,.pdf" class="mt-1">
@@ -269,9 +270,76 @@
             if (up !== el.value) { el.value = up; try { el.setSelectionRange(at, end); } catch (e) {} }
         }));
         tr.addEventListener('input', recalc);
+
+        // Model No: suggestions from the product library; picking one fills brand, description, photo and datasheet
+        const model = q('item_model');
+        model.addEventListener('input', () => {
+            if (q('lib_id').value) {   // the model was changed after picking: drop the library files that were shown, back to the row's own
+                q('lib_id').value = '';
+                if (d.photo_url) { thumb.src = d.photo_url; } else { thumb.style.display = 'none'; rmPhoto.style.display = 'none'; }
+                if (d.datasheet_name) {
+                    dsInfo.querySelector('.ds-name span').textContent = d.datasheet_name;
+                    dsInfo.querySelector('.copy-link').style.display = d.share_url ? '' : 'none';
+                } else { dsInfo.style.display = 'none'; }
+            }
+            suggest(model, pick);
+        });
+        model.addEventListener('blur', () => setTimeout(hideMenu, 200));
+        function pick(p) {
+            model.value = p.model_no;
+            q('lib_id').value = p.id;
+            q('item_brand').value = (p.brand || '').toUpperCase();
+            q('item_description').value = p.description || '';
+            q('remove_photo').value = '0'; q('remove_ds').value = '0';
+            q('photo_' + key).value = ''; q('ds_' + key).value = '';
+            if (p.photo_url) { thumb.src = p.photo_url; thumb.style.display = 'block'; rmPhoto.style.display = ''; }
+            else { thumb.style.display = 'none'; rmPhoto.style.display = 'none'; }
+            if (p.datasheet_name) {
+                dsInfo.querySelector('.ds-name span').textContent = p.datasheet_name;
+                dsInfo.querySelector('.copy-link').style.display = 'none';   // the link exists once the quotation is saved
+                dsInfo.style.display = '';
+            } else { dsInfo.style.display = 'none'; }
+            hideMenu();
+        }
         body.appendChild(tr);
         recalc();
     }
+
+    // one shared suggestion list, fixed-positioned so the scrolling table can't clip it
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;z-index:2000;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.18);max-height:280px;overflow-y:auto;display:none;min-width:320px;font-size:.82rem';
+    document.body.appendChild(menu);
+    let timer = null, seq = 0;
+    function hideMenu() { menu.style.display = 'none'; }
+    function suggest(input, onPick) {
+        clearTimeout(timer);
+        const text = input.value.trim();
+        if (!text) { hideMenu(); return; }
+        timer = setTimeout(async () => {
+            const mine = ++seq;
+            try {
+                const r = await fetch('{% url "quotation:product_search" %}?q=' + encodeURIComponent(text), {credentials: 'same-origin'});
+                const res = (await r.json()).results;
+                if (mine !== seq) return;
+                if (!res.length) { hideMenu(); return; }
+                menu.innerHTML = '';
+                res.forEach(p => {
+                    const el = document.createElement('div');
+                    el.style.cssText = 'padding:.4rem .6rem;cursor:pointer;border-bottom:1px solid #eef1f6';
+                    el.innerHTML = `<b>${esc(p.model_no)}</b> <span style="color:#64748b">${esc(p.brand)}</span><br><span style="color:#64748b">${esc((p.description || '').slice(0, 90))}</span>`;
+                    el.onmouseenter = () => el.style.background = '#f1f5f9';
+                    el.onmouseleave = () => el.style.background = '';
+                    el.onmousedown = e => { e.preventDefault(); onPick(p); };   // before the input's blur hides the list
+                    menu.appendChild(el);
+                });
+                const b = input.getBoundingClientRect();
+                menu.style.left = Math.min(b.left, window.innerWidth - 340) + 'px';
+                menu.style.top = (b.bottom + 2) + 'px';
+                menu.style.display = 'block';
+            } catch (e) { hideMenu(); }
+        }, 200);
+    }
+    window.addEventListener('scroll', hideMenu, true);
 
     function recalc() {
         let sum = 0;

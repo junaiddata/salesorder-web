@@ -1,0 +1,228 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}Products | Quotations{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 991px) { .grid-2 { grid-template-columns: 1fr; } }
+    .pl-table td, .pl-table th { vertical-align: middle; }
+    .pl-table .thumb { width: 44px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+    .pl-table .desc { max-width: 520px; }
+    .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+    .drop-list { max-height: 220px; overflow-y: auto; font-size: .8rem; margin-top: .5rem; }
+    .drop-list div { padding: .15rem 0; border-bottom: 1px solid #eef1f6; display: flex; justify-content: space-between; gap: .6rem; }
+    .drop-list .ok { color: #15803d; }
+    .drop-list .bad { color: #b91c1c; }
+    .drop-sum { font-size: .85rem; margin-top: .5rem; font-weight: 600; }
+    @media (max-width: 991px) {
+        .pl-table thead { display: none; }
+        .pl-table, .pl-table tbody, .pl-table tr, .pl-table td { display: block; width: 100%; }
+        .pl-table tr { padding: .75rem .9rem; border-bottom: 1px solid #e2e8f0; }
+        .pl-table td { padding: .2rem 0; border: none; background: transparent !important; }
+        .pl-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 90px;
+            font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="u-wrap u-page">
+    <div class="sec-head">
+        <h2>Product Library <span class="count">({{ total }})</span></h2>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="get" class="d-flex gap-2">
+                <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search model, brand…">
+                <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+            </form>
+            <a href="{% url 'quotation:product_new' %}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
+        </div>
+    </div>
+    <p class="u-muted">Add each product once. When you type its Model No in a quotation, the brand, description, photo and datasheet fill in automatically.
+        The quotation keeps its own copy, so changing a product here never changes quotations that were already made or sent.</p>
+
+    <details class="card-x mb-3" {% if not total %}open{% endif %}><summary class="card-x-body" style="cursor:pointer"><b><i class="fas fa-file-import"></i> Bulk upload (Excel, then photos and datasheets)</b></summary>
+    <div class="card-x-body" style="padding-top:0">
+        <h6>Step 1 — Excel with the text</h6>
+        <p class="u-muted mb-2" style="font-size:.85rem">Download the template, fill one row per product (Model No, Brand, Description), and upload it. Existing products are updated; blank cells never erase anything.
+            "Photo file" / "Datasheet file" are only needed when the file name is different from the Model No.</p>
+        <form method="post" action="{% url 'quotation:product_import_excel' %}" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center mb-4">
+            {% csrf_token %}
+            <a href="{% url 'quotation:product_template' %}" class="btn-x"><i class="fas fa-download"></i> Download Excel template</a>
+            <input type="file" name="excel" accept=".xlsx" class="input-x" style="max-width:320px" required>
+            <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-upload"></i> Upload Excel</button>
+        </form>
+
+        <h6>Step 2 — Photos and datasheets</h6>
+        <p class="u-muted mb-2" style="font-size:.85rem">Select many files at once. Each file goes to the product whose Model No equals the file name
+            (<code>H12.jpg</code> → H12; for a Model No with "/" use "-" in the name). The list below shows what will match <b>before</b> anything is uploaded.
+            A new file replaces the product's current photo / datasheet. Datasheets (PDF/JPG/PNG) are saved as one JPEG.
+            You can also choose a <b>.zip</b> of files (folders inside are ignored; only the file names count) — it is opened in your browser, so the preview and batches work the same.</p>
+        <div class="grid-2">
+            <div class="drop" data-kind="photo">
+                <label class="label-x">Photos <small class="u-muted">(JPG / PNG, max 5 MB each)</small></label>
+                <input type="file" class="input-x drop-input" accept="image/*,.zip,application/zip" multiple>
+                <div class="drop-sum"></div><div class="drop-list"></div>
+                <button type="button" class="btn-x btn-primary-x mt-2 drop-go" style="display:none"></button>
+            </div>
+            <div class="drop" data-kind="datasheet">
+                <label class="label-x">Datasheets <small class="u-muted">(PDF / JPG / PNG, max 10 MB each)</small></label>
+                <input type="file" class="input-x drop-input" accept="application/pdf,image/*,.pdf,.zip,application/zip" multiple>
+                <div class="drop-sum"></div><div class="drop-list"></div>
+                <button type="button" class="btn-x btn-primary-x mt-2 drop-go" style="display:none"></button>
+            </div>
+        </div>
+        <form id="csrfForm" style="display:none">{% csrf_token %}</form>
+    </div></details>
+
+    {% if page.object_list %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x pl-table">
+            <thead><tr><th>Model No</th><th>Photo</th><th>Brand</th><th>Description</th><th>Datasheet</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for p in page %}
+            <tr>
+                <td data-label="Model No"><b>{{ p.model_no }}</b></td>
+                <td data-label="Photo">{% if p.photo %}<img class="thumb" src="{% url 'quotation:product_photo' p.pk %}?v={{ p.updated_at|date:'U' }}" alt="">{% else %}<span class="u-muted">—</span>{% endif %}</td>
+                <td data-label="Brand">{{ p.brand|default:"—" }}</td>
+                <td data-label="Description" class="desc">{{ p.description|truncatechars:140|default:"—" }}</td>
+                <td data-label="Datasheet">{% if p.datasheet %}<span class="chip-x green">Yes</span>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
+                <td>
+                    <div class="act">
+                        <a href="{% url 'quotation:product_edit' p.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
+                        <form method="post" action="{% url 'quotation:product_delete' p.pk %}" style="display:inline;"
+                              data-confirm="Delete product {{ p.model_no }} from the library? Quotations that already used it are not changed."
+                              data-confirm-title="Delete Product" data-confirm-ok="Delete">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if page.has_other_pages %}
+    <div class="d-flex gap-2 mt-3 align-items-center">
+        {% if page.has_previous %}<a class="btn-x" href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}">&laquo; Previous</a>{% endif %}
+        <span class="u-muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn-x" href="?page={{ page.next_page_number }}&q={{ q|urlencode }}">Next &raquo;</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="card-x"><div class="empty-x">
+        <div class="ic"><i class="fas fa-boxes-stacked"></i></div>
+        <h3>{% if q %}No products match “{{ q }}”{% else %}No products yet{% endif %}</h3>
+        <p>Add a product, or use the bulk upload above.</p>
+    </div></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+{{ keys|json_script:"libKeys" }}
+{{ hints|json_script:"libHints" }}
+<script>
+(function () {
+    const keys = JSON.parse(document.getElementById('libKeys').textContent);
+    const hints = JSON.parse(document.getElementById('libHints').textContent);
+    const csrf = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]').value;
+    const norm = s => s.trim().toUpperCase().replace(/[\/\\]/g, '-');
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const MAX_ZIP_FILES = 1000, MAX_ZIP_BYTES = 400 * 1024 * 1024;   // guards against huge / "zip bomb" archives
+    const BATCH = 15;  // small batches keep every request under the server's upload size limit
+
+    document.querySelectorAll('.drop').forEach(box => {
+        const kind = box.dataset.kind, input = box.querySelector('.drop-input'), sum = box.querySelector('.drop-sum'),
+              list = box.querySelector('.drop-list'), go = box.querySelector('.drop-go');
+        let matched = [];
+
+        function match(file) {
+            const stem = file.name.replace(/\.[^.]*$/, '');
+            return hints[kind][norm(file.name)] || keys[norm(stem)] || '';
+        }
+        const okExt = kind === 'photo' ? /\.(jpe?g|png|webp|gif|bmp)$/i : /\.(pdf|jpe?g|png|webp|gif|bmp)$/i;
+        const maxBytes = (kind === 'photo' ? 5 : 10) * 1024 * 1024;
+
+        // Files chosen directly, plus the contents of any .zip (read in the browser, never written to disk).
+        async function expand(chosen) {
+            const files = [], skipped = [];
+            const seen = new Set();
+            let total = 0;
+            const add = (f, from) => {
+                if (!okExt.test(f.name)) { skipped.push([from + f.name, 'not a ' + (kind === 'photo' ? 'photo' : 'photo / PDF') + ' file']); return; }
+                if (seen.has(f.name.toLowerCase())) { skipped.push([from + f.name, 'duplicate file name']); return; }
+                seen.add(f.name.toLowerCase());
+                files.push(f);
+            };
+            for (const f of chosen) {
+                if (!/\.zip$/i.test(f.name)) { add(f, ''); continue; }
+                if (typeof JSZip === 'undefined') { skipped.push([f.name, 'zip support could not load; choose the files directly']); continue; }
+                try {
+                    const zip = await JSZip.loadAsync(f);
+                    const entries = Object.values(zip.files).filter(e => !e.dir);
+                    if (entries.length > MAX_ZIP_FILES) { skipped.push([f.name, `too many files in the zip (max ${MAX_ZIP_FILES})`]); continue; }
+                    for (const e of entries) {
+                        const base = e.name.split('/').pop();   // folders ignored: only the file name is used
+                        if (!base || base.startsWith('.') || e.name.startsWith('__MACOSX/')) continue;
+                        if (!okExt.test(base)) { skipped.push([f.name + ' › ' + base, 'not a ' + (kind === 'photo' ? 'photo' : 'photo / PDF') + ' file']); continue; }
+                        const declared = e._data && e._data.uncompressedSize;   // checked before unpacking
+                        if (declared > maxBytes) { skipped.push([f.name + ' › ' + base, 'too large (max ' + (maxBytes >> 20) + ' MB)']); continue; }
+                        const blob = await e.async('blob');
+                        total += blob.size;
+                        if (total > MAX_ZIP_BYTES) { skipped.push([f.name, 'zip is too large when opened (max 400 MB); split it into smaller zips']); break; }
+                        add(new File([blob], base), f.name + ' › ');
+                    }
+                } catch (err) {
+                    skipped.push([f.name, 'this zip could not be opened']);
+                }
+            }
+            return {files, skipped};
+        }
+
+        input.addEventListener('change', async () => {
+            matched = [];
+            go.style.display = 'none';
+            sum.textContent = 'Reading files…';
+            const {files, skipped} = await expand(Array.from(input.files));
+            let rows = '';
+            files.forEach(f => {
+                const model = match(f);
+                const big = f.size > maxBytes;
+                if (model && !big) matched.push(f);
+                rows += `<div><span>${esc(f.name)}</span><span class="${model && !big ? 'ok' : 'bad'}">${big ? 'too large (max ' + (maxBytes >> 20) + ' MB)' : model ? '→ ' + esc(model) : 'no matching Model No'}</span></div>`;
+            });
+            skipped.forEach(s => { rows += `<div><span>${esc(s[0])}</span><span class="bad">${esc(s[1])}</span></div>`; });
+            list.innerHTML = rows;
+            sum.textContent = files.length + skipped.length ? `${matched.length} of ${files.length} files match a product.${skipped.length ? ' ' + skipped.length + ' skipped.' : ''}` : '';
+            go.style.display = matched.length ? '' : 'none';
+            go.disabled = false;
+            go.textContent = `Upload ${matched.length} matched file${matched.length === 1 ? '' : 's'}`;
+        });
+        go.addEventListener('click', async () => {
+            go.disabled = true;
+            const out = [];
+            for (let i = 0; i < matched.length; i += BATCH) {
+                const fd = new FormData();
+                fd.append('kind', kind);
+                matched.slice(i, i + BATCH).forEach(f => fd.append('files', f));
+                go.textContent = `Uploading ${Math.min(i + BATCH, matched.length)} / ${matched.length}…`;
+                try {
+                    const r = await fetch('{% url "quotation:product_import_files" %}', {method: 'POST', body: fd, headers: {'X-CSRFToken': csrf}});
+                    if (!r.ok) throw new Error(r.status);
+                    out.push(...(await r.json()).results);
+                } catch (e) {
+                    matched.slice(i, i + BATCH).forEach(f => out.push({name: f.name, status: 'error', message: 'Upload failed (file too large for the server?).'}));
+                }
+            }
+            const ok = out.filter(r => r.status === 'ok').length;
+            sum.textContent = `Done: ${ok} saved, ${out.length - ok} not saved.`;
+            list.innerHTML = out.map(r => `<div><span>${esc(r.name)}</span><span class="${r.status === 'ok' ? 'ok' : 'bad'}">${r.status === 'ok' ? '→ ' + esc(r.model_no) + ' saved' : esc(r.message)}</span></div>`).join('');
+            go.textContent = 'Finished — reload the page to see the photos';
+        });
+    });
+})();
+</script>
+{% endblock %}
