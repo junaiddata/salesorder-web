@@ -137,6 +137,23 @@ def product_photo(request, pk):
 
 @login_required
 @require_GET
+def product_datasheet(request, pk):
+    """Login-only view of a library datasheet (a JPEG). Library datasheets have no public link; quotations get their own."""
+    product = get_object_or_404(Product, pk=pk)
+    if not product.datasheet:
+        raise Http404
+    try:
+        resp = FileResponse(product.datasheet.open('rb'), content_type='image/jpeg')
+    except FileNotFoundError:
+        raise Http404
+    resp['Content-Disposition'] = f'{"attachment" if request.GET.get("download") == "1" else "inline"}; filename="{_display_name(product.datasheet)}"'
+    resp['Cache-Control'] = 'private, no-store'
+    resp['X-Robots-Tag'] = 'noindex, nofollow'
+    return resp
+
+
+@login_required
+@require_GET
 def product_search(request):
     """Model No suggestions for the quotation form."""
     q = (request.GET.get('q') or '').strip()

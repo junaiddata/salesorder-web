@@ -86,7 +86,7 @@
                 <td data-label="Photo">{% if p.photo %}<img class="thumb" src="{% url 'quotation:product_photo' p.pk %}?v={{ p.updated_at|date:'U' }}" alt="">{% else %}<span class="u-muted">—</span>{% endif %}</td>
                 <td data-label="Brand">{{ p.brand|default:"—" }}</td>
                 <td data-label="Description" class="desc">{{ p.description|truncatechars:140|default:"—" }}</td>
-                <td data-label="Datasheet">{% if p.datasheet %}<span class="chip-x green">Yes</span>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
+                <td data-label="Datasheet">{% if p.datasheet %}<a href="{% url 'quotation:product_datasheet' p.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
                 <td>
                     <div class="act">
                         <a href="{% url 'quotation:product_edit' p.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>

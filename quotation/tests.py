@@ -872,6 +872,21 @@ class ProductLibraryTests(TestCase):
         self.client.post(reverse('quotation:new'), self._payload(lib_id=[str(p.pk), ''], remove_photo=['1', '0']))
         self.assertFalse(QuotationItem.objects.get(brand='ARISTON').photo)
 
+    def test_datasheet_can_be_viewed_by_logged_in_users_only(self):
+        p = Product.objects.create(model_no='H12')
+        url = reverse('quotation:product_datasheet', args=[p.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)   # no datasheet yet
+        self.client.post(reverse('quotation:product_import_files'),
+                         {'kind': 'datasheet', 'files': [SimpleUploadedFile('H12.pdf', PDF_BYTES, 'application/pdf')]})
+        resp = self.client.get(url)
+        self.assertEqual(resp['Content-Type'], 'image/jpeg')
+        self.assertTrue(resp['Content-Disposition'].startswith('inline'))
+        self.assertEqual(jpeg_size(b''.join(resp.streaming_content))[0], 1240)
+        self.assertTrue(self.client.get(url + '?download=1')['Content-Disposition'].startswith('attachment'))
+        self.assertContains(self.client.get(reverse('quotation:product_edit', args=[p.pk])), 'View datasheet')
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 302)
+
     def test_library_pages_need_login(self):
         self.client.logout()
         for name in ('product_list', 'product_new', 'product_search', 'product_template'):

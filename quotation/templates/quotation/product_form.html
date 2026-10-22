@@ -37,7 +37,11 @@
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Datasheet <small class="u-muted">(PDF / JPG / PNG, max 10 MB — saved as a JPEG)</small></label>
-                {% if product.datasheet %}<div class="mb-1"><span class="chip-x green"><i class="fas fa-circle-check"></i> Datasheet uploaded</span></div>{% endif %}
+                {% if product.datasheet %}<div class="mb-1 d-flex gap-2 flex-wrap align-items-center">
+                    <span class="chip-x green"><i class="fas fa-circle-check"></i> Datasheet uploaded</span>
+                    <a href="{% url 'quotation:product_datasheet' product.pk %}" target="_blank" rel="noopener" class="btn-x sm"><i class="fas fa-eye"></i> View datasheet</a>
+                    <a href="{% url 'quotation:product_datasheet' product.pk %}?download=1" class="btn-x sm"><i class="fas fa-download"></i> Download</a>
+                </div>{% endif %}
                 <input type="file" name="datasheet" accept="application/pdf,image/*,.pdf" class="input-x">
                 {% if product.datasheet %}<label class="mt-1 d-block"><input type="checkbox" name="remove_ds" value="1"> Remove current datasheet</label>{% endif %}
             </div>

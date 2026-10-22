@@ -22,6 +22,7 @@ urlpatterns = [
     path('products/<int:pk>/edit/', product_views.product_form, name='product_edit'),
     path('products/<int:pk>/delete/', product_views.product_delete, name='product_delete'),
     path('products/<int:pk>/photo/', product_views.product_photo, name='product_photo'),
+    path('products/<int:pk>/datasheet/', product_views.product_datasheet, name='product_datasheet'),
     # Public (no login): the datasheet a customer reaches from the PDF's QR code / link.
     path('ds/<str:token>/', views.datasheet_public, name='datasheet'),
 ]
