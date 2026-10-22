@@ -833,6 +833,19 @@ class ProductLibraryTests(TestCase):
         self.assertEqual(names, ['H12', 'H13', 'XH1'])
         self.assertEqual(self.client.get(reverse('quotation:product_search') + '?q=').json()['results'], [])
 
+    def test_search_ignores_case_spaces_dashes_and_finds_descriptions(self):
+        Product.objects.create(model_no='AB/12', brand='Grohe', description='Chrome basin MIXER')
+        Product.objects.create(model_no='ZX 900', brand='Other', description='x')
+        url = reverse('quotation:product_search')
+
+        def find(q):
+            return [r['model_no'] for r in self.client.get(url, {'q': q}).json()['results']]
+        for q in ('ab-12', 'AB 12', 'ab/12', 'Ab12', 'grohe', 'basin mixer', 'ab'):
+            self.assertEqual(find(q), ['AB/12'], q)
+        self.assertEqual(find('zx900'), ['ZX 900'])
+        self.assertEqual(find('zx 9'), ['ZX 900'])
+        self.assertEqual(find('nothing-here'), [])
+
     def test_quotation_row_gets_its_own_copy_unaffected_by_library_changes(self):
         p = Product.objects.create(model_no='H12', brand='JOMIX', description='Mixer')
         url = reverse('quotation:product_import_files')

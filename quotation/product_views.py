@@ -6,7 +6,8 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Value
+from django.db.models.functions import Replace
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -141,15 +142,19 @@ def product_search(request):
     q = (request.GET.get('q') or '').strip()
     if not q:
         return JsonResponse({'results': []})
-    key = product_key(q)
-    products = list(Product.objects.filter(Q(model_key__icontains=key) | Q(brand__icontains=q))
-                    .order_by('model_key')[:40])
-    products.sort(key=lambda p: (not p.model_key.startswith(key), p.model_key))   # models starting with the typed text first
+    # Not case sensitive, and spaces / dashes / slashes are ignored (ab 12, AB-12 and ab/12 find the same model).
+    loose = re.sub(r'[\s\-/\\]', '', q).upper()
+    products = list(Product.objects
+                    .annotate(loose_key=Replace(Replace(Replace('model_key', Value('-'), Value('')), Value(' '), Value('')), Value('\t'), Value('')))
+                    .filter(Q(loose_key__icontains=loose) | Q(brand__icontains=q) | Q(description__icontains=q))
+                    .order_by('model_key')[:80])
+    products.sort(key=lambda p: (not re.sub(r'[\s\-]', '', p.model_key).startswith(loose), p.model_key))   # models starting with the typed text first
+    products = products[:30]
     return JsonResponse({'results': [{
         'id': p.pk, 'model_no': p.model_no, 'brand': p.brand, 'description': p.description,
         'photo_url': reverse('quotation:product_photo', args=[p.pk]) + f'?v={int(p.updated_at.timestamp())}' if p.photo else '',
         'datasheet_name': _display_name(p.datasheet) if p.datasheet else '',
-    } for p in products[:15]]})
+    } for p in products]})
 
 
 def _cell(value):

@@ -285,6 +285,7 @@
             suggest(model, pick);
         });
         model.addEventListener('blur', () => setTimeout(hideMenu, 200));
+        model.addEventListener('keydown', e => menuKey(e, model, pick));
         function pick(p) {
             model.value = p.model_no;
             q('lib_id').value = p.id;
@@ -309,8 +310,32 @@
     const menu = document.createElement('div');
     menu.style.cssText = 'position:fixed;z-index:2000;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.18);max-height:280px;overflow-y:auto;display:none;min-width:320px;font-size:.82rem';
     document.body.appendChild(menu);
-    let timer = null, seq = 0;
-    function hideMenu() { menu.style.display = 'none'; }
+    // clicking the list (or its scrollbar) must not take focus away from the Model No box, or the list would close
+    menu.addEventListener('mousedown', e => e.preventDefault());
+    let timer = null, seq = 0, activeInput = null, activeIdx = -1;
+    function hideMenu() { menu.style.display = 'none'; activeInput = null; activeIdx = -1; }
+    function placeMenu() {
+        if (!activeInput) return;
+        const b = activeInput.getBoundingClientRect();
+        menu.style.left = Math.max(4, Math.min(b.left, window.innerWidth - 340)) + 'px';
+        const below = window.innerHeight - b.bottom - 8;
+        menu.style.maxHeight = Math.max(140, Math.min(280, below > 140 ? below : b.top - 12)) + 'px';
+        menu.style.top = (below > 140 ? b.bottom + 2 : Math.max(4, b.top - Math.min(280, menu.scrollHeight) - 2)) + 'px';
+    }
+    function highlight(i) {
+        const items = menu.children;
+        if (!items.length) return;
+        activeIdx = (i + items.length) % items.length;
+        Array.from(items).forEach((el, n) => el.style.background = n === activeIdx ? '#e0e7ff' : '');
+        items[activeIdx].scrollIntoView({block: 'nearest'});
+    }
+    function menuKey(e, input, onPick) {
+        if (menu.style.display === 'none' || activeInput !== input) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); highlight(activeIdx + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(activeIdx - 1); }
+        else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); menu.children[activeIdx].dispatchEvent(new Event('pickit')); }
+        else if (e.key === 'Escape') hideMenu();
+    }
     function suggest(input, onPick) {
         clearTimeout(timer);
         const text = input.value.trim();
@@ -327,19 +352,20 @@
                     const el = document.createElement('div');
                     el.style.cssText = 'padding:.4rem .6rem;cursor:pointer;border-bottom:1px solid #eef1f6';
                     el.innerHTML = `<b>${esc(p.model_no)}</b> <span style="color:#64748b">${esc(p.brand)}</span><br><span style="color:#64748b">${esc((p.description || '').slice(0, 90))}</span>`;
-                    el.onmouseenter = () => el.style.background = '#f1f5f9';
-                    el.onmouseleave = () => el.style.background = '';
-                    el.onmousedown = e => { e.preventDefault(); onPick(p); };   // before the input's blur hides the list
+                    el.onmouseenter = () => highlight(Array.from(menu.children).indexOf(el));
+                    el.onclick = () => onPick(p);
+                    el.addEventListener('pickit', () => onPick(p));
                     menu.appendChild(el);
                 });
-                const b = input.getBoundingClientRect();
-                menu.style.left = Math.min(b.left, window.innerWidth - 340) + 'px';
-                menu.style.top = (b.bottom + 2) + 'px';
+                activeInput = input; activeIdx = -1;
                 menu.style.display = 'block';
+                placeMenu();
             } catch (e) { hideMenu(); }
         }, 200);
     }
-    window.addEventListener('scroll', hideMenu, true);
+    // Scrolling the page or the items table moves the list with the box; scrolling the list itself leaves it alone.
+    window.addEventListener('scroll', e => { if (e.target !== menu && !menu.contains(e.target)) placeMenu(); }, true);
+    window.addEventListener('resize', placeMenu);
 
     function recalc() {
         let sum = 0;
