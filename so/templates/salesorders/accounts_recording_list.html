@@ -282,7 +282,8 @@
     }
 
     .table-wrap {
-      overflow-x: auto;
+      overflow: auto;
+      max-height: 70vh;
     }
 
     table {
@@ -357,6 +358,9 @@
     .acc-row-error td { background: #fef2f2 !important; }
 
     thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
       padding: 4px 8px;
       font-size: 0.6rem;
       font-weight: 600;
@@ -583,6 +587,8 @@
               <span id="salesman-text">All Salesmen</span>
             </div>
             <div class="options-container" id="salesman-options">
+              <input type="text" id="salesman-search" placeholder="Search salesman..." autocomplete="off"
+                     style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
               {% for s in salesmen %}
                 <label class="option-label">
                   <input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesmen_filter %}checked{% endif %}>
@@ -885,8 +891,19 @@
     const salesmanCheckboxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
 
     if (salesmanTrigger) {
+      const salesmanSearch = document.getElementById('salesman-search');
       salesmanTrigger.addEventListener('click', () => {
         salesmanOptions.classList.toggle('active');
+        if (salesmanOptions.classList.contains('active')) salesmanSearch.focus();
+      });
+      salesmanSearch.addEventListener('input', () => {
+        const term = salesmanSearch.value.trim().toLowerCase();
+        salesmanOptions.querySelectorAll('.option-label').forEach(label => {
+          label.style.display = label.textContent.toLowerCase().includes(term) ? '' : 'none';
+        });
+      });
+      salesmanSearch.addEventListener('keydown', e => {
+        if (e.key === 'Enter') e.preventDefault();
       });
 
       // Update text when checkboxes change

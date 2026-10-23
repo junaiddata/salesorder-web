@@ -21,9 +21,9 @@
     .badge-open { background: var(--success-light); color: var(--success); }
     .badge-closed { background: var(--danger-light); color: var(--danger); }
     .badge-wh { background: #eef2ff; color: #3730a3; }
-    .table-wrap { overflow-x: auto; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 140px); }
     table { width: 100%; border-collapse: collapse; min-width: 800px; }
-    th { padding: 8px 10px; font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; }
+    th { position: sticky; top: 0; z-index: 2; padding: 8px 10px; font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; }
     td { padding: 8px 10px; font-size: 0.82rem; border-bottom: 1px solid var(--border-light); }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </style>

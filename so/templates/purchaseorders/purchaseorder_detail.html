@@ -54,9 +54,9 @@
     .totals-value { font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .totals-row.grand { background: var(--primary-light); border-color: rgba(44, 85, 48, 0.2); }
     .totals-row.grand .totals-value { color: var(--primary); }
-    .table-wrap { overflow-x: auto; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 140px); }
     table { width: 100%; border-collapse: collapse; min-width: 800px; }
-    thead th { padding: 12px 14px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: var(--surface-alt); border-bottom: 1px solid var(--border); text-align: left; }
+    thead th { position: sticky; top: 0; z-index: 2; padding: 12px 14px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: var(--surface-alt); border-bottom: 1px solid var(--border); text-align: left; }
     tbody td { padding: 12px 14px; font-size: 0.875rem; border-bottom: 1px solid var(--border-light); }
     tbody tr:hover { background: var(--surface-alt); }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }

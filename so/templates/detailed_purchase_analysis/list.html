@@ -40,9 +40,9 @@
     .stat-label { color: var(--text-secondary); }
     .stat-value { font-weight: 700; }
     .table-card { overflow: hidden; }
-    .table-wrap { overflow-x: auto; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 160px); }
     table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-    thead th { padding: 6px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    thead th { position: sticky; top: 0; z-index: 2; padding: 6px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
     tbody td { padding: 6px 10px; font-size: 0.8rem; line-height: 1.35; border-bottom: 1px solid var(--border-light); }
     tbody tr:hover { background: var(--surface-hover); }
     td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
