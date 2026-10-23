@@ -287,6 +287,20 @@ BANGLADESH_PI_SEAL_USERS = ['manager', 'so']
 # Who may upload / print the company stamp on Junaid Galleria quotations (everyone else gets unstamped PDFs).
 QUOTATION_STAMP_USERS = ['md', 'manager', 'so']
 
+# Quotation module "Email" button: sent from its own mailbox, separate from the EMAIL_* account above (that one
+# is used by the older quotation / submittal modules and is left untouched). Same mail server as sales@junaid.ae by
+# default. Set in .env (never in code):
+#   QUOTATION_EMAIL_USER=sanitarysales@junaid.ae
+#   QUOTATION_EMAIL_PASSWORD=<mailbox password>
+# Optional: QUOTATION_EMAIL_HOST / QUOTATION_EMAIL_PORT / QUOTATION_EMAIL_USE_TLS / QUOTATION_IMAP_HOST / QUOTATION_IMAP_PORT
+QUOTATION_EMAIL_HOST = os.getenv('QUOTATION_EMAIL_HOST', EMAIL_HOST)
+QUOTATION_EMAIL_PORT = int(os.getenv('QUOTATION_EMAIL_PORT', str(EMAIL_PORT)))
+QUOTATION_EMAIL_USE_TLS = os.getenv('QUOTATION_EMAIL_USE_TLS', str(EMAIL_USE_TLS)) == 'True'
+QUOTATION_EMAIL_USER = os.getenv('QUOTATION_EMAIL_USER', '')
+QUOTATION_EMAIL_PASSWORD = os.getenv('QUOTATION_EMAIL_PASSWORD', '')
+QUOTATION_IMAP_HOST = os.getenv('QUOTATION_IMAP_HOST', OUTLOOK_IMAP_HOST)   # a copy of each mail is filed in this mailbox's Sent folder
+QUOTATION_IMAP_PORT = int(os.getenv('QUOTATION_IMAP_PORT', str(OUTLOOK_IMAP_PORT)))
+
 
 
 

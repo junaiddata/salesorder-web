@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import date as date_cls
 from decimal import Decimal, InvalidOperation
 
@@ -9,21 +10,21 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.core.exceptions import PermissionDenied
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
-from .models import Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
+from .models import Customer, Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
 from .permissions import can_use_stamp
 from .pdf_builder import build_quotation_pdf
 
 log = logging.getLogger('quotation')
 
 TEXT_FIELDS = [
-    'customer_name', 'customer_contact', 'customer_address', 'customer_trn', 'to_text', 'customer_ref', 'project_reference', 'remarks', 'validity', 'country_of_origin', 'warranty',
+    'customer_name', 'customer_contact', 'customer_person', 'customer_address', 'customer_trn', 'customer_code', 'customer_email', 'to_text', 'customer_ref', 'project_reference', 'remarks', 'validity', 'country_of_origin', 'warranty',
     'sales_person', 'email', 'contact_number',
 ]
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
@@ -154,7 +155,7 @@ def _item_json(request, old, posted_row):
 @login_required
 def quotation_list(request):
     q = (request.GET.get('q') or '').strip()
-    quotations = Quotation.objects.prefetch_related('items')
+    quotations = Quotation.objects.prefetch_related('items', 'emails')
     if q:
         quotations = quotations.filter(qtn_no__icontains=q)
     return render(request, 'quotation/list.html', {'quotations': quotations, 'q': q})
@@ -370,6 +371,35 @@ def item_photo(request, item_pk):
     resp = FileResponse(item.photo.open('rb'))
     resp['Cache-Control'] = 'private, max-age=3600'
     return resp
+
+
+@login_required
+@require_GET
+def customer_search(request):
+    """Customer-name suggestions from earlier quotations: each customer once, with the details of their latest quotation."""
+    tokens = [t for t in re.split(r'[\s\-/]+', (request.GET.get('q') or '').strip()) if t]
+    if not tokens:
+        return JsonResponse({'results': []})
+    rows = Quotation.objects.exclude(customer_name='')
+    for t in tokens:   # every word typed must appear in the name, in any case
+        rows = rows.filter(customer_name__icontains=t)
+    latest = {}
+    for name, contact, address, trn, qdate, email, code, person in rows.order_by('-date', '-id').values_list(
+            'customer_name', 'customer_contact', 'customer_address', 'customer_trn', 'date', 'customer_email', 'customer_code', 'customer_person')[:500]:
+        latest.setdefault(' '.join(name.lower().split()), {   # same name, any capitals/spacing = one customer (newest quotation wins)
+            'name': ' '.join(name.split()), 'contact': contact, 'address': address, 'trn': trn, 'email': email, 'code': code, 'person': person,
+            'date': qdate.strftime('%d %b %Y')})
+    first = ' '.join(tokens).lower()
+    # The Customer list is the master: a listed customer wins over the same name found in an older quotation.
+    listed = Customer.objects.all()
+    for t in tokens:
+        listed = listed.filter(name__icontains=t)
+    for c in listed.order_by('name')[:100]:
+        latest[' '.join(c.name.lower().split())] = {
+            'name': ' '.join(c.name.split()), 'contact': c.contact_number, 'person': c.contact_person, 'address': c.address,
+            'trn': c.trn, 'email': c.email, 'code': c.code, 'date': f'ID {c.code}'}
+    found = sorted(latest.items(), key=lambda kv: (not kv[0].startswith(first), kv[0]))
+    return JsonResponse({'results': [v for _, v in found[:15]]})
 
 
 MAX_STAMP_BYTES = 5 * 1024 * 1024

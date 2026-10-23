@@ -84,17 +84,31 @@
                     <input type="text" name="customer_name" class="input-x" placeholder="e.g. JUNAID SANITARY &amp; ELECTRICAL REQUISITES TRADING LLC" value="{{ values.customer_name }}">
                 </div>
                 <div class="field-x">
-                    <label class="label-x">Contact <small class="u-muted">(person / phone / email)</small></label>
-                    <input type="text" name="customer_contact" class="input-x" placeholder="e.g. Mr. Ahmed, +971 50 123 4567" value="{{ values.customer_contact }}">
+                    <label class="label-x">Contact Number</label>
+                    <input type="text" name="customer_contact" class="input-x" placeholder="e.g. +971 50 123 4567" value="{{ values.customer_contact }}">
                 </div>
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Contact Person</label>
+                <input type="text" name="customer_person" class="input-x" placeholder="e.g. Mr. Ahmed" value="{{ values.customer_person }}">
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Address <small class="u-muted">(one line per row)</small></label>
                 <textarea name="customer_address" rows="3" class="input-x" placeholder="PO BOX 34862&#10;DUBAI INVESTMENT PARK 2, DUBAI, UAE">{{ values.customer_address }}</textarea>
             </div>
-            <div class="field-x mt-3" style="max-width:420px">
-                <label class="label-x">TRN Number</label>
-                <input type="text" name="customer_trn" class="input-x" placeholder="e.g. 100123456700003" value="{{ values.customer_trn }}">
+            <div class="grid-2 mt-3">
+                <div class="field-x">
+                    <label class="label-x">TRN Number</label>
+                    <input type="text" name="customer_trn" class="input-x" placeholder="e.g. 100123456700003" value="{{ values.customer_trn }}">
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Customer ID</label>
+                    <input type="text" name="customer_code" class="input-x" placeholder="e.g. C00123" value="{{ values.customer_code }}">
+                </div>
+            </div>
+            <div class="field-x mt-3">
+                <label class="label-x">Customer Email <small class="u-muted">(printed on the PDF; also used by the Email button)</small></label>
+                <input type="text" name="customer_email" class="input-x" placeholder="e.g. purchase@customer.com" value="{{ values.customer_email }}">
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Other details <small class="u-muted">(optional — printed after the lines above, one per line)</small></label>
@@ -336,14 +350,17 @@
         else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); menu.children[activeIdx].dispatchEvent(new Event('pickit')); }
         else if (e.key === 'Escape') hideMenu();
     }
-    function suggest(input, onPick) {
+    const PRODUCT_LIST = {url: '{% url "quotation:product_search" %}',
+        html: p => `<b>${esc(p.model_no)}</b> <span style="color:#64748b">${esc(p.brand)}</span><br><span style="color:#64748b">${esc((p.description || '').slice(0, 90))}</span>`};
+    function suggest(input, onPick, cfg) {
+        cfg = cfg || PRODUCT_LIST;
         clearTimeout(timer);
         const text = input.value.trim();
         if (!text) { hideMenu(); return; }
         timer = setTimeout(async () => {
             const mine = ++seq;
             try {
-                const r = await fetch('{% url "quotation:product_search" %}?q=' + encodeURIComponent(text), {credentials: 'same-origin'});
+                const r = await fetch(cfg.url + '?q=' + encodeURIComponent(text), {credentials: 'same-origin'});
                 const res = (await r.json()).results;
                 if (mine !== seq) return;
                 if (!res.length) { hideMenu(); return; }
@@ -351,7 +368,7 @@
                 res.forEach(p => {
                     const el = document.createElement('div');
                     el.style.cssText = 'padding:.4rem .6rem;cursor:pointer;border-bottom:1px solid #eef1f6';
-                    el.innerHTML = `<b>${esc(p.model_no)}</b> <span style="color:#64748b">${esc(p.brand)}</span><br><span style="color:#64748b">${esc((p.description || '').slice(0, 90))}</span>`;
+                    el.innerHTML = cfg.html(p);
                     el.onmouseenter = () => highlight(Array.from(menu.children).indexOf(el));
                     el.onclick = () => onPick(p);
                     el.addEventListener('pickit', () => onPick(p));
@@ -389,6 +406,25 @@
         document.getElementById('tVat').textContent = fmt(vat);
         document.getElementById('tGrand').textContent = fmt(net + vat);
     }
+
+    // Customer Name: suggestions from earlier quotations; picking one fills contact, address and TRN (all still editable)
+    const custName = document.querySelector('[name=customer_name]');
+    const CUSTOMER_LIST = {url: '{% url "quotation:customer_search" %}',
+        html: c => `<b>${esc(c.name)}</b> <span style="color:#64748b">${esc(c.date)}</span><br><span style="color:#64748b">${esc((c.address || '').replace(/\r?\n/g, ', ').slice(0, 90))}</span>`};
+    function pickCustomer(c) {
+        custName.value = c.name;
+        document.querySelector('[name=customer_contact]').value = c.contact || '';
+        document.querySelector('[name=customer_address]').value = c.address || '';
+        document.querySelector('[name=customer_trn]').value = c.trn || '';
+        document.querySelector('[name=customer_person]').value = c.person || '';
+        document.querySelector('[name=customer_code]').value = c.code || '';
+        document.querySelector('[name=customer_email]').value = c.email || '';
+        hideMenu();
+    }
+    custName.setAttribute('autocomplete', 'off');
+    custName.addEventListener('input', () => suggest(custName, pickCustomer, CUSTOMER_LIST));
+    custName.addEventListener('blur', () => setTimeout(hideMenu, 200));
+    custName.addEventListener('keydown', e => menuKey(e, custName, pickCustomer));
 
     document.getElementById('discType').addEventListener('change', recalc);
     document.getElementById('discValue').addEventListener('input', recalc);

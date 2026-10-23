@@ -12,7 +12,7 @@ from django.urls import reverse
 from PIL import Image
 from PyPDF2 import PdfReader
 
-from .models import Product, Quotation, QuotationItem
+from .models import Customer, Product, Quotation, QuotationEmail, QuotationItem
 
 TMP_ROOT = tempfile.mkdtemp(prefix='qtn_test_')
 
@@ -495,7 +495,7 @@ class QuotationTests(TestCase):
         old = Quotation.objects.get()
         text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[old.pk])).content)).pages[0].extract_text()
         flat = ' '.join(text.split())
-        self.assertIn('TO: Customer name Contact Address TRN number ACME LLC Dubai', flat)
+        self.assertIn('TO: Customer name Contact person Contact number Address TRN number Customer ID Customer email ACME LLC Dubai', flat)
         # all four filled: TO -> customer name -> contact -> address -> TRN number -> other details
         self.client.post(reverse('quotation:new'), self._payload(
             customer_name='A&B <Trading> LLC', customer_contact='Mr Ahmed, 050 123 4567',
@@ -506,7 +506,7 @@ class QuotationTests(TestCase):
         for query in ('', '?orientation=landscape'):
             text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[q.pk]) + query).content)).pages[0].extract_text()
             flat = ' '.join(text.split())
-            order = ['TO:', 'Customer name A&B <Trading> LLC', 'Contact Mr Ahmed, 050 123 4567',
+            order = ['TO:', 'Customer name A&B <Trading> LLC', 'Contact number Mr Ahmed, 050 123 4567',
                      'Address PO BOX 34862 Dubai Investment Park 2', 'TRN number 100123456700003', 'Other line']
             positions = [flat.index(x) for x in order]
             self.assertEqual(positions, sorted(positions), query)
@@ -550,7 +550,7 @@ class QuotationTests(TestCase):
             text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[q.pk]) + query).content)).pages[0].extract_text()
             flat = ' '.join(text.split())
             # section 1: To
-            for x in ('TO:', 'Customer name ACME TRADING LLC', 'Contact Mr Ahmed', 'Address Dubai', 'TRN number 100123'):
+            for x in ('TO:', 'Customer name ACME TRADING LLC', 'Contact number Mr Ahmed', 'Address Dubai', 'TRN number 100123'):
                 self.assertIn(x, flat, (query, x))
             # section 2: reference details, with the salesperson / email / contact that used to be in the bottom box
             for x in ('Quotation no. JG-2026-001', 'Customer ref. RFQ-8841', 'Salesperson Aiswarya', 'Email a@x.com',
@@ -911,6 +911,26 @@ class ProductLibraryTests(TestCase):
         Product.objects.create(model_no='D1', brand='HANSGROHE')        # a new brand appears by itself
         self.assertIn('HANSGROHE', [b for b, _ in self.client.get(url).context['brand_options']])
 
+    def test_customer_suggestions_from_earlier_quotations(self):
+        def make(date, name, address, trn='', contact=''):
+            self.client.post(reverse('quotation:new'), self._payload(
+                date=date, customer_name=name, customer_address=address, customer_trn=trn, customer_contact=contact))
+        make('2026-03-01', 'Al Noor Trading LLC', 'Old address', '111', '0501')
+        make('2026-09-01', 'AL NOOR  trading llc', 'New address\nDubai', '222', '0502')   # same customer, newer
+        make('2026-05-01', 'Beta Contracting', 'Sharjah')
+        url = reverse('quotation:customer_search')
+
+        def find(q):
+            return self.client.get(url, {'q': q}).json()['results']
+        res = find('al noor')
+        self.assertEqual(len(res), 1)   # one customer, not two
+        self.assertEqual((res[0]['address'], res[0]['trn'], res[0]['contact']), ('New address\nDubai', '222', '0502'))   # newest quotation
+        self.assertEqual(find('NOOR trading')[0]['name'], 'AL NOOR trading llc')
+        self.assertEqual(find('zzz'), [])
+        self.assertEqual(find(''), [])
+        self.client.logout()
+        self.assertEqual(self.client.get(url, {'q': 'al'}).status_code, 302)
+
     def test_library_pages_need_login(self):
         self.client.logout()
         for name in ('product_list', 'product_new', 'product_search', 'product_template'):
@@ -923,3 +943,192 @@ class ProductLibraryTests(TestCase):
         self.assertEqual(self.client.get(reverse('quotation:product_edit', args=[Product.objects.get().pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse('quotation:product_template')).status_code, 200)
         self.assertEqual(self.client.get(reverse('quotation:new')).status_code, 200)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT, QUOTATION_PUBLIC_BASE_URL='https://example.test', QUOTATION_STAMP_USERS=(),
+                   QUOTATION_EMAIL_HOST='smtp.test', QUOTATION_EMAIL_USER='sanitarysales@junaid.ae', QUOTATION_EMAIL_PASSWORD='secret')
+class QuotationEmailTests(TestCase):
+    def setUp(self):
+        from unittest import mock
+        self.user = get_user_model().objects.create_user('mailer', password='x')
+        self.client.force_login(self.user)
+        self.client.post(reverse('quotation:new'), QuotationTests('_payload')._payload(customer_name='Acme'))
+        self.q = Quotation.objects.get()
+        self.url = reverse('quotation:email', args=[self.q.pk])
+        patcher = mock.patch('quotation.mailer._save_copy_to_sent', return_value=True)   # never touch the real IMAP server
+        self.copy = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _post(self, **kw):
+        data = {'to': 'buyer@acme.com', 'cc': 'boss@acme.com', 'subject': 'Quotation', 'body': 'Hello', 'orientation': 'portrait'}
+        data.update(kw)
+        return self.client.post(self.url, data)
+
+    def test_sends_pdf_from_the_quotation_mailbox_and_logs_it(self):
+        from django.core import mail
+        resp = self._post()
+        self.assertRedirects(resp, reverse('quotation:list'))
+        self.assertEqual(len(mail.outbox), 1)
+        m = mail.outbox[0]
+        self.assertIn('sanitarysales@junaid.ae', m.from_email)
+        self.assertEqual((m.to, m.cc, m.reply_to), (['buyer@acme.com'], ['boss@acme.com'], ['sanitarysales@junaid.ae']))
+        name, content, mimetype = m.attachments[0]
+        self.assertEqual((name, mimetype), (f'Quotation_{self.q.qtn_no}.pdf', 'application/pdf'))
+        self.assertEqual(content[:5], b'%PDF-')
+        log = QuotationEmail.objects.get()
+        self.assertTrue(log.success and log.saved_to_sent)
+        self.assertEqual((log.to_addrs, log.sent_by), ('buyer@acme.com', self.user))
+        self.q.refresh_from_db()
+        self.assertEqual(self.q.customer_email, 'buyer@acme.com')   # remembered for next time
+        self.assertContains(self.client.get(reverse('quotation:list')), 'Mail sent')
+        self.assertContains(self.client.get(self.url), 'buyer@acme.com')   # the sent-mails section
+
+    def test_email_always_carries_the_stamp_without_changing_the_quotation(self):
+        from unittest import mock
+        with mock.patch('quotation.email_views.build_quotation_pdf', return_value=b'%PDF-1.4 x') as build:
+            self._post()
+        quotation, _, _ = build.call_args.args[:3]
+        self.assertTrue(quotation.add_stamp)
+        self.assertTrue(build.call_args.kwargs['with_stamp'])
+        self.q.refresh_from_db()
+        self.assertFalse(self.q.add_stamp)   # the saved "Add stamp" tick is untouched
+
+    def test_failure_is_logged_and_shown(self):
+        from unittest import mock
+        with mock.patch('django.core.mail.EmailMessage.send', side_effect=OSError('connection refused')):
+            resp = self._post()
+        self.assertContains(resp, 'connection refused')
+        log = QuotationEmail.objects.get()
+        self.assertFalse(log.success)
+        self.assertIn('connection refused', log.error)
+        self.q.refresh_from_db()
+        self.assertEqual(self.q.customer_email, '')   # nothing remembered after a failure
+        self.assertContains(self.client.get(reverse('quotation:list')), 'Mail failed')
+
+    def test_validation_and_not_configured(self):
+        from django.core import mail
+        self.assertContains(self._post(to='not-an-email'), 'valid email')
+        self.assertContains(self._post(to=''), 'customer email')
+        self.assertEqual(len(mail.outbox), 0)
+        with override_settings(QUOTATION_EMAIL_PASSWORD=''):
+            self.assertContains(self._post(), 'not set up')
+        self.assertEqual((len(mail.outbox), QuotationEmail.objects.count()), (0, 0))
+
+    def test_several_recipients_and_login_required(self):
+        from django.core import mail
+        self._post(to='a@x.com; b@y.com, a@x.com')
+        self.assertEqual(mail.outbox[0].to, ['a@x.com', 'b@y.com'])
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(self.url, {'to': 'a@x.com'}).status_code, 302)
+
+    def test_customer_email_saved_with_quotation_and_suggested(self):
+        self.client.post(reverse('quotation:edit', args=[self.q.pk]), QuotationTests('_payload')._payload(
+            customer_name='Acme', customer_email='buyer@acme.com', item_id=[str(i.pk) for i in self.q.items.all()]))
+        self.q.refresh_from_db()
+        self.assertEqual(self.q.customer_email, 'buyer@acme.com')
+        self.assertEqual(self.client.get(reverse('quotation:customer_search'), {'q': 'acme'}).json()['results'][0]['email'], 'buyer@acme.com')
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT, QUOTATION_PUBLIC_BASE_URL='https://example.test')
+class CustomerIdEmailTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_user('cid', password='x'))
+
+    def test_saved_suggested_and_printed(self):
+        from unittest import mock
+        self.client.post(reverse('quotation:new'), QuotationTests('_payload')._payload(
+            customer_name='Acme', customer_code='C00123', customer_email='buyer@acme.com', customer_person='Mr Zed'))
+        q = Quotation.objects.get()
+        self.assertEqual((q.customer_code, q.customer_email), ('C00123', 'buyer@acme.com'))
+        res = self.client.get(reverse('quotation:customer_search'), {'q': 'acme'}).json()['results'][0]
+        self.assertEqual((res['code'], res['email'], res['person']), ('C00123', 'buyer@acme.com', 'Mr Zed'))
+        self.assertContains(self.client.get(reverse('quotation:edit', args=[q.pk])), 'C00123')
+        from quotation.pdf_builder import _header_block
+        with mock.patch('quotation.pdf_builder.Paragraph', wraps=__import__('reportlab.platypus', fromlist=['Paragraph']).Paragraph) as p:
+            resp = self.client.get(reverse('quotation:pdf', args=[q.pk]))
+        self.assertEqual(resp.status_code, 200)
+        texts = ' '.join(str(c.args[0]) for c in p.call_args_list if c.args)
+        self.assertIn('C00123', texts)
+        self.assertIn('Mr Zed', texts)
+        self.assertIn('buyer@acme.com', texts)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class CustomerListTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_user('cl', password='x'))
+
+    def _xlsx(self, rows, header=('Customer ID', 'Customer Name', 'TRN Number', 'Contact Number', 'Contact Person', 'Address', 'Customer Email')):
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.append(list(header))
+        for r in rows:
+            ws.append(list(r))
+        buf = BytesIO()
+        wb.save(buf)
+        return SimpleUploadedFile('c.xlsx', buf.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    def _import(self, rows, **kw):
+        return self.client.post(reverse('quotation:customer_import_excel'), {'excel': self._xlsx(rows, **kw)}, follow=True)
+
+    def test_import_adds_updates_and_never_wipes(self):
+        self._import([('V00001', 'SUNJET TRDG. CO. LLC.', None, None, None, None, None),
+                      ('V00002', 'ACME LLC', 100123456700003, '+971501234567', 'Mr Ahmed', 'PO BOX 1\nDubai', 'a@acme.com')])
+        self.assertEqual(Customer.objects.count(), 2)
+        c = Customer.objects.get(code='V00002')
+        self.assertEqual((c.trn, c.contact_number, c.contact_person, c.email), ('100123456700003', '+971501234567', 'Mr Ahmed', 'a@acme.com'))
+        resp = self._import([('v00002', 'ACME LLC NEW', None, None, None, None, None), ('V00001', 'x', '', '', '', '', ''),
+                             ('V00001', 'dup', '', '', '', '', ''), ('', 'No id', '', '', '', '', ''), ('V9', None, '', '', '', '', '')])
+        self.assertEqual(Customer.objects.count(), 2)
+        c.refresh_from_db()
+        self.assertEqual((c.name, c.trn, c.email), ('ACME LLC NEW', '100123456700003', 'a@acme.com'))   # blank cells kept the old data
+        self.assertContains(resp, 'repeated in the sheet')
+        self.assertContains(resp, 'Customer ID is empty')
+        self.assertContains(resp, 'no Customer Name')
+
+    def test_bad_files_are_refused(self):
+        resp = self.client.post(reverse('quotation:customer_import_excel'), {'excel': SimpleUploadedFile('c.txt', b'x')}, follow=True)
+        self.assertContains(resp, 'Please upload an .xlsx')
+        resp = self._import([('V1', 'A')], header=('Foo', 'Bar'))
+        self.assertContains(resp, 'must have')
+        self.assertEqual(Customer.objects.count(), 0)
+
+    def test_add_edit_delete_and_unique_id(self):
+        self.client.post(reverse('quotation:customer_new'), {'code': 'C1', 'name': 'Acme', 'email': 'a@x.com'})
+        c = Customer.objects.get()
+        resp = self.client.post(reverse('quotation:customer_new'), {'code': 'c1', 'name': 'Other'})
+        self.assertContains(resp, 'already exists')
+        self.client.post(reverse('quotation:customer_edit', args=[c.pk]), {'code': 'C1', 'name': 'Acme 2'})
+        c.refresh_from_db()
+        self.assertEqual(c.name, 'Acme 2')
+        self.assertContains(self.client.get(reverse('quotation:customer_list'), {'q': 'acme'}), 'Acme 2')
+        self.client.post(reverse('quotation:customer_delete', args=[c.pk]))
+        self.assertEqual(Customer.objects.count(), 0)
+
+    def test_login_required_and_template(self):
+        self.assertEqual(self.client.get(reverse('quotation:customer_template')).status_code, 200)
+        self.client.logout()
+        for name in ('customer_list', 'customer_new', 'customer_template'):
+            self.assertEqual(self.client.get(reverse(f'quotation:{name}')).status_code, 302)
+        self.assertEqual(self.client.post(reverse('quotation:customer_import_excel')).status_code, 302)
+
+    def test_listed_customer_fills_the_form_and_wins_over_old_quotations(self):
+        self.client.post(reverse('quotation:new'), QuotationTests('_payload')._payload(
+            customer_name='Acme Trading', customer_address='Old address', customer_trn='111'))
+        Customer.objects.create(code='V5', name='ACME TRADING', trn='222', contact_number='050', contact_person='Mr Z',
+                                address='New address', email='n@acme.com')
+        Customer.objects.create(code='V6', name='Zeta Only', trn='333')
+        res = self.client.get(reverse('quotation:customer_search'), {'q': 'acme'}).json()['results']
+        self.assertEqual(len(res), 1)
+        self.assertEqual((res[0]['code'], res[0]['trn'], res[0]['address'], res[0]['person'], res[0]['contact'], res[0]['email']),
+                         ('V5', '222', 'New address', 'Mr Z', '050', 'n@acme.com'))
+        self.assertEqual(self.client.get(reverse('quotation:customer_search'), {'q': 'zeta'}).json()['results'][0]['code'], 'V6')
+
+    def test_editing_a_customer_does_not_change_a_made_quotation(self):
+        self.client.post(reverse('quotation:new'), QuotationTests('_payload')._payload(customer_name='Acme', customer_code='V1', customer_trn='111'))
+        Customer.objects.create(code='V1', name='Acme', trn='999')
+        Customer.objects.all().delete()
+        q = Quotation.objects.get()
+        self.assertEqual((q.customer_code, q.customer_trn), ('V1', '111'))

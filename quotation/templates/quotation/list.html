@@ -52,6 +52,7 @@
                     <th>Date</th>
                     <th>To</th>
                     <th>Items</th>
+                    <th>Mail</th>
                     <th>Grand Total (AED)</th>
                     <th class="actions">Actions</th>
                 </tr>
@@ -63,11 +64,22 @@
                     <td class="nowrap" data-label="Date">{{ qt.date|date:"d M Y" }}</td>
                     <td data-label="To">{{ qt.customer_name|default:qt.to_text|truncatechars:60|default:"—" }}</td>
                     <td data-label="Items">{{ qt.items.all|length }}</td>
+                    <td data-label="Mail" class="nowrap">
+                        {% with m=qt.last_email %}
+                        {% if m %}
+                        <a href="{% url 'quotation:email' qt.pk %}#history" class="chip-x {% if m.success %}green{% else %}gray{% endif %}" style="{% if not m.success %}background:#fde8e8;color:#9b1c1c{% endif %}"
+                           title="{% if m.success %}Sent to {{ m.to_addrs }}{% else %}Failed: {{ m.error }}{% endif %} — {{ m.sent_at|date:'d M Y H:i' }}">
+                            <i class="fas fa-envelope"></i> {% if m.success %}Mail sent{% else %}Mail failed{% endif %}</a>
+                        <div class="u-muted" style="font-size:.72rem">{{ m.sent_at|date:"d M Y H:i" }}</div>
+                        {% else %}<span class="u-muted">—</span>{% endif %}
+                        {% endwith %}
+                    </td>
                     <td class="nowrap" data-label="Grand Total (AED)" title="Total {{ qt.total|floatformat:2 }} + VAT 5% {{ qt.vat_amount|floatformat:2 }}">{{ qt.grand_total|floatformat:2 }}</td>
                     <td class="actions">
                         <div class="act">
                             <a href="{% url 'quotation:pdf' qt.pk %}" class="btn-x" title="Download as PDF, A4 portrait"><i class="fas fa-download"></i> PDF Portrait</a>
                             <a href="{% url 'quotation:pdf' qt.pk %}?orientation=landscape" class="btn-x" title="Download as PDF, A4 landscape"><i class="fas fa-download"></i> PDF Landscape</a>
+                            <a href="{% url 'quotation:email' qt.pk %}" class="btn-x" title="Email this quotation (with stamp)"><i class="fas fa-envelope"></i> Email</a>
                             <a href="{% url 'quotation:edit' qt.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
                             <form method="post" action="{% url 'quotation:delete' qt.pk %}" style="display:inline;"
                                   data-confirm="Are you sure you want to delete quotation {{ qt.qtn_no }}? Its datasheet links will stop working. This cannot be undone."

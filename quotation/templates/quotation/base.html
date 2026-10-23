@@ -58,6 +58,9 @@
                 <a href="{% url 'quotation:product_list' %}" class="app-nav-link {% if 'product' in url_name %}active{% endif %}">
                     <i class="fas fa-boxes-stacked"></i> Products
                 </a>
+                <a href="{% url 'quotation:customer_list' %}" class="app-nav-link {% if 'customer_list' in url_name or url_name == 'customer_new' or url_name == 'customer_edit' %}active{% endif %}">
+                    <i class="fas fa-address-book"></i> Customers
+                </a>
                 {% if request.user|can_use_stamp %}
                 <a href="{% url 'quotation:stamp_settings' %}" class="app-nav-link {% if url_name == 'stamp_settings' %}active{% endif %}">
                     <i class="fas fa-stamp"></i> Stamp
@@ -103,6 +106,15 @@
     <script>
         document.getElementById('navToggle')?.addEventListener('click', function () {
             document.getElementById('appNav').classList.toggle('open');
+        });
+        // notifications close by themselves after a few seconds (errors stay until dismissed; warnings stay a little longer)
+        document.querySelectorAll('#flashStack .flash').forEach(function (el) {
+            if (/error|danger/.test(el.className)) return;
+            setTimeout(function () {
+                el.style.transition = 'opacity .4s';
+                el.style.opacity = '0';
+                setTimeout(function () { el.remove(); }, 450);
+            }, /warning/.test(el.className) ? 9000 : 5000);
         });
         // <form data-confirm="..."> shows the dialog above before submitting.
         document.querySelectorAll('form[data-confirm]').forEach(function (form) {

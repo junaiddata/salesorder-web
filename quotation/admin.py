@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Product, Quotation, QuotationItem
+from .models import Customer, Product, Quotation, QuotationItem
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'updated_at')
+    search_fields = ('code', 'name')
 
 
 @admin.register(Product)

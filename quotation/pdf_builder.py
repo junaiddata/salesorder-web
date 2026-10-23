@@ -178,9 +178,12 @@ def _header_block(q, lay):
     address = '<br/>'.join(escape(ln.strip()) for ln in (q.customer_address or '').splitlines() if ln.strip())
     to_rows = [
         ('Customer name', val(q.customer_name, bold=True)),
-        ('Contact', val(q.customer_contact)),
+        ('Contact person', val(q.customer_person)),
+        ('Contact number', val(q.customer_contact)),
         ('Address', Paragraph(address, S_VAL)),
         ('TRN number', val(q.customer_trn)),
+        ('Customer ID', val(q.customer_code)),
+        ('Customer email', val(q.customer_email)),
     ]
     to_table = Table([[Paragraph(label, S_LBL), value] for label, value in to_rows],
                      colWidths=[(w1 - gap) * 0.34, (w1 - gap) * 0.66])

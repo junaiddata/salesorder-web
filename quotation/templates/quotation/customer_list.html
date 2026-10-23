@@ -1,0 +1,103 @@
+{% extends 'quotation/base.html' %}
+
+{% block title %}Customers | Quotations{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cl-table td, .cl-table th { vertical-align: middle; }
+    .cl-table .addr { max-width: 320px; }
+    .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+    @media (max-width: 991px) {
+        .cl-table thead { display: none; }
+        .cl-table, .cl-table tbody, .cl-table tr, .cl-table td { display: block; width: 100%; }
+        .cl-table tr { padding: .75rem .9rem; border-bottom: 1px solid #e2e8f0; }
+        .cl-table td { padding: .2rem 0; border: none; background: transparent !important; }
+        .cl-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 100px;
+            font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="hero">
+    <div class="hero-inner u-spread">
+        <div>
+            <h1><i class="fas fa-address-book" style="opacity:.85"></i> Customers</h1>
+            <p>Keep your customer list here. When you type a customer name in a quotation, these details are filled in automatically.</p>
+            <div class="hero-actions">
+                <a href="{% url 'quotation:customer_new' %}" class="btn-x btn-light-x"><i class="fas fa-plus"></i> New Customer</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="u-wrap u-page">
+    <div class="card-x mb-3"><div class="card-x-body">
+        <h5>Import from Excel</h5>
+        <p class="u-muted mb-2" style="font-size:.85rem">
+            Columns: Customer ID, Customer Name, TRN Number, Contact Number, Contact Person, Address, Customer Email.
+            A new Customer ID is added; an existing one is updated. Blank cells never erase saved details.
+            Keep the TRN and Contact Number columns formatted as <b>Text</b> in Excel so leading zeros and long numbers are kept.
+        </p>
+        <form method="post" action="{% url 'quotation:customer_import_excel' %}" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center">
+            {% csrf_token %}
+            <input type="file" name="excel" accept=".xlsx" class="input-x" style="max-width:320px" required>
+            <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-file-excel"></i> Import</button>
+            <a href="{% url 'quotation:customer_template' %}" class="btn-x"><i class="fas fa-download"></i> Download template</a>
+        </form>
+    </div></div>
+
+    <div class="sec-head">
+        <h2>All Customers <span class="count">({{ shown }}{% if q %} of {{ total }}{% endif %})</span></h2>
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search name, ID, TRN, email…">
+            <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+        </form>
+    </div>
+
+    {% if page.object_list %}
+    <div class="tbl-x-wrap">
+        <table class="tbl-x cl-table">
+            <thead><tr><th>Customer ID</th><th>Name</th><th>TRN</th><th>Contact Number</th><th>Contact Person</th><th>Address</th><th>Email</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for c in page.object_list %}
+            <tr>
+                <td data-label="Customer ID"><b>{{ c.code }}</b></td>
+                <td data-label="Name">{{ c.name }}</td>
+                <td data-label="TRN">{{ c.trn|default:"—" }}</td>
+                <td data-label="Contact Number">{{ c.contact_number|default:"—" }}</td>
+                <td data-label="Contact Person">{{ c.contact_person|default:"—" }}</td>
+                <td data-label="Address" class="addr">{{ c.address|default:"—"|truncatechars:80 }}</td>
+                <td data-label="Email">{{ c.email|default:"—" }}</td>
+                <td>
+                    <div class="act">
+                        <a href="{% url 'quotation:customer_edit' c.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
+                        <form method="post" action="{% url 'quotation:customer_delete' c.pk %}" style="display:inline;"
+                              data-confirm="Delete customer {{ c.code }}? Quotations already made are not changed."
+                              data-confirm-title="Delete Customer" data-confirm-ok="Delete">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-x btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if page.has_other_pages %}
+    <div class="d-flex gap-2 align-items-center mt-3 mb-5">
+        {% if page.has_previous %}<a class="btn-x" href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}">&laquo; Previous</a>{% endif %}
+        <span class="u-muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="btn-x" href="?page={{ page.next_page_number }}&q={{ q|urlencode }}">Next &raquo;</a>{% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="card-x"><div class="empty-x">
+        <div class="ic"><i class="fas fa-address-book"></i></div>
+        <h3>{% if q %}No customers match{% else %}No customers yet{% endif %}</h3>
+        <p>{% if q %}Try a different search.{% else %}Import your Excel above, or add one by hand.{% endif %}</p>
+    </div></div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -44,6 +44,9 @@ class Quotation(models.Model):
     customer_contact = models.CharField(max_length=200, blank=True)
     customer_address = models.TextField(blank=True)
     customer_trn = models.CharField(max_length=50, blank=True)
+    customer_person = models.CharField(max_length=200, blank=True)   # the contact person at the customer
+    customer_code = models.CharField(max_length=50, blank=True)   # the customer's ID / account code
+    customer_email = models.CharField(max_length=300, blank=True)   # where the quotation is emailed (several addresses: comma separated)
     to_text = models.TextField(blank=True)
     remarks = models.TextField(blank=True)
     customer_ref = models.CharField(max_length=200, blank=True)   # the customer's own reference (RFQ / enquiry no.)
@@ -111,8 +114,32 @@ class Quotation(models.Model):
     def grand_total(self):
         return self.net_total + self.vat_amount
 
+    @property
+    def last_email(self):
+        """The most recent email attempt (uses prefetched `emails` when the list page loaded them)."""
+        sent = list(self.emails.all())
+        return max(sent, key=lambda m: (m.sent_at, m.pk)) if sent else None
+
     def __str__(self):
         return self.qtn_no
+
+
+class QuotationEmail(models.Model):
+    """One attempt to email a quotation: who sent it, to whom, when, and whether the mail server accepted it."""
+
+    quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name='emails')
+    to_addrs = models.TextField()
+    cc_addrs = models.TextField(blank=True)
+    subject = models.CharField(max_length=300)
+    orientation = models.CharField(max_length=10, default='portrait')
+    sent_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    sent_at = models.DateTimeField(default=timezone.now)
+    success = models.BooleanField(default=False)
+    error = models.TextField(blank=True)
+    saved_to_sent = models.BooleanField(default=False)   # a copy was filed in the mailbox's Sent folder
+
+    class Meta:
+        ordering = ['-sent_at', '-id']
 
 
 class QuotationStamp(models.Model):
@@ -138,6 +165,35 @@ def product_photo_upload_to(instance, filename):
 
 def product_datasheet_upload_to(instance, filename):
     return f'library/datasheets/{secrets.token_hex(8)}_{filename}'
+
+
+class Customer(models.Model):
+    """Customer list (imported from Excel or typed in): picking the name in a quotation fills these details.
+
+    A quotation keeps its own copy of the details, so editing or deleting a customer here never changes one already made.
+    """
+
+    code = models.CharField(max_length=50)                                    # Customer ID, e.g. V00001
+    code_key = models.CharField(max_length=50, unique=True, editable=False)   # code upper-cased: one customer per ID
+    name = models.CharField(max_length=300)
+    trn = models.CharField(max_length=50, blank=True)
+    contact_number = models.CharField(max_length=200, blank=True)
+    contact_person = models.CharField(max_length=200, blank=True)
+    address = models.TextField(blank=True)
+    email = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', 'code_key']
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or '').strip()
+        self.code_key = self.code.upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.code} {self.name}'
 
 
 class Product(models.Model):
