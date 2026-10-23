@@ -10,6 +10,18 @@
     .pl-table .thumb { width: 44px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
     .pl-table .desc { max-width: 520px; }
     .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+    .brand-dd { position: relative; }
+    .brand-dd summary { list-style: none; cursor: pointer; min-width: 170px; display: flex; justify-content: space-between; align-items: center; gap: .5rem; white-space: nowrap; }
+    .brand-dd summary::-webkit-details-marker { display: none; }
+    .brand-dd summary.on { border-color: #2563eb; font-weight: 600; }
+    .brand-dd summary i { font-size: .65rem; color: #64748b; }
+    .brand-panel { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; width: 260px; background: #fff; border: 1px solid #cbd5e1;
+        border-radius: 10px; box-shadow: 0 10px 28px rgba(15,23,42,.18); padding: .6rem; }
+    .brand-tools { display: flex; gap: .4rem; margin: .5rem 0; }
+    .brand-list { max-height: 240px; overflow-y: auto; margin-bottom: .5rem; }
+    .brand-list label { display: flex; gap: .5rem; align-items: center; padding: .25rem .3rem; border-radius: 6px; cursor: pointer; font-size: .85rem; }
+    .brand-list label:hover { background: #f1f5f9; }
+    .brand-empty { padding: .5rem; font-size: .8rem; color: #64748b; }
     .drop-list { max-height: 220px; overflow-y: auto; font-size: .8rem; margin-top: .5rem; }
     .drop-list div { padding: .15rem 0; border-bottom: 1px solid #eef1f6; display: flex; justify-content: space-between; gap: .6rem; }
     .drop-list .ok { color: #15803d; }
@@ -29,11 +41,30 @@
 {% block body %}
 <div class="u-wrap u-page">
     <div class="sec-head">
-        <h2>Product Library <span class="count">({{ total }})</span></h2>
+        <h2>Product Library <span class="count">({% if shown != total %}{{ shown }} of {% endif %}{{ total }})</span></h2>
         <div class="d-flex gap-2 flex-wrap">
             <form method="get" class="d-flex gap-2">
+                <details class="brand-dd" id="brandDd">
+                    <summary class="input-x{% if brand_count %} on{% endif %}">{{ brand_label }} <i class="fas fa-chevron-down"></i></summary>
+                    <div class="brand-panel">
+                        <input type="text" id="brandSearch" class="input-x" placeholder="Search brand…" autocomplete="off">
+                        <div class="brand-tools">
+                            <button type="button" class="btn-x sm" id="brandAll">Select all</button>
+                            <button type="button" class="btn-x sm" id="brandNone">Clear all</button>
+                        </div>
+                        <div class="brand-list">
+                            {% for b, on in brand_options %}
+                            <label data-name="{% if b == no_brand %}no brand{% else %}{{ b|lower }}{% endif %}"><input type="checkbox" name="brand" value="{{ b }}" {% if on %}checked{% endif %}>
+                                {% if b == no_brand %}(No brand){% else %}{{ b }}{% endif %}</label>
+                            {% endfor %}
+                            <div class="brand-empty" style="display:none">No brand found</div>
+                        </div>
+                        <button type="submit" class="btn-x btn-primary-x sm" style="width:100%">Apply</button>
+                    </div>
+                </details>
                 <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search model, brand…">
                 <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+                {% if brand_count or q %}<a href="{% url 'quotation:product_list' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
             </form>
             <a href="{% url 'quotation:product_new' %}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
         </div>
@@ -105,15 +136,15 @@
     </div>
     {% if page.has_other_pages %}
     <div class="d-flex gap-2 mt-3 align-items-center">
-        {% if page.has_previous %}<a class="btn-x" href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}">&laquo; Previous</a>{% endif %}
+        {% if page.has_previous %}<a class="btn-x" href="?page={{ page.previous_page_number }}&{{ filter_qs }}">&laquo; Previous</a>{% endif %}
         <span class="u-muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-        {% if page.has_next %}<a class="btn-x" href="?page={{ page.next_page_number }}&q={{ q|urlencode }}">Next &raquo;</a>{% endif %}
+        {% if page.has_next %}<a class="btn-x" href="?page={{ page.next_page_number }}&{{ filter_qs }}">Next &raquo;</a>{% endif %}
     </div>
     {% endif %}
     {% else %}
     <div class="card-x"><div class="empty-x">
         <div class="ic"><i class="fas fa-boxes-stacked"></i></div>
-        <h3>{% if q %}No products match “{{ q }}”{% else %}No products yet{% endif %}</h3>
+        <h3>{% if q or brand_count %}No products match the filter{% else %}No products yet{% endif %}</h3>
         <p>Add a product, or use the bulk upload above.</p>
     </div></div>
     {% endif %}
@@ -131,6 +162,22 @@
     const csrf = document.querySelector('#csrfForm [name=csrfmiddlewaretoken]').value;
     const norm = s => s.trim().toUpperCase().replace(/[\/\\]/g, '-');
     const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    // Brand filter: search inside the list, Select all / Clear all, close when clicking elsewhere
+    const dd = document.getElementById('brandDd'), bsearch = document.getElementById('brandSearch');
+    const boxes = () => Array.from(dd.querySelectorAll('.brand-list input'));
+    const visible = () => boxes().filter(b => b.closest('label').style.display !== 'none');
+    bsearch.addEventListener('input', () => {
+        const t = bsearch.value.trim().toLowerCase();
+        let n = 0;
+        dd.querySelectorAll('.brand-list label').forEach(l => { const show = !t || l.dataset.name.includes(t); l.style.display = show ? '' : 'none'; n += show; });
+        dd.querySelector('.brand-empty').style.display = n ? 'none' : '';
+    });
+    bsearch.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });   // Enter in the box must not submit
+    document.getElementById('brandAll').onclick = () => visible().forEach(b => b.checked = true);     // only the brands the search shows
+    document.getElementById('brandNone').onclick = () => visible().forEach(b => b.checked = false);
+    document.addEventListener('click', e => { if (dd.open && !dd.contains(e.target)) dd.open = false; });
+    dd.addEventListener('toggle', () => { if (dd.open) { bsearch.value = ''; bsearch.dispatchEvent(new Event('input')); bsearch.focus(); } });
+
     const MAX_ZIP_FILES = 1000, MAX_ZIP_BYTES = 400 * 1024 * 1024;   // guards against huge / "zip bomb" archives
     const BATCH = 15;  // small batches keep every request under the server's upload size limit
 

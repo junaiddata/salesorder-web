@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -19,7 +20,8 @@ from .views import MAX_DATASHEET_BYTES, _check_photo, _display_name
 
 log = logging.getLogger('quotation')
 
-MAX_EXCEL_BYTES = 5 * 1024 * 1024
+NO_BRAND = '__none__'   # brand-filter value for products without a brand
+MAX_EXCEL_BYTES =5 * 1024 * 1024
 MAX_EXCEL_ROWS = 5000
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'sample_files', 'product_library_template.xlsx')
 HEADERS = {
@@ -55,9 +57,26 @@ def product_list(request):
     products = Product.objects.all()
     if q:
         products = products.filter(Q(model_key__icontains=product_key(q)) | Q(brand__icontains=q) | Q(description__icontains=q))
+    # Brand filter: the choices are read from the products themselves, so a new brand shows up as soon as a product has it.
+    brands = list(Product.objects.exclude(brand='').order_by('brand').values_list('brand', flat=True).distinct())
+    chosen = [b.strip() for b in request.GET.getlist('brand') if b.strip()]
+    chosen_low = {b.lower() for b in chosen}
+    # every option ticked (Select all) or none ticked (Clear all) means no filtering
+    if chosen_low and chosen_low >= {b.lower() for b in brands} | {NO_BRAND}:
+        chosen, chosen_low = [], set()
+    if chosen_low:
+        cond = Q()
+        for b in chosen:
+            cond |= Q(brand='') if b == NO_BRAND else Q(brand__iexact=b)
+        products = products.filter(cond)
     page = Paginator(products, 50).get_page(request.GET.get('page'))
     return render(request, 'quotation/product_list.html', {
         'page': page, 'q': q, 'total': Product.objects.count(),
+        'brand_options': [(b, b.lower() in chosen_low) for b in brands] + [(NO_BRAND, NO_BRAND in chosen_low)],
+        'brand_count': len(chosen), 'brand_label': (chosen[0] if len(chosen) == 1 else f'{len(chosen)} brands') if chosen else 'All brands',
+        'no_brand': NO_BRAND,
+        'filter_qs': urlencode([('q', q)] + [('brand', b) for b in chosen]),
+        'shown': page.paginator.count,
         # lets the page check file names against the library before anything is uploaded
         'keys': {p.model_key: p.model_no for p in Product.objects.only('model_key', 'model_no')},
         'hints': {'photo': {product_key(p.photo_name): p.model_no for p in Product.objects.exclude(photo_name='')},

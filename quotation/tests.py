@@ -887,6 +887,30 @@ class ProductLibraryTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(url).status_code, 302)
 
+    def test_brand_filter_lists_every_brand_and_filters(self):
+        Product.objects.create(model_no='A1', brand='GROHE')
+        Product.objects.create(model_no='A2', brand='GROHE')
+        Product.objects.create(model_no='B1', brand='JOMIX')
+        Product.objects.create(model_no='C1')
+        url = reverse('quotation:product_list')
+        resp = self.client.get(url)
+        self.assertEqual([b for b, _ in resp.context['brand_options']], ['GROHE', 'JOMIX', '__none__'])   # each brand once
+        self.assertEqual(len(resp.context['page']), 4)
+        self.assertContains(resp, 'Select all')
+        self.assertContains(resp, 'Clear all')
+
+        def shown(**kw):
+            return sorted(p.model_no for p in self.client.get(url, kw).context['page'])
+        self.assertEqual(shown(brand=['GROHE']), ['A1', 'A2'])
+        self.assertEqual(shown(brand=['grohe']), ['A1', 'A2'])
+        self.assertEqual(shown(brand=['GROHE', 'JOMIX']), ['A1', 'A2', 'B1'])      # several brands at once
+        self.assertEqual(shown(brand=['JOMIX'], q='b'), ['B1'])
+        self.assertEqual(shown(brand=['__none__']), ['C1'])
+        self.assertEqual(shown(brand=['GROHE', 'JOMIX', '__none__']), ['A1', 'A2', 'B1', 'C1'])   # Select all = everything
+        self.assertEqual(shown(), ['A1', 'A2', 'B1', 'C1'])                                        # Clear all = everything
+        Product.objects.create(model_no='D1', brand='HANSGROHE')        # a new brand appears by itself
+        self.assertIn('HANSGROHE', [b for b, _ in self.client.get(url).context['brand_options']])
+
     def test_library_pages_need_login(self):
         self.client.logout()
         for name in ('product_list', 'product_new', 'product_search', 'product_template'):
