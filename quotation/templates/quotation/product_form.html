@@ -29,6 +29,25 @@
                 <label class="label-x">Description</label>
                 <textarea name="description" rows="5" class="input-x">{{ values.description }}</textarea>
             </div>
+            {% if is_admin %}
+            <div class="grid-2 mt-3" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="field-x">
+                    <label class="label-x">Cost <small class="u-muted">(from stock data by Model No; edit to override)</small></label>
+                    <input type="text" inputmode="decimal" name="cost" id="costIn" class="input-x" value="{{ values.cost }}">
+                    {% if product and product.cost_manual %}<label class="mt-1 d-block"><input type="checkbox" name="reset_cost" value="1"> Set by hand — tick to use the stock cost again</label>{% endif %}
+                </div>
+                <div class="field-x">
+                    <label class="label-x">Selling Price <small class="u-muted">(2 × cost; edit to override)</small></label>
+                    <input type="text" inputmode="decimal" name="selling_price" id="priceIn" class="input-x" value="{{ values.selling_price }}">
+                    {% if product and product.price_manual %}<label class="mt-1 d-block"><input type="checkbox" name="reset_price" value="1"> Set by hand — tick to use 2 × cost again</label>{% endif %}
+                </div>
+            </div>
+            {% elif product and product.selling_price is not None %}
+            <div class="field-x mt-3">
+                <label class="label-x">Selling Price</label>
+                <div>{{ product.selling_price }}</div>
+            </div>
+            {% endif %}
             <div class="field-x mt-3">
                 <label class="label-x">Photo <small class="u-muted">(JPG / PNG, max 5 MB)</small></label>
                 {% if product.photo %}<img class="thumb-lg" src="{% url 'quotation:product_photo' product.pk %}?v={{ product.updated_at|date:'U' }}" alt="">{% endif %}
@@ -52,4 +71,24 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if is_admin %}
+<script>
+    // the selling price follows 2 x cost while you type, unless you have typed your own price
+    (function () {
+        var cost = document.getElementById('costIn'), price = document.getElementById('priceIn');
+        if (!cost || !price) return;
+        function num(v) { v = parseFloat(String(v).replace(/,/g, '')); return isNaN(v) ? null : v; }
+        var lastAuto = num(cost.value) === null ? null : (num(cost.value) * 2).toFixed(2);
+        cost.addEventListener('input', function () {
+            var c = num(cost.value), cur = price.value.trim();
+            var follows = cur === '' || (lastAuto !== null && num(cur) !== null && num(cur).toFixed(2) === lastAuto);
+            lastAuto = c === null ? null : (c * 2).toFixed(2);
+            if (follows) price.value = lastAuto === null ? '' : lastAuto;
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}

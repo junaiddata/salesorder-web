@@ -212,6 +212,12 @@ class Product(models.Model):
     # File names given in the Excel "Photo file" / "Datasheet file" columns, used when the files are uploaded later.
     photo_name = models.CharField(max_length=200, blank=True)
     datasheet_name = models.CharField(max_length=200, blank=True)
+    # Cost (from the stock data, admin only) and selling price (2 x cost). A value admin typed by hand is flagged *_manual and
+    # is never overwritten by a stock refresh; see quotation/pricing.py.
+    cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    cost_manual = models.BooleanField(default=False)
+    price_manual = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -221,6 +227,8 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         self.model_no = (self.model_no or '').strip()
         self.model_key = product_key(self.model_no)
+        if not self.price_manual and self.cost is not None:   # the automatic price always follows the cost
+            self.selling_price = (self.cost * 2).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 
     def __str__(self):

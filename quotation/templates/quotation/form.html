@@ -305,6 +305,7 @@
             q('lib_id').value = p.id;
             q('item_brand').value = (p.brand || '').toUpperCase();
             q('item_description').value = p.description || '';
+            if (p.selling_price) { q('item_price').value = parseFloat(p.selling_price); recalc(); }   // the library's selling price becomes the unit price
             q('remove_photo').value = '0'; q('remove_ds').value = '0';
             q('photo_' + key).value = ''; q('ds_' + key).value = '';
             if (p.photo_url) { thumb.src = p.photo_url; thumb.style.display = 'block'; rmPhoto.style.display = ''; }

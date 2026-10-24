@@ -25,6 +25,7 @@ urlpatterns = [
     path('products/', product_views.product_list, name='product_list'),
     path('products/new/', product_views.product_form, name='product_new'),
     path('products/search/', product_views.product_search, name='product_search'),
+    path('products/refresh-costs/', product_views.product_refresh_costs, name='product_refresh_costs'),
     path('products/template/', product_views.product_template, name='product_template'),
     path('products/import-excel/', product_views.product_import_excel, name='product_import_excel'),
     path('products/import-files/', product_views.product_import_files, name='product_import_files'),

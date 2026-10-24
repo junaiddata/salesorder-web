@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Q, Value
 from django.db.models.functions import Replace
@@ -15,6 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
+from . import pricing
 from .models import Product, product_key
 from .views import MAX_DATASHEET_BYTES, _check_photo, _display_name
 
@@ -76,7 +78,7 @@ def product_list(request):
         'brand_count': len(chosen), 'brand_label': (chosen[0] if len(chosen) == 1 else f'{len(chosen)} brands') if chosen else 'All brands',
         'no_brand': NO_BRAND,
         'filter_qs': urlencode([('q', q)] + [('brand', b) for b in chosen]),
-        'shown': page.paginator.count,
+        'shown': page.paginator.count, 'is_admin': pricing.is_price_admin(request.user),
         # lets the page check file names against the library before anything is uploaded
         'keys': {p.model_key: p.model_no for p in Product.objects.only('model_key', 'model_no')},
         'hints': {'photo': {product_key(p.photo_name): p.model_no for p in Product.objects.exclude(photo_name='')},
@@ -88,11 +90,25 @@ def product_list(request):
 def product_form(request, pk=None):
     product = get_object_or_404(Product, pk=pk) if pk else None
     errors = []
+    is_admin = pricing.is_price_admin(request.user)
     values = {'model_no': product.model_no if product else '', 'brand': product.brand if product else '',
-              'description': product.description if product else ''}
+              'description': product.description if product else '',
+              'cost': product.cost if product and product.cost is not None else '',
+              'selling_price': product.selling_price if product and product.selling_price is not None else ''}
     if request.method == 'POST':
         values = {k: (request.POST.get(k) or '').strip() for k in ('model_no', 'brand', 'description')}
         values['brand'] = values['brand'].upper()
+        new_cost = new_price = None
+        if is_admin:   # only admin may touch cost / selling price; for anyone else these posted values are ignored
+            values['cost'], values['selling_price'] = (request.POST.get('cost') or '').strip(), (request.POST.get('selling_price') or '').strip()
+            try:
+                new_cost = pricing.parse_money(values['cost'])
+            except ValueError:
+                errors.append('Cost must be a valid amount (0 or more).')
+            try:
+                new_price = pricing.parse_money(values['selling_price'])
+            except ValueError:
+                errors.append('Selling price must be a valid amount (0 or more).')
         photo, ds = request.FILES.get('photo'), request.FILES.get('datasheet')
         if not values['model_no']:
             errors.append('Model No is required.')
@@ -113,7 +129,9 @@ def product_form(request, pk=None):
                     errors.append(f'Datasheet: {e}')
         if not errors:
             product = product or Product()
+            model_changed = product.pk is None or product.model_no != values['model_no']
             product.model_no, product.brand, product.description = values['model_no'], values['brand'], values['description']
+            _apply_pricing(request, product, is_admin, new_cost, new_price, model_changed)
             if request.POST.get('remove_photo') == '1' and product.photo:
                 product.photo.delete(save=False)
             if photo:
@@ -125,7 +143,61 @@ def product_form(request, pk=None):
             product.save()
             messages.success(request, f'Product {product.model_no} saved.')
             return redirect('quotation:product_list')
-    return render(request, 'quotation/product_form.html', {'product': product, 'values': values, 'errors': errors})
+    return render(request, 'quotation/product_form.html', {'product': product, 'values': values, 'errors': errors, 'is_admin': is_admin})
+
+
+def _apply_pricing(request, product, is_admin, new_cost, new_price, model_changed):
+    """Cost / selling price rules (see pricing.py). A typed value that differs from the automatic one is kept as manual."""
+    if not is_admin:
+        if model_changed and not product.cost_manual:   # a new / renamed product still gets its stock cost
+            pricing.refresh_cost(product)
+        return
+    prev_cost, prev_price = product.cost, product.selling_price
+    stock = pricing.stock_cost(product.model_no)
+    if request.POST.get('reset_cost') == '1' or new_cost is None:
+        product.cost, product.cost_manual = stock, False         # back to automatic (blank if the stock data has none)
+    elif new_cost == prev_cost and product.cost_manual:
+        pass                                                      # a hand-set cost, left as it is
+    elif new_cost == stock:
+        product.cost, product.cost_manual = new_cost, False
+    elif new_cost == prev_cost:
+        if model_changed and stock is not None:                   # automatic cost of a renamed product
+            product.cost = stock
+    else:
+        product.cost, product.cost_manual = new_cost, True
+    auto = pricing.auto_price(product.cost)
+    if request.POST.get('reset_price') == '1' or new_price is None or new_price == auto:
+        product.price_manual, product.selling_price = False, auto
+    elif new_price == prev_price:
+        product.selling_price = prev_price if product.price_manual else auto   # untouched
+    else:
+        product.price_manual, product.selling_price = True, new_price
+
+
+@login_required
+@require_POST
+def product_refresh_costs(request):
+    """Admin: refill every product's cost from the stock data. Costs set by hand are skipped."""
+    if not pricing.is_price_admin(request.user):
+        raise PermissionDenied
+    cost_map = pricing.stock_cost_map()
+    updated = unchanged = missing = manual = 0
+    for product in Product.objects.all():
+        if product.cost_manual:
+            manual += 1
+            continue
+        old = product.cost
+        if not pricing.refresh_cost(product, cost_map):
+            missing += 1
+            continue
+        if product.cost == old:
+            unchanged += 1
+            continue
+        product.save()
+        updated += 1
+    messages.success(request, f'Costs refreshed from stock: {updated} updated, {unchanged} unchanged, {missing} with no stock match, '
+                              f'{manual} kept (set by hand).')
+    return redirect('quotation:product_list')
 
 
 @login_required
@@ -190,6 +262,7 @@ def product_search(request):
         'id': p.pk, 'model_no': p.model_no, 'brand': p.brand, 'description': p.description,
         'photo_url': reverse('quotation:product_photo', args=[p.pk]) + f'?v={int(p.updated_at.timestamp())}' if p.photo else '',
         'datasheet_name': _display_name(p.datasheet) if p.datasheet else '',
+        'selling_price': str(p.selling_price) if p.selling_price is not None else '',   # never the cost
     } for p in products]})
 
 
@@ -231,6 +304,7 @@ def product_import_excel(request):
     created = updated = 0
     problems = []
     seen = set()
+    cost_map = None   # read once, only if a new product turns up
     for n, row in enumerate(rows[1:], start=2):
         data = {k: _cell(row[i]) if i < len(row) else '' for k, i in cols.items()}
         model_no = data.get('model_no', '')
@@ -258,6 +332,9 @@ def product_import_excel(request):
             product.photo_name = data['photo_name'][:200]
         if data.get('datasheet_name'):
             product.datasheet_name = data['datasheet_name'][:200]
+        if is_new:   # a new product gets its cost from the stock data (and the selling price follows)
+            cost_map = pricing.stock_cost_map() if cost_map is None else cost_map
+            pricing.refresh_cost(product, cost_map)
         product.save()
         created += is_new
         updated += not is_new

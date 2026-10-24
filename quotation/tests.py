@@ -12,7 +12,7 @@ from django.urls import reverse
 from PIL import Image
 from PyPDF2 import PdfReader
 
-from .models import Customer, Product, Quotation, QuotationEmail, QuotationItem
+from .models import Customer, Product, product_key, Quotation, QuotationEmail, QuotationItem
 
 TMP_ROOT = tempfile.mkdtemp(prefix='qtn_test_')
 
@@ -1132,3 +1132,111 @@ class CustomerListTests(TestCase):
         Customer.objects.all().delete()
         q = Quotation.objects.get()
         self.assertEqual((q.customer_code, q.customer_trn), ('V1', '111'))
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ProductPricingTests(TestCase):
+    def setUp(self):
+        from so.models import Items, Role
+        self.Items = Items
+        self.admin = get_user_model().objects.create_user('boss', password='x')
+        Role.objects.create(user=self.admin, role='Admin')
+        self.staff = get_user_model().objects.create_user('sales', password='x')
+        Role.objects.create(user=self.staff, role='Salesman')
+        Items.objects.create(item_code='100001', item_description='Heater', item_upvc='ar-50', item_cost=100.0, item_firm='ARISTON')
+        Items.objects.create(item_code='100002', item_description='No cost', item_upvc='NC-1', item_cost=0.0, item_firm='X')
+        self.client.force_login(self.admin)
+
+    def _new(self, model_no='AR 50', **extra):
+        data = {'model_no': model_no, 'brand': 'ariston', 'description': 'Heater'}
+        data.update(extra)
+        self.client.post(reverse('quotation:product_new'), data)
+        return Product.objects.get(model_key=product_key(model_no))
+
+    def _edit(self, p, **extra):
+        data = {'model_no': p.model_no, 'brand': p.brand, 'description': p.description}
+        data.update(extra)
+        return self.client.post(reverse('quotation:product_edit', args=[p.pk]), data)
+
+    def test_new_product_gets_stock_cost_by_upc_and_double_price(self):
+        from decimal import Decimal as D
+        p = self._new()                       # 'AR 50' finds the stock UPC code 'ar-50' (case, space, dash ignored)
+        self.assertEqual((p.cost, p.selling_price, p.cost_manual, p.price_manual), (D('100.00'), D('200.00'), False, False))
+        self.assertIsNone(self._new('NC-1').cost)       # a 0 cost in the stock data means unknown
+        self.assertIsNone(self._new('UNKNOWN-9').cost)  # no stock item with that UPC code
+
+    def test_admin_edits_are_kept_by_refresh_and_reset_restores(self):
+        from decimal import Decimal as D
+        p = self._new()
+        self._edit(p, cost='120', selling_price='240.00')   # a cost typed by hand; the price stays automatic (2 x 120)
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price, p.cost_manual, p.price_manual), (D('120.00'), D('240.00'), True, False))
+        self.assertRedirects(self.client.post(reverse('quotation:product_refresh_costs')), reverse('quotation:product_list'))
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price), (D('120.00'), D('240.00')))   # the refresh did not touch the hand-set cost
+        self._edit(p, cost='120', selling_price='999')       # a price typed by hand
+        p.refresh_from_db()
+        self.assertEqual((p.selling_price, p.price_manual), (D('999.00'), True))
+        self._edit(p, cost='130', selling_price='999')       # the cost moves, the hand-set price stays
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price), (D('130.00'), D('999.00')))
+        self._edit(p, cost='130', selling_price='999', reset_cost='1', reset_price='1')
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price, p.cost_manual, p.price_manual), (D('100.00'), D('200.00'), False, False))
+
+    def test_refresh_updates_automatic_costs_only(self):
+        from decimal import Decimal as D
+        p = self._new()
+        self.Items.objects.filter(item_code='100001').update(item_cost=150.0)
+        self.client.post(reverse('quotation:product_refresh_costs'))
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price), (D('150.00'), D('300.00')))
+
+    def test_retyping_the_automatic_value_is_not_a_manual_override(self):
+        from decimal import Decimal as D
+        p = self._new()
+        self._edit(p, cost='100', selling_price='200')
+        p.refresh_from_db()
+        self.assertEqual((p.cost_manual, p.price_manual), (False, False))
+        self.Items.objects.filter(item_code='100001').update(item_cost=110.0)
+        self.client.post(reverse('quotation:product_refresh_costs'))
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price), (D('110.00'), D('220.00')))
+
+    def test_invalid_amounts_are_refused(self):
+        p = self._new()
+        resp = self._edit(p, cost='abc')
+        self.assertContains(resp, 'Cost must be a valid amount')
+        resp = self._edit(p, cost='100', selling_price='-5')
+        self.assertContains(resp, 'Selling price must be a valid amount')
+
+    def test_cost_is_hidden_from_everyone_but_admin(self):
+        p = self._new()
+        self.assertContains(self.client.get(reverse('quotation:product_list')), '<th>Cost</th>')
+        self.client.force_login(self.staff)
+        html = self.client.get(reverse('quotation:product_list')).content.decode()
+        self.assertNotIn('<th>Cost</th>', html)
+        self.assertNotIn('100.00', html)
+        self.assertIn('200.00', html)                               # the selling price is visible
+        form = self.client.get(reverse('quotation:product_edit', args=[p.pk])).content.decode()
+        self.assertNotIn('name="cost"', form)
+        self.assertNotIn('100.00', form)
+        res = self.client.get(reverse('quotation:product_search'), {'q': 'ar'}).json()['results'][0]
+        self.assertEqual(res['selling_price'], '200.00')
+        self.assertNotIn('cost', res)
+        self.assertEqual(self.client.post(reverse('quotation:product_refresh_costs')).status_code, 403)
+        self._edit(p, cost='1', selling_price='2')                    # posted prices from a non-admin are ignored
+        p.refresh_from_db()
+        self.assertEqual((p.cost, p.selling_price), (__import__('decimal').Decimal('100.00'), __import__('decimal').Decimal('200.00')))
+
+    def test_excel_import_fills_cost_for_new_products(self):
+        from decimal import Decimal as D
+        from openpyxl import Workbook
+        wb = Workbook()
+        wb.active.append(['Model No', 'Brand'])
+        wb.active.append(['AR-50', 'Ariston'])
+        buf = BytesIO()
+        wb.save(buf)
+        self.client.post(reverse('quotation:product_import_excel'), {'excel': SimpleUploadedFile('p.xlsx', buf.getvalue())})
+        p = Product.objects.get()
+        self.assertEqual((p.cost, p.selling_price), (D('100.00'), D('200.00')))

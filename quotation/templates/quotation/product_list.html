@@ -9,6 +9,7 @@
     .pl-table td, .pl-table th { vertical-align: middle; }
     .pl-table .thumb { width: 44px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
     .pl-table .desc { max-width: 520px; }
+    .pl-table .nowrap { white-space: nowrap; }
     .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
     .brand-dd { position: relative; }
     .brand-dd summary { list-style: none; cursor: pointer; min-width: 170px; display: flex; justify-content: space-between; align-items: center; gap: .5rem; white-space: nowrap; }
@@ -66,6 +67,12 @@
                 <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
                 {% if brand_count or q %}<a href="{% url 'quotation:product_list' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
             </form>
+            {% if is_admin %}
+            <form method="post" action="{% url 'quotation:product_refresh_costs' %}" style="display:inline;"
+                  data-confirm="Refill the cost of every product from the stock data? Costs you set by hand are kept." data-confirm-title="Refresh costs" data-confirm-ok="Refresh">
+                {% csrf_token %}<button type="submit" class="btn-x" title="Fill costs from the stock data"><i class="fas fa-rotate"></i> Refresh costs</button>
+            </form>
+            {% endif %}
             <a href="{% url 'quotation:product_new' %}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
         </div>
     </div>
@@ -109,7 +116,7 @@
     {% if page.object_list %}
     <div class="tbl-x-wrap">
         <table class="tbl-x pl-table">
-            <thead><tr><th>Model No</th><th>Photo</th><th>Brand</th><th>Description</th><th>Datasheet</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Model No</th><th>Photo</th><th>Brand</th><th>Description</th>{% if is_admin %}<th>Cost</th>{% endif %}<th>Selling Price</th><th>Datasheet</th><th>Actions</th></tr></thead>
             <tbody>
             {% for p in page %}
             <tr>
@@ -117,6 +124,8 @@
                 <td data-label="Photo">{% if p.photo %}<img class="thumb" src="{% url 'quotation:product_photo' p.pk %}?v={{ p.updated_at|date:'U' }}" alt="">{% else %}<span class="u-muted">—</span>{% endif %}</td>
                 <td data-label="Brand">{{ p.brand|default:"—" }}</td>
                 <td data-label="Description" class="desc">{{ p.description|truncatechars:140|default:"—" }}</td>
+                {% if is_admin %}<td data-label="Cost" class="nowrap">{% if p.cost is not None %}{{ p.cost|floatformat:2 }}{% if p.cost_manual %} <span class="chip-x gray" title="Set by hand; stock refreshes keep it">manual</span>{% endif %}{% else %}<span class="u-muted" title="No stock item with this UPC code">—</span>{% endif %}</td>{% endif %}
+                <td data-label="Selling Price" class="nowrap">{% if p.selling_price is not None %}{{ p.selling_price|floatformat:2 }}{% if is_admin and p.price_manual %} <span class="chip-x gray" title="Set by hand">manual</span>{% endif %}{% else %}<span class="u-muted">—</span>{% endif %}</td>
                 <td data-label="Datasheet">{% if p.datasheet %}<a href="{% url 'quotation:product_datasheet' p.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
                 <td>
                     <div class="act">
