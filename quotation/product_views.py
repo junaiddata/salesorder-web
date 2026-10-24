@@ -13,6 +13,7 @@ from django.db.models.functions import Replace
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
@@ -31,6 +32,16 @@ HEADERS = {
     'brand': 'brand', 'description': 'description',
     'photo file': 'photo_name', 'datasheet file': 'datasheet_name',
 }
+
+
+def _back_url(request):
+    """Where to return to after saving / deleting: the Products list as the user left it (brand filter, search, page).
+    Only an address on this site that points into the Products list is accepted; anything else gives the plain list."""
+    plain = reverse('quotation:product_list')
+    nxt = (request.POST.get('next') or request.GET.get('next') or '').strip()
+    if nxt.startswith(plain) and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return nxt
+    return plain
 
 
 def _delete_files(product):
@@ -53,8 +64,8 @@ def _set_datasheet(product, name, data):
     product.datasheet.save(name, ContentFile(data), save=False)
 
 
-@login_required
-def product_list(request):
+def _filtered(request):
+    """The products matching the search box and the brand filter (shared by the list and its exports)."""
     q = (request.GET.get('q') or '').strip()
     products = Product.objects.all()
     if q:
@@ -71,6 +82,12 @@ def product_list(request):
         for b in chosen:
             cond |= Q(brand='') if b == NO_BRAND else Q(brand__iexact=b)
         products = products.filter(cond)
+    return products, q, brands, chosen, chosen_low
+
+
+@login_required
+def product_list(request):
+    products, q, brands, chosen, chosen_low = _filtered(request)
     page = Paginator(products, 50).get_page(request.GET.get('page'))
     return render(request, 'quotation/product_list.html', {
         'page': page, 'q': q, 'total': Product.objects.count(),
@@ -78,7 +95,7 @@ def product_list(request):
         'brand_count': len(chosen), 'brand_label': (chosen[0] if len(chosen) == 1 else f'{len(chosen)} brands') if chosen else 'All brands',
         'no_brand': NO_BRAND,
         'filter_qs': urlencode([('q', q)] + [('brand', b) for b in chosen]),
-        'shown': page.paginator.count, 'is_admin': pricing.is_price_admin(request.user),
+        'shown': page.paginator.count, 'is_admin': pricing.is_price_admin(request.user), 'here': request.get_full_path(),
         # lets the page check file names against the library before anything is uploaded
         'keys': {p.model_key: p.model_no for p in Product.objects.only('model_key', 'model_no')},
         'hints': {'photo': {product_key(p.photo_name): p.model_no for p in Product.objects.exclude(photo_name='')},
@@ -142,8 +159,8 @@ def product_form(request, pk=None):
                 _set_datasheet(product, *ds_jpeg)
             product.save()
             messages.success(request, f'Product {product.model_no} saved.')
-            return redirect('quotation:product_list')
-    return render(request, 'quotation/product_form.html', {'product': product, 'values': values, 'errors': errors, 'is_admin': is_admin})
+            return redirect(_back_url(request))
+    return render(request, 'quotation/product_form.html', {'product': product, 'values': values, 'errors': errors, 'is_admin': is_admin, 'back': _back_url(request)})
 
 
 def _apply_pricing(request, product, is_admin, new_cost, new_price, model_changed):
@@ -197,7 +214,7 @@ def product_refresh_costs(request):
         updated += 1
     messages.success(request, f'Costs refreshed from stock: {updated} updated, {unchanged} unchanged, {missing} with no stock match, '
                               f'{manual} kept (set by hand).')
-    return redirect('quotation:product_list')
+    return redirect(_back_url(request))
 
 
 @login_required
@@ -208,7 +225,7 @@ def product_delete(request, pk):
     _delete_files(product)
     product.delete()
     messages.success(request, f'Product {name} deleted. Quotations that already used it are not changed.')
-    return redirect('quotation:product_list')
+    return redirect(_back_url(request))
 
 
 @login_required
@@ -281,17 +298,17 @@ def product_import_excel(request):
     f = request.FILES.get('excel')
     if not f:
         messages.error(request, 'Please choose the Excel file.')
-        return redirect('quotation:product_list')
+        return redirect(_back_url(request))
     if f.size > MAX_EXCEL_BYTES or not f.name.lower().endswith('.xlsx'):
         messages.error(request, 'Please upload an .xlsx Excel file (max 5 MB).')
-        return redirect('quotation:product_list')
+        return redirect(_back_url(request))
     from openpyxl import load_workbook
     try:
         sheet = load_workbook(f, read_only=True, data_only=True).worksheets[0]
         rows = list(sheet.iter_rows(values_only=True, max_row=MAX_EXCEL_ROWS + 1))
     except Exception:
         messages.error(request, 'This file could not be read. Please use the downloaded template (.xlsx).')
-        return redirect('quotation:product_list')
+        return redirect(_back_url(request))
     cols = {}
     for i, h in enumerate(rows[0] if rows else ()):
         field = HEADERS.get(_cell(h).lower())
@@ -299,7 +316,7 @@ def product_import_excel(request):
             cols[field] = i
     if 'model_no' not in cols:
         messages.error(request, 'The first row must have a "Model No" column. Please use the downloaded template.')
-        return redirect('quotation:product_list')
+        return redirect(_back_url(request))
 
     created = updated = 0
     problems = []
@@ -343,7 +360,7 @@ def product_import_excel(request):
         messages.warning(request, p)
     if len(problems) > 10:
         messages.warning(request, f'…and {len(problems) - 10} more rows skipped.')
-    return redirect('quotation:product_list')
+    return redirect(_back_url(request))
 
 
 @login_required

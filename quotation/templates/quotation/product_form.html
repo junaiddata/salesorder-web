@@ -16,6 +16,7 @@
 
     <form method="post" enctype="multipart/form-data" style="max-width:760px">
         {% csrf_token %}
+        <input type="hidden" name="next" value="{{ back }}">
         <div class="card-x mb-3"><div class="card-x-body">
             <div class="field-x">
                 <label class="label-x">Model No <small class="u-muted">(unique — each product once)</small></label>
@@ -67,7 +68,7 @@
         </div></div>
         <div class="d-flex gap-2 mb-5">
             <button type="submit" class="btn-x btn-primary-x lg"><i class="fas fa-save"></i> Save Product</button>
-            <a href="{% url 'quotation:product_list' %}" class="btn-x lg">Cancel</a>
+            <a href="{{ back }}" class="btn-x lg">Cancel</a>
         </div>
     </form>
 </div>

@@ -54,7 +54,8 @@
                 </a>
             </div>
             <div class="app-nav-right">
-                <a href="{% url 'home' %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> SO Home</a>
+                {# the SO Home page is for admins only; salesmen go back to their own dashboard #}
+                <a href="{% if request.user.role.role == 'Salesman' %}{% if request.user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}{% else %}{% url 'home' %}{% endif %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> {% if request.user.role.role == 'Salesman' %}My Dashboard{% else %}SO Home{% endif %}</a>
             </div>
             {% endwith %}
         </div>

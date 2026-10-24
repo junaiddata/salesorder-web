@@ -1240,3 +1240,194 @@ class ProductPricingTests(TestCase):
         self.client.post(reverse('quotation:product_import_excel'), {'excel': SimpleUploadedFile('p.xlsx', buf.getvalue())})
         p = Product.objects.get()
         self.assertEqual((p.cost, p.selling_price), (D('100.00'), D('200.00')))
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ProductListReturnTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_user('ret', password='x'))
+        self.p = Product.objects.create(model_no='J-1', brand='JOMIX')
+        Product.objects.create(model_no='A-1', brand='ARISTON')
+        self.here = reverse('quotation:product_list') + '?brand=JOMIX&page=1'
+        self.edit = reverse('quotation:product_edit', args=[self.p.pk])
+
+    def test_list_links_carry_the_current_filter(self):
+        html = self.client.get(self.here).content.decode()
+        self.assertIn(self.edit + '?next=/quote-builder/products/%3Fbrand%3DJOMIX%26page%3D1', html)
+        self.assertIn('name="next" value="/quote-builder/products/?brand=JOMIX&amp;page=1"', html)
+
+    def test_save_returns_to_the_filtered_list(self):
+        resp = self.client.post(self.edit, {'model_no': 'J-1', 'brand': 'JOMIX', 'description': 'x', 'next': self.here})
+        self.assertRedirects(resp, self.here, fetch_redirect_response=False)
+        self.assertEqual(self.client.post(self.edit, {'model_no': 'J-1', 'brand': 'JOMIX'}).headers['Location'],
+                         reverse('quotation:product_list'))   # no address given: the plain list, as before
+
+    def test_failed_save_keeps_the_address_and_cancel_uses_it(self):
+        resp = self.client.post(self.edit, {'model_no': '', 'next': self.here})
+        self.assertContains(resp, 'Model No is required')
+        self.assertContains(resp, 'value="/quote-builder/products/?brand=JOMIX&amp;page=1"')
+        self.assertContains(self.client.get(self.edit, {'next': self.here}), 'href="/quote-builder/products/?brand=JOMIX&amp;page=1" class="btn-x lg">Cancel')
+
+    def test_delete_returns_to_the_filtered_list(self):
+        resp = self.client.post(reverse('quotation:product_delete', args=[self.p.pk]), {'next': self.here})
+        self.assertRedirects(resp, self.here, fetch_redirect_response=False)
+
+    def test_only_addresses_inside_the_products_list_are_accepted(self):
+        plain = reverse('quotation:product_list')
+        for bad in ('https://evil.example/', '//evil.example/x', '/quote-builder/', '/admin/', 'javascript:alert(1)'):
+            resp = self.client.post(self.edit, {'model_no': 'J-1', 'brand': 'JOMIX', 'next': bad})
+            self.assertEqual(resp.headers['Location'], plain, bad)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ProductExportTests(TestCase):
+    def setUp(self):
+        from decimal import Decimal as D
+        from so.models import Role
+        self.admin = get_user_model().objects.create_user('boss2', password='x')
+        Role.objects.create(user=self.admin, role='Admin')
+        self.staff = get_user_model().objects.create_user('sales2', password='x')
+        Product.objects.create(model_no='J-1', brand='JOMIX', description='Jomix mixer', cost=D('50'), selling_price=D('100'))
+        Product.objects.create(model_no='=SUM(1)', brand='JOMIX', description='formula-like name')
+        Product.objects.create(model_no='A-1', brand='ARISTON', description='Heater', cost=D('10'))
+        self.client.force_login(self.admin)
+
+    def _sheet(self, resp):
+        from openpyxl import load_workbook
+        return list(load_workbook(BytesIO(resp.content)).worksheets[0].iter_rows(values_only=True))
+
+    def test_excel_follows_the_filter_and_admin_sees_cost(self):
+        resp = self.client.get(reverse('quotation:product_export_excel'), {'brand': 'JOMIX'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('.xlsx', resp['Content-Disposition'])
+        rows = self._sheet(resp)
+        self.assertEqual(rows[0], ('Model No', 'Brand', 'Description', 'Cost', 'Selling Price', 'Photo', 'Datasheet'))
+        self.assertEqual({r[0] for r in rows[1:]}, {'J-1', '=SUM(1)'})            # ARISTON filtered out; the formula-like text stays text
+        self.assertEqual([r for r in rows[1:] if r[0] == 'J-1'][0][3:5], (50.0, 100.0))
+        self.assertEqual(len(self._sheet(self.client.get(reverse('quotation:product_export_excel')))), 4)   # no filter: all three
+        self.assertEqual(len(self._sheet(self.client.get(reverse('quotation:product_export_excel'), {'q': 'heater'}))), 2)
+
+    def test_non_admin_export_has_no_cost(self):
+        self.client.force_login(self.staff)
+        rows = self._sheet(self.client.get(reverse('quotation:product_export_excel')))
+        self.assertNotIn('Cost', rows[0])
+        self.assertNotIn(50.0, [v for r in rows for v in r])
+        self.assertNotIn(10.0, [v for r in rows for v in r])
+        pdf = self.client.get(reverse('quotation:product_export_pdf'))
+        text = ' '.join(pg.extract_text() or '' for pg in PdfReader(BytesIO(pdf.content)).pages)
+        self.assertNotIn('Cost', text)
+        self.assertIn('Selling Price', text)
+
+    def test_pdf_export(self):
+        resp = self.client.get(reverse('quotation:product_export_pdf'), {'brand': 'ARISTON'})
+        self.assertEqual((resp.status_code, resp['Content-Type']), (200, 'application/pdf'))
+        text = ' '.join(pg.extract_text() or '' for pg in PdfReader(BytesIO(resp.content)).pages)
+        self.assertIn('A-1', text)
+        self.assertIn('Cost', text)
+        self.assertNotIn('J-1', text)
+
+    def test_empty_result_and_login_required_and_buttons(self):
+        resp = self.client.get(reverse('quotation:product_export_pdf'), {'q': 'zzzz'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(self._sheet(self.client.get(reverse('quotation:product_export_excel'), {'q': 'zzzz'}))), 1)
+        page = self.client.get(reverse('quotation:product_list'), {'brand': 'JOMIX'}).content.decode()
+        self.assertIn('/quote-builder/products/export/excel/?q=&amp;brand=JOMIX', page)
+        self.assertIn('/quote-builder/products/export/pdf/?q=&amp;brand=JOMIX', page)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse('quotation:product_export_excel')).status_code, 302)
+        self.assertEqual(self.client.get(reverse('quotation:product_export_pdf')).status_code, 302)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ProductExportLinksPhotosTests(TestCase):
+    def setUp(self):
+        from django.core.files.base import ContentFile
+        self.client.force_login(get_user_model().objects.create_user('exp', password='x'))
+        self.p = Product.objects.create(model_no='J-1', brand='JOMIX', description='Mixer')
+        buf = BytesIO()
+        Image.new('RGB', (300, 200), 'red').save(buf, 'JPEG')
+        self.p.photo.save('j1.jpg', ContentFile(buf.getvalue()), save=False)
+        self.p.datasheet.save('j1_ds.jpg', ContentFile(buf.getvalue()), save=True)
+        Product.objects.create(model_no='N-1', brand='JOMIX', description='No files')
+
+    def _pdf(self, **params):
+        return PdfReader(BytesIO(self.client.get(reverse('quotation:product_export_pdf'), params).content))
+
+    def _images_and_links(self, reader):
+        images = links = 0
+        for page in reader.pages:
+            res = page['/Resources']
+            images += len(res['/XObject']) if '/XObject' in res else 0
+            for a in page.get('/Annots') or []:
+                uri = a.get_object().get('/A', {}).get('/URI')
+                links += bool(uri and '/products/%d/datasheet/' % self.p.pk in uri)
+        return images, links
+
+    def test_pdf_has_the_photo_and_a_datasheet_link_only_where_they_exist(self):
+        images, links = self._images_and_links(self._pdf())
+        self.assertEqual((images, links), (1, 1))
+        text = ' '.join(pg.extract_text() or '' for pg in self._pdf().pages)
+        self.assertIn('Photo', text)
+        self.assertIn('Datasheet', text)
+
+    def test_photos_are_left_out_for_a_very_large_export(self):
+        from unittest import mock
+        with mock.patch('quotation.product_export.PHOTO_LIMIT', 1):
+            reader = self._pdf()
+        images, links = self._images_and_links(reader)
+        self.assertEqual((images, links), (0, 1))                      # the links stay
+        self.assertIn('Photos are left out', ' '.join(pg.extract_text() or '' for pg in reader.pages))
+
+    def test_an_unreadable_photo_does_not_break_the_pdf(self):
+        from unittest import mock
+        with mock.patch('quotation.product_export._thumb', return_value=None):
+            resp = self.client.get(reverse('quotation:product_export_pdf'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_excel_datasheet_cell_is_a_link(self):
+        from openpyxl import load_workbook
+        resp = self.client.get(reverse('quotation:product_export_excel'))
+        ws = load_workbook(BytesIO(resp.content)).worksheets[0]
+        header = [c.value for c in ws[1]]
+        col = header.index('Datasheet') + 1
+        self.assertIn('/quote-builder/products/%d/datasheet/' % self.p.pk, ws.cell(row=2, column=col).hyperlink.target)
+        self.assertIsNone(ws.cell(row=3, column=col).hyperlink)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class SalesmanDashboardLinkTests(TestCase):
+    def _login(self, username, role, company='Junaid'):
+        from so.models import Role
+        user = get_user_model().objects.create_user(username, password='x')
+        Role.objects.create(user=user, role=role, company=company)
+        self.client.force_login(user)
+
+    def test_salesman_dashboard_has_the_quotation_card(self):
+        self._login('sm1', 'Salesman')
+        resp = self.client.get(reverse('sales_home'))
+        self.assertContains(resp, 'Junaid Galleria Quotation')
+        self.assertContains(resp, 'href="%s"' % reverse('quotation:list'))
+
+    def test_back_link_goes_to_the_users_own_dashboard(self):
+        self._login('sm2', 'Salesman')
+        resp = self.client.get(reverse('quotation:list'))
+        self.assertContains(resp, 'href="%s" class="app-nav-ghost"' % reverse('sales_home'))
+        self.assertContains(resp, 'My Dashboard')
+        self.client.logout()
+        self._login('sm3', 'Salesman', company='Alabama')
+        self.assertContains(self.client.get(reverse('quotation:list')), 'href="%s" class="app-nav-ghost"' % reverse('alabama:alabama_sales_home'))
+        self.client.logout()
+        self._login('ad1', 'Admin')
+        resp = self.client.get(reverse('quotation:list'))
+        self.assertContains(resp, 'href="%s" class="app-nav-ghost"' % reverse('home'))
+        self.assertContains(resp, 'SO Home')
+
+    def test_agents_pages_back_link_for_a_salesman(self):
+        self._login('sm4', 'Salesman')
+        resp = self.client.get(reverse('emailagent:review_queue'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'href="%s" class="app-nav-ghost"' % reverse('sales_home'))
+        self.assertContains(resp, 'My Dashboard')
+        self.client.logout()
+        self._login('ad2', 'Admin')
+        self.assertContains(self.client.get(reverse('emailagent:review_queue')), 'href="%s" class="app-nav-ghost"' % reverse('home'))

@@ -2577,18 +2577,28 @@ def export_quotation_to_pdf(request, quotation_id):
     filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
+    response.write(_render_quotation_pdf(quotation))
+    return response
+
+
+def _render_quotation_pdf(quotation):
+    """PDF bytes for a quotation: the new letterhead design, falling back to the old per-division generators if the
+    new one fails for any reason (so an export or email never breaks because of the redesign)."""
+    import logging
+    try:
+        from .quotation_pdf_new import build_so_quotation_pdf
+        return build_so_quotation_pdf(quotation)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            'New quotation PDF failed for %s; using the old layout', quotation.quotation_number)
     buffer = BytesIO()
-    
-    # Dispatch based on Division
     if quotation.division == 'ALABAMA':
         generate_alabama_quotation(buffer, quotation)
     else:
         generate_junaid_quotation(buffer, quotation)
-        
     pdf_content = buffer.getvalue()
     buffer.close()
-    response.write(pdf_content)
-    return response
+    return pdf_content
 
 
 _DATASHEET_SUGGESTIONS_PER_ITEM = 3  # cap noise -- see docstring below
@@ -2827,15 +2837,9 @@ def send_quotation_email(request, quotation_id):
     source_email = getattr(_agent_draft_for_quotation(quotation), 'tracked_email', None)
     send_recorder = supervisor.AgentRunRecorder(AgentRun.AGENT_SEND, tracked_email=source_email, quotation=quotation)
 
-    buffer = BytesIO()
-    if quotation.division == 'ALABAMA':
-        generate_alabama_quotation(buffer, quotation)
-    else:
-        generate_junaid_quotation(buffer, quotation)
-    pdf_content = buffer.getvalue()
-    buffer.close()
+    pdf_content = _render_quotation_pdf(quotation)
 
-    company = 'Alabama' if quotation.division == 'ALABAMA' else 'Junaid World'
+    company ='Alabama' if quotation.division == 'ALABAMA' else 'Junaid World'
     subject = f"Quotation {quotation.quotation_number} from {company}"
     body = custom_message or _build_default_send_message(quotation, source_email)
     filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"

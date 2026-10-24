@@ -70,10 +70,12 @@
             {% if is_admin %}
             <form method="post" action="{% url 'quotation:product_refresh_costs' %}" style="display:inline;"
                   data-confirm="Refill the cost of every product from the stock data? Costs you set by hand are kept." data-confirm-title="Refresh costs" data-confirm-ok="Refresh">
-                {% csrf_token %}<button type="submit" class="btn-x" title="Fill costs from the stock data"><i class="fas fa-rotate"></i> Refresh costs</button>
+                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><button type="submit" class="btn-x" title="Fill costs from the stock data"><i class="fas fa-rotate"></i> Refresh costs</button>
             </form>
             {% endif %}
-            <a href="{% url 'quotation:product_new' %}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
+            <a href="{% url 'quotation:product_export_excel' %}?{{ filter_qs }}" class="btn-x" title="Download the products shown (current search and brand filter) as Excel"><i class="fas fa-file-excel"></i> Excel</a>
+            <a href="{% url 'quotation:product_export_pdf' %}?{{ filter_qs }}" class="btn-x" title="Download the products shown (current search and brand filter) as PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+            <a href="{% url 'quotation:product_new' %}?next={{ here|urlencode }}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
         </div>
     </div>
     <p class="u-muted">Add each product once. When you type its Model No in a quotation, the brand, description, photo and datasheet fill in automatically.
@@ -85,7 +87,7 @@
         <p class="u-muted mb-2" style="font-size:.85rem">Download the template, fill one row per product (Model No, Brand, Description), and upload it. Existing products are updated; blank cells never erase anything.
             "Photo file" / "Datasheet file" are only needed when the file name is different from the Model No.</p>
         <form method="post" action="{% url 'quotation:product_import_excel' %}" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center mb-4">
-            {% csrf_token %}
+            {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
             <a href="{% url 'quotation:product_template' %}" class="btn-x"><i class="fas fa-download"></i> Download Excel template</a>
             <input type="file" name="excel" accept=".xlsx" class="input-x" style="max-width:320px" required>
             <button type="submit" class="btn-x btn-primary-x"><i class="fas fa-upload"></i> Upload Excel</button>
@@ -129,11 +131,11 @@
                 <td data-label="Datasheet">{% if p.datasheet %}<a href="{% url 'quotation:product_datasheet' p.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
                 <td>
                     <div class="act">
-                        <a href="{% url 'quotation:product_edit' p.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
+                        <a href="{% url 'quotation:product_edit' p.pk %}?next={{ here|urlencode }}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
                         <form method="post" action="{% url 'quotation:product_delete' p.pk %}" style="display:inline;"
                               data-confirm="Delete product {{ p.model_no }} from the library? Quotations that already used it are not changed."
                               data-confirm-title="Delete Product" data-confirm-ok="Delete">
-                            {% csrf_token %}
+                            {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
                             <button type="submit" class="btn-x btn-danger-x" title="Delete"><i class="fas fa-trash"></i></button>
                         </form>
                     </div>
