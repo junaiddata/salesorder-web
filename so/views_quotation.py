@@ -26,7 +26,7 @@ def _is_manager_account(user):
 # Optional header details for the quotation PDF (see the Quotation model). Each is a form input of the same name.
 QUOTATION_HEADER_FIELDS = (
     'customer_contact_person', 'customer_contact_number', 'customer_address', 'customer_trn', 'customer_email',
-    'customer_ref', 'project_reference', 'validity', 'delivery_availability',
+    'customer_ref', 'project_reference', 'validity', 'delivery_availability', 'payment_terms',
 )
 
 

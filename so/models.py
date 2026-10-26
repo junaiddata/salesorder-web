@@ -413,6 +413,7 @@ class Quotation(models.Model):
     project_reference = models.CharField(max_length=255, blank=True, null=True)
     validity = models.CharField(max_length=255, blank=True, null=True)
     delivery_availability = models.CharField(max_length=255, blank=True, null=True)
+    payment_terms = models.CharField(max_length=255, blank=True, null=True)
 
     emailed_to = models.CharField(max_length=500, blank=True, null=True,
         help_text="Comma-separated recipient address(es) the quotation PDF was last emailed to")

@@ -180,14 +180,14 @@ def _header_block(q, cfg):
 
     mid_rows = []
     for label, value in (('Date', q.quotation_date.strftime('%d.%m.%Y')), ('Validity', q.validity),
-                         ('Delivery availability', q.delivery_availability)):
+                         ('Delivery availability', q.delivery_availability), ('Payment terms', q.payment_terms)):
         mid_rows += [[Paragraph(label, S_MID_LBL)], [Paragraph(_txt(value) or '&nbsp;', S_MID_VAL)]]
     right = Table(mid_rows, colWidths=[w3 - gap])
     right.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 1), (0, 1), 5), ('BOTTOMPADDING', (0, 3), (0, 3), 5),
+        ('BOTTOMPADDING', (0, 1), (0, 1), 5), ('BOTTOMPADDING', (0, 3), (0, 3), 5), ('BOTTOMPADDING', (0, 5), (0, 5), 5),
     ]))
 
     # columns 0, 2 and 4 are the boxes; 1 and 3 are the empty gaps between them
