@@ -156,7 +156,7 @@
                     <div><span>Total Ex-Works</span><span id="tExw">0.00</span></div>
                     <div><span>Inland &amp; Sea Freight</span><span id="tFrt">0.00</span></div>
                     <div class="grand"><span>Customer total (CFR Chattogram)</span><span id="tCfr">0.00</span></div>
-                    <div class="grand"><span>Bank total (no freight)</span><span id="tBank">0.00</span></div>
+                    <div class="grand"><span>Bank total (incl. bank freight)</span><span id="tBank">0.00</span></div>
                 </div>
             </div>
         </div></div>
@@ -167,6 +167,12 @@
             <div class="grid-2">
                 {% include 'bangladeshpi/_field.html' with name='bank_payment' label='Payment (bank copy) — blank = same as above' %}
                 {% include 'bangladeshpi/_field.html' with name='bank_insurance' label='Insurance (bank copy) — blank = same as above' %}
+            </div>
+            <div class="field-x mt-3" style="max-width:420px">
+                <label class="label-x">Inland and Sea Freight Charges — bank copy (USD)</label>
+                <input type="number" step="0.01" min="0" name="bank_freight_charges" id="bankFreight" class="input-x"
+                       value="{{ values.bank_freight_charges }}">
+                <small class="u-muted">0 = the Bank PDF/Excel show a single total. Enter an amount to show Ex-Works, Freight and Total lines. FOC items are not shown on the bank copy.</small>
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Terms &amp; Conditions for issuing L/C <small class="u-muted">(one point per line)</small></label>
@@ -290,7 +296,8 @@
         document.getElementById('tExw').textContent = fmt(sum);
         document.getElementById('tFrt').textContent = fmt(f);
         document.getElementById('tCfr').textContent = fmt(sum + f);
-        document.getElementById('tBank').textContent = fmt(bankSum);
+        const bf = parseFloat(document.getElementById('bankFreight').value) || 0;
+        document.getElementById('tBank').textContent = fmt(bankSum + bf);
     }
 
     // ── Catalog search dropdown (read-only; own endpoint) ──
@@ -359,6 +366,7 @@
     // The product heading always goes at the top of the table, above the items.
     document.getElementById('addHeading').onclick = () => addRow({kind: 'heading'}, true);
     document.getElementById('freight').addEventListener('input', recalc);
+    document.getElementById('bankFreight').addEventListener('input', recalc);
 
     const initial = JSON.parse(document.getElementById('itemsData').textContent);
     if (initial.length) initial.forEach(d => addRow(d));

@@ -161,6 +161,8 @@ def _items_table(pi, variant='customer', tight=False):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f2f2f2')),
     ]
     for it in pi.items.all():
+        if bank and it.is_foc:
+            continue            # FOC items are not shown on the bank copy
         r = len(rows)
         if it.kind == 'heading':
             text = it.description or it.code
@@ -180,8 +182,16 @@ def _items_table(pi, variant='customer', tight=False):
 
     country = (pi.country_of_origin or '').upper()
     if bank:
-        # Bank copy: a single total, no Ex-Works / freight lines.
-        totals = [('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_items_total)]
+        if pi.bank_freight_charges:
+            # Bank freight entered: same three lines as the customer copy.
+            totals = [
+                (f'TOTAL EX-WORKS, {country}' if country else 'TOTAL EX-WORKS', pi.bank_items_total),
+                ('INLAND AND SEA FREIGHT CHARGES', pi.bank_freight_charges),
+                ('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_grand_total),
+            ]
+        else:
+            # No bank freight: a single total, as before.
+            totals = [('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_items_total)]
     else:
         totals = [
             (f'TOTAL EX-WORKS, {country}' if country else 'TOTAL EX-WORKS', pi.items_total),

@@ -121,6 +121,8 @@ def build_pi_xlsx(pi, variant='customer'):
     r += 1
     first_item = r
     for it in pi.items.all():
+        if bank and it.is_foc:
+            continue            # FOC items are not shown on the bank copy
         if it.kind == 'heading':
             ws.merge_cells(f'A{r}:E{r}')
             ws[f'A{r}'] = it.description or it.code
@@ -163,12 +165,13 @@ def build_pi_xlsx(pi, variant='customer'):
         return row
 
     sum_formula = f'=SUM(E{first_item}:E{last_item})'
-    if bank:
+    freight = pi.bank_freight_charges if bank else pi.freight_charges
+    if bank and not freight:
         grand = total_row('TOTAL CFR CHATTOGRAM , BANGLADESH.', sum_formula)
     else:
         country = (pi.country_of_origin or '').upper()
         exw = total_row(f'TOTAL EX-WORKS, {country}' if country else 'TOTAL EX-WORKS', sum_formula)
-        frt = total_row('INLAND AND SEA FREIGHT CHARGES', float(pi.freight_charges or 0))
+        frt = total_row('INLAND AND SEA FREIGHT CHARGES', float(freight or 0))
         ws[f'E{frt}'].font = BOLD
         grand = total_row('TOTAL CFR CHATTOGRAM , BANGLADESH.', f'=E{exw}+E{frt}')
     for col in 'ABCDE':

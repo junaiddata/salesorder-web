@@ -321,11 +321,12 @@ class FOCTests(BangladeshPITests):
             pdf = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), q)
             self.assertEqual(pdf.status_code, 200)
             text = fitz.open(stream=pdf.content, filetype='pdf')[0].get_text()
-            self.assertEqual(text.count('FOC'), 2, text)       # unit price + amount cells
+            expected = 0 if q else 2     # customer: unit price + amount cells; bank copy hides FOC rows
+            self.assertEqual(text.count('FOC'), expected, text)
             xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), q)
             ws = openpyxl.load_workbook(io.BytesIO(xl.content)).active
             cells = [c.value for row in ws.iter_rows() for c in row]
-            self.assertEqual(cells.count('FOC'), 2)
+            self.assertEqual(cells.count('FOC'), expected)
 
     def test_edit_form_prefills_foc(self):
         self.client.post(reverse('bangladeshpi:new'), self._payload_foc())
@@ -345,3 +346,58 @@ class ListTotalsTests(BangladeshPITests):
         self.assertIn('47886.50', html.replace(',', ''))   # customer total incl. freight
         self.assertIn('9950.00', html.replace(',', ''))    # bank total
         self.assertIn('—', html)                           # PI without bank prices
+
+
+class BankFocAndFreightTests(FOCTests):
+    """FOC rows are hidden on the bank copy; the bank copy can carry its own freight."""
+
+    def _setup(self, bank_freight='0'):
+        data = self._payload_foc()
+        data['bank_freight_charges'] = bank_freight
+        self.client.post(reverse('bangladeshpi:new'), data)
+        return BangladeshPI.objects.get()
+
+    def test_bank_copy_hides_foc_rows_but_customer_keeps_them(self):
+        import fitz, openpyxl
+        pi = self._setup()
+        for kind, q, expected in (('customer', {}, True), ('bank', {'copy': 'bank'}, False)):
+            pdf = self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), q).content
+            text = fitz.open(stream=pdf, filetype='pdf')[0].get_text()
+            self.assertEqual('FREE SAMPLE HEATER' in text, expected, kind)
+            xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), q).content
+            cells = [c.value for row in openpyxl.load_workbook(io.BytesIO(xl)).active.iter_rows() for c in row]
+            self.assertEqual('FREE SAMPLE HEATER' in cells, expected, kind)
+
+    def test_no_bank_freight_keeps_single_total(self):
+        import fitz
+        pi = self._setup('0')
+        text = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), {'copy': 'bank'}).content,
+                         filetype='pdf')[0].get_text()
+        self.assertIn('TOTAL CFR CHATTOGRAM', text)
+        self.assertNotIn('INLAND AND SEA FREIGHT', text)
+        self.assertEqual(pi.bank_grand_total, pi.bank_items_total)
+
+    def test_bank_freight_shows_three_lines_and_total(self):
+        import fitz, openpyxl
+        pi = self._setup('250.00')
+        self.assertEqual(pi.bank_grand_total, pi.bank_items_total + Decimal('250'))
+        text = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), {'copy': 'bank'}).content,
+                         filetype='pdf')[0].get_text()
+        self.assertIn('TOTAL EX-WORKS', text)
+        self.assertIn('INLAND AND SEA FREIGHT CHARGES', text)
+        self.assertIn('250.00', text)
+        total = f'{pi.bank_grand_total:,.2f}'
+        self.assertIn(total, text)
+        xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), {'copy': 'bank'}).content
+        cells = [c.value for row in openpyxl.load_workbook(io.BytesIO(xl)).active.iter_rows() for c in row]
+        self.assertIn('INLAND AND SEA FREIGHT CHARGES', cells)
+        self.assertIn(250.0, cells)
+        # customer copy unaffected by the bank freight
+        ctext = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).content, filetype='pdf')[0].get_text()
+        self.assertIn('1,800.00', ctext)
+        self.assertNotIn(total, ctext)
+
+    def test_list_total_bank_includes_bank_freight(self):
+        pi = self._setup('250.00')
+        html = self.client.get(reverse('bangladeshpi:list')).content.decode().replace(',', '')
+        self.assertIn(f'{pi.bank_grand_total:.2f}', html)

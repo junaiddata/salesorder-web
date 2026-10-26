@@ -75,7 +75,7 @@
                     <td data-label="Destination">{{ p.destination|default:"—" }}</td>
                     <td data-label="Items">{{ p.items.all|length }}</td>
                     <td class="nowrap" data-label="Total Customer (USD)">{{ p.grand_total|floatformat:2 }}</td>
-                    <td class="nowrap" data-label="Total Bank (USD)">{% if p.has_bank_prices %}{{ p.bank_items_total|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td class="nowrap" data-label="Total Bank (USD)">{% if p.has_bank_prices %}{{ p.bank_grand_total|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="actions">
                         <div class="act">
                             <span class="act-group">
