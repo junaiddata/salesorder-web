@@ -380,18 +380,22 @@ class BankFocAndFreightTests(FOCTests):
     def test_bank_freight_shows_three_lines_and_total(self):
         import fitz, openpyxl
         pi = self._setup('250.00')
-        self.assertEqual(pi.bank_grand_total, pi.bank_items_total + Decimal('250'))
+        self.assertEqual(pi.bank_grand_total, pi.bank_items_total - Decimal('250'))   # freight is deducted
         text = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), {'copy': 'bank'}).content,
                          filetype='pdf')[0].get_text()
-        self.assertIn('TOTAL EX-WORKS', text)
-        self.assertIn('INLAND AND SEA FREIGHT CHARGES', text)
+        # Bank PDF order: CFR total, then freight (no minus sign), then FOB value = CFR - freight
+        self.assertNotIn('TOTAL EX-WORKS', text)
+        i_cfr, i_frt, i_fob = (text.index(k) for k in ('TOTAL CFR CHATTOGRAM', 'INLAND AND SEA FREIGHT CHARGES', 'FOB VALUE'))
+        self.assertTrue(i_cfr < i_frt < i_fob)
         self.assertIn('250.00', text)
-        total = f'{pi.bank_grand_total:,.2f}'
+        self.assertNotIn('-250.00', text)
+        total = f'{pi.bank_grand_total:,.2f}'          # the FOB value
         self.assertIn(total, text)
+        self.assertIn(f'{pi.bank_items_total:,.2f}', text)   # the CFR total
         xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), {'copy': 'bank'}).content
         cells = [c.value for row in openpyxl.load_workbook(io.BytesIO(xl)).active.iter_rows() for c in row]
         self.assertIn('INLAND AND SEA FREIGHT CHARGES', cells)
-        self.assertIn(250.0, cells)
+        self.assertIn(-250.0, cells)                      # deducted: stored as a minus amount
         # customer copy unaffected by the bank freight
         ctext = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).content, filetype='pdf')[0].get_text()
         self.assertIn('1,800.00', ctext)

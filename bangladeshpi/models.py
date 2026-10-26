@@ -28,7 +28,7 @@ class BangladeshPI(models.Model):
     payment = models.CharField(max_length=400, blank=True)
     freight_charges = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     freight_valid_till = models.CharField(max_length=100, blank=True)
-    # Bank copy freight. 0 = the Bank PDF/Excel keep their single total line.
+    # Bank copy freight: DEDUCTED from the bank total. 0 = the Bank PDF/Excel keep their single total line.
     bank_freight_charges = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     # Bank copy only: Terms & Conditions for issuing L/C, plus optional wording
     # overrides (blank = use the main Payment / Insurance text).
@@ -67,8 +67,8 @@ class BangladeshPI(models.Model):
 
     @property
     def bank_grand_total(self):
-        """Bank total as printed: bank items + bank freight (0 when none is entered)."""
-        return self.bank_items_total + (self.bank_freight_charges or Decimal('0'))
+        """Bank total as printed: bank items MINUS the bank freight (0 freight = items total)."""
+        return self.bank_items_total - (self.bank_freight_charges or Decimal('0'))
 
     @property
     def has_bank_prices(self):

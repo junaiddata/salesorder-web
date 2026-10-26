@@ -181,14 +181,17 @@ def _items_table(pi, variant='customer', tight=False):
         ])
 
     country = (pi.country_of_origin or '').upper()
+    highlight_first = False
     if bank:
         if pi.bank_freight_charges:
-            # Bank freight entered: same three lines as the customer copy.
+            # Bank freight entered: CFR total first, then the freight (positive), then the
+            # FOB value = CFR total - freight.
             totals = [
-                (f'TOTAL EX-WORKS, {country}' if country else 'TOTAL EX-WORKS', pi.bank_items_total),
+                ('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_items_total),
                 ('INLAND AND SEA FREIGHT CHARGES', pi.bank_freight_charges),
-                ('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_grand_total),
+                ('FOB VALUE', pi.bank_grand_total),
             ]
+            highlight_first = True
         else:
             # No bank freight: a single total, as before.
             totals = [('TOTAL CFR CHATTOGRAM , BANGLADESH.', pi.bank_items_total)]
@@ -202,7 +205,8 @@ def _items_table(pi, variant='customer', tight=False):
         r = len(rows)
         rows.append([Paragraph(label, S_RIGHT_B), '', '', '', Paragraph(_money(val), S_RIGHT_B)])
         style.append(('SPAN', (0, r), (3, r)))
-    style.append(('BACKGROUND', (0, len(rows) - 1), (-1, len(rows) - 1), colors.HexColor('#f2f2f2')))
+    shade_row = len(rows) - len(totals) if highlight_first else len(rows) - 1
+    style.append(('BACKGROUND', (0, shade_row), (-1, shade_row), colors.HexColor('#f2f2f2')))
 
     t = Table(rows, colWidths=w, repeatRows=1)
     t.setStyle(TableStyle(style))

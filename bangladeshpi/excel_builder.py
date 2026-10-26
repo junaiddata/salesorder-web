@@ -165,7 +165,8 @@ def build_pi_xlsx(pi, variant='customer'):
         return row
 
     sum_formula = f'=SUM(E{first_item}:E{last_item})'
-    freight = pi.bank_freight_charges if bank else pi.freight_charges
+    # Bank freight is deducted, so it is written as a negative number and the total stays =Ex-Works+Freight.
+    freight = -pi.bank_freight_charges if bank else pi.freight_charges
     if bank and not freight:
         grand = total_row('TOTAL CFR CHATTOGRAM , BANGLADESH.', sum_formula)
     else:
