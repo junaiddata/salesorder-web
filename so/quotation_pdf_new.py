@@ -29,6 +29,8 @@ from reportlab.platypus import (
 
 from quotation.words import amount_in_words
 
+from .quotation_customer_details import customer_details
+
 log = logging.getLogger(__name__)
 
 MARGIN_X = 30
@@ -50,6 +52,9 @@ LETTERHEAD_DIR = os.path.join(settings.MEDIA_ROOT, 'quotation_letterheads')
 DIVISION_CONFIG = {
     'JUNAID': {
         'letterhead': os.path.join(LETTERHEAD_DIR, 'Junaid_world_qt.pdf'),
+        # Same letterhead without the head-office address: used for a branch salesman's quotations, with the branch's
+        # address lines drawn by the code (see BRANCHES). Every other salesman gets the letterhead above unchanged.
+        'branch_letterhead': os.path.join(LETTERHEAD_DIR, 'Junaid_world_address.pdf'),
         'top': 137,
         'bottom': 40,
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'junaid'),
@@ -63,6 +68,20 @@ DIVISION_CONFIG = {
         'show_license': False,
     },
 }
+
+# Branch address lines for the Junaid letterhead, keyed by Salesman.branch: (address, landline, mobile, email).
+BRANCHES = {
+    'AJMAN': ('Shop 7, Rashideya 2, Ajman', '06-7447415', '052-9796910', 'ajman@junaid.ae'),
+    'DEIRA': ('Shop 1, Diera, Dubai', '04-2216046', '050-3663916', 'salesdeira@junaid.ae'),
+    'RAK1': ('Ras Al Khor Industrial Second, Dubai', '04-3201694', '055-1236439', 'storemanager@junaid.ae'),
+    'RAK2': ('Ras Al Khor Industrial Second, Dubai', '04-3201694', '054-9946951', 'qusaisshop@junaid.ae'),
+    'ABUDHABI': ('Building No 2, Mussaffah 9, Abudhabi', '02-2461525', '050-3860314', 'adshop@junaidgroup.ae'),
+}
+# Where the three address lines go: right-aligned to the letterhead's right edge, baselines measured from the page top
+# (matching the head-office address on Junaid_world_qt.pdf).
+ADDRESS_RIGHT_X = 562 * _LH_SCALE
+ADDRESS_BASELINES = (91.5, 106, 120.5)
+ADDRESS_FONT = ('Helvetica', 10)
 
 LICENSE_NAMES = {
     'JUNAID_SME': 'JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH',
@@ -131,26 +150,44 @@ def _header_block(q, cfg):
     w1, w2, w3 = avail * 0.40, avail * 0.38, avail * 0.22
     gap = 14   # a box's left + right padding
 
-    display_name = q.customer_display_name or q.customer.customer_name
-    to = [Paragraph('<b>TO:</b>', S_ADDR), Spacer(1, 2), _label_table([('Customer name', _val(display_name, True))], w1 - gap)]
+    cust = q.customer
+    display_name = q.customer_display_name or cust.customer_name
+    d = customer_details(cust, q)
+    address = '<br/>'.join(escape(ln.strip()) for ln in d['address'].splitlines() if ln.strip())
+    to_rows = [
+        ('Customer name', _val(display_name, True)),
+        ('Contact person', _val(d['contact_person'])),
+        ('Contact number', _val(d['contact_number'])),
+        ('Address', Paragraph(address, S_VAL)),
+        ('TRN number', _val(d['trn'])),
+        ('Customer ID', _val(cust.customer_code)),
+        ('Customer email', _val(d['email'])),
+    ]
+    to = [Paragraph('<b>TO:</b>', S_ADDR), Spacer(1, 2), _label_table(to_rows, w1 - gap)]
 
-    ref_rows = [('Quotation no.', _val(q.quotation_number, True))]
     sm = q.salesman
-    ref_rows.append(('Salesperson', _val(sm.salesman_name if sm else '')))
-    ref_rows.append(('Contact', _val(sm.phone if sm else '')))
+    ref_rows = [
+        ('Quotation no.', _val(q.quotation_number, True)),
+        ('Customer ref.', _val(q.customer_ref)),
+        ('Salesperson', _val(sm.salesman_name if sm else '')),
+        ('Email', _val(sm.email if sm else '')),
+        ('Contact', _val(sm.phone if sm else '')),
+        ('Project reference', _val(q.project_reference)),
+    ]
     if cfg['show_license']:
         ref_rows.append(('Company', _val(LICENSE_NAMES.get(q.license_name or 'JUNAID_SME', ''))))
     ref = _label_table(ref_rows, w2 - gap)
 
     mid_rows = []
-    for label, value in (('Date', q.quotation_date.strftime('%d.%m.%Y')), ('Currency', CURRENCY)):
+    for label, value in (('Date', q.quotation_date.strftime('%d.%m.%Y')), ('Validity', q.validity),
+                         ('Delivery availability', q.delivery_availability)):
         mid_rows += [[Paragraph(label, S_MID_LBL)], [Paragraph(_txt(value) or '&nbsp;', S_MID_VAL)]]
     right = Table(mid_rows, colWidths=[w3 - gap])
     right.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 1), (0, 1), 5),
+        ('BOTTOMPADDING', (0, 1), (0, 1), 5), ('BOTTOMPADDING', (0, 3), (0, 3), 5),
     ]))
 
     # columns 0, 2 and 4 are the boxes; 1 and 3 are the empty gaps between them
@@ -290,8 +327,8 @@ def _body(q, cfg):
     stamp = _stamp(cfg.get('stamp'))
     if stamp is not None:
         stamp_row = Table([[stamp]], colWidths=[CONTENT_W])
-        stamp_row.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                                       ('RIGHTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 10)]))
+        stamp_row.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                       ('LEFTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 10)]))
         tail.append(stamp_row)
     story.append(KeepTogether(tail))
     return story
@@ -334,9 +371,38 @@ def _letterhead_page(cfg):
         return PageObject.create_blank_page(width=PAGE_W, height=PAGE_H)
 
 
+def _branch_setup(quotation, cfg):
+    """(config to use for the letterhead, address lines to draw or None).
+
+    A Junaid quotation whose salesman has a branch uses the address-free letterhead and gets that branch's lines.
+    Anything else (no salesman/branch, Alabama, missing file) uses the normal letterhead and draws nothing.
+    """
+    path = cfg.get('branch_letterhead')
+    branch = getattr(quotation.salesman, 'branch', None) if quotation.salesman_id else None
+    if not path or branch not in BRANCHES or not os.path.exists(path):
+        return cfg, None
+    address, landline, mobile, email = BRANCHES[branch]
+    lines = (address, f'Ph: {landline}  |  Mob: {mobile}', f'{email}  |  www.junaidworld.com')
+    return {**cfg, 'letterhead': path}, lines
+
+
+def _draw_address(canvas, doc, lines):
+    """Print the branch address lines under the logo on every page (never lets a drawing error break the PDF)."""
+    try:
+        canvas.saveState()
+        canvas.setFont(*ADDRESS_FONT)
+        canvas.setFillColorRGB(0.1, 0.1, 0.1)
+        for text, baseline in zip(lines, ADDRESS_BASELINES):
+            canvas.drawRightString(ADDRESS_RIGHT_X, PAGE_H - baseline * _LH_SCALE - _LH_DY, text)
+        canvas.restoreState()
+    except Exception:
+        log.exception('Branch address could not be drawn')
+
+
 def build_so_quotation_pdf(quotation):
     """Return the finished PDF (letterhead + content) for an so.Quotation as bytes."""
     cfg = DIVISION_CONFIG.get(quotation.division) or DIVISION_CONFIG['JUNAID']
+    cfg, address_lines = _branch_setup(quotation, cfg)
     body_buf = BytesIO()
     doc = BaseDocTemplate(
         body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
@@ -344,7 +410,8 @@ def build_so_quotation_pdf(quotation):
     )
     frame = Frame(MARGIN_X, cfg['bottom'], CONTENT_W, PAGE_H - cfg['top'] - cfg['bottom'],
                   leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
+    on_page = (lambda canvas, doc: _draw_address(canvas, doc, address_lines)) if address_lines else (lambda canvas, doc: None)
+    doc.addPageTemplates([PageTemplate(id='main', frames=[frame], onPage=on_page)])
     doc.build(_body(quotation, cfg))
     body_buf.seek(0)
 

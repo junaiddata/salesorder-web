@@ -252,6 +252,56 @@
                     </div>
 
                     <div class="form-group">
+                        <label>PDF Header Details (Optional)</label>
+                        <p class="help-text">Printed in the quotation PDF header. Greyed text shows what will print from the customer list if you leave a box empty &ndash; type here only to add or correct a detail for this quotation.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_contact_person">Customer Contact Person</label>
+                        <input type="text" name="customer_contact_person" id="customer_contact_person" maxlength="255" value="{{ quotation.customer_contact_person|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_contact_number">Customer Contact Number</label>
+                        <input type="text" name="customer_contact_number" id="customer_contact_number" maxlength="255" value="{{ quotation.customer_contact_number|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_address">Customer Address</label>
+                        <textarea name="customer_address" id="customer_address" rows="2" maxlength="1000" style="width:100%;padding:12px 16px;border:2px solid #e1e8ed;border-radius:8px;font-size:16px;resize:vertical;" placeholder="">{{ quotation.customer_address|default:'' }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_trn">Customer TRN</label>
+                        <input type="text" name="customer_trn" id="customer_trn" maxlength="255" value="{{ quotation.customer_trn|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_email">Customer Email</label>
+                        <input type="text" name="customer_email" id="customer_email" maxlength="255" value="{{ quotation.customer_email|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customer_ref">Customer Ref.</label>
+                        <input type="text" name="customer_ref" id="customer_ref" maxlength="255" value="{{ quotation.customer_ref|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project_reference">Project Reference</label>
+                        <input type="text" name="project_reference" id="project_reference" maxlength="255" value="{{ quotation.project_reference|default:'' }}" placeholder="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="validity">Validity</label>
+                        <input type="text" name="validity" id="validity" maxlength="255" value="{{ quotation.validity|default:'' }}" placeholder="e.g. 15 days">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="delivery_availability">Delivery Availability</label>
+                        <input type="text" name="delivery_availability" id="delivery_availability" maxlength="255" value="{{ quotation.delivery_availability|default:'' }}" placeholder="e.g. Ex-stock / 2 weeks">
+                    </div>
+
+                    <div class="form-group">
                         <label for="remarks">Remarks</label>
                         <textarea name="remarks" id="remarks" rows="3"
                                   style="width:100%;padding:12px 16px;border:2px solid #e1e8ed;border-radius:8px;font-size:16px;resize:vertical;"
@@ -1142,6 +1192,23 @@
             errorMsg.html(message).slideDown();
             setTimeout(() => errorMsg.slideUp(), 8000);
         }
+    </script>
+
+    <script>
+    // Show, as placeholders, what the PDF will print for the chosen customer (quote-builder customer list, then SAP data).
+    (function () {
+        var map = {contact_person: 'customer_contact_person', contact_number: 'customer_contact_number',
+                   address: 'customer_address', trn: 'customer_trn', email: 'customer_email'};
+        function showFallbacks() {
+            var id = $('#customer').val();
+            Object.keys(map).forEach(function (k) { $('#' + map[k]).attr('placeholder', ''); });
+            if (!id) return;
+            $.getJSON("{% url 'quotation_customer_details' %}", {customer_id: id}, function (d) {
+                Object.keys(map).forEach(function (k) { $('#' + map[k]).attr('placeholder', d[k] || ''); });
+            });
+        }
+        $(function () { $('#customer').on('change', showFallbacks); showFallbacks(); });
+    })();
     </script>
 </body>
 </html>

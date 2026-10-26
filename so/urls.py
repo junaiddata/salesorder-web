@@ -127,6 +127,7 @@ urlpatterns = [
     path('quotations/export-consolidated-excel/', views_quotation.export_inapp_quotations_consolidated_excel, name='export_inapp_quotations_consolidated_excel'),
     path('quotations/export-items-excel/', views_quotation.export_inapp_quotations_items_excel, name='export_inapp_quotations_items_excel'),
     path('quotations/create/', views_quotation.create_quotation, name='create_quotation'),
+    path('quotations/customer-details/', views_quotation.quotation_customer_details, name='quotation_customer_details'),
     path('quotations/<int:quotation_id>/details/', views_quotation.view_quotation_details, name='view_quotation_details'),
     path('quotations/<int:quotation_id>/edit/', views_quotation.edit_quotation, name='edit_quotation'),
     path('quotations/<int:quotation_id>/export/', views_quotation.export_quotation_to_pdf, name='export_quotation_to_pdf'),

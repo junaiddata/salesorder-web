@@ -118,6 +118,18 @@ class CustomerPendingInvoice(models.Model):
 class Salesman(models.Model):
     salesman_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(max_length=254, blank=True, null=True)   # printed on the quotation PDF
+
+    BRANCH_CHOICES = (
+        ('AJMAN', 'Ajman'),
+        ('DEIRA', 'Deira'),
+        ('RAK1', 'Ras Al Khor-1'),
+        ('RAK2', 'Ras Al Khor-2'),
+        ('ABUDHABI', 'Abudhabi'),
+    )
+    # Leave blank for head office. A branch salesman's Junaid quotations print that branch's address (see
+    # so/quotation_pdf_new.py).
+    branch = models.CharField(max_length=20, choices=BRANCH_CHOICES, blank=True, null=True)
 
     def __str__(self):
         return self.salesman_name
@@ -389,6 +401,18 @@ class Quotation(models.Model):
         help_text="Optional display name for walk-in/CASH customers")
     converted_to_sales_order = models.ForeignKey('SalesOrder', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='source_quotation', help_text="Sales order created from this quotation")
+
+    # Optional details printed in the header of the quotation PDF. Anything left blank is filled at print time from the
+    # customer lists (see so/quotation_customer_details.py), so older quotations are unaffected.
+    customer_contact_person = models.CharField(max_length=255, blank=True, null=True)
+    customer_contact_number = models.CharField(max_length=100, blank=True, null=True)
+    customer_address = models.TextField(blank=True, null=True)
+    customer_trn = models.CharField(max_length=100, blank=True, null=True)
+    customer_email = models.CharField(max_length=255, blank=True, null=True)
+    customer_ref = models.CharField(max_length=255, blank=True, null=True)
+    project_reference = models.CharField(max_length=255, blank=True, null=True)
+    validity = models.CharField(max_length=255, blank=True, null=True)
+    delivery_availability = models.CharField(max_length=255, blank=True, null=True)
 
     emailed_to = models.CharField(max_length=500, blank=True, null=True,
         help_text="Comma-separated recipient address(es) the quotation PDF was last emailed to")

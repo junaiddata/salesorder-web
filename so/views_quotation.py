@@ -23,6 +23,32 @@ def _is_manager_account(user):
     )
 
 
+# Optional header details for the quotation PDF (see the Quotation model). Each is a form input of the same name.
+QUOTATION_HEADER_FIELDS = (
+    'customer_contact_person', 'customer_contact_number', 'customer_address', 'customer_trn', 'customer_email',
+    'customer_ref', 'project_reference', 'validity', 'delivery_availability',
+)
+
+
+def _quotation_header_values(post):
+    """{field: stripped text or None} for the optional PDF header inputs actually present in the submitted form."""
+    return {f: ((post.get(f) or '').strip()[:1000 if f == 'customer_address' else 255] or None)
+            for f in QUOTATION_HEADER_FIELDS if f in post}
+
+
+from django.contrib.auth.decorators import login_required as _login_required
+
+
+@_login_required
+def quotation_customer_details(request):
+    """JSON of what the PDF would print for a customer (quote-builder list, then SAP data) -- shown as placeholders
+    in the quotation form's optional detail inputs."""
+    from django.http import JsonResponse
+    from .quotation_customer_details import customer_details
+    customer = Customer.objects.filter(pk=request.GET.get('customer_id') or 0).first()
+    return JsonResponse(customer_details(customer) if customer else {})
+
+
 @csrf_exempt
 @transaction.atomic
 def create_quotation(request):
@@ -110,6 +136,7 @@ def create_quotation(request):
                 remarks=remarks,
                 license_name=license_name,
                 customer_display_name=customer_display_name if customer_display_name else None,
+                **_quotation_header_values(request.POST),
                 discount_type=discount_type,
                 discount_value=discount_value,
                 discount_approval_status='PENDING' if discount_type else 'NOT_REQUIRED',
@@ -2193,6 +2220,8 @@ def edit_quotation(request, quotation_id):
         quotation.salesman = salesman
         quotation.customer_display_name = customer_display_name if customer_display_name else None
         quotation.remarks = request.POST.get('remarks', '').strip() or None
+        for field, value in _quotation_header_values(request.POST).items():
+            setattr(quotation, field, value)
 
         # Discount (percentage OR fixed amount — mutually exclusive)
         discount_type = (request.POST.get('discount_type') or '').strip().upper()
