@@ -23,11 +23,14 @@ PHOTO_LIMIT = 300   # photos are left out of the PDF when more products than thi
 def _rows(request):
     products, q, brands, chosen, _low = _filtered(request)
     is_admin = pricing.is_price_admin(request.user)
-    head = ['Model No', 'Brand', 'Description'] + (['Cost'] if is_admin else []) + ['Selling Price', 'Photo', 'Datasheet']
+    head = ['Model No', 'Brand', 'Description', 'Item Code', 'DIP Stock'] + (['Cost'] if is_admin else []) + ['Selling Price', 'Photo', 'Datasheet']
+    info = pricing.stock_info_map()
     rows, prods = [], []
     for p in products.order_by('model_key'):
         prods.append(p)
-        row = [p.model_no, p.brand, p.description]
+        code, dip = pricing.stock_info(p.model_no, info)
+        p.stock_item_code, p.dip_stock = code, dip
+        row = [p.model_no, p.brand, p.description, code, dip]
         if is_admin:
             row.append(p.cost)
         row += [p.selling_price, 'Yes' if p.photo else 'No', 'Yes' if p.datasheet else 'No']
@@ -89,7 +92,10 @@ def product_export_excel(request):
             cell = ws.cell(row=n, column=i)
             if v is None:
                 continue
-            if i in money_cols:
+            if head[i - 1] == 'DIP Stock':
+                cell.value = float(v)
+                cell.number_format = '#,##0.##'
+            elif i in money_cols:
                 cell.value = float(v)
                 cell.number_format = '#,##0.00'
             else:
@@ -100,7 +106,7 @@ def product_export_excel(request):
             if head[i - 1] == 'Datasheet' and prod.datasheet:
                 cell.hyperlink = _datasheet_url(request, prod)   # click to open (staff must be logged in)
                 cell.font = Font(color='1D4ED8', underline='single')
-    widths = {'Model No': 22, 'Brand': 18, 'Description': 60, 'Cost': 12, 'Selling Price': 14, 'Photo': 9, 'Datasheet': 11}
+    widths = {'Model No': 22, 'Brand': 18, 'Description': 60, 'Item Code': 14, 'DIP Stock': 11, 'Cost': 12, 'Selling Price': 14, 'Photo': 9, 'Datasheet': 11}
     for i, h in enumerate(head, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = widths[h]
     ws.freeze_panes = 'A2'
@@ -140,7 +146,7 @@ def product_export_pdf(request):
         return '' if v is None else f'{v:,.2f}'
 
     with_photos = len(prods) <= PHOTO_LIMIT
-    pdf_head = ['Model No'] + (['Photo'] if with_photos else []) + ['Brand', 'Description'] + (['Cost'] if is_admin else []) + ['Selling Price', 'Datasheet']
+    pdf_head = ['Model No'] + (['Photo'] if with_photos else []) + ['Brand', 'Description', 'Item Code', 'DIP Stock'] + (['Cost'] if is_admin else []) + ['Selling Price', 'Datasheet']
     dash = Paragraph('-', cell)
     data = [[Paragraph(h, hcell) for h in pdf_head]]
     for p in prods:
@@ -154,6 +160,7 @@ def product_export_pdf(request):
             else:
                 line.append(dash)
         line += [Paragraph(escape(p.brand or ''), cell), Paragraph(escape(p.description or '').replace('\n', '<br/>'), cell)]
+        line += [Paragraph(escape(p.stock_item_code or '') or '-', cell), Paragraph(pricing.format_stock(p.dip_stock) or '-', cell_r)]
         if is_admin:
             line.append(Paragraph(money(p.cost), cell_r))
         line.append(Paragraph(money(p.selling_price), cell_r))
@@ -167,7 +174,7 @@ def product_export_pdf(request):
 
     page = landscape(A4)
     usable = page[0] - 20 * mm
-    fixed = {'Model No': 36, 'Photo': 20, 'Brand': 28, 'Cost': 22, 'Selling Price': 26, 'Datasheet': 20}
+    fixed = {'Model No': 36, 'Photo': 20, 'Brand': 26, 'Item Code': 22, 'DIP Stock': 18, 'Cost': 20, 'Selling Price': 26, 'Datasheet': 20}
     fixed_total = sum(fixed[h] for h in pdf_head if h in fixed) * mm
     widths = [fixed[h] * mm if h in fixed else usable - fixed_total for h in pdf_head]
     table = Table(data, colWidths=widths, repeatRows=1)

@@ -62,7 +62,8 @@
                     <th>Date</th>
                     <th>Destination</th>
                     <th>Items</th>
-                    <th>Total CFR (USD)</th>
+                    <th>Total Customer (USD)</th>
+                    <th>Total Bank (USD)</th>
                     <th class="actions">Actions</th>
                 </tr>
             </thead>
@@ -73,7 +74,8 @@
                     <td class="nowrap" data-label="Date">{{ p.date|date:"d M Y" }}</td>
                     <td data-label="Destination">{{ p.destination|default:"—" }}</td>
                     <td data-label="Items">{{ p.items.all|length }}</td>
-                    <td class="nowrap" data-label="Total CFR (USD)">{{ p.grand_total|floatformat:2 }}</td>
+                    <td class="nowrap" data-label="Total Customer (USD)">{{ p.grand_total|floatformat:2 }}</td>
+                    <td class="nowrap" data-label="Total Bank (USD)">{% if p.has_bank_prices %}{{ p.bank_items_total|floatformat:2 }}{% else %}—{% endif %}</td>
                     <td class="actions">
                         <div class="act">
                             <span class="act-group">

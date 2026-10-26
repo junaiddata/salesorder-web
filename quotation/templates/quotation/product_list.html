@@ -118,7 +118,7 @@
     {% if page.object_list %}
     <div class="tbl-x-wrap">
         <table class="tbl-x pl-table">
-            <thead><tr><th>Model No</th><th>Photo</th><th>Brand</th><th>Description</th>{% if is_admin %}<th>Cost</th>{% endif %}<th>Selling Price</th><th>Datasheet</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Model No</th><th>Photo</th><th>Brand</th><th>Description</th><th>Item Code</th><th>DIP Stock</th>{% if is_admin %}<th>Cost</th>{% endif %}<th>Selling Price</th><th>Datasheet</th><th>Actions</th></tr></thead>
             <tbody>
             {% for p in page %}
             <tr>
@@ -126,6 +126,8 @@
                 <td data-label="Photo">{% if p.photo %}<img class="thumb" src="{% url 'quotation:product_photo' p.pk %}?v={{ p.updated_at|date:'U' }}" alt="">{% else %}<span class="u-muted">—</span>{% endif %}</td>
                 <td data-label="Brand">{{ p.brand|default:"—" }}</td>
                 <td data-label="Description" class="desc">{{ p.description|truncatechars:140|default:"—" }}</td>
+                <td data-label="Item Code" class="nowrap">{{ p.stock_item_code|default:"—" }}</td>
+                <td data-label="DIP Stock" class="nowrap">{{ p.dip_stock|default:"—" }}</td>
                 {% if is_admin %}<td data-label="Cost" class="nowrap">{% if p.cost is not None %}{{ p.cost|floatformat:2 }}{% if p.cost_manual %} <span class="chip-x gray" title="Set by hand; stock refreshes keep it">manual</span>{% endif %}{% else %}<span class="u-muted" title="No stock item with this UPC code">—</span>{% endif %}</td>{% endif %}
                 <td data-label="Selling Price" class="nowrap">{% if p.selling_price is not None %}{{ p.selling_price|floatformat:2 }}{% if is_admin and p.price_manual %} <span class="chip-x gray" title="Set by hand">manual</span>{% endif %}{% else %}<span class="u-muted">—</span>{% endif %}</td>
                 <td data-label="Datasheet">{% if p.datasheet %}<a href="{% url 'quotation:product_datasheet' p.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>

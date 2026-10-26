@@ -1301,9 +1301,9 @@ class ProductExportTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('.xlsx', resp['Content-Disposition'])
         rows = self._sheet(resp)
-        self.assertEqual(rows[0], ('Model No', 'Brand', 'Description', 'Cost', 'Selling Price', 'Photo', 'Datasheet'))
+        self.assertEqual(rows[0], ('Model No', 'Brand', 'Description', 'Item Code', 'DIP Stock', 'Cost', 'Selling Price', 'Photo', 'Datasheet'))
         self.assertEqual({r[0] for r in rows[1:]}, {'J-1', '=SUM(1)'})            # ARISTON filtered out; the formula-like text stays text
-        self.assertEqual([r for r in rows[1:] if r[0] == 'J-1'][0][3:5], (50.0, 100.0))
+        self.assertEqual([r for r in rows[1:] if r[0] == 'J-1'][0][5:7], (50.0, 100.0))
         self.assertEqual(len(self._sheet(self.client.get(reverse('quotation:product_export_excel')))), 4)   # no filter: all three
         self.assertEqual(len(self._sheet(self.client.get(reverse('quotation:product_export_excel'), {'q': 'heater'}))), 2)
 
@@ -1431,3 +1431,39 @@ class SalesmanDashboardLinkTests(TestCase):
         self.client.logout()
         self._login('ad2', 'Admin')
         self.assertContains(self.client.get(reverse('emailagent:review_queue')), 'href="%s" class="app-nav-ghost"' % reverse('home'))
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ProductStockColumnsTests(TestCase):
+    def setUp(self):
+        from so.models import Items, Role
+        self.user = get_user_model().objects.create_user('sales', password='x')
+        Role.objects.create(user=self.user, role='Salesman')
+        Items.objects.create(item_code='100001', item_description='Heater', item_upvc='ar-50', item_cost=100.0,
+                             item_firm='ARISTON', dip_warehouse_stock=Decimal('12.00'))
+        Product.objects.create(model_no='AR 50', brand='ARISTON')
+        Product.objects.create(model_no='NOSTOCK-1', brand='X')
+        self.client.force_login(self.user)
+
+    def test_list_shows_item_code_and_dip_stock_to_everyone(self):
+        html = self.client.get(reverse('quotation:product_list')).content.decode()
+        self.assertIn('<th>Item Code</th><th>DIP Stock</th>', html)
+        self.assertIn('100001', html)
+        self.assertIn('data-label="DIP Stock" class="nowrap">12<', html)
+        self.assertNotIn('<th>Cost</th>', html)
+
+    def test_exports_have_the_columns(self):
+        from openpyxl import load_workbook
+        resp = self.client.get(reverse('quotation:product_export_excel'))
+        ws = load_workbook(BytesIO(resp.content)).active
+        head = [c.value for c in ws[1]]
+        self.assertIn('Item Code', head)
+        self.assertIn('DIP Stock', head)
+        rows = {r[0].value: r for r in ws.iter_rows(min_row=2)}
+        self.assertEqual(rows['AR 50'][head.index('Item Code')].value, '100001')
+        self.assertEqual(rows['AR 50'][head.index('DIP Stock')].value, 12)
+        self.assertIsNone(rows['NOSTOCK-1'][head.index('Item Code')].value)
+        pdf = self.client.get(reverse('quotation:product_export_pdf'))
+        text = ''.join(p.extract_text() for p in PdfReader(BytesIO(pdf.content)).pages)
+        self.assertIn('DIP Stock', text)
+        self.assertIn('100001', text)

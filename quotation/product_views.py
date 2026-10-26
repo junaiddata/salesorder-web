@@ -89,6 +89,10 @@ def _filtered(request):
 def product_list(request):
     products, q, brands, chosen, chosen_low = _filtered(request)
     page = Paginator(products, 50).get_page(request.GET.get('page'))
+    info = pricing.stock_info_map()
+    for p in page:   # item code and DIP stock come live from the stock data; nothing is stored on the product
+        p.stock_item_code, dip = pricing.stock_info(p.model_no, info)
+        p.dip_stock = pricing.format_stock(dip)
     return render(request, 'quotation/product_list.html', {
         'page': page, 'q': q, 'total': Product.objects.count(),
         'brand_options': [(b, b.lower() in chosen_low) for b in brands] + [(NO_BRAND, NO_BRAND in chosen_low)],

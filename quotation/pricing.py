@@ -89,6 +89,36 @@ def stock_cost_map():
         return {}
 
 
+def stock_info_map():
+    """{loose Model No: (item code, DIP warehouse stock)} from the stock data (one query; the oldest item wins on a repeated UPC).
+
+    Shown to everyone (no cost involved). DIP stock is None when the stock data has no figure for the item.
+    """
+    try:
+        from so.models import Items
+        out = {}
+        for upc, code, dip in (Items.objects.exclude(item_upvc__isnull=True).exclude(item_upvc='').order_by('-id')
+                               .values_list('item_upvc', 'item_code', 'dip_warehouse_stock')):
+            out[_loose(upc)] = (code, dip)
+        return out
+    except Exception:
+        log.exception('Stock info map failed')
+        return {}
+
+
+def stock_info(model_no, info_map):
+    """(item code, DIP stock) for a Model No, or (None, None) when no stock item has that UPC code."""
+    return info_map.get(_loose(model_no), (None, None))
+
+
+def format_stock(value):
+    """DIP stock for display: 12.00 -> '12', 2.5 -> '2.5', None -> '' ."""
+    if value is None:
+        return ''
+    text = f'{Decimal(value):f}'
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
 def _loose(text):
     return re.sub(r'[\s\-/\\]', '', (text or '').upper())
 

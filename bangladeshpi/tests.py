@@ -332,3 +332,16 @@ class FOCTests(BangladeshPITests):
         pi = BangladeshPI.objects.get()
         html = self.client.get(reverse('bangladeshpi:edit', args=[pi.pk])).content.decode()
         self.assertIn('&quot;is_foc&quot;: true', html.replace('"is_foc": true', '&quot;is_foc&quot;: true'))
+
+
+class ListTotalsTests(BangladeshPITests):
+    def test_list_shows_customer_and_bank_totals(self):
+        self._post()                           # customer 46,086.50 + 1,800 freight; bank 9,950.00
+        self._post(suffix='NB', bank=('', ''))  # no bank prices
+        html = self.client.get(reverse('bangladeshpi:list')).content.decode()
+        self.assertIn('Total Customer (USD)', html)
+        self.assertIn('Total Bank (USD)', html)
+        self.assertNotIn('Total CFR (USD)', html)
+        self.assertIn('47886.50', html.replace(',', ''))   # customer total incl. freight
+        self.assertIn('9950.00', html.replace(',', ''))    # bank total
+        self.assertIn('—', html)                           # PI without bank prices
