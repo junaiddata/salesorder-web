@@ -206,6 +206,7 @@ urlpatterns += [
     path('saparinvoices/sync-api/', sap_salesorder_views.sync_arinvoices_from_api, name='sync_arinvoices_api'),
     path('saparinvoices/sync-api-receive/', sap_salesorder_views.sync_arinvoices_api_receive, name='sync_arinvoices_api_receive'),
     path('saparinvoices/export-excel/', sap_salesorder_views.export_arinvoice_list_excel, name='export_arinvoice_list_excel'),
+    path('saparinvoices/export-pdf/', sap_salesorder_views.export_arinvoice_list_pdf, name='export_arinvoice_list_pdf'),
     # Combined Sales Invoices URLs (must come before detail route)
     path('saparinvoices/analysis/', sap_salesorder_views.sales_analysis_dashboard, name='sales_analysis_dashboard'),
     path('saparinvoices/item-analysis/', sap_salesorder_views.item_analysis, name='item_analysis'),
