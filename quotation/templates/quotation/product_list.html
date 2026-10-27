@@ -65,7 +65,8 @@
                 </details>
                 <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search model, brand…">
                 <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
-                {% if brand_count or q %}<a href="{% url 'quotation:product_list' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
+                <label class="btn-x" style="cursor:pointer;gap:.4rem" title="Show only products that have DIP stock (hides 0 stock and products with no stock item)"><input type="checkbox" name="instock" value="1" {% if hide_zero %}checked{% endif %} onchange="this.form.submit()"> Hide 0 stock</label>
+                {% if brand_count or q or hide_zero %}<a href="{% url 'quotation:product_list' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
             </form>
             {% if is_admin %}
             <form method="post" action="{% url 'quotation:product_refresh_costs' %}" style="display:inline;"

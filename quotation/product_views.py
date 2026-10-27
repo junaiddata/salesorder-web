@@ -82,7 +82,17 @@ def _filtered(request):
         for b in chosen:
             cond |= Q(brand='') if b == NO_BRAND else Q(brand__iexact=b)
         products = products.filter(cond)
+    if _hide_zero_stock(request):
+        # keep only products whose stock item has DIP stock above 0 (no stock item, or 0 / blank stock, is hidden)
+        info = pricing.stock_info_map()
+        keep = [pk for pk, model_no in products.values_list('pk', 'model_no')
+                if (pricing.stock_info(model_no, info)[1] or 0) > 0]
+        products = products.filter(pk__in=keep)
     return products, q, brands, chosen, chosen_low
+
+
+def _hide_zero_stock(request):
+    return request.GET.get('instock') == '1'
 
 
 @login_required
@@ -98,7 +108,8 @@ def product_list(request):
         'brand_options': [(b, b.lower() in chosen_low) for b in brands] + [(NO_BRAND, NO_BRAND in chosen_low)],
         'brand_count': len(chosen), 'brand_label': (chosen[0] if len(chosen) == 1 else f'{len(chosen)} brands') if chosen else 'All brands',
         'no_brand': NO_BRAND,
-        'filter_qs': urlencode([('q', q)] + [('brand', b) for b in chosen]),
+        'filter_qs': urlencode([('q', q)] + [('brand', b) for b in chosen] + ([('instock', '1')] if _hide_zero_stock(request) else [])),
+        'hide_zero': _hide_zero_stock(request),
         'shown': page.paginator.count, 'is_admin': pricing.is_price_admin(request.user), 'here': request.get_full_path(),
         # lets the page check file names against the library before anything is uploaded
         'keys': {p.model_key: p.model_no for p in Product.objects.only('model_key', 'model_no')},

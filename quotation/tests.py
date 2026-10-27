@@ -1467,3 +1467,33 @@ class ProductStockColumnsTests(TestCase):
         text = ''.join(p.extract_text() for p in PdfReader(BytesIO(pdf.content)).pages)
         self.assertIn('DIP Stock', text)
         self.assertIn('100001', text)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class HideZeroStockTests(TestCase):
+    def setUp(self):
+        from so.models import Items, Role
+        user = get_user_model().objects.create_user('sales', password='x')
+        Role.objects.create(user=user, role='Salesman')
+        Items.objects.create(item_code='1', item_description='a', item_upvc='IN-1', item_firm='X', dip_warehouse_stock=Decimal('5'))
+        Items.objects.create(item_code='2', item_description='b', item_upvc='ZERO-1', item_firm='X', dip_warehouse_stock=Decimal('0'))
+        for m in ('IN-1', 'ZERO-1', 'NOITEM-1'):
+            Product.objects.create(model_no=m, brand='X')
+        self.client.force_login(user)
+
+    def _models(self, resp):
+        return {p.model_no for p in resp.context['page']}
+
+    def test_toggle_hides_zero_and_unmatched(self):
+        url = reverse('quotation:product_list')
+        self.assertEqual(self._models(self.client.get(url)), {'IN-1', 'ZERO-1', 'NOITEM-1'})   # off: nothing changes
+        resp = self.client.get(url, {'instock': '1'})
+        self.assertEqual(self._models(resp), {'IN-1'})
+        self.assertContains(resp, 'name="instock" value="1" checked')
+        self.assertIn('instock=1', resp.context['filter_qs'])
+
+    def test_exports_follow_the_toggle(self):
+        from openpyxl import load_workbook
+        resp = self.client.get(reverse('quotation:product_export_excel'), {'instock': '1'})
+        rows = list(load_workbook(BytesIO(resp.content)).active.iter_rows(min_row=2, values_only=True))
+        self.assertEqual([r[0] for r in rows], ['IN-1'])
