@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/email/', email_views.quotation_email, name='email'),
     path('photo/<int:item_pk>/', views.item_photo, name='photo'),
     path('customers/search/', views.customer_search, name='customer_search'),
+    path('salesmen/search/', views.salesman_search, name='salesman_search'),
     path('stamp/', views.stamp_settings, name='stamp_settings'),
     # Customer list (imported from Excel; fills the customer details when the name is picked)
     path('customer-list/', customer_views.customer_list, name='customer_list'),
@@ -25,6 +26,7 @@ urlpatterns = [
     path('products/', product_views.product_list, name='product_list'),
     path('products/new/', product_views.product_form, name='product_new'),
     path('products/search/', product_views.product_search, name='product_search'),
+    path('products/pick/', product_views.product_pick, name='product_pick'),
     path('products/refresh-costs/', product_views.product_refresh_costs, name='product_refresh_costs'),
     path('products/export/excel/', product_export.product_export_excel, name='product_export_excel'),
     path('products/export/pdf/', product_export.product_export_pdf, name='product_export_pdf'),

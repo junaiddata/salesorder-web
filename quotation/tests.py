@@ -1624,3 +1624,102 @@ class ItemCodeSearchAndHideCostTests(TestCase):
         self.client.force_login(self.staff)
         self.assertNotContains(self.client.get(reverse('quotation:product_list')), 'id="noCost"')
         self.assertNotIn('Cost', self._sheet())
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class AddMultipleItemsTests(TestCase):
+    def setUp(self):
+        from so.models import Items, Role
+        self.staff = get_user_model().objects.create_user('sales', password='x')
+        Role.objects.create(user=self.staff, role='Salesman')
+        Items.objects.create(item_code='901887', item_description='x', item_upvc='GRT160H', item_cost=50.0, item_firm='X',
+                             dip_warehouse_stock=Decimal('7'))
+        Items.objects.create(item_code='900001', item_description='y', item_upvc='ZZ-1', item_cost=9.0, item_firm='X',
+                             dip_warehouse_stock=Decimal('0'))
+        Product.objects.create(model_no='GRT160H', brand='GRAND', description='Heater', cost=Decimal('50'))
+        Product.objects.create(model_no='ZZ-1', brand='GRAND', description='Valve')
+        Product.objects.create(model_no='OTHER-1', brand='OTHER', description='Pipe')
+        self.client.force_login(self.staff)
+        self.url = reverse('quotation:product_pick')
+
+    def _models(self, **params):
+        return [r['model_no'] for r in self.client.get(self.url, params).json()['results']]
+
+    def test_filters_by_brands_search_code_and_stock(self):
+        self.assertEqual(self._models(), ['GRT160H', 'OTHER-1', 'ZZ-1'])
+        self.assertEqual(self._models(brand=['GRAND']), ['GRT160H', 'ZZ-1'])
+        self.assertEqual(self._models(brand=['GRAND', 'OTHER']), ['GRT160H', 'OTHER-1', 'ZZ-1'])
+        self.assertEqual(self._models(q='9018'), ['GRT160H'])                     # by item code
+        self.assertEqual(self._models(q='pipe'), ['OTHER-1'])                     # by description
+        self.assertEqual(self._models(instock='1'), ['GRT160H'])                  # hides 0 / unknown stock
+        self.assertEqual(self._models(brand=['OTHER'], instock='1'), [])
+
+    def test_returns_what_a_row_needs_and_never_the_cost(self):
+        data = self.client.get(self.url).json()
+        first = data['results'][0]
+        for key in ('id', 'model_no', 'brand', 'description', 'photo_url', 'datasheet_name', 'selling_price', 'item_code', 'dip_stock'):
+            self.assertIn(key, first)
+        self.assertEqual((first['item_code'], first['dip_stock']), ('901887', '7'))
+        self.assertNotIn('cost', first)
+        self.assertNotIn('50.00', self.client.get(self.url).content.decode().replace('100.00', ''))   # the cost is not in the payload
+        self.assertEqual(sorted(data['brands']), ['GRAND', 'OTHER'])
+
+    def test_needs_login_and_pages(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.client.force_login(self.staff)
+        for i in range(60):
+            Product.objects.create(model_no=f'BULK-{i:03d}', brand='BULK')
+        first = self.client.get(self.url, {'brand': 'BULK'}).json()
+        self.assertEqual((len(first['results']), first['has_next'], first['total']), (50, True, 60))
+        second = self.client.get(self.url, {'brand': 'BULK', 'page': 2}).json()
+        self.assertEqual((len(second['results']), second['has_next'], 'brands' in second), (10, False, False))
+
+    def test_quotation_form_keeps_add_item_and_gets_the_picker(self):
+        page = self.client.get(reverse('quotation:new')).content.decode()
+        self.assertIn('id="addItem"', page)                       # the one-by-one flow is still there
+        self.assertIn('id="addMany"', page)
+        self.assertIn('id="pickModal"', page)
+        self.assertIn(self.url, page)
+        self.assertIn('tr._pick = pick', page)
+
+
+class SalesmanPrefillTests(TestCase):
+    def setUp(self):
+        from so.models import Salesman
+        self.user = get_user_model().objects.create_user('rashid', password='x', email='acct@example.com')
+        Salesman.objects.create(salesman_name='RASHID', phone='0501234567', email='rashid@junaid.ae')
+        Salesman.objects.create(salesman_name='SAMEER', phone='', email='')
+        self.client.force_login(self.user)
+
+    def test_new_form_prefills_from_salesman_ignoring_case(self):
+        values = self.client.get(reverse('quotation:new')).context['values']
+        self.assertEqual(values['sales_person'], 'RASHID')
+        self.assertEqual(values['email'], 'rashid@junaid.ae')
+        self.assertEqual(values['contact_number'], '0501234567')
+
+    def test_blank_salesman_details_fall_back_to_the_account(self):
+        from so.models import Salesman
+        Salesman.objects.filter(salesman_name='RASHID').update(phone='', email='')
+        values = self.client.get(reverse('quotation:new')).context['values']
+        self.assertEqual(values['sales_person'], 'RASHID')
+        self.assertEqual(values['email'], 'acct@example.com')
+        self.assertEqual(values['contact_number'], '')
+
+    def test_no_matching_salesman_keeps_the_old_default(self):
+        other = get_user_model().objects.create_user('nobody', password='x', email='n@example.com')
+        self.client.force_login(other)
+        values = self.client.get(reverse('quotation:new')).context['values']
+        self.assertEqual((values['sales_person'], values['email'], values['contact_number']), ('nobody', 'n@example.com', ''))
+
+    def test_search_is_case_insensitive_and_needs_login(self):
+        res = self.client.get(reverse('quotation:salesman_search'), {'q': 'rash'}).json()['results']
+        self.assertEqual(res, [{'name': 'RASHID', 'phone': '0501234567', 'email': 'rashid@junaid.ae'}])
+        self.assertEqual(self.client.get(reverse('quotation:salesman_search'), {'q': ''}).json()['results'], [])
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse('quotation:salesman_search'), {'q': 'rash'}).status_code, 302)
+
+    def test_form_wires_the_sales_person_suggestions(self):
+        page = self.client.get(reverse('quotation:new')).content.decode()
+        self.assertIn(reverse('quotation:salesman_search'), page)
+        self.assertIn('pickSalesman', page)

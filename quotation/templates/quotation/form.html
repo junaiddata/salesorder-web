@@ -119,7 +119,8 @@
         <div class="card-x mb-3"><div class="card-x-body">
             <div class="u-spread mb-2">
                 <h5 class="mb-0">Items <small class="u-muted">(currency: AED)</small></h5>
-                <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button>
+                <div class="d-flex gap-2"><button type="button" class="btn-x sm" id="addMany"><i class="fas fa-layer-group"></i> Add multiple items</button>
+                <button type="button" class="btn-x btn-primary-x sm" id="addItem"><i class="fas fa-plus"></i> Add item</button></div>
             </div>
             <p class="u-muted mb-2" style="font-size:.8rem">Item No is optional (e.g. H12) — leave it blank to print 1, 2, 3…. Upload a datasheet (PDF, JPG or PNG) to give the row a "Download Datasheet" link in the PDF. It is saved as a JPEG, and customers can download it from that link without logging in. Photos: JPG/PNG, max 5 MB. Datasheets: max 10 MB (PDFs up to 10 pages).</p>
             <div class="items-scroll">
@@ -226,6 +227,66 @@
 
 {% block extra_js %}
 {{ items_data|json_script:"itemsData" }}
+<style>
+    .pick-modal .modal-content { border-radius: 14px; }
+    .pick-bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .6rem; }
+    .pick-bar .input-x { max-width: 340px; }
+    .pick-brands { position: relative; }
+    .pick-brands summary { list-style: none; cursor: pointer; white-space: nowrap; }
+    .pick-brands summary::-webkit-details-marker { display: none; }
+    .pick-brand-panel { position: absolute; z-index: 5; top: 110%; left: 0; width: 260px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(15,23,42,.18); padding: .5rem; }
+    .pick-brand-list { max-height: 220px; overflow-y: auto; margin: .4rem 0; }
+    .pick-brand-list label { display: flex; gap: .4rem; align-items: center; font-size: .82rem; padding: .15rem .2rem; }
+    .pick-scroll { max-height: 52vh; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .pick-row { display: grid; grid-template-columns: 28px 52px 1fr 90px 70px 90px; gap: .6rem; align-items: center; padding: .4rem .6rem;
+        border-bottom: 1px solid #f1f5f9; margin: 0; font-weight: 400; cursor: pointer; font-size: .82rem; }
+    .pick-row:hover { background: #f8fafc; }
+    .pick-row.off { opacity: .5; cursor: default; }
+    .pick-row img { width: 48px; height: 48px; object-fit: contain; }
+    .pick-row .ph { width: 48px; height: 48px; }
+    .pick-row .sub { color: #64748b; font-size: .76rem; }
+    .pick-head { background: #f8fafc; font-weight: 600; font-size: .72rem; text-transform: uppercase; cursor: default; position: sticky; top: 0; z-index: 1; }
+    @media (max-width: 768px) { .pick-row { grid-template-columns: 28px 48px 1fr 70px; } .pick-row .c-code, .pick-row .c-dip { display: none; } }
+</style>
+<div class="modal fade pick-modal" id="pickModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Add multiple items</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="pick-bar">
+                    <details class="pick-brands" id="pickBrandDd">
+                        <summary class="input-x" id="pickBrandSum">All brands <i class="fas fa-chevron-down"></i></summary>
+                        <div class="pick-brand-panel">
+                            <input type="text" id="pickBrandFind" class="input-x" placeholder="Search brand…" autocomplete="off">
+                            <div class="d-flex gap-2 mt-1">
+                                <button type="button" class="btn-x sm" id="pickBrandAll">Select all</button>
+                                <button type="button" class="btn-x sm" id="pickBrandNone">Clear all</button>
+                            </div>
+                            <div class="pick-brand-list" id="pickBrands"></div>
+                        </div>
+                    </details>
+                    <input type="text" id="pickQ" class="input-x" placeholder="Search model, description, item code…" autocomplete="off">
+                    <label class="btn-x" style="cursor:pointer;gap:.4rem" title="Show only products that have DIP stock"><input type="checkbox" id="pickInStock"> Hide 0 stock</label>
+                </div>
+                <div class="pick-scroll">
+                    <div class="pick-row pick-head"><span><input type="checkbox" id="pickAll" title="Select all shown"></span><span></span><span>Model / Description</span><span>Item code</span><span>DIP stock</span><span>Selling price</span></div>
+                    <div id="pickList"></div>
+                    <div class="p-2 text-center"><button type="button" class="btn-x sm" id="pickMore" style="display:none">Load more</button></div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <span class="u-muted" id="pickCount">0 selected</span>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn-x" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-x btn-primary-x" id="pickAdd" disabled><i class="fas fa-plus"></i> Add selected</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const body = document.getElementById('itemsBody');
@@ -343,6 +404,8 @@
             } else { dsInfo.style.display = 'none'; }
             hideMenu();
         }
+        tr._pick = pick;   // lets "Add multiple items" fill this row exactly as picking in the Model No box does
+        addRow.last = tr;
         body.appendChild(tr);
         recalc();
     }
@@ -453,8 +516,127 @@
     custName.addEventListener('blur', () => setTimeout(hideMenu, 200));
     custName.addEventListener('keydown', e => menuKey(e, custName, pickCustomer));
 
+    // Sales Person: suggestions from the Salesman list; picking one fills Email and Contact Number when they are stored (all still editable)
+    const spName = document.querySelector('[name=sales_person]');
+    const SALESMAN_LIST = {url: '{% url "quotation:salesman_search" %}',
+        html: m => `<b>${esc(m.name)}</b><br><span style="color:#64748b">${esc([m.phone, m.email].filter(Boolean).join(' · '))}</span>`};
+    function pickSalesman(m) {
+        spName.value = m.name;
+        if (m.email) document.querySelector('[name=email]').value = m.email;
+        if (m.phone) document.querySelector('[name=contact_number]').value = m.phone;
+        hideMenu();
+    }
+    spName.setAttribute('autocomplete', 'off');
+    spName.addEventListener('input', () => suggest(spName, pickSalesman, SALESMAN_LIST));
+    spName.addEventListener('blur', () => setTimeout(hideMenu, 200));
+    spName.addEventListener('keydown', e => menuKey(e, spName, pickSalesman));
+
     document.getElementById('discType').addEventListener('change', recalc);
     document.getElementById('discValue').addEventListener('input', recalc);
+    // ---- "Add multiple items": tick many products (filtered by brand / search) and add them as rows in one go ----
+    (function () {
+        const modalEl = document.getElementById('pickModal');
+        if (!modalEl) return;
+        const MAX_ADD = 100, PICK_URL = '{% url "quotation:product_pick" %}';
+        const $ = id => document.getElementById(id);
+        const listEl = $('pickList'), qEl = $('pickQ'), stockEl = $('pickInStock'), countEl = $('pickCount'), addBtn = $('pickAdd'),
+              moreBtn = $('pickMore'), brandBox = $('pickBrands'), brandSum = $('pickBrandSum'), allBox = $('pickAll');
+        const selected = new Map();   // product id -> product (kept while the filters change)
+        let shown = [], page = 1, seq = 0, timer = null, brandsBuilt = false;
+        const norm = s => String(s || '').trim().toUpperCase().replace(/[\/\\]/g, '-');
+        const inQuotation = () => new Set(Array.from(body.querySelectorAll('[name="item_model"]')).map(i => norm(i.value)).filter(Boolean));
+        const chosenBrands = () => Array.from(brandBox.querySelectorAll('input:checked')).map(i => i.value);
+
+        function updateCount() {
+            countEl.textContent = selected.size + ' selected' + (selected.size > MAX_ADD ? ' (max ' + MAX_ADD + ' at a time)' : '');
+            addBtn.disabled = !selected.size || selected.size > MAX_ADD;
+        }
+        function render(have) {
+            listEl.innerHTML = shown.length ? shown.map(p => {
+                const added = have.has(norm(p.model_no));
+                return `<label class="pick-row${added ? ' off' : ''}">
+                    <input type="checkbox" data-id="${p.id}" ${added ? 'disabled' : ''} ${selected.has(p.id) ? 'checked' : ''}>
+                    ${p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : '<span class="ph"></span>'}
+                    <span><b>${esc(p.model_no)}</b> <span class="sub">${esc(p.brand)}</span>${added ? ' <span class="chip-x gray">Already added</span>' : ''}<br><span class="sub">${esc((p.description || '').slice(0, 110))}</span></span>
+                    <span class="c-code">${esc(p.item_code) || '—'}</span><span class="c-dip">${esc(p.dip_stock) || '—'}</span>
+                    <span>${p.selling_price ? esc(parseFloat(p.selling_price).toFixed(2)) : '—'}</span></label>`;
+            }).join('') : '<div class="p-3 u-muted">No products found.</div>';
+        }
+        async function load(reset) {
+            if (reset) { page = 1; shown = []; }
+            const mine = ++seq;
+            const params = new URLSearchParams({q: qEl.value.trim(), page: page});
+            if (stockEl.checked) params.set('instock', '1');
+            chosenBrands().forEach(b => params.append('brand', b));
+            let data;
+            try {
+                const r = await fetch(PICK_URL + '?' + params.toString(), {credentials: 'same-origin'});
+                if (!r.ok) throw new Error(r.status);
+                data = await r.json();
+            } catch (e) { listEl.innerHTML = '<div class="p-3 text-danger">Could not load the products. Please try again.</div>'; return; }
+            if (mine !== seq) return;   // a newer search is already running
+            if (data.brands && !brandsBuilt) {
+                brandsBuilt = true;
+                brandBox.innerHTML = data.brands.concat([data.no_brand]).map(b =>
+                    `<label data-name="${esc(b.toLowerCase())}"><input type="checkbox" value="${esc(b)}"> ${b === data.no_brand ? '(No brand)' : esc(b)}</label>`).join('');
+            }
+            shown = shown.concat(data.results);
+            moreBtn.style.display = data.has_next ? '' : 'none';
+            render(inQuotation());
+        }
+        const reload = () => { clearTimeout(timer); timer = setTimeout(() => load(true), 300); };
+
+        listEl.addEventListener('change', e => {
+            const id = parseInt(e.target.dataset.id, 10), p = shown.find(x => x.id === id);
+            if (!p) return;
+            if (e.target.checked) selected.set(id, p); else selected.delete(id);
+            updateCount();
+        });
+        allBox.addEventListener('change', () => {
+            const have = inQuotation();
+            shown.forEach(p => { if (!have.has(norm(p.model_no))) { if (allBox.checked) selected.set(p.id, p); else selected.delete(p.id); } });
+            render(have); updateCount();
+        });
+        moreBtn.onclick = () => { page += 1; load(false); };
+        qEl.addEventListener('input', reload);
+        stockEl.addEventListener('change', () => load(true));
+        brandBox.addEventListener('change', () => {
+            const n = chosenBrands().length;
+            brandSum.firstChild.textContent = (n === 0 ? 'All brands' : n === 1 ? chosenBrands()[0] : n + ' brands') + ' ';
+            reload();
+        });
+        // close the brand panel when clicking anywhere outside it
+        const brandDd = $('pickBrandDd');
+        modalEl.addEventListener('mousedown', e => { if (brandDd.open && !brandDd.contains(e.target)) brandDd.open = false; });
+        modalEl.addEventListener('show.bs.modal', () => { brandDd.open = false; });
+        $('pickBrandFind').addEventListener('input', e => {
+            const f = e.target.value.trim().toLowerCase();
+            brandBox.querySelectorAll('label').forEach(l => { l.style.display = l.dataset.name.includes(f) ? '' : 'none'; });
+        });
+        $('pickBrandAll').onclick = () => { brandBox.querySelectorAll('input').forEach(i => { i.checked = true; }); brandBox.dispatchEvent(new Event('change')); };
+        $('pickBrandNone').onclick = () => { brandBox.querySelectorAll('input').forEach(i => { i.checked = false; }); brandBox.dispatchEvent(new Event('change')); };
+
+        $('addMany').onclick = () => {
+            selected.clear(); allBox.checked = false; updateCount();
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            load(true);
+        };
+        addBtn.onclick = () => {
+            const have = inQuotation();
+            const items = Array.from(selected.values()).filter(p => !have.has(norm(p.model_no)))
+                .sort((a, b) => a.model_no.localeCompare(b.model_no));
+            if (!items.length || items.length > MAX_ADD) return;
+            // a blank row left at the end (a new quotation starts with one) is reused instead of staying empty
+            const last = body.lastElementChild;
+            if (last && !last.querySelector('[name="item_id"]').value
+                && !['item_model', 'item_brand', 'item_description'].some(n => last.querySelector('[name="' + n + '"]').value.trim())) last.remove();
+            items.forEach(p => { addRow({}); addRow.last._pick(p); });   // the same fill as picking one product in the Model No box
+            recalc();
+            selected.clear(); updateCount();
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        };
+    })();
+
     document.getElementById('addItem').onclick = () => addRow({});
     const initial = JSON.parse(document.getElementById('itemsData').textContent);
     if (initial.length) initial.forEach(addRow); else addRow({});

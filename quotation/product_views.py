@@ -307,6 +307,37 @@ def product_search(request):
     } for p in products]})
 
 
+PICK_PAGE = 50
+
+
+@login_required
+@require_GET
+def product_pick(request):
+    """Products for the "Add multiple items" window of the quotation form (read-only; never returns the cost).
+
+    Takes the same q / brand / instock filters as the Products page and returns one page of products, each with what the
+    quotation row needs (the same fields the Model No suggestions return) plus the item code and DIP stock.
+    """
+    products, q, brands, chosen, chosen_low = _filtered(request)
+    page = Paginator(products.order_by('model_key'), PICK_PAGE).get_page(request.GET.get('page'))
+    info = pricing.stock_info_map()
+    results = []
+    for p in page:
+        code, dip = pricing.stock_info(p.model_no, info)
+        results.append({
+            'id': p.pk, 'model_no': p.model_no, 'brand': p.brand, 'description': p.description,
+            'photo_url': reverse('quotation:product_photo', args=[p.pk]) + f'?v={int(p.updated_at.timestamp())}' if p.photo else '',
+            'datasheet_name': _display_name(p.datasheet) if p.datasheet else '',
+            'selling_price': str(p.selling_price) if p.selling_price is not None else '',
+            'item_code': code or '', 'dip_stock': pricing.format_stock(dip),
+        })
+    payload = {'results': results, 'has_next': page.has_next(), 'total': page.paginator.count}
+    if (request.GET.get('page') or '1') == '1':   # the brand list is only needed once
+        payload['brands'] = brands
+        payload['no_brand'] = NO_BRAND
+    return JsonResponse(payload)
+
+
 def _cell(value):
     if value is None:
         return ''

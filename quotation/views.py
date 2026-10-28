@@ -19,6 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .datasheet import DatasheetError, to_jpeg
 from .models import DEFAULT_VALIDITY, PAYMENT_TERM_CHOICES, Customer, Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
 from .permissions import can_use_stamp
+from .salesman_lookup import salesman_for_user, search_salesmen
 from .pdf_builder import build_quotation_pdf
 
 log = logging.getLogger('quotation')
@@ -315,10 +316,12 @@ def quotation_form(request, pk=None):
         values.update(date=quotation.date.isoformat(),
                       stock_availability=quotation.stock_availability.isoformat() if quotation.stock_availability else '')
     else:
+        sm = salesman_for_user(request.user) or {}   # the matching Salesman (name, any case) supplies phone / email when filled in
         values = {'date': timezone.localdate().isoformat(), 'discount_type': 'amount', 'discount_value': '',
                   'validity': DEFAULT_VALIDITY, 'delivery_subject_to_stock': True, 'payment_terms': [],   # defaults for a new quotation only
-                  'sales_person': request.user.get_full_name() or request.user.get_username(),
-                  'email': request.user.email}
+                  'sales_person': sm.get('name') or request.user.get_full_name() or request.user.get_username(),
+                  'email': sm.get('email') or request.user.email,
+                  'contact_number': sm.get('phone', '')}
 
     if quotation:
         qtn_no_shown = quotation.qtn_no
@@ -409,6 +412,13 @@ def customer_search(request):
             'trn': c.trn, 'email': c.email, 'code': c.code, 'date': f'ID {c.code}'}
     found = sorted(latest.items(), key=lambda kv: (not kv[0].startswith(first), kv[0]))
     return JsonResponse({'results': [v for _, v in found[:15]]})
+
+
+@login_required
+@require_GET
+def salesman_search(request):
+    """Salesman-name suggestions (read-only) with the phone and email stored for each."""
+    return JsonResponse({'results': search_salesmen(request.GET.get('q'))})
 
 
 MAX_STAMP_BYTES = 5 * 1024 * 1024
