@@ -414,6 +414,7 @@ class Quotation(models.Model):
     validity = models.CharField(max_length=255, blank=True, null=True)
     delivery_availability = models.CharField(max_length=255, blank=True, null=True)
     payment_terms = models.CharField(max_length=255, blank=True, null=True)
+    payment_terms_details = models.TextField(blank=True, null=True)   # printed as the last point under Terms and Conditions
 
     emailed_to = models.CharField(max_length=500, blank=True, null=True,
         help_text="Comma-separated recipient address(es) the quotation PDF was last emailed to")

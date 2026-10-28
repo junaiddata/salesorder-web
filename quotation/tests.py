@@ -526,9 +526,9 @@ class QuotationTests(TestCase):
         for query in ('', '?orientation=landscape'):
             pdf = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[q.pk]) + query).content))
             text = '\n'.join(p.extract_text() for p in pdf.pages)
-            order = ['TERMS AND CONDITIONS', '1.  Deposit before production', '3.  Net packing',
-                     'VALIDITY\n30 days', 'DELIVERY AVAILABILITY\n05.11.2026', 'COUNTRY OF ORIGIN\nItaly',
-                     'WARRANTY\nTwo years manufacturer warranty', 'BANK ACCOUNT DETAILS']
+            order = ['TERMS AND CONDITIONS:', '1.  Deposit before production', '3.  Net packing',
+                     'VALIDITY:\n30 days', 'DELIVERY AVAILABILITY:\n05.11.2026', 'COUNTRY OF ORIGIN:\nItaly',
+                     'WARRANTY:\nTwo years manufacturer warranty', 'BANK ACCOUNT DETAILS']
             positions = [text.index(x) for x in order]
             self.assertEqual(positions, sorted(positions), query)
             self.assertEqual(text.count('TERMS AND CONDITIONS'), 1, query)       # one box, not two
@@ -1497,3 +1497,130 @@ class HideZeroStockTests(TestCase):
         resp = self.client.get(reverse('quotation:product_export_excel'), {'instock': '1'})
         rows = list(load_workbook(BytesIO(resp.content)).active.iter_rows(min_row=2, values_only=True))
         self.assertEqual([r[0] for r in rows], ['IN-1'])
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT, QUOTATION_PUBLIC_BASE_URL='https://example.test', QUOTATION_STAMP_USERS=())
+class PaymentTermsAndDefaultsTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user('tester', password='x', email='t@x.com')
+        self.client.force_login(self.user)
+
+    def _payload(self, **extra):
+        data = {'date': '2026-10-20', 'to_text': 'ACME', 'sales_person': 'A', 'row_key': ['n1'], 'item_id': [''],
+                'item_no': [''], 'item_model': ['M1'], 'item_brand': ['B'], 'item_description': ['Thing'], 'item_size': [''],
+                'item_color': [''], 'item_qty': ['1'], 'item_price': ['10'], 'item_warranty': [''],
+                'remove_photo': ['0'], 'remove_ds': ['0']}
+        data.update(extra)
+        return data
+
+    def _text(self, q):
+        resp = self.client.get(reverse('quotation:pdf', args=[q.pk]))
+        return ' '.join(p.extract_text().replace('\n', ' ') for p in PdfReader(BytesIO(resp.content)).pages)
+
+    def test_new_form_has_defaults_but_an_old_quotation_keeps_its_values(self):
+        page = self.client.get(reverse('quotation:new'))
+        self.assertContains(page, 'name="validity" class="input-x" value="10 Days"')
+        self.assertContains(page, 'value="Subject to Stock availability" readonly >')
+        self.assertContains(page, 'name="delivery_subject_to_stock" id="dlvFlag" value="on" >')   # the flag is sent (not disabled)
+        self.client.post(reverse('quotation:new'), self._payload())   # saved without the tick and without a validity
+        q = Quotation.objects.get()
+        self.assertEqual((q.validity, q.delivery_subject_to_stock, q.payment_terms), ('', False, ''))
+        edit = self.client.get(reverse('quotation:edit', args=[q.pk]))
+        self.assertNotContains(edit, 'value="10 Days"')
+        self.assertContains(edit, 'id="dlvFlag" value="on" disabled>')   # an old quotation starts in date mode
+
+    def test_subject_to_stock_replaces_the_date(self):
+        self.client.post(reverse('quotation:new'), self._payload(delivery_subject_to_stock='on', stock_availability='2026-11-05'))
+        q = Quotation.objects.get()
+        self.assertTrue(q.delivery_subject_to_stock)
+        self.assertIsNone(q.stock_availability)
+        self.assertIn('Subject to Stock availability', self._text(q))
+        self.client.post(reverse('quotation:edit', args=[q.pk]), self._payload(row_key=[f'e{q.items.get().pk}'], item_id=[q.items.get().pk],
+                                                                               stock_availability='2026-11-05'))
+        q.refresh_from_db()
+        text = self._text(q)
+        self.assertEqual((q.delivery_subject_to_stock, str(q.stock_availability)), (False, '2026-11-05'))
+        self.assertIn('05.11.2026', text)
+        self.assertNotIn('Subject to Stock availability', text)
+
+    def test_payment_terms_are_saved_and_printed(self):
+        self.client.post(reverse('quotation:new'), self._payload(payment_terms=['PDC', 'LC', 'Bogus'], payment_terms_note='50% advance, balance 30 days'))
+        q = Quotation.objects.get()
+        self.assertEqual((q.payment_terms, q.payment_terms_note), ('LC, PDC', '50% advance, balance 30 days'))
+        text = self._text(q)
+        self.assertIn('Payment terms', text)
+        self.assertIn('LC, PDC', text)
+        self.assertIn('50% advance, balance 30 days', text)
+        self.assertEqual(text.count('50% advance, balance 30 days'), 1)       # the details are in the Terms and Conditions box only
+        for label in ('TERMS AND CONDITIONS:', 'PAYMENT TERMS:'):
+            self.assertIn(label, text)
+        edit = self.client.get(reverse('quotation:edit', args=[q.pk])).content.decode()
+        self.assertIn('value="LC" checked', edit)
+        self.assertIn('value="PDC" checked', edit)
+        self.assertNotIn('value="Advance" checked', edit)
+
+    def test_no_payment_terms_prints_nothing(self):
+        self.client.post(reverse('quotation:new'), self._payload())
+        self.assertNotIn('Payment terms', self._text(Quotation.objects.get()))
+        self.assertNotIn('PAYMENT TERMS', self._text(Quotation.objects.get()))
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ItemCodeInSearchTests(TestCase):
+    def setUp(self):
+        from so.models import Items
+        user = get_user_model().objects.create_user('sales', password='x')
+        self.client.force_login(user)
+        Items.objects.create(item_code='100001', item_description='Heater', item_upvc='ar-50', item_firm='ARISTON')
+        Product.objects.create(model_no='AR 50', brand='ARISTON')
+        Product.objects.create(model_no='AR-NOSTOCK', brand='ARISTON')
+
+    def test_search_returns_the_stock_item_code_for_item_no(self):
+        res = {r['model_no']: r for r in self.client.get(reverse('quotation:product_search'), {'q': 'ar'}).json()['results']}
+        self.assertEqual(res['AR 50']['item_code'], '100001')
+        self.assertEqual(res['AR-NOSTOCK']['item_code'], '')
+        self.assertNotIn('cost', res['AR 50'])
+
+    def test_form_fills_item_no_only_when_blank_or_auto_filled(self):
+        page = self.client.get(reverse('quotation:new')).content.decode()
+        self.assertIn("noBox.dataset.auto", page)
+        self.assertIn("!noBox.value.trim()", page)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT)
+class ItemCodeSearchAndHideCostTests(TestCase):
+    def setUp(self):
+        from so.models import Items, Role
+        self.admin = get_user_model().objects.create_user('boss', password='x')
+        Role.objects.create(user=self.admin, role='Admin')
+        self.staff = get_user_model().objects.create_user('sales', password='x')
+        Role.objects.create(user=self.staff, role='Salesman')
+        Items.objects.create(item_code='901887', item_description='x', item_upvc='GRT160H', item_cost=50.0, item_firm='X')
+        Product.objects.create(model_no='GRT160H', brand='GRAND', cost=Decimal('50'))
+        Product.objects.create(model_no='OTHER-1', brand='OTHER')
+        self.client.force_login(self.admin)
+
+    def _models(self, **params):
+        return {p.model_no for p in self.client.get(reverse('quotation:product_list'), params).context['page']}
+
+    def test_search_by_item_code_respects_brand_filter(self):
+        self.assertEqual(self._models(q='9018'), {'GRT160H'})
+        self.assertEqual(self._models(q='GRT'), {'GRT160H'})                    # the old search still works
+        self.assertEqual(self._models(q='9018', brand='OTHER'), set())           # the brand filter still applies
+        self.assertEqual(self._models(q='nomatch'), set())
+
+    def _sheet(self, **params):
+        from openpyxl import load_workbook
+        resp = self.client.get(reverse('quotation:product_export_excel'), params)
+        return [c.value for c in load_workbook(BytesIO(resp.content)).active[1]]
+
+    def test_admin_can_hide_cost_in_downloads(self):
+        self.assertIn('Cost', self._sheet())                                    # as before
+        self.assertNotIn('Cost', self._sheet(nocost='1'))
+        pdf = self.client.get(reverse('quotation:product_export_pdf'), {'nocost': '1'})
+        text = ' '.join(p.extract_text() or '' for p in PdfReader(BytesIO(pdf.content)).pages)
+        self.assertNotIn('Cost', text)
+        self.assertContains(self.client.get(reverse('quotation:product_list')), 'id="noCost"')
+        self.client.force_login(self.staff)
+        self.assertNotContains(self.client.get(reverse('quotation:product_list')), 'id="noCost"')
+        self.assertNotIn('Cost', self._sheet())

@@ -21,7 +21,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus.doctemplate import LayoutError
 
-from .models import VAT_RATE, QuotationStamp
+from .models import DELIVERY_SUBJECT_TO_STOCK, VAT_RATE, QuotationStamp
 from .words import amount_in_words
 from reportlab.platypus import (
     BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer,
@@ -103,7 +103,7 @@ S_WORDS = ParagraphStyle('qwords', parent=_base, fontSize=8, leading=10.5)
 S_POINT = ParagraphStyle('qpoint', parent=_base, leftIndent=16, firstLineIndent=-16)
 
 # Relative widths of: Item no, Model no, Photo, Brand, Description, Size, Color, Qty, Unit price, Total, Link, Warranty
-_WEIGHTS = [22, 38, 46, 52, 86, 56, 54, 22, 42, 48, 48, 52]
+_WEIGHTS = [30, 38, 46, 52, 78, 56, 54, 22, 42, 48, 48, 52]
 
 
 def _p(text, style=S_BASE):
@@ -157,6 +157,14 @@ S_VAL = ParagraphStyle('qval', parent=_base, fontSize=8.5, leading=10.5, wordWra
 S_VAL_B = ParagraphStyle('qvalb', parent=S_VAL, fontName='Helvetica-Bold')
 S_MID_LBL = ParagraphStyle('qmidlbl', parent=_base, fontName='Helvetica-Bold', fontSize=7.5, leading=9)
 S_MID_VAL = ParagraphStyle('qmidval', parent=_base, fontSize=9, leading=11, wordWrap='CJK')
+S_MID_VAL_B = ParagraphStyle('qmidvalb', parent=S_MID_VAL, fontName='Helvetica-Bold')                       # payment terms: the ticked options
+
+
+def _delivery_text(q):
+    """Delivery availability as printed: the 'Subject to Stock availability' wording when ticked, else the date (or blank)."""
+    if q.delivery_subject_to_stock:
+        return DELIVERY_SUBJECT_TO_STOCK
+    return q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''
 
 
 def _header_block(q, lay):
@@ -213,17 +221,23 @@ def _header_block(q, lay):
     # -- 3. date, validity, delivery availability: small bold label with its value under it
     mid = [
         ('Date', q.date.strftime('%d.%m.%Y')), ('Validity', q.validity),
-        ('Delivery availability', q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''),
+        ('Delivery availability', _delivery_text(q)),
     ]
     mid_rows = []
     for label, value in mid:
         mid_rows += [[Paragraph(label, S_MID_LBL)], [Paragraph(escape((value or '').strip()) or '&nbsp;', S_MID_VAL)]]
+    pay_ticks, pay_note = (q.payment_terms or '').strip(), (q.payment_terms_note or '').strip()
+    if pay_ticks:   # only the ticked options here; the details follow in the Terms and Conditions box
+        mid_rows.append([Paragraph('Payment terms', S_MID_LBL)])
+        mid_rows.append([Paragraph(escape(pay_ticks), S_MID_VAL_B)])
+
     right = Table(mid_rows, colWidths=[w3 - gap])
     right.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
         ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         ('BOTTOMPADDING', (0, 1), (0, 1), 5), ('BOTTOMPADDING', (0, 3), (0, 3), 5),
+        ('BOTTOMPADDING', (0, 5), (0, 5), 5),
     ]))
 
     # columns 0, 2 and 4 are the boxes; 1 and 3 are the empty gaps between them. One row, so the boxes are equally tall.
@@ -440,13 +454,14 @@ def _body(q, base_url, lay, split_rows=False, with_stamp=False):
     # are shown in the top block too). Blank ones are left out.
     points = _numbered_points(q.remarks)
     facts = [(label, value) for label, value in (
-        ('VALIDITY', q.validity),
-        ('DELIVERY AVAILABILITY', q.stock_availability.strftime('%d.%m.%Y') if q.stock_availability else ''),
-        ('COUNTRY OF ORIGIN', q.country_of_origin),
-        ('WARRANTY', q.warranty),
+        ('VALIDITY:', q.validity),
+        ('DELIVERY AVAILABILITY:', _delivery_text(q)),
+        ('PAYMENT TERMS:', ' - '.join(t for t in ((q.payment_terms or '').strip(), (q.payment_terms_note or '').strip()) if t)),
+        ('COUNTRY OF ORIGIN:', q.country_of_origin),
+        ('WARRANTY:', q.warranty),
     ) if (value or '').strip()]
     if points or facts:
-        group = [_boxed('TERMS AND CONDITIONS', points, lay)]
+        group = [_boxed('TERMS AND CONDITIONS:', points, lay)]
         if facts:   # directly under the points
             group += [Spacer(1, 4), _boxed(None, _info_rows(facts), lay, label_w=130)]
         story += [KeepTogether(group), Spacer(1, 14)]

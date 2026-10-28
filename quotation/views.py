@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from .datasheet import DatasheetError, to_jpeg
-from .models import Customer, Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
+from .models import DEFAULT_VALIDITY, PAYMENT_TERM_CHOICES, Customer, Product, Quotation, QuotationItem, QuotationStamp, line_amount, new_share_token
 from .permissions import can_use_stamp
 from .pdf_builder import build_quotation_pdf
 
@@ -25,7 +25,7 @@ log = logging.getLogger('quotation')
 
 TEXT_FIELDS = [
     'customer_name', 'customer_contact', 'customer_person', 'customer_address', 'customer_trn', 'customer_code', 'customer_email', 'to_text', 'customer_ref', 'project_reference', 'remarks', 'validity', 'country_of_origin', 'warranty',
-    'sales_person', 'email', 'contact_number',
+    'sales_person', 'email', 'contact_number', 'payment_terms_note',
 ]
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 MAX_DATASHEET_BYTES = 10 * 1024 * 1024
@@ -178,7 +178,8 @@ def quotation_form(request, pk=None):
             qdate = None
             errors.append('Please enter a valid date.')
         stock_date = None
-        if (posted.get('stock_availability') or '').strip():
+        subject_to_stock = posted.get('delivery_subject_to_stock') == 'on'   # then no date is kept
+        if (posted.get('stock_availability') or '').strip() and not subject_to_stock:
             try:
                 stock_date = date_cls.fromisoformat(posted['stock_availability'].strip())
             except ValueError:
@@ -254,6 +255,8 @@ def quotation_form(request, pk=None):
                 if can_use_stamp(request.user):   # everyone else leaves the existing choice untouched
                     quotation.add_stamp = posted.get('add_stamp') == 'on'
                 quotation.stock_availability = stock_date
+                quotation.delivery_subject_to_stock = subject_to_stock
+                quotation.payment_terms = ', '.join(t for t in PAYMENT_TERM_CHOICES if t in posted.getlist('payment_terms'))
                 quotation.discount_type = discount_type
                 quotation.discount_value = discount_value
                 for f in TEXT_FIELDS:
@@ -300,15 +303,20 @@ def quotation_form(request, pk=None):
         values['discount_type'] = 'percent' if posted.get('discount_type') == 'percent' else 'amount'
         values['discount_value'] = posted.get('discount_value', '')
         values['add_stamp'] = (posted.get('add_stamp') == 'on') if can_use_stamp(request.user) else bool(quotation and quotation.add_stamp)
+        values['delivery_subject_to_stock'] = posted.get('delivery_subject_to_stock') == 'on'
+        values['payment_terms'] = [t for t in PAYMENT_TERM_CHOICES if t in posted.getlist('payment_terms')]
     elif quotation:
         values = {k: getattr(quotation, k) for k in TEXT_FIELDS}
         values['add_stamp'] = quotation.add_stamp
+        values['delivery_subject_to_stock'] = quotation.delivery_subject_to_stock
+        values['payment_terms'] = [t.strip() for t in quotation.payment_terms.split(',') if t.strip()]
         values['discount_type'] = quotation.discount_type
         values['discount_value'] = quotation.discount_value or ''   # blank rather than 0.00
         values.update(date=quotation.date.isoformat(),
                       stock_availability=quotation.stock_availability.isoformat() if quotation.stock_availability else '')
     else:
         values = {'date': timezone.localdate().isoformat(), 'discount_type': 'amount', 'discount_value': '',
+                  'validity': DEFAULT_VALIDITY, 'delivery_subject_to_stock': True, 'payment_terms': [],   # defaults for a new quotation only
                   'sales_person': request.user.get_full_name() or request.user.get_username(),
                   'email': request.user.email}
 
@@ -324,6 +332,7 @@ def quotation_form(request, pk=None):
     return render(request, 'quotation/form.html', {
         'quotation': quotation,
         'qtn_no_shown': qtn_no_shown,
+        'payment_term_choices': PAYMENT_TERM_CHOICES,
         'has_stamp': bool(QuotationStamp.get_instance().stamp),
         'can_stamp': can_use_stamp(request.user),
         'errors': errors,

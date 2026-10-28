@@ -7,6 +7,9 @@ from django.utils import timezone
 
 from .storage import get_private_storage
 
+PAYMENT_TERM_CHOICES = ['LC', 'PDC', 'Advance']
+DELIVERY_SUBJECT_TO_STOCK = 'Subject to Stock availability'
+DEFAULT_VALIDITY = '10 Days'
 QTN_PREFIX = 'JG'          # quotation numbers look like JG-2026-001
 VAT_RATE = Decimal('0.05')   # UAE VAT, added on top of the item total
 CENT = Decimal('0.01')
@@ -53,6 +56,10 @@ class Quotation(models.Model):
     project_reference = models.CharField(max_length=300, blank=True)
     validity = models.CharField(max_length=200, blank=True)
     stock_availability = models.DateField(null=True, blank=True)
+    # Print "Subject to Stock availability" as the delivery availability instead of the date (off for quotations made before this existed).
+    delivery_subject_to_stock = models.BooleanField(default=False)
+    payment_terms = models.CharField(max_length=60, blank=True)         # ticked options, comma separated (LC, PDC, Advance)
+    payment_terms_note = models.CharField(max_length=300, blank=True)   # free text that clarifies the payment terms
     # Optional discount taken off the item total, before VAT: a fixed amount in AED, or a percentage of the total.
     discount_type = models.CharField(max_length=10, choices=[('amount', 'AED'), ('percent', '%')], default='amount')
     discount_value = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))

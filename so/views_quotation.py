@@ -26,14 +26,22 @@ def _is_manager_account(user):
 # Optional header details for the quotation PDF (see the Quotation model). Each is a form input of the same name.
 QUOTATION_HEADER_FIELDS = (
     'customer_contact_person', 'customer_contact_number', 'customer_address', 'customer_trn', 'customer_email',
-    'customer_ref', 'project_reference', 'validity', 'delivery_availability', 'payment_terms',
+    'customer_ref', 'project_reference', 'validity', 'delivery_availability', 'payment_terms_details',
 )
+
+
+# Payment terms the quotation forms offer as tick boxes; the ticked ones are saved comma-separated in this order.
+PAYMENT_TERMS_CHOICES = ('LC', 'PDC', 'ADVANCE')
 
 
 def _quotation_header_values(post):
     """{field: stripped text or None} for the optional PDF header inputs actually present in the submitted form."""
-    return {f: ((post.get(f) or '').strip()[:1000 if f == 'customer_address' else 255] or None)
-            for f in QUOTATION_HEADER_FIELDS if f in post}
+    values = {f: ((post.get(f) or '').strip()[:1000 if f in ('customer_address', 'payment_terms_details') else 255] or None)
+              for f in QUOTATION_HEADER_FIELDS if f in post}
+    if 'payment_terms_form' in post:   # the tick boxes were on the form (nothing ticked = none chosen)
+        ticked = set(post.getlist('payment_terms'))
+        values['payment_terms'] = ', '.join(c for c in PAYMENT_TERMS_CHOICES if c in ticked) or None
+    return values
 
 
 from django.contrib.auth.decorators import login_required as _login_required

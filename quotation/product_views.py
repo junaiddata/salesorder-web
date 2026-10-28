@@ -69,7 +69,14 @@ def _filtered(request):
     q = (request.GET.get('q') or '').strip()
     products = Product.objects.all()
     if q:
-        products = products.filter(Q(model_key__icontains=product_key(q)) | Q(brand__icontains=q) | Q(description__icontains=q))
+        match = Q(model_key__icontains=product_key(q)) | Q(brand__icontains=q) | Q(description__icontains=q)
+        # the search box also finds a product by the item code shown in its Item Code column
+        info, low = pricing.stock_info_map(), q.lower()
+        by_code = [pk for pk, model_no in Product.objects.values_list('pk', 'model_no')
+                   if low in (pricing.stock_info(model_no, info)[0] or '').lower()]
+        if by_code:
+            match |= Q(pk__in=by_code)
+        products = products.filter(match)
     # Brand filter: the choices are read from the products themselves, so a new brand shows up as soon as a product has it.
     brands = list(Product.objects.exclude(brand='').order_by('brand').values_list('brand', flat=True).distinct())
     chosen = [b.strip() for b in request.GET.getlist('brand') if b.strip()]
@@ -290,11 +297,13 @@ def product_search(request):
                     .order_by('model_key')[:80])
     products.sort(key=lambda p: (not re.sub(r'[\s\-]', '', p.model_key).startswith(loose), p.model_key))   # models starting with the typed text first
     products = products[:30]
+    codes = pricing.stock_item_codes(p.model_no for p in products)
     return JsonResponse({'results': [{
         'id': p.pk, 'model_no': p.model_no, 'brand': p.brand, 'description': p.description,
         'photo_url': reverse('quotation:product_photo', args=[p.pk]) + f'?v={int(p.updated_at.timestamp())}' if p.photo else '',
         'datasheet_name': _display_name(p.datasheet) if p.datasheet else '',
         'selling_price': str(p.selling_price) if p.selling_price is not None else '',   # never the cost
+        'item_code': codes.get(pricing._loose(p.model_no), ''),   # the stock item code, used to fill Item No
     } for p in products]})
 
 

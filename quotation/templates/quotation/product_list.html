@@ -63,7 +63,7 @@
                         <button type="submit" class="btn-x btn-primary-x sm" style="width:100%">Apply</button>
                     </div>
                 </details>
-                <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search model, brand…">
+                <input type="text" name="q" value="{{ q }}" class="input-x" placeholder="Search model, brand, item code…">
                 <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
                 <label class="btn-x" style="cursor:pointer;gap:.4rem" title="Show only products that have DIP stock (hides 0 stock and products with no stock item)"><input type="checkbox" name="instock" value="1" {% if hide_zero %}checked{% endif %} onchange="this.form.submit()"> Hide 0 stock</label>
                 {% if brand_count or q or hide_zero %}<a href="{% url 'quotation:product_list' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
@@ -74,8 +74,9 @@
                 {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><button type="submit" class="btn-x" title="Fill costs from the stock data"><i class="fas fa-rotate"></i> Refresh costs</button>
             </form>
             {% endif %}
-            <a href="{% url 'quotation:product_export_excel' %}?{{ filter_qs }}" class="btn-x" title="Download the products shown (current search and brand filter) as Excel"><i class="fas fa-file-excel"></i> Excel</a>
-            <a href="{% url 'quotation:product_export_pdf' %}?{{ filter_qs }}" class="btn-x" title="Download the products shown (current search and brand filter) as PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+            {% if is_admin %}<label class="btn-x" style="cursor:pointer;gap:.4rem" title="Leave the Cost column out of the Excel and PDF downloads (for files you send to someone)"><input type="checkbox" id="noCost"> Hide cost in downloads</label>{% endif %}
+            <a href="{% url 'quotation:product_export_excel' %}?{{ filter_qs }}" data-export class="btn-x" title="Download the products shown (current search and brand filter) as Excel"><i class="fas fa-file-excel"></i> Excel</a>
+            <a href="{% url 'quotation:product_export_pdf' %}?{{ filter_qs }}" data-export class="btn-x" title="Download the products shown (current search and brand filter) as PDF"><i class="fas fa-file-pdf"></i> PDF</a>
             <a href="{% url 'quotation:product_new' %}?next={{ here|urlencode }}" class="btn-x btn-primary-x"><i class="fas fa-plus"></i> New product</a>
         </div>
     </div>
@@ -169,6 +170,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 {{ keys|json_script:"libKeys" }}
 {{ hints|json_script:"libHints" }}
+<script>
+// "Hide cost in downloads" (admin only): adds nocost=1 to the Excel / PDF links; the choice is remembered in this browser.
+(function () {
+    const box = document.getElementById('noCost');
+    if (!box) return;
+    try { box.checked = localStorage.getItem('qtNoCost') === '1'; } catch (e) {}
+    function apply() {
+        document.querySelectorAll('a[data-export]').forEach(function (a) {
+            const u = new URL(a.getAttribute('href'), location.href);
+            if (box.checked) u.searchParams.set('nocost', '1'); else u.searchParams.delete('nocost');
+            a.setAttribute('href', u.pathname + u.search);
+        });
+    }
+    box.addEventListener('change', function () { try { localStorage.setItem('qtNoCost', box.checked ? '1' : '0'); } catch (e) {} apply(); });
+    apply();
+})();
+</script>
 <script>
 (function () {
     const keys = JSON.parse(document.getElementById('libKeys').textContent);

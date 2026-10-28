@@ -163,12 +163,35 @@
             <div class="grid-2">
                 <div class="field-x"><label class="label-x">Validity</label>
                     <input type="text" name="validity" class="input-x" value="{{ values.validity }}"></div>
-                <div class="field-x"><label class="label-x">Delivery Availability <small class="u-muted">(date)</small></label>
-                    <input type="date" name="stock_availability" class="input-x" value="{{ values.stock_availability }}"></div>
+                <div class="field-x" id="deliveryBox"><label class="label-x">Delivery Availability</label>
+                    <input type="text" id="dlvText" class="input-x" value="Subject to Stock availability" readonly {% if not values.delivery_subject_to_stock %}style="display:none"{% endif %}>
+                    <input type="date" name="stock_availability" id="dlvDate" class="input-x" value="{{ values.stock_availability }}" {% if values.delivery_subject_to_stock %}disabled style="display:none"{% endif %}>
+                    <input type="hidden" name="delivery_subject_to_stock" id="dlvFlag" value="on" {% if not values.delivery_subject_to_stock %}disabled{% endif %}>
+                    <a href="#" id="dlvSwitch" style="font-size:.8rem">{% if values.delivery_subject_to_stock %}Choose a date instead{% else %}Use "Subject to Stock availability"{% endif %}</a></div>
+                <script>
+                (function () {
+                    const text = document.getElementById('dlvText'), date = document.getElementById('dlvDate'),
+                          flag = document.getElementById('dlvFlag'), link = document.getElementById('dlvSwitch');
+                    function show(subject) {   // text mode: "Subject to Stock availability" is printed; date mode: the chosen date
+                        text.style.display = subject ? '' : 'none';
+                        date.style.display = subject ? 'none' : '';
+                        date.disabled = subject;
+                        flag.disabled = !subject;
+                        link.textContent = subject ? 'Choose a date instead' : 'Use "Subject to Stock availability"';
+                    }
+                    link.addEventListener('click', function (e) { e.preventDefault(); show(flag.disabled); });
+                })();
+                </script>
                 <div class="field-x"><label class="label-x">Country of Origin</label>
                     <input type="text" name="country_of_origin" class="input-x" value="{{ values.country_of_origin }}"></div>
                 <div class="field-x"><label class="label-x">Warranty</label>
                     <input type="text" name="warranty" class="input-x" placeholder="e.g. 2 years against manufacturing defects" value="{{ values.warranty }}"></div>
+                <div class="field-x"><label class="label-x">Payment Terms</label>
+                    <div class="d-flex gap-3 flex-wrap mb-1">
+                        {% for t in payment_term_choices %}<label style="font-weight:500"><input type="checkbox" name="payment_terms" value="{{ t }}" {% if t in values.payment_terms %}checked{% endif %}> {{ t }}</label>{% endfor %}
+                    </div>
+                    <textarea name="payment_terms_note" rows="2" maxlength="120" class="input-x" placeholder="Details (optional), e.g. 50% advance, balance by PDC 30 days">{{ values.payment_terms_note }}</textarea>
+                    <small class="u-muted">Printed in small text under the ticked options. Keep it short (up to 120 characters).</small></div>
             </div>
             <div class="fixed-box mt-3"><b>Bank details (fixed — printed automatically)</b><br>
                 NATIONAL BANK OF FUJAIRAH, P.O BOX: 2979, DUBAI - U.A.E. · SWIFT: NBFUAEAFDXB · A/C NO: 012001111025 ·
@@ -301,6 +324,9 @@
         model.addEventListener('blur', () => setTimeout(hideMenu, 200));
         model.addEventListener('keydown', e => menuKey(e, model, pick));
         function pick(p) {
+            // Item No: the stock item code, only when the box is empty or still holds a code filled in by an earlier pick
+            const noBox = q('item_no');
+            if (p.item_code && (!noBox.value.trim() || noBox.value === noBox.dataset.auto)) { noBox.value = p.item_code; noBox.dataset.auto = p.item_code; }
             model.value = p.model_no;
             q('lib_id').value = p.id;
             q('item_brand').value = (p.brand || '').toUpperCase();

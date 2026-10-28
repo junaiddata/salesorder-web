@@ -119,6 +119,25 @@ def format_stock(value):
     return text.rstrip('0').rstrip('.') if '.' in text else text
 
 
+def stock_item_codes(model_nos):
+    """{loose Model No: stock item code} for just these Model Nos (a few rows, for the search suggestions)."""
+    keys = {_loose(m) for m in model_nos if _loose(m)}
+    if not keys:
+        return {}
+    try:
+        from django.db.models import Value
+        from django.db.models.functions import Replace, Upper
+        from so.models import Items
+        rows = (Items.objects.exclude(item_upvc__isnull=True).exclude(item_upvc='')
+                .annotate(k=Upper(Replace(Replace(Replace(Replace('item_upvc', Value('-'), Value('')), Value(' '), Value('')),
+                                                  Value('/'), Value('')), Value('\\'), Value(''))))
+                .filter(k__in=keys).order_by('-id').values_list('k', 'item_code'))
+        return {k: code for k, code in rows}   # newest first, so the oldest item ends up winning (same as the other lookups)
+    except Exception:
+        log.exception('Stock item code lookup failed')
+        return {}
+
+
 def _loose(text):
     return re.sub(r'[\s\-/\\]', '', (text or '').upper())
 

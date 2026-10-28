@@ -380,17 +380,31 @@
 
                     <div class="form-group">
                         <label for="validity">Validity</label>
-                        <input type="text" name="validity" id="validity" maxlength="255" placeholder="e.g. 15 days">
+                        <input type="text" name="validity" id="validity" maxlength="255" value="10 days" placeholder="e.g. 15 days">
                     </div>
 
                     <div class="form-group">
                         <label for="delivery_availability">Delivery Availability</label>
-                        <input type="text" name="delivery_availability" id="delivery_availability" maxlength="255" placeholder="e.g. Ex-stock / 2 weeks">
+                        <input type="text" name="delivery_availability" id="delivery_availability" maxlength="255" value="Subject to stock availability" placeholder="e.g. Ex-stock / 2 weeks">
                     </div>
 
                     <div class="form-group">
-                        <label for="payment_terms">Payment Terms</label>
-                        <input type="text" name="payment_terms" id="payment_terms" maxlength="255" placeholder="e.g. 30 days credit / Advance / Cash">
+                        <label>Payment Terms</label>
+                        <input type="hidden" name="payment_terms_form" value="1">
+                        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="checkbox" name="payment_terms" value="LC"> LC
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="checkbox" name="payment_terms" value="PDC"> PDC
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:6px; font-weight:400;">
+                                <input type="checkbox" name="payment_terms" value="ADVANCE"> ADVANCE
+                            </label>
+                        </div>
+                        <textarea name="payment_terms_details" id="payment_terms_details" rows="2" maxlength="1000"
+                                  style="width:100%;margin-top:10px;padding:12px 16px;border:2px solid #e1e8ed;border-radius:8px;font-size:16px;resize:vertical;"
+                                  placeholder="Add payment details (optional) - printed as the last point under Terms and Conditions"></textarea>
                     </div>
 
                     {% if not is_alabama_user %}

@@ -323,6 +323,9 @@ def _body(q, cfg):
         remark_rows = [[Paragraph(escape(ln.strip()) or '&nbsp;', S_CELL)] for ln in q.remarks.splitlines() if ln.strip()]
         story += [KeepTogether([_section('REMARKS', remark_rows)]), Spacer(1, 10)]
     points = [[Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)] for n, text in enumerate(TERMS, 1)]
+    details = ' '.join((q.payment_terms_details or '').split())   # one point, however many lines were typed
+    if details:
+        points.append([Paragraph(f'{len(points) + 1}.&nbsp;&nbsp;Payment terms: {escape(details)}', S_POINT)])
     tail = [_section('TERMS AND CONDITIONS', points)]
     stamp = _stamp(cfg.get('stamp'))
     if stamp is not None:

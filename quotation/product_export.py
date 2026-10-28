@@ -22,7 +22,8 @@ PHOTO_LIMIT = 300   # photos are left out of the PDF when more products than thi
 
 def _rows(request):
     products, q, brands, chosen, _low = _filtered(request)
-    is_admin = pricing.is_price_admin(request.user)
+    # Cost is for admin only, and an admin can leave it out of a download (?nocost=1) before sending the file to someone.
+    is_admin = pricing.is_price_admin(request.user) and request.GET.get('nocost') != '1'
     head = ['Model No', 'Brand', 'Description', 'Item Code', 'DIP Stock'] + (['Cost'] if is_admin else []) + ['Selling Price', 'Photo', 'Datasheet']
     info = pricing.stock_info_map()
     rows, prods = [], []
