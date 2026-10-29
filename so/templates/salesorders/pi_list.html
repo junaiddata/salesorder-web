@@ -496,6 +496,8 @@
 
             <!-- The hidden dropdown with checkboxes -->
             <div class="options-container" id="salesman-options">
+              <input type="text" id="salesman-search" placeholder="Search salesman..." autocomplete="off"
+                     style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
               {% for s in salesmen %}
                 <label class="option-label">
                   <input type="checkbox" name="salesman" value="{{ s }}" 
@@ -626,10 +628,25 @@ document.addEventListener("DOMContentLoaded", function() {
   const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
 
   // 1. Toggle Dropdown visibility
+  const searchInput = document.getElementById('salesman-search');
+
   trigger.addEventListener('click', function(e) {
-    e.stopPropagation(); 
+    e.stopPropagation();
     options.classList.toggle('active');
+    if (searchInput && options.classList.contains('active')) searchInput.focus();
   });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const term = searchInput.value.trim().toLowerCase();
+      options.querySelectorAll('.option-label').forEach(function(label) {
+        label.style.display = label.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    });
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  }
 
   // 2. Prevent closing when clicking INSIDE the dropdown
   options.addEventListener('click', function(e) {
