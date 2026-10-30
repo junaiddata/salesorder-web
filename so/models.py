@@ -1445,3 +1445,22 @@ class ItemSyncStatus(models.Model):
 
     def __str__(self):
         return f'{self.item.item_code} seen {self.last_seen_at:%Y-%m-%d %H:%M}'
+
+
+class AlabamaCatalogBrand(models.Model):
+    """A brand shown to Alabama users on the Item Catalog (/items/catalog/). Managed in the admin site.
+
+    While no active row exists Alabama falls back to settings.ALABAMA_CATALOG_BRANDS (empty = every brand). Only the
+    catalog reads this table; quotation / sales-order brand lists are not affected.
+    """
+    brand = models.CharField(max_length=100, unique=True, help_text='Must match the item brand exactly (pick it from the list).')
+    is_active = models.BooleanField(default=True, help_text='Untick to hide the brand from Alabama without deleting it.')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['brand']
+        verbose_name = 'Alabama catalog brand'
+        verbose_name_plural = 'Alabama catalog brands'
+
+    def __str__(self):
+        return self.brand

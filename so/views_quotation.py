@@ -5,7 +5,7 @@ from django.contrib import messages
 from .models import Quotation, QuotationItem, Customer, Salesman, Items, CustomerPrice
 from .models import Quotation, QuotationItem, CustomerPrice, Customer, Items, Salesman, QuotationLog
 from .utils import get_client_ip, label_network
-from .item_status import active_items, firms_with_existing
+from .item_status import active_items, firms_with_existing, limit_to_user_brands
 from django.db.models import Q
 from .utils import parse_device_info
 from urllib.parse import quote
@@ -316,7 +316,7 @@ def create_quotation(request):
         # END: Salesman Filtering Logic
         # ---------------------------------------------------------------------
         # inactive items (no longer listed by the stock app) are not offered for a new quotation
-        firms = active_items(Items.objects.all()).values_list('item_firm', flat=True).distinct().order_by('item_firm')
+        firms = limit_to_user_brands(active_items(Items.objects.all()), request.user).values_list('item_firm', flat=True).distinct().order_by('item_firm')
         is_alabama_user = (
             request.user.is_authenticated
             and request.user.username.lower().startswith('alabama')
@@ -2404,7 +2404,7 @@ def edit_quotation(request, quotation_id):
     # -------------------------------------------------------------------------
     # END: Salesman Filtering Logic
     # active brands, plus the brands of the lines already on this quotation (so an old line's brand still shows)
-    firms = firms_with_existing(qi.item for qi in quotation.items.select_related('item') if qi.item)
+    firms = firms_with_existing((qi.item for qi in quotation.items.select_related('item') if qi.item), request.user)
 
     return render(request, 'so/quotations/edit_quotation.html', {
         'quotation': quotation,

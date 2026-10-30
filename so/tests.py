@@ -561,3 +561,138 @@ class ItemCatalogEditDeleteExportTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(reverse('item_catalog_export_excel')).status_code, 302)
         self.assertEqual(self.client.get(reverse('item_catalog_export_pdf')).status_code, 302)
+
+
+@override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'])
+class AlabamaCatalogBrandAdminTests(TestCase):
+    """The Alabama brand list is managed in the admin site (AlabamaCatalogBrand)."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.ariston = Items.objects.create(item_code='A1', item_description='Ariston heater', item_firm='ARISTON')
+        self.grohe = Items.objects.create(item_code='G1', item_description='Grohe mixer', item_firm='GROHE')
+        run = timezone.now()                      # one sync run: every item carries the same timestamp
+        for it in (self.ariston, self.grohe):
+            ItemSyncStatus.objects.create(item=it, last_seen_at=run)
+        self.alabama = User.objects.create_user('alabama_sam', password='x')
+        Role.objects.create(user=self.alabama, role='Salesman', company='Alabama')
+        self.junaid = User.objects.create_user('jsam', password='x')
+        Role.objects.create(user=self.junaid, role='Salesman', company='Junaid')
+        self.boss = User.objects.create_superuser('root', 'r@x.com', 'x')
+
+    def shown(self, user):
+        self.client.force_login(user)
+        return {it.item_code for it in self.client.get(reverse('item_catalog')).context['page']}
+
+    def test_empty_list_shows_every_brand_to_alabama(self):
+        self.assertEqual(self.shown(self.alabama), {'A1', 'G1'})
+
+    def test_listed_brands_limit_alabama_only(self):
+        from .models import AlabamaCatalogBrand
+        AlabamaCatalogBrand.objects.create(brand='ARISTON')
+        self.assertEqual(self.shown(self.alabama), {'A1'})
+        self.assertEqual(self.shown(self.junaid), {'A1', 'G1'})
+
+    def test_inactive_brand_row_is_ignored(self):
+        from .models import AlabamaCatalogBrand
+        AlabamaCatalogBrand.objects.create(brand='ARISTON', is_active=False)
+        self.assertEqual(self.shown(self.alabama), {'A1', 'G1'})
+
+    def test_admin_form_offers_existing_brands_and_rejects_duplicates(self):
+        from .admin import AlabamaCatalogBrandForm
+        from .models import AlabamaCatalogBrand
+        form = AlabamaCatalogBrandForm({'brand': 'GROHE', 'is_active': True})
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual({c for c, _ in form.fields['brand'].choices} - {''}, {'ARISTON', 'GROHE'})
+        self.assertFalse(AlabamaCatalogBrandForm({'brand': 'NOPE'}).is_valid())
+        AlabamaCatalogBrand.objects.create(brand='GROHE')
+        self.assertFalse(AlabamaCatalogBrandForm({'brand': 'grohe'.upper(), 'is_active': True}).is_valid())
+
+    def test_admin_pages_load(self):
+        self.client.force_login(self.boss)
+        self.assertEqual(self.client.get('/admin/so/alabamacatalogbrand/').status_code, 200)
+        self.assertEqual(self.client.get('/admin/so/alabamacatalogbrand/add/').status_code, 200)
+
+
+@override_settings(ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'])
+class AlabamaBrandListInPickersTests(TestCase):
+    """The Alabama brand list also limits the brand / item pickers of NEW quotations and sales orders -- for Alabama users
+    only, and never the lines already on a made document."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        from django.utils import timezone
+        from .models import AlabamaCatalogBrand
+        cache.clear()
+        run = timezone.now()
+        self.ar = Items.objects.create(item_code='A1', item_description='Ariston valve', item_firm='ARISTON', item_cost=1, item_price=5)
+        self.gr = Items.objects.create(item_code='G1', item_description='Grohe valve', item_firm='GROHE', item_cost=1, item_price=5)
+        for it in (self.ar, self.gr):
+            ItemSyncStatus.objects.create(item=it, last_seen_at=run)
+        self.alabama = User.objects.create_user('alabama_sam', password='x')
+        Role.objects.create(user=self.alabama, role='Admin', company='Alabama')
+        self.junaid = User.objects.create_user('jboss', password='x')
+        Role.objects.create(user=self.junaid, role='Admin', company='Junaid')
+        AlabamaCatalogBrand.objects.create(brand='ARISTON')
+
+    def ids(self, url, params):
+        data = self.client.get(url, params).json()
+        rows = data['items'] if isinstance(data, dict) else data
+        return {r['item_code'] for r in rows}
+
+    def test_item_endpoints_follow_the_list_for_alabama_only(self):
+        self.client.force_login(self.alabama)
+        self.assertEqual(self.ids('/get_items_by_firm/', {'firms': 'All'}), {'A1'})
+        self.assertEqual(self.ids('/get_items_by_firm/', {'firms': 'GROHE'}), set())
+        self.assertEqual(self.ids('/api/items-search/', {'q': 'valve'}), {'A1'})
+        self.client.force_login(self.junaid)                      # cached lists are not shared between the two
+        self.assertEqual(self.ids('/get_items_by_firm/', {'firms': 'All'}), {'A1', 'G1'})
+        self.assertEqual(self.ids('/api/items-search/', {'q': 'valve'}), {'A1', 'G1'})
+        self.client.force_login(self.alabama)
+        self.assertEqual(self.ids('/get_items_by_firm/', {'firms': 'All'}), {'A1'})
+
+    def test_brand_dropdowns_follow_the_list_for_alabama_only(self):
+        for name in ('create_quotation', 'create_sales_order'):
+            self.client.force_login(self.alabama)
+            self.assertEqual(set(self.client.get(reverse(name)).context['firms']), {'ARISTON'}, name)
+            self.client.force_login(self.junaid)
+            self.assertEqual(set(self.client.get(reverse(name)).context['firms']), {'ARISTON', 'GROHE'}, name)
+
+    def test_empty_or_inactive_list_leaves_alabama_unchanged(self):
+        from .models import AlabamaCatalogBrand
+        AlabamaCatalogBrand.objects.update(is_active=False)
+        self.client.force_login(self.alabama)
+        self.assertEqual(set(self.client.get(reverse('create_quotation')).context['firms']), {'ARISTON', 'GROHE'})
+        self.assertEqual(self.ids('/get_items_by_firm/', {'firms': 'All'}), {'A1', 'G1'})
+
+    def test_edit_pages_keep_the_brands_of_existing_lines(self):
+        from .models import Customer, Quotation, QuotationItem
+        cust = Customer.objects.create(customer_code='C1', customer_name='Cust')
+        q = Quotation.objects.create(customer=cust)
+        QuotationItem.objects.create(quotation=q, item=self.gr, quantity=1, price=5, unit='pcs', line_total=5)
+        self.client.force_login(self.alabama)
+        resp = self.client.get(reverse('edit_quotation', args=[q.pk]))
+        self.assertEqual(set(resp.context['firms']), {'ARISTON', 'GROHE'})     # GROHE is off the list but already on the quotation
+        self.assertContains(resp, 'Grohe valve')
+
+
+@override_settings(ALLOWED_HOSTS=['testserver'])
+class ItemCatalogDashboardLinkTests(TestCase):
+    """Both salesman dashboards link to the Item Catalog, and a salesman can open it."""
+
+    def _login(self, name, company):
+        u = User.objects.create_user(name, password='x')
+        Role.objects.create(user=u, role='Salesman', company=company)
+        self.client.force_login(u)
+
+    def test_junaid_salesman_dashboard_links_to_the_catalog(self):
+        self._login('jsam', 'Junaid')
+        resp = self.client.get(reverse('sales_home'))
+        self.assertContains(resp, 'href="%s"' % reverse('item_catalog'))
+        self.assertEqual(self.client.get(reverse('item_catalog')).status_code, 200)
+
+    def test_alabama_salesman_dashboard_links_to_the_catalog(self):
+        self._login('alabama_sam', 'Alabama')
+        resp = self.client.get(reverse('alabama:alabama_sales_home'))
+        self.assertContains(resp, 'href="%s"' % reverse('item_catalog'))
+        self.assertEqual(self.client.get(reverse('item_catalog')).status_code, 200)

@@ -1,7 +1,7 @@
 """Item catalog: every stock item (so.Items, kept up to date by the stock sync) with its photo and datasheet.
 
 Photos / datasheets live in ItemMedia (a separate table + private folder), so the sync that rewrites Items never touches
-them. Junaid users see every brand; Alabama users only the brands in settings.ALABAMA_CATALOG_BRANDS (empty = all).
+them. Junaid users see every brand; Alabama users only the brands in the admin list (AlabamaCatalogBrand), else settings.ALABAMA_CATALOG_BRANDS (empty = all).
 Only admins upload or remove files.
 """
 import logging
@@ -24,8 +24,8 @@ from django.views.decorators.http import require_GET, require_POST
 from quotation import pricing
 
 from .item_media import MediaError, datasheet_to_jpeg, photo_to_jpeg
-from .item_status import active_items, latest_sync_run
-from .models import ItemMedia, Items, ItemSyncStatus
+from .item_status import active_items, alabama_brand_limit, latest_sync_run
+from .models import AlabamaCatalogBrand, ItemMedia, Items, ItemSyncStatus
 
 log = logging.getLogger('so')
 
@@ -40,8 +40,7 @@ def _alabama_brands(user):
     """Lower-cased brand allowlist when this user is restricted to Alabama's brands, else None (= every brand)."""
     role = getattr(user, 'role', None)
     is_alabama = (role is not None and role.company == 'Alabama') or 'alabama' in (user.username or '').lower()
-    allowed = [b.strip().lower() for b in getattr(settings, 'ALABAMA_CATALOG_BRANDS', []) if b and b.strip()]
-    return allowed if (is_alabama and allowed) else None
+    return alabama_brand_limit(user)
 
 
 def _visible_items(user):

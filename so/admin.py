@@ -277,3 +277,38 @@ class AccountsRecordingChangeLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+from django import forms as _forms
+
+
+class AlabamaCatalogBrandForm(_forms.ModelForm):
+    """Pick the brand from the brands that exist in Items, so a typo can never create a brand that matches nothing."""
+    brand = _forms.ChoiceField(choices=[])
+
+    class Meta:
+        model = AlabamaCatalogBrand
+        fields = ['brand', 'is_active']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        brands = list(Items.objects.exclude(item_firm='').order_by('item_firm').values_list('item_firm', flat=True).distinct())
+        current = self.instance.brand if self.instance and self.instance.pk else ''
+        if current and current not in brands:
+            brands.append(current)
+        self.fields['brand'].choices = [('', '---------')] + [(b, b) for b in brands]
+
+    def clean_brand(self):
+        brand = (self.cleaned_data.get('brand') or '').strip()
+        clash = AlabamaCatalogBrand.objects.filter(brand__iexact=brand).exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise _forms.ValidationError('This brand is already in the list.')
+        return brand
+
+
+@admin.register(AlabamaCatalogBrand)
+class AlabamaCatalogBrandAdmin(admin.ModelAdmin):
+    form = AlabamaCatalogBrandForm
+    list_display = ('brand', 'is_active', 'created_at')
+    list_editable = ('is_active',)
+    list_filter = ('is_active',)
+    search_fields = ('brand',)
