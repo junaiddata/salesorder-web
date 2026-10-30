@@ -1405,3 +1405,43 @@ class HistoricalSalesLine(models.Model):
 
     def __str__(self):
         return f"{self.document_type} {self.document_number} - {self.customer_name or self.customer.customer_name}"
+
+# ---------------------------------------------------------------------------
+# Item catalog media: one photo + one datasheet per stock item, kept in their own table so the shared Items table
+# (rewritten by the stock sync) is never touched.
+# ---------------------------------------------------------------------------
+import secrets as _secrets
+from .item_media_storage import get_item_media_storage
+
+
+def item_photo_upload_to(instance, filename):
+    return f'photos/{_secrets.token_hex(8)}.jpg'
+
+
+def item_datasheet_upload_to(instance, filename):
+    return f'datasheets/{_secrets.token_hex(8)}.jpg'
+
+
+class ItemMedia(models.Model):
+    item = models.OneToOneField(Items, on_delete=models.CASCADE, related_name='media')
+    photo = models.ImageField(upload_to=item_photo_upload_to, storage=get_item_media_storage, blank=True, null=True)
+    datasheet = models.FileField(upload_to=item_datasheet_upload_to, storage=get_item_media_storage, blank=True, null=True)   # always a JPEG
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Media for {self.item.item_code}'
+
+
+class ItemSyncStatus(models.Model):
+    """When the stock sync (import_items2) last saw this item in the stock app's API.
+
+    Kept in its own table so the shared Items table is untouched. Every item the API lists in a run gets that run's
+    timestamp; an item missing from the latest run (or never listed, e.g. created by an upload) is shown as Inactive.
+    Nothing is deleted: the item and all its history stay, and it turns Active again when the stock app lists it again.
+    """
+    item = models.OneToOneField(Items, on_delete=models.CASCADE, related_name='sync_status')
+    last_seen_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f'{self.item.item_code} seen {self.last_seen_at:%Y-%m-%d %H:%M}'

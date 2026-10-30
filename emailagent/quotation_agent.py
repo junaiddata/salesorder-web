@@ -15,6 +15,7 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import BaseModel
 from so.models import Quotation, QuotationItem, Customer, Items
+from so.item_status import active_items
 from emailagent.models import (
     AdditionalQuotationDraft, EnquiryItem, EnquiryItemSuggestion, QuotationDraft,
 )
@@ -982,7 +983,7 @@ def _record_suggested_substitutes(enquiry_item, suggestions):
         code = (entry.get('item_code') or '').strip()
         if not code or code in seen:
             continue
-        candidate = Items.objects.filter(item_code=code).first()
+        candidate = active_items(Items.objects.filter(item_code=code)).first()
         if not candidate:
             continue
         seen.add(code)
@@ -1032,7 +1033,7 @@ def _expand_size_range_matches(tracked_email, enquiry_items, expansions):
             if not code or code in seen:
                 continue
             seen.add(code)
-            candidate = Items.objects.filter(item_code=code).first()
+            candidate = active_items(Items.objects.filter(item_code=code)).first()
             if not candidate:
                 continue
             stock_note, price_note = _stock_and_price_notes(candidate)
@@ -1292,7 +1293,7 @@ def draft_quotation(tracked_email) -> None:
         matched_item = None
         item_code = (match.get('item_code') or '').strip()
         if item_code:
-            candidate = Items.objects.filter(item_code=item_code).first()
+            candidate = active_items(Items.objects.filter(item_code=item_code)).first()
             if candidate:
                 # Always quote the best catalog match found, even at 0 stock,
                 # rather than silently dropping the line -- regardless of
@@ -1792,7 +1793,7 @@ def merge_followup_into_quotation(tracked_email, original_tracked_email) -> dict
             # downgrade an existing match to unmatched.
             continue
 
-        candidate = Items.objects.filter(item_code=suggested_code).first()
+        candidate = active_items(Items.objects.filter(item_code=suggested_code)).first()
         if not candidate:
             continue
         stock = candidate.total_available_stock

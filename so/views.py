@@ -14,6 +14,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from .models import Customer, Items, SalesOrder, OrderItem,Salesman,CustomerPrice,Role
+from .item_status import active_items, active_firms, firms_with_existing, latest_sync_run
 import datetime
 from django.contrib.auth.decorators import login_required
 from functools import wraps
@@ -350,7 +351,7 @@ def create_sales_order(request):
             salesmen = salesmen.none()
 
     # -------------------------------------------------------------------------
-    firms = Items.objects.values_list('item_firm', flat=True).distinct()
+    firms = active_firms()   # inactive items are not offered for a new order
     customers = Customer.objects.all()
 
     return render(request, 'so/create_sales_order.html', {
@@ -368,7 +369,7 @@ def items_search(request):
     firms_param = request.GET.get('firms', '')
     firms = [f.strip() for f in firms_param.split(',') if f.strip()]
 
-    base_qs = Items.objects.all()
+    base_qs = active_items(Items.objects.all())   # inactive items are not offered for new lines
     if firms and 'All' not in firms:
         base_qs = base_qs.filter(item_firm__in=firms)
 
@@ -488,7 +489,8 @@ def edit_sales_order(request, order_id):
 
     # -------------------------------------------------------------------------
 
-    firms = Items.objects.values_list('item_firm', flat=True).distinct()
+    # active brands, plus the brands of the lines already on this order (so an old line's brand still shows)
+    firms = firms_with_existing(oi.item for oi in sales_order.items.select_related('item'))
 
     return render(request, 'so/edit_sales_order.html', {
         'sales_order': sales_order,
@@ -656,7 +658,9 @@ def get_items_by_firm(request):
     firms_param = request.GET.get('firms', '') or request.GET.get('firm', '')
     firms = [f.strip() for f in firms_param.split(',') if f.strip()]
 
-    cache_key = f'items_by_firms_{"_".join(sorted(f.lower() for f in firms)) or "all"}'
+    # the key carries the latest sync run, so a new sync is never served from a list cached before it
+    run = latest_sync_run()
+    cache_key = f'items_by_firms_{"_".join(sorted(f.lower() for f in firms)) or "all"}_r{int(run.timestamp()) if run else 0}'
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse({'items': cached})
@@ -665,6 +669,7 @@ def get_items_by_firm(request):
         qs = Items.objects.all()
     else:
         qs = Items.objects.filter(item_firm__in=firms)
+    qs = active_items(qs)   # inactive items are not offered for new lines
 
     items = list(
         qs.only('id', 'item_description', 'item_code', 'item_firm', 'item_upvc', 'item_stock')
@@ -3485,6 +3490,7 @@ SALES_USER_MAP = {
     "alabamaadmin": ["KADER","MUSHARAF","AIJAZ","CASH"],
     "alabamaaijaz": ["AIJAZ"],
     "alabamasreejith": ["SREEJITH","A.SREEJITH", "A. SREEJITH"],
+    "alabamamuzammil":["MUZAMMIL"],
     "alabamaakhil": ["AKHIL"],
     "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
     "alabamakadar": ["KADER", "A.KADER", "A. KADER"],
@@ -5041,8 +5047,8 @@ def items_search_api(request):
     if len(search_term) < 2:
         return JsonResponse([], safe=False)
 
-    # Base queryset
-    items = Items.objects.all()
+    # Base queryset (inactive items are not offered for new lines)
+    items = active_items(Items.objects.all())
 
     # 1. Apply the firm filter if one is provided
     if firm_filter and firm_filter.lower() != 'all':

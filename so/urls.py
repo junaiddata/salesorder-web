@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 from so.views import *
 from . import views_quotation
+from . import item_catalog_views
+from . import item_catalog_export
 from . import sap_salesorder_views
 from . import sap_purchaseorder_views
 from . import sap_purchaseorder_pdf_export
@@ -77,6 +79,15 @@ urlpatterns = [
 
     ################ ITEM MANAGEMENT ##################
     path('items/', views.item_list, name='item_list'),
+    path('items/catalog/', item_catalog_views.item_catalog, name='item_catalog'),
+    path('items/catalog/<int:pk>/photo/', item_catalog_views.item_catalog_photo, name='item_catalog_photo'),
+    path('items/catalog/<int:pk>/datasheet/', item_catalog_views.item_catalog_datasheet, name='item_catalog_datasheet'),
+    path('items/catalog/<int:pk>/upload/', item_catalog_views.item_catalog_upload, name='item_catalog_upload'),
+    path('items/catalog/<int:pk>/remove/', item_catalog_views.item_catalog_remove, name='item_catalog_remove'),
+    path('items/catalog/<int:pk>/edit/', item_catalog_views.item_catalog_edit, name='item_catalog_edit'),
+    path('items/catalog/<int:pk>/delete/', item_catalog_views.item_catalog_delete, name='item_catalog_delete'),
+    path('items/catalog/export/excel/', item_catalog_export.item_catalog_export_excel, name='item_catalog_export_excel'),
+    path('items/catalog/export/pdf/', item_catalog_export.item_catalog_export_pdf, name='item_catalog_export_pdf'),
     path('items/add/', views.item_create, name='item_create'),
     path('items/edit/<int:pk>/', views.item_edit, name='item_edit'),
     path('items/delete/<int:pk>/', views.item_delete, name='item_delete'),

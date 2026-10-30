@@ -6,7 +6,9 @@ import requests
 from decimal import Decimal
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from so.models import Items, IgnoreList
+from so.models import Items, IgnoreList, ItemSyncStatus
+from django.db.models import Max
+from django.utils import timezone
 from django.core.cache import cache
 
 # Stock API: gzip body, ETag/304, 503 retry — see integration notes (STOCK_API_URL).
@@ -14,6 +16,7 @@ DEFAULT_STOCK_URL = "https://stock.junaidworld.com/api/stock"
 ETAG_FILENAME = "stock_import_etag.txt"
 MAX_RETRIES_503 = 5
 RETRY_BASE_SEC = 2.0
+MIN_RUN_FRACTION = 0.8   # a run listing under 80% of the previous run's items is not recorded as a new run
 REQUEST_TIMEOUT = (15, 600)  # connect, read (large gzip payload)
 
 
@@ -24,6 +27,10 @@ class Command(BaseCommand):
         return Path(settings.BASE_DIR) / ETAG_FILENAME
 
     def _read_etag(self):
+        # No item has a "last seen" mark yet (first run after ItemSyncStatus was added): ignore the saved ETag so
+        # this run is a full import and marks every item the stock app lists, even if the stock data is unchanged.
+        if not ItemSyncStatus.objects.exists():
+            return None
         p = self._etag_path()
         if not p.is_file():
             return None
@@ -110,6 +117,33 @@ class Command(BaseCommand):
             f"Stock API returned 503 repeatedly; try again later ({MAX_RETRIES_503} attempts)."
         )
 
+    def _record_seen(self, codes, batch):
+        """Give every listed item this run's timestamp in ItemSyncStatus (update the rows that exist, create the rest)."""
+        run_at = timezone.now()
+        uniq = list(set(codes))
+        ids = []
+        for i in range(0, len(uniq), batch):
+            ids.extend(Items.objects.filter(item_code__in=uniq[i:i + batch]).values_list("id", flat=True))
+        # Sanity check: items missing from a run turn Inactive and disappear from new quotations / orders, so a run
+        # that lists far fewer items than the previous one (a partial or broken stock API reply) is NOT recorded.
+        # The previous marks stay in force until a normal-sized run arrives.
+        last = ItemSyncStatus.objects.aggregate(m=Max("last_seen_at"))["m"]
+        if last is not None:
+            previous = ItemSyncStatus.objects.filter(last_seen_at=last).count()
+            if previous and len(ids) < previous * MIN_RUN_FRACTION:
+                self.stdout.write(self.style.WARNING(
+                    f"Stock API listed only {len(ids)} items (previous run: {previous}); not recording this run so "
+                    "items are not wrongly marked Inactive."
+                ))
+                return
+        for i in range(0, len(ids), batch):
+            ItemSyncStatus.objects.filter(item_id__in=ids[i:i + batch]).update(last_seen_at=run_at)
+        have = set(ItemSyncStatus.objects.values_list("item_id", flat=True))
+        ItemSyncStatus.objects.bulk_create(
+            [ItemSyncStatus(item_id=i, last_seen_at=run_at) for i in ids if i not in have],
+            batch_size=batch, ignore_conflicts=True,
+        )
+
     def handle(self, *args, **kwargs):
         url = os.getenv("STOCK_API_URL", DEFAULT_STOCK_URL).strip()
 
@@ -147,6 +181,7 @@ class Command(BaseCommand):
 
         new_items = []
         items_to_update = []
+        seen_codes = []   # every item the stock API listed in this run (ignore list excluded)
 
         created, updated, skipped = 0, 0, 0
 
@@ -156,6 +191,8 @@ class Command(BaseCommand):
             if item_code in ignore_codes or not item_code:
                 skipped += 1
                 continue
+
+            seen_codes.append(item_code)
 
             # Safely parse numeric fields
             cost_price = safe_float(item.get("cost_price"))
@@ -205,6 +242,12 @@ class Command(BaseCommand):
         if new_items:
             for i in range(0, len(new_items), BATCH_SIZE):
                 Items.objects.bulk_create(new_items[i:i + BATCH_SIZE], ignore_conflicts=True)
+
+        # 5. Remember that these items are still listed by the stock app (items missing from a run show as Inactive)
+        try:
+            self._record_seen(seen_codes, BATCH_SIZE)
+        except Exception as exc:   # never let the status marks break the item import itself
+            self.stdout.write(self.style.WARNING(f"Could not record item sync status: {exc}"))
 
         # Invalidate cached stock map used by get_stock_costs() only (avoid wiping all caches).
         cache.delete("junaid_stock_data")

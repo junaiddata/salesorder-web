@@ -1,0 +1,334 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Item Catalog</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'submittal/ui.css' %}">
+    <style>
+        /* Use the full browser width (the shared UI caps it at 1140px), same as the Products page. */
+        .u-wrap, .app-nav-inner { max-width: none; padding-left: 1.5rem; padding-right: 1.5rem; }
+        @media (max-width: 768px) { .u-wrap, .app-nav-inner { padding-left: 1rem; padding-right: 1rem; } }
+        body { overflow-x: hidden; }
+        input, select, textarea { max-width: 100%; }
+
+        /* Filter controls stay on one row on wide screens (the shared .input-x is width:100%). */
+        .cat-filters .cat-search { width: 340px; }
+        .cat-filters .cat-select { width: auto; }
+        .cat-filters .btn-x, .cat-filters .brand-dd { flex: none; }
+        @media (max-width: 1199px) { .cat-filters { flex-wrap: wrap; } .cat-filters .cat-search { width: 260px; } }
+        @media (max-width: 575px) { .cat-filters .cat-search { width: 100%; } }
+        .pl-table td, .pl-table th { vertical-align: middle; }
+        .pl-table .thumb { width: 44px; height: 44px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; }
+        .pl-table .desc { max-width: 520px; }
+        .pl-table .nowrap { white-space: nowrap; }
+        .act { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+        .brand-dd { position: relative; }
+        .brand-dd summary { list-style: none; cursor: pointer; min-width: 170px; display: flex; justify-content: space-between; align-items: center; gap: .5rem; white-space: nowrap; }
+        .brand-dd summary::-webkit-details-marker { display: none; }
+        .brand-dd summary.on { border-color: #2563eb; font-weight: 600; }
+        .brand-dd summary i { font-size: .65rem; color: #64748b; }
+        .brand-panel { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; width: 260px; background: #fff; border: 1px solid #cbd5e1;
+            border-radius: 10px; box-shadow: 0 10px 28px rgba(15,23,42,.18); padding: .6rem; }
+        .brand-tools { display: flex; gap: .4rem; margin: .5rem 0; }
+        .brand-list { max-height: 240px; overflow-y: auto; margin-bottom: .5rem; }
+        .brand-list label { display: flex; gap: .5rem; align-items: center; padding: .25rem .3rem; border-radius: 6px; cursor: pointer; font-size: .85rem; }
+        .brand-list label:hover { background: #f1f5f9; }
+        .brand-empty { padding: .5rem; font-size: .8rem; color: #64748b; }
+        .qt-confirm .modal-dialog { max-width: 340px; }
+        @media (max-width: 991px) {
+            .pl-table thead { display: none; }
+            .pl-table, .pl-table tbody, .pl-table tr, .pl-table td { display: block; width: 100%; }
+            .pl-table tr { padding: .75rem .9rem; border-bottom: 1px solid #e2e8f0; }
+            .pl-table td { padding: .2rem 0; border: none; background: transparent !important; }
+            .pl-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 90px;
+                font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="app-nav" id="appNav">
+        <div class="app-nav-inner">
+            <a class="app-brand" href="{% url 'item_catalog' %}">
+                <span class="logo"><i class="fas fa-boxes-stacked"></i></span>
+                <span>
+                    <span class="name">Item Catalog</span><br>
+                    <span class="sub">Stock items with photos and datasheets</span>
+                </span>
+            </a>
+            <button class="app-nav-toggle" id="navToggle" aria-label="Menu"><i class="fas fa-bars"></i></button>
+            <div class="app-nav-links">
+                <a href="{% url 'item_catalog' %}" class="app-nav-link active"><i class="fas fa-boxes-stacked"></i> Item Catalog</a>
+                <a href="{% url 'create_quotation' %}" class="app-nav-link"><i class="fas fa-plus-circle"></i> Create Quotation</a>
+                <a href="{% url 'view_quotations' %}" class="app-nav-link"><i class="fas fa-table-columns"></i> View Quotations</a>
+            </div>
+            <div class="app-nav-right">
+                <a href="{% if request.user.role.role == 'Salesman' %}{% if request.user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}{% else %}{% url 'home' %}{% endif %}" class="app-nav-ghost"><i class="fas fa-arrow-left"></i> {% if request.user.role.role == 'Salesman' %}My Dashboard{% else %}SO Home{% endif %}</a>
+            </div>
+        </div>
+    </nav>
+
+    {% if messages %}
+    <div class="flash-stack" id="flashStack">
+        {% for msg in messages %}
+        <div class="flash {{ msg.tags }}">
+            <span>{{ msg }}</span>
+            <button class="close" onclick="this.parentElement.remove()" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="u-wrap u-page">
+        <div class="sec-head">
+            <h2>Item Catalog <span class="count">({% if shown != total %}{{ shown }} of {% endif %}{{ total }})</span></h2>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="get" class="d-flex gap-2 align-items-center cat-filters">
+                    <details class="brand-dd" id="brandDd">
+                        <summary class="input-x{% if brand_count %} on{% endif %}">{{ brand_label }} <i class="fas fa-chevron-down"></i></summary>
+                        <div class="brand-panel">
+                            <input type="text" id="brandSearch" class="input-x" placeholder="Search brand…" autocomplete="off">
+                            <div class="brand-tools">
+                                <button type="button" class="btn-x sm" id="brandAll">Select all</button>
+                                <button type="button" class="btn-x sm" id="brandNone">Clear all</button>
+                            </div>
+                            <div class="brand-list">
+                                {% for b, on in brand_options %}
+                                <label data-name="{{ b|lower }}"><input type="checkbox" name="brand" value="{{ b }}" {% if on %}checked{% endif %}> {{ b }}</label>
+                                {% endfor %}
+                            </div>
+                            <div class="brand-empty" style="display:none">No brand found</div>
+                            <button type="submit" class="btn-x btn-primary-x sm" style="width:100%">Apply</button>
+                        </div>
+                    </details>
+                    <input type="text" name="q" value="{{ q }}" class="input-x cat-search" placeholder="Search item code, UPC, description, brand…">
+                    <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
+                    <label class="btn-x" style="cursor:pointer;gap:.4rem" title="Show only items that have DIP stock above 0"><input type="checkbox" name="instock" value="1" {% if hide_zero %}checked{% endif %} onchange="this.form.submit()"> Hide 0 stock</label>
+                    {% if brand_count or q or hide_zero %}<a href="{% url 'item_catalog' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
+                </form>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+            <a href="{% url 'item_catalog_export_excel' %}?{{ filter_qs }}" data-export class="btn-x" title="Download the items shown (current search and filters) as Excel"><i class="fas fa-file-excel"></i> Excel</a>
+            <a href="{% url 'item_catalog_export_pdf' %}?{{ filter_qs }}" data-export class="btn-x" title="Download the items shown (current search and filters) as PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+            {% if is_admin %}<label class="btn-x" style="cursor:pointer;gap:.4rem" title="Leave the Cost column out of the Excel and PDF downloads (for files you send to someone)"><input type="checkbox" id="noCost"> Hide cost in downloads</label>{% endif %}
+        </div>
+
+        {% if page.object_list %}
+        <div class="tbl-x-wrap">
+            <table class="tbl-x pl-table">
+                <thead><tr><th>Item Code</th><th>UPC / Model</th><th>Photo</th><th>Brand</th><th>Description</th><th>Total Stock</th><th>DIP Stock</th>{% if is_admin %}<th>Cost</th>{% endif %}<th>Min Price</th><th>Datasheet</th>{% if is_admin %}<th>Actions</th>{% endif %}</tr></thead>
+                <tbody>
+                {% for it in page %}
+                <tr>
+                    <td data-label="Item Code" class="nowrap"><b>{{ it.item_code }}</b></td>
+                    <td data-label="UPC / Model" class="nowrap">{{ it.item_upvc|default:"—" }}</td>
+                    <td data-label="Photo">{% if it.has_photo %}<a href="{% url 'item_catalog_photo' it.pk %}?v={{ it.media_version }}" target="_blank" rel="noopener"><img class="thumb" loading="lazy" src="{% url 'item_catalog_photo' it.pk %}?v={{ it.media_version }}" alt=""></a>{% else %}<span class="u-muted">—</span>{% endif %}</td>
+                    <td data-label="Brand">{{ it.item_firm|default:"—" }}</td>
+                    <td data-label="Description" class="desc">{{ it.item_description|truncatechars:140 }}</td>
+                    <td data-label="Total Stock" class="nowrap">{{ it.total_stock_text|default:"—" }}</td>
+                    <td data-label="DIP Stock" class="nowrap">{{ it.dip_stock_text|default:"—" }}</td>
+                    {% if is_admin %}<td data-label="Cost" class="nowrap">{{ it.item_cost|floatformat:2 }}</td>{% endif %}
+                    <td data-label="Min Price" class="nowrap">{{ it.item_price|floatformat:2 }}</td>
+                    <td data-label="Datasheet">{% if it.has_datasheet %}<a href="{% url 'item_catalog_datasheet' it.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
+                    {% if is_admin %}
+                    <td>
+                        <div class="act">
+                            <button type="button" class="btn-x js-upload" data-code="{{ it.item_code }}" data-action="{% url 'item_catalog_upload' it.pk %}" title="Upload or replace photo / datasheet"><i class="fas fa-upload"></i></button>
+                            {% if it.can_modify %}
+                            <button type="button" class="btn-x js-edit" title="Edit item" data-code="{{ it.item_code }}" data-action="{% url 'item_catalog_edit' it.pk %}"
+                                    data-desc="{{ it.item_description }}" data-upc="{{ it.item_upvc|default:'' }}" data-firm="{{ it.item_firm }}"
+                                    data-price="{{ it.item_price|stringformat:'.2f' }}" data-cost="{{ it.item_cost|stringformat:'.2f' }}"><i class="fas fa-pen"></i></button>
+                            <form method="post" action="{% url 'item_catalog_delete' it.pk %}" style="display:inline;"
+                                  data-confirm="Delete item {{ it.item_code }} for good? This is refused if any quotation, order or history uses it." data-confirm-title="Delete item" data-confirm-ok="Delete">
+                                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
+                                <button type="submit" class="btn-x btn-danger-x" title="Delete item"><i class="fas fa-trash"></i></button>
+                            </form>
+                            {% endif %}
+                            {% if it.has_photo %}
+                            <form method="post" action="{% url 'item_catalog_remove' it.pk %}" style="display:inline;"
+                                  data-confirm="Remove the photo of {{ it.item_code }}?" data-confirm-title="Remove photo" data-confirm-ok="Remove">
+                                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><input type="hidden" name="kind" value="photo">
+                                <button type="submit" class="btn-x btn-danger-x" title="Remove photo"><i class="fas fa-image"></i></button>
+                            </form>
+                            {% endif %}
+                            {% if it.has_datasheet %}
+                            <form method="post" action="{% url 'item_catalog_remove' it.pk %}" style="display:inline;"
+                                  data-confirm="Remove the datasheet of {{ it.item_code }}?" data-confirm-title="Remove datasheet" data-confirm-ok="Remove">
+                                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><input type="hidden" name="kind" value="datasheet">
+                                <button type="submit" class="btn-x btn-danger-x" title="Remove datasheet"><i class="fas fa-file"></i></button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page.has_other_pages %}
+        <div class="d-flex gap-2 mt-3 align-items-center">
+            {% if page.has_previous %}<a class="btn-x" href="?page={{ page.previous_page_number }}&{{ filter_qs }}">&laquo; Previous</a>{% endif %}
+            <span class="u-muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+            {% if page.has_next %}<a class="btn-x" href="?page={{ page.next_page_number }}&{{ filter_qs }}">Next &raquo;</a>{% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="card-x"><div class="empty-x">
+            <div class="ic"><i class="fas fa-boxes-stacked"></i></div>
+            <h3>No items match the filter</h3>
+            <p>Try a different search or brand.</p>
+        </div></div>
+        {% endif %}
+    </div>
+
+    {% if is_admin %}
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="post" enctype="multipart/form-data" class="modal-content" id="uploadForm">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
+                <div class="modal-header"><h5 class="modal-title">Upload for <b id="uploadCode"></b></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <label class="label-x">Photo <small class="u-muted">(JPG / PNG, max 5 MB; saved small)</small></label>
+                    <input type="file" name="photo" accept="image/*" class="input-x mb-3">
+                    <label class="label-x">Datasheet <small class="u-muted">(PDF / JPG / PNG, max 10 MB; saved as one JPEG)</small></label>
+                    <input type="file" name="datasheet" accept="application/pdf,image/*,.pdf" class="input-x">
+                    <p class="u-muted mt-3 mb-0" style="font-size:.85rem">A new file replaces the current one. Leave a box empty to keep what is there.</p>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn-x" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn-x btn-primary-x"><i class="fas fa-upload"></i> Save</button></div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_admin %}
+    <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="post" class="modal-content" id="editForm">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
+                <div class="modal-header"><h5 class="modal-title">Edit item <b id="editCode"></b></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <label class="label-x">Description</label>
+                    <input type="text" name="item_description" id="editDesc" class="input-x mb-3" maxlength="100" required>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6"><label class="label-x">UPC / Model</label><input type="text" name="item_upvc" id="editUpc" class="input-x" maxlength="50"></div>
+                        <div class="col-6"><label class="label-x">Brand</label><input type="text" name="item_firm" id="editFirm" class="input-x" maxlength="100" list="brandList" required></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6"><label class="label-x">Min price</label><input type="number" name="item_price" id="editPrice" class="input-x" step="any" min="0" required></div>
+                        {% if can_see_cost %}<div class="col-6"><label class="label-x">Cost</label><input type="number" name="item_cost" id="editCost" class="input-x" step="any" min="0" required></div>{% endif %}
+                    </div>
+                    <datalist id="brandList">{% for b, on in brand_options %}<option value="{{ b }}">{% endfor %}</datalist>
+                    <p class="u-muted mt-3 mb-0" style="font-size:.85rem">The item code cannot be changed. Only items the stock app does not list can be edited.</p>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn-x" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn-x btn-primary-x"><i class="fas fa-check"></i> Save</button></div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="modal fade qt-confirm" id="qtConfirm" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="padding:1.6rem;text-align:center;border-radius:18px">
+                <h5 id="qtConfirmTitle">Please confirm</h5>
+                <p id="qtConfirmMsg" class="u-muted"></p>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn-x" style="flex:1;justify-content:center" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-x btn-danger-x" style="flex:1;justify-content:center" id="qtConfirmOk">Remove</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('navToggle')?.addEventListener('click', function () {
+            document.getElementById('appNav').classList.toggle('open');
+        });
+        document.querySelectorAll('#flashStack .flash').forEach(function (el) {
+            if (/error|danger/.test(el.className)) return;
+            setTimeout(function () { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(function () { el.remove(); }, 450); }, 5000);
+        });
+        // <form data-confirm="..."> shows the dialog before submitting.
+        document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                if (form.dataset.confirmed === '1') return;
+                e.preventDefault();
+                document.getElementById('qtConfirmTitle').textContent = form.dataset.confirmTitle || 'Please confirm';
+                document.getElementById('qtConfirmMsg').textContent = form.dataset.confirm;
+                document.getElementById('qtConfirmOk').textContent = form.dataset.confirmOk || 'Confirm';
+                var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('qtConfirm'));
+                document.getElementById('qtConfirmOk').onclick = function () { modal.hide(); form.dataset.confirmed = '1'; form.submit(); };
+                modal.show();
+            });
+        });
+
+        // Brand filter: search inside the list, Select all / Clear all, close when clicking elsewhere
+        (function () {
+            const dd = document.getElementById('brandDd'), bsearch = document.getElementById('brandSearch');
+            const visible = () => Array.from(dd.querySelectorAll('.brand-list input')).filter(b => b.closest('label').style.display !== 'none');
+            bsearch.addEventListener('input', () => {
+                const t = bsearch.value.trim().toLowerCase();
+                let n = 0;
+                dd.querySelectorAll('.brand-list label').forEach(l => { const show = !t || l.dataset.name.includes(t); l.style.display = show ? '' : 'none'; n += show; });
+                dd.querySelector('.brand-empty').style.display = n ? 'none' : '';
+            });
+            bsearch.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+            document.getElementById('brandAll').onclick = () => visible().forEach(b => b.checked = true);
+            document.getElementById('brandNone').onclick = () => visible().forEach(b => b.checked = false);
+            document.addEventListener('click', e => { if (dd.open && !dd.contains(e.target)) dd.open = false; });
+            dd.addEventListener('toggle', () => { if (dd.open) { bsearch.value = ''; bsearch.dispatchEvent(new Event('input')); bsearch.focus(); } });
+        })();
+
+        // Excel / PDF downloads: "Hide cost in downloads" adds nocost=1 to the link
+        document.querySelectorAll('a[data-export]').forEach(function (a) {
+            a.addEventListener('click', function () {
+                var u = new URL(a.href, location.href);
+                u.searchParams.delete('nocost');
+                var box = document.getElementById('noCost');
+                if (box && box.checked) u.searchParams.set('nocost', '1');
+                a.href = u.toString();
+            });
+        });
+
+        // Edit dialog (admin)
+        (function () {
+            const el = document.getElementById('editModal');
+            if (!el) return;
+            const modal = new bootstrap.Modal(el), form = document.getElementById('editForm');
+            document.querySelectorAll('.js-edit').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    form.action = b.dataset.action;
+                    document.getElementById('editCode').textContent = b.dataset.code;
+                    document.getElementById('editDesc').value = b.dataset.desc;
+                    document.getElementById('editUpc').value = b.dataset.upc;
+                    document.getElementById('editFirm').value = b.dataset.firm;
+                    document.getElementById('editPrice').value = b.dataset.price;
+                    var cost = document.getElementById('editCost');
+                    if (cost) cost.value = b.dataset.cost;
+                    modal.show();
+                });
+            });
+        })();
+
+        // Upload dialog (admin)
+        (function () {
+            const el = document.getElementById('uploadModal');
+            if (!el) return;
+            const modal = new bootstrap.Modal(el), form = document.getElementById('uploadForm');
+            document.querySelectorAll('.js-upload').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    form.action = b.dataset.action;
+                    form.reset();
+                    document.getElementById('uploadCode').textContent = b.dataset.code;
+                    modal.show();
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

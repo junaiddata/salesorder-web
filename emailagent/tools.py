@@ -271,6 +271,7 @@ def lookup_item_master(description: str) -> str:
     from django.db.models import Case, Count, IntegerField, Q, Value, When
 
     from so.models import Items
+    from so.item_status import active_items
 
     try:
         description = description.strip()
@@ -309,7 +310,7 @@ def lookup_item_master(description: str) -> str:
         # entirely for a phrase-only search with no scoreable words.
         frequencies = {}
         if word_hits:
-            frequencies = Items.objects.aggregate(**{
+            frequencies = active_items(Items.objects.all()).aggregate(**{
                 f"df_{i}": Count(Case(When(hit, then=Value(1)), output_field=IntegerField()))
                 for i, hit in enumerate(word_hits.values())
             })
@@ -355,7 +356,7 @@ def lookup_item_master(description: str) -> str:
             When(all_terms_hit, then=Value(1)), default=Value(0), output_field=IntegerField(),
         ) if all_terms_hit is not None else Value(0, output_field=IntegerField())
 
-        ranked = (Items.objects.filter(combined_q)
+        ranked = (active_items(Items.objects.all()).filter(combined_q)
                   .annotate(_relevance=relevance, _covers_all=covers_all)
                   .order_by('-_relevance', 'item_code'))
         total_matches = ranked.count()

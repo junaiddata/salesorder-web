@@ -287,6 +287,10 @@ BANGLADESH_PI_SEAL_USERS = ['manager', 'so']
 # Who may upload / print the company stamp on Junaid Galleria quotations (everyone else gets unstamped PDFs).
 QUOTATION_STAMP_USERS = ['md', 'manager', 'so']
 
+# Item catalog (/items/catalog/): Alabama users only see these brands (comma separated in .env, e.g.
+# ALABAMA_CATALOG_BRANDS=ARISTON,GROHE). Empty = Alabama sees every brand, like Junaid.
+ALABAMA_CATALOG_BRANDS = [b.strip() for b in os.getenv('ALABAMA_CATALOG_BRANDS', '').split(',') if b.strip()]
+
 # Quotation module "Email" button: sent from its own mailbox, separate from the EMAIL_* account above (that one
 # is used by the older quotation / submittal modules and is left untouched). Same mail server as sales@junaid.ae by
 # default. Set in .env (never in code):
