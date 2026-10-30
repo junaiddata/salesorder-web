@@ -202,6 +202,7 @@ urlpatterns += [
     path('sapsalesorders/<str:so_number>/', sap_salesorder_views.salesorder_detail, name='salesorder_detail'),
     path('sapsalesorders/<str:so_number>/view-pdf/', sap_salesorder_views.sap_salesorder_view_pdf, name='sap_salesorder_view_pdf'),
     path('sapsalesorders/<str:so_number>/export/', sap_salesorder_views.export_sap_salesorder_pdf, name='export_sap_salesorder_pdf'),
+    path('sapsalesorders/<str:so_number>/export-excel/', sap_salesorder_views.export_sap_salesorder_excel, name='export_sap_salesorder_excel'),
     path('sapsalesorders/<str:so_number>/export-open/', sap_salesorder_views.export_sap_salesorder_open_items_pdf, name='export_sap_salesorder_open_items_pdf'),
     path('sapsalesorders/<str:so_number>/remarks/', sap_salesorder_views.salesorder_update_remarks, name='salesorder_update_remarks'),
     path('sapsalesorders/<str:so_number>/management-remarks/', sap_salesorder_views.salesorder_update_management_remarks, name='salesorder_update_management_remarks'),

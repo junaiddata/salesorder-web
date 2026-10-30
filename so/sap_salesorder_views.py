@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.template.loader import render_to_string
 from datetime import datetime, date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from html import escape as html_escape
 import pandas as pd
@@ -2185,6 +2185,101 @@ def export_salesorder_list_pdf(request):
     fname = f'sales_orders_list_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{fname}"'
+    return response
+
+
+@login_required
+def export_sap_salesorder_excel(request, so_number):
+    """Admin-only: export one sales order's line items to Excel with all detail-page columns."""
+    _is_manager = (request.user.username or '').strip().lower() == 'manager'
+    is_admin = _is_manager or (
+        hasattr(request.user, 'role') and request.user.role
+        and getattr(request.user.role, 'role', None) == 'Admin'
+    )
+    if not is_admin:
+        raise Http404("Not found")
+
+    salesorder = get_object_or_404(SAPSalesorder, so_number=so_number)
+    items = list(salesorder.items.all().order_by('line_no', 'id'))
+
+    item_codes = [it.item_no for it in items if it.item_no]
+    stock_lookup = {}
+    if item_codes:
+        for row in Items.objects.filter(item_code__in=item_codes).only(
+            'item_code', 'total_available_stock', 'dip_warehouse_stock', 'item_cost', 'item_price', 'item_firm'
+        ):
+            stock_lookup[row.item_code] = row
+
+    try:
+        from so.brand_margins_service import fetch_brand_margins, _get_required_margin
+        brand_margins = fetch_brand_margins()
+    except Exception:
+        brand_margins, _get_required_margin = None, None
+
+    zero = Decimal("0")
+    data = []
+    for idx, it in enumerate(items, start=1):
+        qty = it.quantity or zero
+        row_total = it.row_total or zero
+        unit_price = (row_total / qty).quantize(Decimal("0.01")) if qty else zero
+        live = stock_lookup.get(it.item_no)
+        cost = Decimal(str(live.item_cost or 0)) if live else zero
+        margin_pct = ((unit_price - cost) / unit_price * 100).quantize(Decimal("0.01")) if unit_price > 0 else zero
+
+        revised = it.revised_price
+        manufacture = (it.manufacture or '').strip()
+        req_margin = None
+        if brand_margins:
+            req_margin = float(
+                Decimal(str(_get_required_margin(manufacture or (live.item_firm if live and live.item_firm else ''), brand_margins)))
+                .quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            )
+
+        is_open = (it.row_status or '').strip().upper() in ('O', 'OPEN')
+        data.append({
+            '#': idx,
+            'Item No': it.item_no or '',
+            'Description': it.description or '',
+            'Mfr': manufacture,
+            'St': 'O' if is_open else 'C',
+            'Qty': float(qty),
+            'Price': float(unit_price),
+            'Min Sell': float(live.item_price) if live and live.item_price is not None else None,
+            'Rev. Price': float(revised) if revised is not None else None,
+            'Cost': float(cost),
+            'Mgn %': float(margin_pct.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)),
+            'Req %': req_margin,
+            'Rev. Total': float(row_total),
+            'Open': float(it.remaining_open_quantity or zero),
+            'Pending': float(it.pending_amount or zero),
+            'Tot. Stock': float(live.total_available_stock or zero) if live else 0.0,
+            'DIP': float(live.dip_warehouse_stock or zero) if live else 0.0,
+        })
+
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Items', index=False)
+        worksheet = writer.sheets['Items']
+        from openpyxl.styles import Font, PatternFill, Alignment
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for column in worksheet.columns:
+            max_length = max((len(str(c.value)) for c in column if c.value is not None), default=0)
+            worksheet.column_dimensions[column[0].column_letter].width = min(max_length + 2, 50)
+        worksheet.freeze_panes = 'A2'
+
+    output.seek(0)
+    date_str = salesorder.posting_date.strftime('%Y%m%d') if salesorder.posting_date else 'NA'
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="SAP_Salesorder_{salesorder.so_number}_{date_str}.xlsx"'
     return response
 
 
