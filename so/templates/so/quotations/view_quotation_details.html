@@ -656,6 +656,18 @@
             font-size: 16px;
         }
 
+        /* Horizontal scroll for the wide items table on tablets/narrow screens */
+        .sap-table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 577px) and (max-width: 1200px) {
+            .sap-table-scroll .sap-table {
+                min-width: 900px;
+            }
+        }
+
         /* Action Buttons */
         .action-area {
             background-color: white;
@@ -1358,6 +1370,7 @@
                 {% endif %}
             </div>
             <div class="sap-card-body" style="padding: 0;">
+                <div class="sap-table-scroll">
                 <table class="sap-table">
                     <thead>
                         <tr>
@@ -1471,6 +1484,7 @@
                         {% endif %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
 
