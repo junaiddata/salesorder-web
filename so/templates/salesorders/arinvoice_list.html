@@ -137,10 +137,34 @@
     }
 
     @media (min-width: 1024px) {
+      /* Row 1: Search 3 | Salesman 2 | Customer 3 | Year 2 | Month 2
+         Row 2: Cancel 2 | Start 2 | End 2 | Store 2 | Amount 2 | Per Page 2
+         Row 3: Apply / Clear buttons */
       .filters-grid {
-        grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        align-items: end;
       }
+      .filters-grid > .field { grid-column: span 2; min-width: 0; }
+      .filters-grid > .field:nth-child(1) { grid-column: span 3; }
+      .filters-grid > .field:nth-child(3) { grid-column: span 3; }
+      .filters-grid > .field:nth-child(12) { grid-column: span 12; }
     }
+
+    /* Same height for every filter control */
+    .filters-grid .input,
+    .filters-grid .select,
+    .filters-grid .select-box {
+      height: 40px;
+      box-sizing: border-box;
+    }
+    .filters-grid .select-box > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .filters-grid .select-box::after { margin-left: 8px; flex-shrink: 0; }
+    .filters-grid .field label { white-space: nowrap; }
 
     .field label {
       display: block;
@@ -512,13 +536,60 @@
         </div>
 
         <div class="field">
-          <label>Start Date</label>
-          <input class="input" type="date" name="start" value="{{ filters.start }}">
+          <label>Customer</label>
+          <div class="multi-select" id="customer-wrapper">
+            <div class="select-box" id="customer-trigger">
+              <span id="customer-text">All Customers</span>
+            </div>
+            <div class="options-container" id="customer-options">
+              <input type="text" id="customer-search" placeholder="Search customer..." autocomplete="off"
+                     style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
+              {% for c in customers %}
+                <label class="option-label">
+                  <input type="checkbox" name="customer" value="{{ c.customer_code }}" data-label="{{ c.name }}" {% if c.customer_code in filters.customers_filter %}checked{% endif %}>
+                  {{ c.name }} <span style="opacity:.6">({{ c.customer_code }})</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
 
         <div class="field">
-          <label>End Date</label>
-          <input class="input" type="date" name="end" value="{{ filters.end }}">
+          <label>Year</label>
+          <div class="multi-select" id="year-wrapper">
+            <div class="select-box" id="year-trigger" title="Overrides Start/End Date when selected">
+              <span id="year-text">All Years</span>
+            </div>
+            <div class="options-container" id="year-options">
+              <input type="text" id="year-search" placeholder="Search year..." autocomplete="off"
+                     style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
+              {% for y in year_options %}
+                <label class="option-label">
+                  <input type="checkbox" name="year" value="{{ y }}" data-label="{{ y }}" {% if y in filters.year %}checked{% endif %}>
+                  {{ y }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Month</label>
+          <div class="multi-select" id="month-wrapper">
+            <div class="select-box" id="month-trigger" title="Overrides Start/End Date when selected">
+              <span id="month-text">All Months</span>
+            </div>
+            <div class="options-container" id="month-options">
+              <input type="text" id="month-search" placeholder="Search month..." autocomplete="off"
+                     style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
+              {% for m in month_options %}
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="{{ m.value }}" data-label="{{ m.label }}" {% if m.value in filters.month %}checked{% endif %}>
+                  {{ m.label }}
+                </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -529,6 +600,16 @@
             <option value="csYes" {% if filters.cancel_status == 'csYes' %}selected{% endif %}>Cancelled</option>
             <option value="csCancellation" {% if filters.cancel_status == 'csCancellation' %}selected{% endif %}>Cancellation</option>
           </select>
+        </div>
+
+        <div class="field">
+          <label>Start Date</label>
+          <input class="input" type="date" name="start" value="{{ filters.start }}">
+        </div>
+
+        <div class="field">
+          <label>End Date</label>
+          <input class="input" type="date" name="end" value="{{ filters.end }}">
         </div>
 
         <div class="field">
@@ -555,7 +636,7 @@
 
         <div class="field">
           <label>Per Page</label>
-          <input class="input" type="number" name="page_size" min="5" max="100" value="{{ filters.page_size }}" style="width:80px;">
+          <input class="input" type="number" name="page_size" min="5" max="1000" value="{{ filters.page_size }}">
         </div>
 
         <div class="field" style="align-self:end; display:flex; flex-wrap:nowrap; align-items:center; gap:8px; white-space:nowrap;">
@@ -590,6 +671,60 @@
       </div>
     </div>
 
+    {% if current_month_summary %}
+    <!-- Customer summary -->
+    <div class="card" style="margin-bottom:12px;">
+      <div class="stats-bar" style="border-top:none;">
+        <div class="stat-item"><span class="stat-label">Current month ({{ current_month_summary.label }}):</span>
+          <span class="stat-value">{{ current_month_summary.count }} invoices</span></div>
+        <div class="stat-item"><span class="stat-label">Sales (without VAT):</span>
+          <span class="stat-value">{{ current_month_summary.without_vat|floatformat:2 }}</span></div>
+        <div class="stat-item"><span class="stat-label">Total (with VAT):</span>
+          <span class="stat-value">{{ current_month_summary.total|floatformat:2 }}</span></div>
+        {% if user.is_staff or user.is_superuser %}
+        <div class="stat-item"><span class="stat-label">GP:</span>
+          <span class="stat-value">{{ current_month_summary.gp|floatformat:2 }} ({{ current_month_summary.gp_pct|floatformat:2 }}%)</span></div>
+        {% endif %}
+      </div>
+      {% if monthly_rows %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th style="text-align:right">Invoices</th>
+              <th style="text-align:right">Sales (without VAT)</th>
+              <th style="text-align:right">VAT</th>
+              <th style="text-align:right">Total (with VAT)</th>
+              {% if user.is_staff or user.is_superuser %}<th style="text-align:right">GP</th><th style="text-align:right">GP %</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in monthly_rows %}
+            <tr>
+              <td>{{ r.m|date:"M Y" }}</td>
+              <td class="num">{{ r.count }}</td>
+              <td class="num">{{ r.without_vat|floatformat:2 }}</td>
+              <td class="num">{{ r.vat|floatformat:2 }}</td>
+              <td class="num">{{ r.total|floatformat:2 }}</td>
+              {% if user.is_staff or user.is_superuser %}<td class="num">{{ r.gp|floatformat:2 }}</td><td class="num">{{ r.gp_pct|floatformat:2 }}%</td>{% endif %}
+            </tr>
+            {% endfor %}
+            <tr style="font-weight:700;">
+              <td>Total</td>
+              <td class="num">{{ monthly_totals.count }}</td>
+              <td class="num">{{ monthly_totals.without_vat|floatformat:2 }}</td>
+              <td class="num">{{ monthly_totals.vat|floatformat:2 }}</td>
+              <td class="num">{{ monthly_totals.total|floatformat:2 }}</td>
+              {% if user.is_staff or user.is_superuser %}<td class="num">{{ monthly_totals.gp|floatformat:2 }}</td><td class="num">{{ monthly_totals.gp_pct|floatformat:2 }}%</td>{% endif %}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Table -->
     <div class="card table-card">
       <div class="table-wrap">
@@ -622,15 +757,15 @@
   </div>
 
 <script>
-  // Multi-Select
-  document.addEventListener("DOMContentLoaded", function() {
-    const wrapper = document.getElementById('salesman-wrapper');
-    const trigger = document.getElementById('salesman-trigger');
-    const options = document.getElementById('salesman-options');
-    const textSpan = document.getElementById('salesman-text');
+  // Multi-Select (salesman + customer)
+  function initMultiSelect(prefix, allLabel, useDataLabel) {
+    const wrapper = document.getElementById(prefix + '-wrapper');
+    if (!wrapper) return;
+    const trigger = document.getElementById(prefix + '-trigger');
+    const options = document.getElementById(prefix + '-options');
+    const textSpan = document.getElementById(prefix + '-text');
     const getCheckboxes = () => options.querySelectorAll('input[type="checkbox"]');
-
-    const searchInput = document.getElementById('salesman-search');
+    const searchInput = document.getElementById(prefix + '-search');
 
     trigger.addEventListener('click', e => {
       e.stopPropagation();
@@ -653,10 +788,10 @@
     function updateLabel() {
       const checked = Array.from(getCheckboxes()).filter(c => c.checked);
       if (checked.length === 0) {
-        textSpan.textContent = "All Salesmen";
+        textSpan.textContent = allLabel;
         textSpan.style.opacity = "0.6";
       } else if (checked.length === 1) {
-        textSpan.textContent = checked[0].value;
+        textSpan.textContent = useDataLabel ? checked[0].dataset.label : checked[0].value;
         textSpan.style.opacity = "1";
       } else {
         textSpan.textContent = `${checked.length} Selected`;
@@ -676,6 +811,13 @@
     document.addEventListener('click', e => {
       if (!wrapper.contains(e.target)) options.classList.remove('active');
     });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    initMultiSelect('salesman', 'All Salesmen', false);
+    initMultiSelect('customer', 'All Customers', true);
+    initMultiSelect('year', 'All Years', true);
+    initMultiSelect('month', 'All Months', true);
   });
 </script>
 </body>

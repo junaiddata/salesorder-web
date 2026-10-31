@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404, JsonResponse
-from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField, F
+from django.db.models import Q, Sum, Value, DecimalField, Exists, OuterRef, Case, When, CharField, F, Max
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
@@ -6542,6 +6542,46 @@ def sync_arcreditmemos_api_receive(request):
 # =====================
 # AR Invoice: List
 # =====================
+def _arinvoice_customer_filter(qs, request):
+    """Optional customer filter (customer_code list). Returns (qs, selected_codes)."""
+    codes = [c.strip() for c in request.GET.getlist('customer') if c and c.strip()]
+    if codes:
+        qs = qs.filter(customer_code__in=codes)
+    return qs, codes
+
+
+def _arinvoice_month_range(month_str):
+    """'YYYY-MM' -> (first_day, last_day) or None if invalid."""
+    import calendar
+    try:
+        first = datetime.strptime((month_str or '').strip() + '-01', '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    return first, last
+
+
+def _arinvoice_apply_month(qs, request):
+    """Optional Year / Month multi-filters. When any is chosen it takes the place
+    of start/end dates. `year` = 4-digit years, `month` = month numbers 1-12.
+    Years and months combine (e.g. years 2025+2026 and months 1+2 -> Jan & Feb of both).
+    Returns (qs, {'years': [...], 'months': [...]}, applied)."""
+    years, months = [], []
+    for y in request.GET.getlist('year'):
+        y = (y or '').strip()
+        if y.isdigit() and 1900 <= int(y) <= 2200 and y not in years:
+            years.append(y)
+    for m in request.GET.getlist('month'):
+        m = (m or '').strip()
+        if m.isdigit() and 1 <= int(m) <= 12 and str(int(m)) not in months:
+            months.append(str(int(m)))
+    if years:
+        qs = qs.filter(posting_date__year__in=[int(y) for y in years])
+    if months:
+        qs = qs.filter(posting_date__month__in=[int(m) for m in months])
+    return qs, {'years': years, 'months': months}, bool(years or months)
+
+
 @login_required
 def arinvoice_list(request):
     # Scope by logged-in user (similar to salesorder)
@@ -6563,13 +6603,16 @@ def arinvoice_list(request):
     # Apply Store Filter
     if store_filter:
         qs = qs.filter(store=store_filter)
-    
+
     # Apply List Filter
     if salesmen_filter:
         clean_salesmen = [s for s in salesmen_filter if s.strip()]
         if clean_salesmen:
             qs = qs.filter(salesman_name__in=clean_salesmen)
-    
+
+    # Customer filter (optional)
+    qs, customers_filter = _arinvoice_customer_filter(qs, request)
+
     # Cancel status filter
     if cancel_status_filter:
         if cancel_status_filter == 'csNo':
@@ -6582,7 +6625,11 @@ def arinvoice_list(request):
             pass  # Show all
         else:
             qs = qs.filter(cancel_status=cancel_status_filter)
-    
+
+    # Snapshot used for the "current month" summary: same scope/customer/store/
+    # salesman/cancel filters, but independent of date/month/amount/search filters.
+    summary_base_qs = qs
+
     if total_range:
         if total_range == "0-5000":
             qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
@@ -6596,7 +6643,7 @@ def arinvoice_list(request):
             qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
         elif total_range == "100000+":
             qs = qs.filter(doc_total__gt=100000)
-    
+
     if q:
         if q.isdigit():
             qs = qs.filter(invoice_number__istartswith=q)
@@ -6614,7 +6661,7 @@ def arinvoice_list(request):
                 Q(bp_reference_no__icontains=q) |
                 Q(customer_code__icontains=q)
             )
-    
+
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
         if not s:
@@ -6625,14 +6672,17 @@ def arinvoice_list(request):
             return datetime.strptime(s, '%Y-%m-%d').date()
         except ValueError:
             return None
-    
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
-    
+
+    # Month filter (optional): when a valid month is chosen it replaces start/end
+    qs, month_filter, month_applied = _arinvoice_apply_month(qs, request)
+    if not month_applied:
+        start_date = parse_date(start)
+        end_date = parse_date(end)
+        if start_date:
+            qs = qs.filter(posting_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(posting_date__lte=end_date)
+
     # Calculate totals
     grand_total_agg = qs.aggregate(
         total=Coalesce(Sum('doc_total'), Value(0, output_field=DecimalField())),
@@ -6650,17 +6700,63 @@ def arinvoice_list(request):
     )
 
     qs = qs.order_by('-posting_date', '-invoice_number')
-    
-    # Pagination
+
+    # Customer summary (only when a customer is selected): current month + month-wise
+    current_month_summary = None
+    monthly_rows = []
+    monthly_totals = None
+    if customers_filter:
+        from django.db.models import Count
+        from django.db.models.functions import TruncMonth
+        today = date.today()
+        cm_first, cm_last = _arinvoice_month_range(today.strftime('%Y-%m'))
+        zero = lambda: Value(0, output_field=DecimalField())
+        agg_fields = dict(
+            count=Count('id'),
+            total=Coalesce(Sum('doc_total'), zero()),
+            without_vat=Coalesce(Sum('doc_total_without_vat'), zero()),
+            vat=Coalesce(Sum('vat_sum'), zero()),
+            gp=Coalesce(Sum('total_gross_profit'), zero()),
+        )
+
+        def _with_gp_pct(d):
+            d['gp_pct'] = (float(d['gp']) / float(d['without_vat']) * 100) if d['without_vat'] else 0
+            return d
+
+        current_month_summary = _with_gp_pct(
+            summary_base_qs.filter(posting_date__gte=cm_first, posting_date__lte=cm_last)
+            .aggregate(**agg_fields)
+        )
+        current_month_summary['label'] = cm_first.strftime('%B %Y')
+
+        monthly_rows = [
+            _with_gp_pct(r) for r in
+            qs.exclude(posting_date__isnull=True)
+            .annotate(m=TruncMonth('posting_date'))
+            .values('m')
+            .annotate(**agg_fields)
+            .order_by('-m')
+        ]
+        monthly_totals = _with_gp_pct({
+            'count': sum(r['count'] for r in monthly_rows),
+            'total': sum(r['total'] for r in monthly_rows),
+            'without_vat': sum(r['without_vat'] for r in monthly_rows),
+            'vat': sum(r['vat'] for r in monthly_rows),
+            'gp': sum(r['gp'] for r in monthly_rows),
+        })
+
+    # Pagination (cap is lifted so all invoices of a selected customer can be shown)
+    max_page_size = 1000 if customers_filter else 100
+    default_page_size = 1000 if customers_filter else 100
     try:
-        page_size = int(request.GET.get('page_size', 100))
+        page_size = int(request.GET.get('page_size', default_page_size))
     except ValueError:
         page_size = 20
-    page_size = max(5, min(page_size, 100))
+    page_size = max(5, min(page_size, max_page_size))
     paginator = Paginator(qs, page_size)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
+
     # Distinct salesmen list
     salesmen = (
         SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -6670,8 +6766,39 @@ def arinvoice_list(request):
         .distinct()
         .order_by('salesman_name')
     )
-    
+
+    # Distinct customers list (same scope as the invoices the user may see)
+    customers_scope_qs = SAPARInvoice.objects.all()
+    if not (request.user.is_superuser or request.user.is_staff):
+        customers_scope_qs = customers_scope_qs.filter(salesman_scope_q_salesorder(request.user))
+    customers = list(
+        customers_scope_qs
+        .exclude(customer_code__isnull=True).exclude(customer_code='')
+        .values('customer_code')
+        .annotate(name=Max('customer_name'))
+        .order_by('name')
+    )
+
+    # Year options: earliest invoice year (or 2 years back) .. latest of this year / latest invoice year
+    from django.db.models.functions import ExtractYear as _ExtractYear
+    data_years = [
+        r['y'] for r in customers_scope_qs.exclude(posting_date__isnull=True)
+        .annotate(y=_ExtractYear('posting_date')).values('y').distinct()
+    ]
+    _cy = date.today().year
+    _y_first = min(data_years + [_cy - 2])
+    _y_last = max(data_years + [_cy])
+    year_options = [str(y) for y in range(_y_last, _y_first - 1, -1)]
+    import calendar as _cal
+    month_options = [{'value': str(n), 'label': _cal.month_name[n]} for n in range(1, 13)]
+
     return render(request, 'salesorders/arinvoice_list.html', {
+        'month_options': month_options,
+        'year_options': year_options,
+        'customers': customers,
+        'current_month_summary': current_month_summary,
+        'monthly_rows': monthly_rows,
+        'monthly_totals': monthly_totals,
         'page_obj': page_obj,
         'total_count': paginator.count,
         'total_value': total_value,
@@ -6683,6 +6810,9 @@ def arinvoice_list(request):
         'filters': {
             'q': q,
             'salesmen_filter': salesmen_filter,
+            'customers_filter': customers_filter,
+            'month': month_filter['months'],
+            'year': month_filter['years'],
             'cancel_status': cancel_status_filter or 'All',
             'store': store_filter,
             'start': start,
@@ -6727,7 +6857,10 @@ def export_arinvoice_list_excel(request):
         clean_salesmen = [s for s in salesmen_filter if s.strip()]
         if clean_salesmen:
             qs = qs.filter(salesman_name__in=clean_salesmen)
-    
+
+    # Customer filter (optional)
+    qs, _customers_filter = _arinvoice_customer_filter(qs, request)
+
     # Cancel status filter
     if cancel_status_filter:
         if cancel_status_filter == 'csNo':
@@ -6740,7 +6873,7 @@ def export_arinvoice_list_excel(request):
             pass  # Show all
         else:
             qs = qs.filter(cancel_status=cancel_status_filter)
-    
+
     if total_range:
         if total_range == "0-5000":
             qs = qs.filter(doc_total__gte=0, doc_total__lte=5000)
@@ -6754,7 +6887,7 @@ def export_arinvoice_list_excel(request):
             qs = qs.filter(doc_total__gte=50001, doc_total__lte=100000)
         elif total_range == "100000+":
             qs = qs.filter(doc_total__gt=100000)
-    
+
     if q:
         if q.isdigit():
             qs = qs.filter(invoice_number__istartswith=q)
@@ -6772,7 +6905,7 @@ def export_arinvoice_list_excel(request):
                 Q(bp_reference_no__icontains=q) |
                 Q(customer_code__icontains=q)
             )
-    
+
     # Parse dates (YYYY-MM or YYYY-MM-DD)
     def parse_date(s):
         if not s:
@@ -6783,17 +6916,20 @@ def export_arinvoice_list_excel(request):
             return datetime.strptime(s, '%Y-%m-%d').date()
         except ValueError:
             return None
-    
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
-    
+
+    # Month filter (optional): replaces start/end when valid
+    qs, _month_filter, _month_applied = _arinvoice_apply_month(qs, request)
+    if not _month_applied:
+        start_date = parse_date(start)
+        end_date = parse_date(end)
+        if start_date:
+            qs = qs.filter(posting_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(posting_date__lte=end_date)
+
     # Ordering
     qs = qs.order_by('-posting_date', '-invoice_number')
-    
+
     # 2. PREPARE DATA FOR EXCEL
     data = []
     for invoice in qs:
@@ -6902,6 +7038,8 @@ def export_arinvoice_list_pdf(request):
     if clean_salesmen:
         qs = qs.filter(salesman_name__in=clean_salesmen)
 
+    qs, _customers_filter = _arinvoice_customer_filter(qs, request)
+
     if cancel_status_filter and cancel_status_filter != 'All':
         qs = qs.filter(cancel_status=cancel_status_filter)
 
@@ -6944,12 +7082,14 @@ def export_arinvoice_list_pdf(request):
         except ValueError:
             return None
 
-    start_date = parse_date(start)
-    end_date = parse_date(end)
-    if start_date:
-        qs = qs.filter(posting_date__gte=start_date)
-    if end_date:
-        qs = qs.filter(posting_date__lte=end_date)
+    qs, _month_filter, _month_applied = _arinvoice_apply_month(qs, request)
+    if not _month_applied:
+        start_date = parse_date(start)
+        end_date = parse_date(end)
+        if start_date:
+            qs = qs.filter(posting_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(posting_date__lte=end_date)
 
     qs = qs.order_by('-posting_date', '-invoice_number')
 
