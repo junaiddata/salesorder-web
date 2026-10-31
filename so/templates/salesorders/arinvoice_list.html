@@ -679,6 +679,10 @@
       <div class="stats-bar" style="border-top:none;">
         <div class="stat-item"><span class="stat-label">Current month ({{ current_month_summary.label }}):</span>
           <span class="stat-value">{{ current_month_summary.count }} invoices</span></div>
+        {% if show_customer_count %}
+        <div class="stat-item"><span class="stat-label">Customers:</span>
+          <span class="stat-value">{{ current_month_summary.customers }}</span></div>
+        {% endif %}
         <div class="stat-item"><span class="stat-label">Sales (without VAT):</span>
           <span class="stat-value">{{ current_month_summary.without_vat|floatformat:2 }}</span></div>
         <div class="stat-item"><span class="stat-label">Total (with VAT):</span>
@@ -695,6 +699,7 @@
             <tr>
               <th>Month</th>
               <th style="text-align:right">Invoices</th>
+              {% if show_customer_count %}<th style="text-align:right">Customers</th>{% endif %}
               <th style="text-align:right">Sales (without VAT)</th>
               <th style="text-align:right">VAT</th>
               <th style="text-align:right">Total (with VAT)</th>
@@ -706,6 +711,7 @@
             <tr>
               <td>{{ r.m|date:"M Y" }}</td>
               <td class="num">{{ r.count }}</td>
+              {% if show_customer_count %}<td class="num">{{ r.customers }}</td>{% endif %}
               <td class="num">{{ r.without_vat|floatformat:2 }}</td>
               <td class="num">{{ r.vat|floatformat:2 }}</td>
               <td class="num">{{ r.total|floatformat:2 }}</td>
@@ -715,6 +721,7 @@
             <tr style="font-weight:700;">
               <td>Total</td>
               <td class="num">{{ monthly_totals.count }}</td>
+              {% if show_customer_count %}<td class="num" title="Distinct customers across all months">{{ monthly_totals.customers }}</td>{% endif %}
               <td class="num">{{ monthly_totals.without_vat|floatformat:2 }}</td>
               <td class="num">{{ monthly_totals.vat|floatformat:2 }}</td>
               <td class="num">{{ monthly_totals.total|floatformat:2 }}</td>

@@ -6701,11 +6701,15 @@ def arinvoice_list(request):
 
     qs = qs.order_by('-posting_date', '-invoice_number')
 
-    # Customer summary (only when a customer is selected): current month + month-wise
+    # Customer/salesman summary (only when a customer or salesman is selected):
+    # current month + month-wise, including distinct customer count
     current_month_summary = None
     monthly_rows = []
     monthly_totals = None
-    if customers_filter:
+    salesmen_active = any((s or '').strip() for s in salesmen_filter)
+    show_summary = bool(customers_filter) or salesmen_active
+    show_customer_count = len(customers_filter) != 1
+    if show_summary:
         from django.db.models import Count
         from django.db.models.functions import TruncMonth
         today = date.today()
@@ -6717,6 +6721,7 @@ def arinvoice_list(request):
             without_vat=Coalesce(Sum('doc_total_without_vat'), zero()),
             vat=Coalesce(Sum('vat_sum'), zero()),
             gp=Coalesce(Sum('total_gross_profit'), zero()),
+            customers=Count('customer_code', distinct=True, filter=~Q(customer_code='')),
         )
 
         def _with_gp_pct(d):
@@ -6738,6 +6743,10 @@ def arinvoice_list(request):
             .order_by('-m')
         ]
         monthly_totals = _with_gp_pct({
+            # distinct across all months (a customer in two months counts once)
+            'customers': qs.exclude(posting_date__isnull=True).aggregate(
+                c=Count('customer_code', distinct=True, filter=~Q(customer_code=''))
+            )['c'],
             'count': sum(r['count'] for r in monthly_rows),
             'total': sum(r['total'] for r in monthly_rows),
             'without_vat': sum(r['without_vat'] for r in monthly_rows),
@@ -6808,6 +6817,7 @@ def arinvoice_list(request):
         'year_options': year_options,
         'customers': customers,
         'current_month_summary': current_month_summary,
+        'show_customer_count': show_customer_count,
         'monthly_rows': monthly_rows,
         'monthly_totals': monthly_totals,
         'page_obj': page_obj,
