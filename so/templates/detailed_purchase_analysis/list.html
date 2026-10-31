@@ -108,7 +108,7 @@
     <header class="header">
       <div>
         <h1>Detailed Purchase Analysis</h1>
-        <p>Open and closed purchase orders, item level, with warehouse{% if selected_year %} &middot; {{ selected_year }}{% else %} &middot; All years{% endif %}</p>
+        <p>Open and closed purchase orders, item level, with warehouse{% if selected_months %} &middot; {{ selected_month_label }}{% endif %}{% if selected_year %} &middot; {{ selected_year }}{% else %} &middot; All years{% endif %}</p>
       </div>
       <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
     </header>
@@ -128,6 +128,27 @@
               <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
+        </div>
+        <div class="field">
+          <label>Month</label>
+          <div class="multi-select" id="month-wrapper">
+            <div class="select-box" id="month-trigger"><span id="month-text">All Months</span></div>
+            <div class="options-container" id="month-options">
+              <div class="search-box-container">
+                <input type="text" id="month-search" class="search-box" placeholder="Search months..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              {% for num, name in months %}
+                <label class="option-label">
+                  <input type="checkbox" name="month" value="{{ num }}" {% if num in selected_months %}checked{% endif %}>
+                  <span class="option-text">{{ name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
         <div class="field">
           <label>Status</label>
@@ -410,6 +431,7 @@
     }
     initMultiSelect('brand', 'All Brands');
     initMultiSelect('purchaser', 'All Purchasers');
+    initMultiSelect('month', 'All Months');
   </script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 Detailed Purchase Analysis: open + closed purchase orders (item level) with warehouse.
 Independent from sap_purchaseorder_views.py.
 """
+import calendar
 import json
 import logging
 from datetime import date, datetime
@@ -178,7 +179,15 @@ def detailed_purchase_analysis_list(request):
     if selected_year:
         qs = qs.filter(purchaseorder__posting_date__year=selected_year)
 
-    q = request.GET.get('q', '').strip()
+    # Month filter (multi-select): ?month=1&month=3 ... (default: all months). Invalid values are ignored.
+    selected_months = sorted({
+        int(m) for m in request.GET.getlist('month')
+        if m.strip().isdigit() and 1 <= int(m) <= 12
+    })
+    if selected_months:
+        qs = qs.filter(purchaseorder__posting_date__month__in=selected_months)
+
+    q =request.GET.get('q', '').strip()
     status = request.GET.get('status', '').strip().upper()  # O / C / '' (all)
     warehouse = request.GET.get('warehouse', '').strip()
     purchaser_filter = [p.strip() for p in request.GET.getlist('purchaser') if p and p.strip()]
@@ -252,9 +261,15 @@ def detailed_purchase_analysis_list(request):
         | set(range(FIRST_YEAR, DEFAULT_YEAR + 1)),
         reverse=True,
     )
+    purchaser_scope = {}
+    if selected_year:
+        purchaser_scope['posting_date__year'] = selected_year
+    if selected_months:
+        purchaser_scope['posting_date__month__in'] = selected_months
     purchasers = [
-        p for p in DetailedPurchaseOrder.objects.filter(**({'posting_date__year': selected_year} if selected_year else {})).values_list('salesman_name', flat=True).distinct().order_by('salesman_name') if p
+        p for p in DetailedPurchaseOrder.objects.filter(**purchaser_scope).values_list('salesman_name', flat=True).distinct().order_by('salesman_name') if p
     ]
+    months = [(i, calendar.month_name[i]) for i in range(1, 13)]
 
     # Keep filters when paging
     params = request.GET.copy()
@@ -279,6 +294,9 @@ def detailed_purchase_analysis_list(request):
         'show_price': show_price,
         'years': years,
         'selected_year': selected_year,
+        'months': months,
+        'selected_months': selected_months,
+        'selected_month_label': ', '.join(calendar.month_abbr[m] for m in selected_months),
         'querystring': params.urlencode(),
         'querystring_noview': params_noview.urlencode(),
         'filters': {
