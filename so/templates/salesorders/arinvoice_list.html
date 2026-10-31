@@ -279,6 +279,8 @@
       display: block;
     }
 
+    .option-label[hidden] { display: none !important; }
+
     .option-label {
       display: flex;
       align-items: center;
@@ -546,7 +548,7 @@
                      style="position:sticky;top:0;width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:4px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;color:#111;">
               {% for c in customers %}
                 <label class="option-label">
-                  <input type="checkbox" name="customer" value="{{ c.customer_code }}" data-label="{{ c.name }}" {% if c.customer_code in filters.customers_filter %}checked{% endif %}>
+                  <input type="checkbox" name="customer" value="{{ c.customer_code }}" data-label="{{ c.name }}" data-salesmen="{{ c.salesmen }}" {% if c.customer_code in filters.customers_filter %}checked{% endif %}>
                   {{ c.name }} <span style="opacity:.6">({{ c.customer_code }})</span>
                 </label>
               {% endfor %}
@@ -799,6 +801,42 @@
       }
     }
 
+    // Sticky header: search box + Select All / Clear All
+    const head = document.createElement('div');
+    head.style.cssText = 'position:sticky;top:0;z-index:2;background:var(--surface,#fff);padding-bottom:4px;';
+    searchInput.parentNode.insertBefore(head, searchInput);
+    head.appendChild(searchInput);
+    searchInput.style.position = 'static';
+    searchInput.style.marginBottom = '4px';
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;padding:0 2px;';
+    const mkBtn = (text) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = text;
+      b.style.cssText = 'flex:1;padding:5px 8px;font-size:12px;font-weight:600;border:1px solid var(--border,#cbd5e1);border-radius:6px;background:var(--surface,#fff);color:var(--text,#111);cursor:pointer;';
+      return b;
+    };
+    const selectAllBtn = mkBtn('Select All');
+    const clearAllBtn = mkBtn('Clear All');
+    actions.appendChild(selectAllBtn);
+    actions.appendChild(clearAllBtn);
+    head.appendChild(actions);
+
+    function bulkSet(checked, onlyVisible) {
+      getCheckboxes().forEach(box => {
+        if (onlyVisible) {
+          const label = box.closest('.option-label');
+          if (label && (label.hidden || label.style.display === 'none')) return;
+        }
+        box.checked = checked;
+      });
+      updateLabel();
+      options.dispatchEvent(new CustomEvent('bulkchange', { bubbles: true }));
+    }
+    selectAllBtn.addEventListener('click', () => bulkSet(true, true));
+    clearAllBtn.addEventListener('click', () => bulkSet(false, false));
+
     updateLabel();
 
     getCheckboxes().forEach(box => {
@@ -818,6 +856,31 @@
     initMultiSelect('customer', 'All Customers', true);
     initMultiSelect('year', 'All Years', true);
     initMultiSelect('month', 'All Months', true);
+
+    // Narrow the customer dropdown by the selected salesmen.
+    // No salesman ticked -> all customers. Already-ticked customers are never hidden or unticked.
+    const salesmanBoxes = document.querySelectorAll('#salesman-options input[type="checkbox"]');
+    const customerBoxes = document.querySelectorAll('#customer-options input[type="checkbox"]');
+    function narrowCustomers() {
+      const chosen = Array.from(salesmanBoxes).filter(b => b.checked).map(b => b.value);
+      customerBoxes.forEach(box => {
+        const label = box.closest('.option-label');
+        if (!label) return;
+        if (chosen.length === 0 || box.checked) {
+          label.hidden = false;
+          return;
+        }
+        const owners = (box.dataset.salesmen || '').split('|');
+        label.hidden = !chosen.some(s => owners.includes(s));
+      });
+    }
+    salesmanBoxes.forEach(b => b.addEventListener('change', narrowCustomers));
+    customerBoxes.forEach(b => b.addEventListener('change', narrowCustomers));
+    ['salesman-options', 'customer-options'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('bulkchange', narrowCustomers);
+    });
+    narrowCustomers();
   });
 </script>
 </body>

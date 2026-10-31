@@ -6778,6 +6778,17 @@ def arinvoice_list(request):
         .annotate(name=Max('customer_name'))
         .order_by('name')
     )
+    # Salesmen each customer has invoices with (used to narrow the customer dropdown in the UI)
+    _cust_salesmen = {}
+    for _row in (
+        customers_scope_qs
+        .exclude(customer_code__isnull=True).exclude(customer_code='')
+        .exclude(salesman_name__isnull=True).exclude(salesman_name='')
+        .values('customer_code', 'salesman_name').distinct()
+    ):
+        _cust_salesmen.setdefault(_row['customer_code'], set()).add(_row['salesman_name'])
+    for _c in customers:
+        _c['salesmen'] = '|'.join(sorted(_cust_salesmen.get(_c['customer_code'], ())))
 
     # Year options: earliest invoice year (or 2 years back) .. latest of this year / latest invoice year
     from django.db.models.functions import ExtractYear as _ExtractYear
