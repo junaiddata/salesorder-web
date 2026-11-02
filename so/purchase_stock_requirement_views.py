@@ -461,6 +461,10 @@ def api_item_analysis_totals(request):
         credit_memo__in=creditmemo_qs,
     ).exclude(item_code__isnull=True).exclude(item_code='').select_related('credit_memo')
 
+    # Only 2025 and 2026 data (applies to ho_qty, others_qty, total_qty and the year totals)
+    invoice_items = invoice_items.filter(invoice__posting_date__year__in=[2025, 2026])
+    creditmemo_items = creditmemo_items.filter(credit_memo__posting_date__year__in=[2025, 2026])
+
     if firm_list:
         item_codes = list(Items.objects.filter(item_firm__in=firm_list).values_list('item_code', flat=True))
         if item_codes:
