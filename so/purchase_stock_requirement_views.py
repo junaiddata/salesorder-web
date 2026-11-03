@@ -161,7 +161,7 @@ def _build_items_data(request, firms):
     for row in cm_2024.values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     ):
-        sold_2024[row['item_code']] = sold_2024.get(row['item_code'], 0) - safe_float(row['qty'])
+        sold_2024[row['item_code']] = sold_2024.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # Project/Trading salesmen by business category
     all_salesmen = set(
@@ -187,7 +187,7 @@ def _build_items_data(request, firms):
     for row in cm_project_2025.values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     ):
-        project_2025[row['item_code']] = project_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+        project_2025[row['item_code']] = project_2025.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # Trading 2025
     inv_trading_2025 = invoice_items.filter(
@@ -205,7 +205,7 @@ def _build_items_data(request, firms):
     for row in cm_trading_2025.values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     ):
-        trading_2025[row['item_code']] = trading_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+        trading_2025[row['item_code']] = trading_2025.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # Total 2025 (invoice - credit memo)
     inv_2025 = invoice_items.filter(invoice__posting_date__year=2025)
@@ -217,7 +217,7 @@ def _build_items_data(request, firms):
     for row in cm_2025.values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     ):
-        total_2025[row['item_code']] = total_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+        total_2025[row['item_code']] = total_2025.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # Last 6 months sale
     inv_6m = invoice_items.filter(invoice__posting_date__gte=six_months_ago)
@@ -229,7 +229,7 @@ def _build_items_data(request, firms):
     for row in cm_6m.values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     ):
-        last_6m[row['item_code']] = last_6m.get(row['item_code'], 0) - safe_float(row['qty'])
+        last_6m[row['item_code']] = last_6m.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # LPO given (open POs) - only last 6 months by posting_date
     open_po_qty = SAPPurchaseOrderItem.objects.filter(

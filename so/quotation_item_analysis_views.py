@@ -108,7 +108,7 @@ def _get_sold_quantities_lookup(item_codes, request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_2025:
-        sold_2025[row['item_code']] = sold_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+        sold_2025[row['item_code']] = sold_2025.get(row['item_code'], 0) + safe_float(row['qty'])
 
     sold_2026 = {}
     inv_2026 = invoice_items.filter(invoice__posting_date__year=2026).values('item_code').annotate(
@@ -120,7 +120,7 @@ def _get_sold_quantities_lookup(item_codes, request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_2026:
-        sold_2026[row['item_code']] = sold_2026.get(row['item_code'], 0) - safe_float(row['qty'])
+        sold_2026[row['item_code']] = sold_2026.get(row['item_code'], 0) + safe_float(row['qty'])
 
     result = {}
     for code in item_codes:
