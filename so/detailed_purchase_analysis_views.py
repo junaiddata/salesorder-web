@@ -125,6 +125,18 @@ def _brand_comparison(qs, brand_filter, show_price):
         if not d['description'] and r['description']:
             d['description'] = r['description']
 
+    # Current cost from Item Master (Items.item_cost); only needed when prices are visible.
+    cost_map = {}
+    if show_price:
+        codes = [code for items_by_code in data.values() for code in items_by_code if code]
+        for start in range(0, len(codes), 500):
+            cost_map.update(
+                Items.objects.filter(item_code__in=codes[start:start + 500]).values_list('item_code', 'item_cost')
+            )
+        for items_by_code in data.values():
+            for code, d in items_by_code.items():
+                d['current_cost'] = cost_map.get(code)
+
     sort_key = (lambda i: i['value']) if show_price else (lambda i: i['qty'])
     ranked = {}
     key_of = lambda b: '' if b == NO_BRAND else b

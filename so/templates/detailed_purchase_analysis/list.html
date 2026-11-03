@@ -94,6 +94,7 @@
     table.bw thead th.col-item, table.bw td.col-item { text-align: left; max-width: 260px; white-space: normal; }
     .item-desc { display: block; font-size: 0.72rem; color: var(--text-secondary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
     .zero { color: var(--text-muted); }
+    table.bw thead th.col-cost, table.bw tbody td.col-cost { text-align: center; }
     table.bw th.col-docs, table.bw td.col-docs { text-align: left; font-size: 0.78rem; line-height: 1.5; }
     .pager { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; border-top: 1px solid var(--border-light); }
     .pager a, .pager .disabled { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none; color: var(--text); background: var(--surface); }
@@ -293,7 +294,7 @@
               <tr>
                 <th class="col-brand" rowspan="2">#</th>
                 {% for b in brand_summaries %}
-                <th colspan="{% if show_price %}6{% else %}4{% endif %}" class="brand-group">{{ b.brand }}</th>
+                <th colspan="{% if show_price %}7{% else %}4{% endif %}" class="brand-group">{{ b.brand }}</th>
                 {% endfor %}
               </tr>
               <tr>
@@ -302,7 +303,7 @@
                 <th class="col-docs">Doc No</th>
                 <th>Qty</th>
                 <th>Open Qty</th>
-                {% if show_price %}<th>Value</th><th>Pending</th>{% endif %}
+                {% if show_price %}<th class="col-cost">Current Cost</th><th>Value</th><th>Pending</th>{% endif %}
                 {% endfor %}
               </tr>
             </thead>
@@ -316,11 +317,11 @@
                 <td class="col-docs" title="{{ c.doc_all }}">{% for d in c.doc_list %}<a class="po-link" href="{% url 'detailed_purchase_analysis_detail' d %}">{{ d }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if c.doc_more %}<br><span class="zero">+{{ c.doc_more }} more</span>{% endif %}</td>
                 <td>{{ c.qty|floatformat:"-2"|intcomma }}</td>
                 <td>{{ c.open_qty|floatformat:"-2"|intcomma }}</td>
-                {% if show_price %}<td>{{ c.value|floatformat:2|intcomma }}</td><td>{{ c.pending|floatformat:2|intcomma }}</td>{% endif %}
+                {% if show_price %}<td class="col-cost">{% if c.current_cost is not None %}{{ c.current_cost|floatformat:2|intcomma }}{% else %}&ndash;{% endif %}</td><td>{{ c.value|floatformat:2|intcomma }}</td><td>{{ c.pending|floatformat:2|intcomma }}</td>{% endif %}
                 {% else %}
                 <td class="col-item brand-start zero">&ndash;</td>
                 <td class="zero">&ndash;</td><td class="zero">&ndash;</td><td class="zero">&ndash;</td>
-                {% if show_price %}<td class="zero">&ndash;</td><td class="zero">&ndash;</td>{% endif %}
+                {% if show_price %}<td class="zero col-cost">&ndash;</td><td class="zero">&ndash;</td><td class="zero">&ndash;</td>{% endif %}
                 {% endif %}
                 {% endfor %}
               </tr>
