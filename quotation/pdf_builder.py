@@ -82,6 +82,79 @@ BANK_LINES = [
     'IBAN: AE88 0380 0000 1200 1111 025',
 ]
 
+# Solar water heater quotations (every item is brand VERA SOLAR / ARISTON SOLAR) get this block after the facts box
+# (validity, delivery, ...). `{brand}` is VERA or ARISTON and `{phone}` the service line. Plain strings are numbered
+# points; ('H', text) is a bold sub-heading; ('P', text) is an unnumbered paragraph. Same wording as so/quotation_pdf_new.py
+# (kept as its own copy: nothing is shared with the other app's PDF code).
+SOLAR_SERVICE_PHONE = '04-2367723'
+SOLAR_TERMS = [
+    ('P', 'Ignore the below if it is unrelated to the above items in this quotation.'),
+    ('P', 'Conditions apply for the Warranty of all tanks and calorifiers models including the solar water systems as follows:'),
+    'Consumables (magnesium anode bars) must be checked periodically (recommended twice per year) & replaced at least '
+    'once a year (depending on water quality) to prolong the life of the tanks and heating elements and maintain their '
+    'warranty. The magnesium anode will gradually deteriorate to protect the heating element and the tanks. The warranty '
+    'on tanks and heating elements will be void in case of the non-existence of magnesium anode or in case of failure to '
+    'replace it upon expiry.',
+    'Accessories on tanks and solar collectors must be maintained and cleaned periodically (1-2 times per year) to '
+    'prolong their lives. All accessories are considered consumables and not covered by warranty. This includes; safety '
+    'valves, air vents, temperature, and pressure gauges.',
+    'All spare parts and consumables should be genuine, and compatible with {brand} products to keep on the warranty.',
+    "It is the buyer's responsibility to manage the service and maintenance, contact our customer service & maintenance "
+    'department for advice and support at {phone}.',
+    'These prices, and terms of payments are applied in standard shipping conditions only, and might be changed without '
+    'prior notice.',
+    'Tank-in-Tank Thermosiphon System: A solar water heating system featuring two concentric tanks, where the inner tank '
+    'stores domestic hot water and the outer tank contains the solar-heated water. Heat is transferred through the tank '
+    'walls by natural convection (thermosiphon effect), without requiring a circulation pump. This provides efficient '
+    'solar heating and reliable hot water supply.',
+    ('H', 'EXCLUSIONS (If Applicable):'),
+    ('P', '* ALL DOMESTIC WATER CONNECTIONS (VALVES, ACCESSORIES, ADAPTORS...) ARE NOT INCLUDED.'),
+    ('P', '* ALL CIVIL WORKS RELATED TO SOLAR ARE NOT INCLUDED.'),
+    ('P', '* INSULATION / CLADDING NOT INCLUDED.'),
+    ('P', '* ALL ELECTRICAL WORK IS NOT INCLUDED.'),
+]
+
+
+def _solar_brand(q):
+    """'VERA' / 'ARISTON' when EVERY item's brand is exactly VERA SOLAR / ARISTON SOLAR ('ARISTON-SOLAR' too).
+
+    Any other brand on the quotation, or no items, gives None (the usual terms only). The first item names the brand.
+    """
+    try:
+        items = list(q.items.all())
+    except Exception:
+        return None
+    brands = []
+    for it in items:
+        brand = ' '.join((it.brand or '').upper().replace('-', ' ').split())
+        if brand == 'VERA SOLAR':
+            brands.append('VERA')
+        elif brand == 'ARISTON SOLAR':
+            brands.append('ARISTON')
+        else:
+            return None
+    return brands[0] if brands else None
+
+
+def _solar_rows(brand):
+    """(rows before the exclusions, rows from the exclusions heading on) as one-cell table rows."""
+    rows, end_at = [], None
+    n = 0
+    for entry in SOLAR_TERMS:
+        if isinstance(entry, tuple):
+            kind, text = entry
+            if kind == 'H' and end_at is None:
+                end_at = len(rows)
+            rows.append([Paragraph(escape(text), S_BOLD if kind == 'H' else S_BASE)])
+        else:
+            n += 1
+            text = entry.format(brand=brand, phone=SOLAR_SERVICE_PHONE)
+            rows.append([Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)])
+    if end_at is None:
+        end_at = len(rows)
+    return rows[:end_at], rows[end_at:]
+
+
 _base = ParagraphStyle('qbase', fontName='Helvetica', fontSize=7.5, leading=9.5)
 S_BASE = _base
 S_BOLD = ParagraphStyle('qbold', parent=_base, fontName='Helvetica-Bold')
@@ -460,14 +533,26 @@ def _body(q, base_url, lay, split_rows=False, with_stamp=False):
         ('COUNTRY OF ORIGIN:', q.country_of_origin),
         ('WARRANTY:', q.warranty),
     ) if (value or '').strip()]
+    brand = _solar_brand(q)
     if points or facts:
         group = [_boxed('TERMS AND CONDITIONS:', points, lay)]
         if facts:   # directly under the points
             group += [Spacer(1, 4), _boxed(None, _info_rows(facts), lay, label_w=130)]
-        story += [KeepTogether(group), Spacer(1, 14)]
+        story += [KeepTogether(group), Spacer(1, 8 if brand else 14)]
     tail = [
         _bank_box(lay, _stamp_image(110, 82) if (with_stamp and q.add_stamp) else None),
     ]
+    if brand:
+        # Solar quotation: the warranty conditions and exclusions follow the facts box. They flow across pages; the
+        # exclusions stay together with the bank/stamp box so that box is never alone on a page.
+        main_rows, end_rows = _solar_rows(brand)
+        title = None if (points or facts) else 'TERMS AND CONDITIONS:'
+        if main_rows:
+            story.append(_boxed(title, main_rows, lay))
+        elif title:
+            end_rows = [[Paragraph(title, S_SECTION)]] + end_rows
+        if end_rows:
+            tail = [_boxed(None, end_rows, lay), Spacer(1, 14)] + tail
     story.append(KeepTogether(tail))
     return story
 

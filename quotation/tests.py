@@ -1723,3 +1723,55 @@ class SalesmanPrefillTests(TestCase):
         page = self.client.get(reverse('quotation:new')).content.decode()
         self.assertIn(reverse('quotation:salesman_search'), page)
         self.assertIn('pickSalesman', page)
+
+
+@override_settings(QUOTATION_PRIVATE_ROOT=TMP_ROOT, QUOTATION_PUBLIC_BASE_URL='https://example.test',
+                   QUOTATION_STAMP_USERS=())
+class SolarTermsTests(TestCase):
+    """VERA SOLAR / ARISTON SOLAR-only quotations get the solar warranty terms after the facts box; all others don't."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user('solar', password='x', email='s@x.com')
+        self.client.force_login(self.user)
+
+    def _quote(self, *brands, remarks='Deposit before production'):
+        q = Quotation.objects.create(qtn_no=f'JG-2026-{Quotation.objects.count() + 1:03d}', date='2026-10-20',
+                                     customer_name='ACME', validity='10 Days', remarks=remarks,
+                                     country_of_origin='United Arab Emirates', warranty='10')
+        for n, brand in enumerate(brands):
+            QuotationItem.objects.create(quotation=q, position=n, brand=brand, model_no=f'M{n}', description='Heater',
+                                         qty=Decimal('1'), unit_price=Decimal('100'))
+        return q
+
+    def _text(self, q, orientation=''):
+        resp = self.client.get(reverse('quotation:pdf', args=[q.pk]) + (f'?orientation={orientation}' if orientation else ''))
+        self.assertEqual(resp.status_code, 200)
+        return ' '.join(' '.join(p.extract_text().split()) for p in PdfReader(BytesIO(resp.content)).pages)
+
+    def test_vera_solar_only_gets_the_solar_terms(self):
+        text = self._text(self._quote('VERA SOLAR', 'Vera Solar'))
+        for needle in ('VALIDITY:', 'Tank-in-Tank Thermosiphon System', 'compatible with VERA products', 'support at 04-2367723',
+                       'EXCLUSIONS (If Applicable):', 'ALL ELECTRICAL WORK IS NOT INCLUDED'):
+            self.assertIn(needle, text, needle)
+        self.assertLess(text.index('VALIDITY:'), text.index('Tank-in-Tank'))   # after the facts box
+
+    def test_ariston_solar_names_ariston(self):
+        text = self._text(self._quote('ARISTON-SOLAR'))
+        self.assertIn('compatible with ARISTON products', text)
+
+    def test_mixed_or_other_brands_do_not_get_them(self):
+        for brands in (('VERA SOLAR', 'VERA ARMATUREN'), ('ARISTON',), ('AQUAVERA',), ()):
+            text = self._text(self._quote(*brands))
+            self.assertNotIn('Tank-in-Tank', text, brands)
+            self.assertNotIn('EXCLUSIONS', text, brands)
+            self.assertIn('VALIDITY:', text, brands)
+
+    def test_landscape_and_empty_terms_still_work(self):
+        text = self._text(self._quote('VERA SOLAR', remarks=''), 'landscape')
+        self.assertIn('Tank-in-Tank', text)
+        self.assertIn('TERMS AND CONDITIONS', text)
+
+    def test_long_quotation_keeps_the_solar_block_complete(self):
+        text = self._text(self._quote(*['VERA SOLAR'] * 40))
+        self.assertIn('ALL ELECTRICAL WORK IS NOT INCLUDED', text)
+        self.assertIn('BANK ACCOUNT DETAILS', text)

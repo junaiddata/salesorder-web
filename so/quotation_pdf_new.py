@@ -59,6 +59,7 @@ DIVISION_CONFIG = {
         'bottom': 40,
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'junaid'),
         'show_license': True,
+        'phone': '04-2367723',      # the landline printed on the letterhead (used in the solar terms)
     },
     'ALABAMA': {
         'letterhead': os.path.join(LETTERHEAD_DIR, 'Alabama_qt.pdf'),
@@ -66,6 +67,7 @@ DIVISION_CONFIG = {
         'bottom': 40,
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'alabama'),
         'show_license': False,
+        'phone': '04-3526973',      # the landline printed on the letterhead (used in the solar terms)
     },
 }
 
@@ -94,6 +96,57 @@ TERMS = [
     'Delivery timelines will be confirmed upon order confirmation.',
     'This is a system-generated document and does not require a signature.',
 ]
+
+# Solar water heater quotations (every item Vera Solar / Ariston Solar) print this block instead of TERMS. `{brand}` is
+# VERA for Vera Solar and ARISTON for Ariston Solar. Plain strings = numbered points; ('H', text) = a bold sub-heading;
+# ('P', text) = an unnumbered paragraph.
+SOLAR_TERMS = [
+    ('P', 'Ignore the below if it is unrelated to the above items in this quotation.'),
+    ('P', 'Conditions apply for the Warranty of all tanks and calorifiers models including the solar water systems as follows:'),
+    'Consumables (magnesium anode bars) must be checked periodically (recommended twice per year) & replaced at least '
+    'once a year (depending on water quality) to prolong the life of the tanks and heating elements and maintain their '
+    'warranty. The magnesium anode will gradually deteriorate to protect the heating element and the tanks. The warranty '
+    'on tanks and heating elements will be void in case of the non-existence of magnesium anode or in case of failure to '
+    'replace it upon expiry.',
+    'Accessories on tanks and solar collectors must be maintained and cleaned periodically (1-2 times per year) to '
+    'prolong their lives. All accessories are considered consumables and not covered by warranty. This includes; safety '
+    'valves, air vents, temperature, and pressure gauges.',
+    'All spare parts and consumables should be genuine, and compatible with {brand} products to keep on the warranty.',
+    "It is the buyer's responsibility to manage the service and maintenance, contact our customer service & maintenance "
+    'department for advice and support at {phone}.',
+    'These prices, and terms of payments are applied in standard shipping conditions only, and might be changed without '
+    'prior notice.',
+    'Tank-in-Tank Thermosiphon System: A solar water heating system featuring two concentric tanks, where the inner tank '
+    'stores domestic hot water and the outer tank contains the solar-heated water. Heat is transferred through the tank '
+    'walls by natural convection (thermosiphon effect), without requiring a circulation pump. This provides efficient '
+    'solar heating and reliable hot water supply.',
+    ('H', 'EXCLUSIONS (If Applicable):'),
+    ('P', '* ALL DOMESTIC WATER CONNECTIONS (VALVES, ACCESSORIES, ADAPTORS...) ARE NOT INCLUDED.'),
+    ('P', '* ALL CIVIL WORKS RELATED TO SOLAR ARE NOT INCLUDED.'),
+    ('P', '* INSULATION / CLADDING NOT INCLUDED.'),
+    ('P', '* ALL ELECTRICAL WORK IS NOT INCLUDED.'),
+]
+
+
+def _solar_brand(q):
+    """'VERA' / 'ARISTON' when EVERY item is of the exact brand VERA SOLAR / ARISTON SOLAR (spelled 'ARISTON-SOLAR' in
+    the item master too). Any other brand on the quotation (VERA EDWIN, ARISTON - ITALY, EURO ...) or no items gives
+    None and the standard TERMS are used. The first item's solar brand names the warranty point."""
+    try:
+        lines = list(q.items.select_related('item'))
+    except Exception:
+        return None
+    brands = []
+    for qi in lines:
+        firm = ' '.join(str(getattr(qi.item, 'item_firm', '') or '').upper().replace('-', ' ').split())
+        if firm == 'VERA SOLAR':
+            brands.append('VERA')
+        elif firm == 'ARISTON SOLAR':
+            brands.append('ARISTON')
+        else:
+            return None
+    return brands[0] if brands else None
+
 
 _base = ParagraphStyle('nqbase', fontName='Helvetica', fontSize=7.5, leading=9.5)
 S_BOLD = ParagraphStyle('nqbold', parent=_base, fontName='Helvetica-Bold')
@@ -322,18 +375,59 @@ def _body(q, cfg):
     if q.remarks and q.remarks.strip():
         remark_rows = [[Paragraph(escape(ln.strip()) or '&nbsp;', S_CELL)] for ln in q.remarks.splitlines() if ln.strip()]
         story += [KeepTogether([_section('REMARKS', remark_rows)]), Spacer(1, 10)]
-    points = [[Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)] for n, text in enumerate(TERMS, 1)]
+    brand = _solar_brand(q)
     details = ' '.join((q.payment_terms_details or '').split())   # one point, however many lines were typed
-    if details:
-        points.append([Paragraph(f'{len(points) + 1}.&nbsp;&nbsp;Payment terms: {escape(details)}', S_POINT)])
-    tail = [_section('TERMS AND CONDITIONS', points)]
+    if brand:
+        points, n = [], 0
+        for entry in SOLAR_TERMS:
+            if isinstance(entry, tuple):
+                kind, text = entry
+                style = S_BOLD if kind == 'H' else _base
+                points.append([Paragraph(escape(text), style)])
+            else:
+                n += 1
+                points.append([Paragraph(f'{n}.&nbsp;&nbsp;{escape(entry.format(brand=brand, phone=cfg.get('phone') or DIVISION_CONFIG['JUNAID']['phone']))}', S_POINT)])
+        if details:
+            n += 1
+            # the payment details stay a numbered point, placed after the numbered warranty points, before the exclusions
+            idx = next((i for i, e in enumerate(SOLAR_TERMS) if isinstance(e, tuple) and e[0] == 'H'), len(points))
+            points.insert(idx, [Paragraph(f'{n}.&nbsp;&nbsp;Payment terms: {escape(details)}', S_POINT)])
+    else:
+        points = [[Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)] for n, text in enumerate(TERMS, 1)]
+        if details:
+            points.append([Paragraph(f'{len(points) + 1}.&nbsp;&nbsp;Payment terms: {escape(details)}', S_POINT)])
     stamp = _stamp(cfg.get('stamp'))
+    stamp_row = None
     if stamp is not None:
         stamp_row = Table([[stamp]], colWidths=[CONTENT_W])
         stamp_row.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                                        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 10)]))
-        tail.append(stamp_row)
-    story.append(KeepTogether(tail))
+    if brand:
+        # The solar block is long, so it flows across pages. The exclusions (heading + lines) and the stamp are kept
+        # together: if the stamp does not fit under them, they move to the next page together, so the stamp is never
+        # alone on a page.
+        split_at = next((i for i, e in enumerate(SOLAR_TERMS) if isinstance(e, tuple) and e[0] == 'H'), None)
+        if split_at is not None and details:
+            split_at += 1                      # the payment point was inserted before the exclusions heading
+        if split_at is None:
+            story.append(_section('TERMS AND CONDITIONS', points))
+            if stamp_row is not None:
+                story.append(stamp_row)
+        else:
+            story.append(_section('TERMS AND CONDITIONS', points[:split_at]))
+            end = Table(points[split_at:], colWidths=[CONTENT_W])
+            end.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (0, 0), 6),
+            ]))
+            story.append(KeepTogether([end] + ([stamp_row] if stamp_row is not None else [])))
+    else:
+        tail = [_section('TERMS AND CONDITIONS', points)]
+        if stamp_row is not None:
+            tail.append(stamp_row)
+        story.append(KeepTogether(tail))
     return story
 
 
@@ -386,7 +480,7 @@ def _branch_setup(quotation, cfg):
         return cfg, None
     address, landline, mobile, email = BRANCHES[branch]
     lines = (address, f'Ph: {landline}  |  Mob: {mobile}', f'{email}  |  www.junaidworld.com')
-    return {**cfg, 'letterhead': path}, lines
+    return {**cfg, 'letterhead': path, 'phone': landline}, lines   # the branch's own landline is the one in its header
 
 
 def _draw_address(canvas, doc, lines):
