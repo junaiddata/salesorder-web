@@ -164,9 +164,9 @@ def _get_customer_details_for_sold_items(invoice_items_qs, creditmemo_items_qs, 
         inv_count_2026 = agg.get('invoice_count_2026', 0) or 0
 
         cm = cm_lookup.get((item_code, customer_code), {})
-        qty -= cm.get('cm_qty', 0)
-        qty_2025 -= cm.get('cm_qty_2025', 0)
-        qty_2026 -= cm.get('cm_qty_2026', 0)
+        qty += cm.get('cm_qty', 0)
+        qty_2025 += cm.get('cm_qty_2025', 0)
+        qty_2026 += cm.get('cm_qty_2026', 0)
         inv_count_2025 += cm.get('cm_count_2025', 0)
         inv_count_2026 += cm.get('cm_count_2026', 0)
 
@@ -276,7 +276,7 @@ def item_sold_analysis(request):
     )
     sold_2025_dict = {r['item_code']: _safe_float(r['qty']) for r in sold_2025_inv}
     for r in sold_2025_cm:
-        sold_2025_dict[r['item_code']] = sold_2025_dict.get(r['item_code'], 0) - _safe_float(r['qty'])
+        sold_2025_dict[r['item_code']] = sold_2025_dict.get(r['item_code'], 0) + _safe_float(r['qty'])
 
     # Qty sold 2026
     sold_2026_inv = list(
@@ -291,7 +291,7 @@ def item_sold_analysis(request):
     )
     sold_2026_dict = {r['item_code']: _safe_float(r['qty']) for r in sold_2026_inv}
     for r in sold_2026_cm:
-        sold_2026_dict[r['item_code']] = sold_2026_dict.get(r['item_code'], 0) - _safe_float(r['qty'])
+        sold_2026_dict[r['item_code']] = sold_2026_dict.get(r['item_code'], 0) + _safe_float(r['qty'])
 
     # Total amount 2025 (line_total_after_discount or line_total, invoices - credit memos)
     amt_2025_inv = list(
@@ -318,7 +318,7 @@ def item_sold_analysis(request):
     )
     amt_2025_dict = {r['item_code']: _safe_float(r['amt']) for r in amt_2025_inv}
     for r in amt_2025_cm:
-        amt_2025_dict[r['item_code']] = amt_2025_dict.get(r['item_code'], 0) - _safe_float(r.get('amt') or 0)
+        amt_2025_dict[r['item_code']] = amt_2025_dict.get(r['item_code'], 0) + _safe_float(r.get('amt') or 0)
 
     amt_2026_inv = list(
         invoice_items_qs.filter(invoice__posting_date__year=2026)
@@ -344,7 +344,7 @@ def item_sold_analysis(request):
     )
     amt_2026_dict = {r['item_code']: _safe_float(r['amt']) for r in amt_2026_inv}
     for r in amt_2026_cm:
-        amt_2026_dict[r['item_code']] = amt_2026_dict.get(r['item_code'], 0) - _safe_float(r.get('amt') or 0)
+        amt_2026_dict[r['item_code']] = amt_2026_dict.get(r['item_code'], 0) + _safe_float(r.get('amt') or 0)
 
     # Invoice count 2025, 2026
     inv_count_2025 = list(
@@ -523,25 +523,25 @@ def _build_items_list_for_pdf(request, firm_list, search_term, include_customers
     sold_2025_cm = list(creditmemo_items_qs.filter(credit_memo__posting_date__year=2025).values('item_code').annotate(qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))))
     sold_2025_dict = {r['item_code']: _safe_float(r['qty']) for r in sold_2025_inv}
     for r in sold_2025_cm:
-        sold_2025_dict[r['item_code']] = sold_2025_dict.get(r['item_code'], 0) - _safe_float(r['qty'])
+        sold_2025_dict[r['item_code']] = sold_2025_dict.get(r['item_code'], 0) + _safe_float(r['qty'])
 
     sold_2026_inv = list(invoice_items_qs.filter(invoice__posting_date__year=2026).values('item_code').annotate(qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))))
     sold_2026_cm = list(creditmemo_items_qs.filter(credit_memo__posting_date__year=2026).values('item_code').annotate(qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))))
     sold_2026_dict = {r['item_code']: _safe_float(r['qty']) for r in sold_2026_inv}
     for r in sold_2026_cm:
-        sold_2026_dict[r['item_code']] = sold_2026_dict.get(r['item_code'], 0) - _safe_float(r['qty'])
+        sold_2026_dict[r['item_code']] = sold_2026_dict.get(r['item_code'], 0) + _safe_float(r['qty'])
 
     amt_2025_inv = list(invoice_items_qs.filter(invoice__posting_date__year=2025).values('item_code').annotate(amt=Sum(Case(When(Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0), then=F('line_total_after_discount')), default=F('line_total')))))
     amt_2025_cm = list(creditmemo_items_qs.filter(credit_memo__posting_date__year=2025).values('item_code').annotate(amt=Sum(Case(When(Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0), then=F('line_total_after_discount')), default=F('line_total')))))
     amt_2025_dict = {r['item_code']: _safe_float(r['amt']) for r in amt_2025_inv}
     for r in amt_2025_cm:
-        amt_2025_dict[r['item_code']] = amt_2025_dict.get(r['item_code'], 0) - _safe_float(r.get('amt') or 0)
+        amt_2025_dict[r['item_code']] = amt_2025_dict.get(r['item_code'], 0) + _safe_float(r.get('amt') or 0)
 
     amt_2026_inv = list(invoice_items_qs.filter(invoice__posting_date__year=2026).values('item_code').annotate(amt=Sum(Case(When(Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0), then=F('line_total_after_discount')), default=F('line_total')))))
     amt_2026_cm = list(creditmemo_items_qs.filter(credit_memo__posting_date__year=2026).values('item_code').annotate(amt=Sum(Case(When(Q(line_total_after_discount__isnull=False) & ~Q(line_total_after_discount=0), then=F('line_total_after_discount')), default=F('line_total')))))
     amt_2026_dict = {r['item_code']: _safe_float(r['amt']) for r in amt_2026_inv}
     for r in amt_2026_cm:
-        amt_2026_dict[r['item_code']] = amt_2026_dict.get(r['item_code'], 0) - _safe_float(r.get('amt') or 0)
+        amt_2026_dict[r['item_code']] = amt_2026_dict.get(r['item_code'], 0) + _safe_float(r.get('amt') or 0)
 
     inv_count_2025 = list(invoice_items_qs.filter(invoice__posting_date__year=2025).values('item_code').annotate(cnt=Count('invoice', distinct=True)))
     inv_count_2026 = list(invoice_items_qs.filter(invoice__posting_date__year=2026).values('item_code').annotate(cnt=Count('invoice', distinct=True)))
