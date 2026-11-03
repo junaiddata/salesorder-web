@@ -80,6 +80,7 @@ BANK_LINES = [
     'A/C NO: 012001111025',
     'A/C NAME: JUNAID GALLERIA TRADING LLC',
     'IBAN: AE88 0380 0000 1200 1111 025',
+    'TRN: 100225006400003',
 ]
 
 # Solar water heater quotations (every item is brand VERA SOLAR / ARISTON SOLAR) get this block after the facts box
