@@ -482,7 +482,8 @@ def api_item_analysis_totals(request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_ho:
-        ho_qty[row['item_code']] = ho_qty.get(row['item_code'], 0) - safe_float(row['qty'])
+        # Credit memo quantities are stored negative, so ADD to net them off
+        ho_qty[row['item_code']] = ho_qty.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # Others qty: invoice - credit memo where store='Others'
     inv_others = invoice_items.filter(invoice__store='Others').values('item_code').annotate(
@@ -493,7 +494,7 @@ def api_item_analysis_totals(request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_others:
-        others_qty[row['item_code']] = others_qty.get(row['item_code'], 0) - safe_float(row['qty'])
+        others_qty[row['item_code']] = others_qty.get(row['item_code'], 0) + safe_float(row['qty'])
 
     # total_2025, total_2026
     inv_2025 = invoice_items.filter(invoice__posting_date__year=2025).values('item_code').annotate(
@@ -504,7 +505,7 @@ def api_item_analysis_totals(request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_2025:
-        total_2025[row['item_code']] = total_2025.get(row['item_code'], 0) - safe_float(row['qty'])
+        total_2025[row['item_code']] = total_2025.get(row['item_code'], 0) + safe_float(row['qty'])
 
     inv_2026 = invoice_items.filter(invoice__posting_date__year=2026).values('item_code').annotate(
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
@@ -514,7 +515,7 @@ def api_item_analysis_totals(request):
         qty=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField()))
     )
     for row in cm_2026:
-        total_2026[row['item_code']] = total_2026.get(row['item_code'], 0) - safe_float(row['qty'])
+        total_2026[row['item_code']] = total_2026.get(row['item_code'], 0) + safe_float(row['qty'])
 
     all_codes = set(ho_qty.keys()) | set(others_qty.keys()) | set(total_2025.keys()) | set(total_2026.keys())
 
