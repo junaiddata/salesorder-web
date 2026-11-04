@@ -520,3 +520,227 @@ def build_so_quotation_pdf(quotation):
     out = BytesIO()
     writer.write(out)
     return out.getvalue()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SAP quotation (so.SAPQuotation -> sapquotations/<number>/ -> Export PDF). Same letterhead design as above; separate
+# functions so nothing used by build_so_quotation_pdf is changed.
+# ---------------------------------------------------------------------------------------------------------------------
+_SAP_WEIGHTS = [20, 70, 230, 44, 64, 68]
+_SAP_COL_W = [CONTENT_W * w / sum(_SAP_WEIGHTS) for w in _SAP_WEIGHTS]
+
+
+def _dec(value):
+    from decimal import Decimal
+    if value is None:
+        return Decimal('0')
+    try:
+        return value if isinstance(value, Decimal) else Decimal(str(value))
+    except Exception:
+        return Decimal('0')
+
+
+def _sap_header_block(q):
+    sep = 6
+    avail = CONTENT_W - 2 * sep
+    w1, w2, w3 = avail * 0.40, avail * 0.38, avail * 0.22
+    gap = 14
+
+    address = '<br/>'.join(escape(ln.strip()) for ln in (q.bill_to or '').splitlines() if ln.strip())
+    to_rows = [('Customer name', _val(q.customer_name, True)), ('Customer ID', _val(q.customer_code))]
+    if address:
+        to_rows.insert(1, ('Address', Paragraph(address, S_VAL)))
+    to = [Paragraph('<b>TO:</b>', S_ADDR), Spacer(1, 2), _label_table(to_rows, w1 - gap)]
+
+    ref = _label_table([
+        ('Quotation no.', _val(q.q_number, True)),
+        ('Customer ref.', _val(q.bp_reference_no)),
+        ('Salesperson', _val(q.salesman_name)),
+    ], w2 - gap)
+
+    date_txt = q.posting_date.strftime('%d.%m.%Y') if q.posting_date else ''
+    right = Table([[Paragraph('Date', S_MID_LBL)], [Paragraph(_txt(date_txt) or '&nbsp;', S_MID_VAL)]], colWidths=[w3 - gap])
+    right.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+
+    outer = Table([[to, '', ref, '', right]], colWidths=[w1, sep, w2, sep, w3])
+    outer.setStyle(TableStyle([
+        ('BOX', (0, 0), (0, 0), 0.8, colors.black),
+        ('BOX', (2, 0), (2, 0), 0.8, colors.black),
+        ('BOX', (4, 0), (4, 0), 0.8, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7), ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (1, 0), (1, 0), 0), ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('LEFTPADDING', (3, 0), (3, 0), 0), ('RIGHTPADDING', (3, 0), (3, 0), 0),
+    ]))
+    return outer
+
+
+def _sap_items_table(q):
+    from decimal import Decimal
+    heads = ['#', 'ITEM CODE', 'DESCRIPTION', 'QTY', f'UNIT PRICE<br/>{CURRENCY}', f'TOTAL<br/>{CURRENCY}']
+    head_style = [S_HEAD_C, S_HEAD_C, S_HEAD_L, S_HEAD_C, S_HEAD_R, S_HEAD_R]
+    rows = [[Paragraph(h, hs) for h, hs in zip(heads, head_style)]]
+    style = [
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (0, -1), 0),
+        ('LINEABOVE', (0, 0), (-1, 0), 0.8, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.8, colors.black),
+    ]
+    subtotal = Decimal('0')
+    for n, it in enumerate(q.items.all().order_by('id'), 1):
+        qty, price = _dec(it.quantity), _dec(it.price)
+        line_total = _dec(it.row_total) if it.row_total is not None else qty * price
+        subtotal += line_total
+        qty_txt = f'{qty:f}'.rstrip('0').rstrip('.') if qty else '0'
+        rows.append([
+            Paragraph(str(n), S_CELL_C),
+            Paragraph(_txt(it.item_no), S_CELL_C),
+            Paragraph(_txt(it.description) or 'No description available', S_CELL),
+            Paragraph(qty_txt, S_CELL_C),
+            Paragraph(_money(price), S_RIGHT),
+            Paragraph(_money(line_total), S_RIGHT),
+        ])
+    first_total_row = len(rows)
+    if first_total_row > 1:
+        style.append(('LINEBELOW', (0, first_total_row - 1), (-1, first_total_row - 1), 0.6, colors.black))
+
+    vat = (subtotal * Decimal(str(VAT_RATE))).quantize(Decimal('0.01'))
+    # document_total from SAP may be with or without VAT; the grand total always includes the VAT line shown above
+    # (SAP's own figure is used only when it already matches subtotal + VAT, e.g. to keep its rounding).
+    grand_total = subtotal + vat
+    doc_total = _dec(q.document_total)
+    if doc_total and abs(doc_total - grand_total) <= Decimal('1'):
+        grand_total = doc_total
+    for label, value, bold in ((f'TOTAL AMOUNT EXCL. VAT ({CURRENCY})', subtotal, False),
+                               (f'VAT {VAT_RATE:.0%} ({CURRENCY})', vat, False),
+                               (f'GRAND TOTAL ({CURRENCY})', grand_total, True)):
+        r = len(rows)
+        s = S_RIGHT_B if bold else S_RIGHT
+        rows.append([''] * 2 + [Paragraph(label, s)] + [''] * 2 + [Paragraph(_money(value), s)])
+        style += [('SPAN', (2, r), (4, r)), ('TOPPADDING', (0, r), (-1, r), 2), ('BOTTOMPADDING', (0, r), (-1, r), 2)]
+        if bold:
+            style += [('LINEABOVE', (2, r), (5, r), 0.6, colors.black), ('TOPPADDING', (0, r), (-1, r), 4)]
+    r = len(rows)
+    words = amount_in_words(round(float(grand_total), 2))
+    rows.append([Paragraph(f'<b>{CURRENCY} : {escape(words)}</b>', S_WORDS)] + [''] * 5)
+    style += [('SPAN', (0, r), (-1, r)), ('TOPPADDING', (0, r), (-1, r), 8)]
+    style.append(('NOSPLIT', (0, first_total_row - 1), (-1, len(rows) - 1)))
+
+    t = Table(rows, colWidths=_SAP_COL_W, repeatRows=1)
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _sap_solar_brand(q):
+    """'VERA' / 'ARISTON' when EVERY line of the SAP quotation matches a catalog item (item_no == item_code) whose
+    firm is exactly VERA SOLAR / ARISTON SOLAR (same strict rule as _solar_brand). Anything else -- an unmatched code,
+    mixed brands, no items, or any error -- gives None, so the standard terms are printed."""
+    try:
+        from .models import Items
+        lines = list(q.items.all().order_by('id'))
+        codes = {str(li.item_no).strip() for li in lines if li.item_no and str(li.item_no).strip()}
+        if not lines or len(codes) == 0 or any(not (li.item_no and str(li.item_no).strip()) for li in lines):
+            return None
+        firms = {}
+        for code, firm in Items.objects.filter(item_code__in=codes).values_list('item_code', 'item_firm'):
+            firms[str(code).strip()] = firm
+        brands = []
+        for li in lines:
+            firm = ' '.join(str(firms.get(str(li.item_no).strip(), '') or '').upper().replace('-', ' ').split())
+            if firm == 'VERA SOLAR':
+                brands.append('VERA')
+            elif firm == 'ARISTON SOLAR':
+                brands.append('ARISTON')
+            else:
+                return None
+        return brands[0] if brands else None
+    except Exception:
+        log.exception('SAP solar brand check failed for %s', getattr(q, 'q_number', ''))
+        return None
+
+
+def _sap_body(q, cfg):
+    story = [
+        Paragraph('<u>QUOTATION</u>', S_TITLE),
+        Spacer(1, 8),
+        _sap_header_block(q),
+        Spacer(1, 10),
+        _sap_items_table(q),
+        Spacer(1, 14),
+    ]
+    if q.remarks and q.remarks.strip():
+        remark_rows = [[Paragraph(escape(ln.strip()) or '&nbsp;', S_CELL)] for ln in q.remarks.splitlines() if ln.strip()]
+        story += [KeepTogether([_section('REMARKS', remark_rows)]), Spacer(1, 10)]
+    stamp = _stamp(cfg.get('stamp'))
+    stamp_row = None
+    if stamp is not None:
+        stamp_row = Table([[stamp]], colWidths=[CONTENT_W])
+        stamp_row.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                       ('LEFTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 10)]))
+
+    brand = _sap_solar_brand(q)
+    if brand:
+        # Vera Solar / Ariston Solar only: same block as the app quotation (no payment-terms point: SAP has none).
+        points, n = [], 0
+        for entry in SOLAR_TERMS:
+            if isinstance(entry, tuple):
+                kind, text = entry
+                points.append([Paragraph(escape(text), S_BOLD if kind == 'H' else _base)])
+            else:
+                n += 1
+                text = entry.format(brand=brand, phone=cfg.get('phone') or DIVISION_CONFIG['JUNAID']['phone'])
+                points.append([Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)])
+        split_at = next((i for i, e in enumerate(SOLAR_TERMS) if isinstance(e, tuple) and e[0] == 'H'), None)
+        if split_at is None:
+            story.append(_section('TERMS AND CONDITIONS', points))
+            if stamp_row is not None:
+                story.append(stamp_row)
+        else:
+            story.append(_section('TERMS AND CONDITIONS', points[:split_at]))
+            end = Table(points[split_at:], colWidths=[CONTENT_W])
+            end.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 1.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (0, 0), 6),
+            ]))
+            story.append(KeepTogether([end] + ([stamp_row] if stamp_row is not None else [])))
+        return story
+
+    points = [[Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)] for n, text in enumerate(TERMS, 1)]
+    tail = [_section('TERMS AND CONDITIONS', points)]
+    if stamp_row is not None:
+        tail.append(stamp_row)
+    story.append(KeepTogether(tail))
+    return story
+
+
+def build_sap_quotation_pdf(quotation):
+    """Return the finished PDF (Junaid letterhead + content) for an so.SAPQuotation as bytes."""
+    cfg = DIVISION_CONFIG['JUNAID']
+    body_buf = BytesIO()
+    doc = BaseDocTemplate(
+        body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
+        topMargin=cfg['top'], bottomMargin=cfg['bottom'], title=f'Quotation {quotation.q_number}',
+    )
+    frame = Frame(MARGIN_X, cfg['bottom'], CONTENT_W, PAGE_H - cfg['top'] - cfg['bottom'],
+                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    doc.addPageTemplates([PageTemplate(id='main', frames=[frame])])
+    doc.build(_sap_body(quotation, cfg))
+    body_buf.seek(0)
+
+    writer = PdfWriter()
+    for body_page in PdfReader(body_buf).pages:
+        base = _letterhead_page(cfg)
+        base.merge_page(body_page)
+        writer.add_page(base)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()

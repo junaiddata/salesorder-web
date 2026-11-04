@@ -4739,6 +4739,18 @@ def export_sap_quotation_pdf(request, q_number):
     filename = f"SAP_Quotation_{quotation.q_number}_{date_str}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
+    # New letterhead design; on any failure fall through to the old layout below so the export never breaks.
+    try:
+        from .quotation_pdf_new import build_sap_quotation_pdf
+        response.write(build_sap_quotation_pdf(quotation))
+        return response
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'New SAP quotation PDF failed for %s; using the old layout', quotation.q_number)
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
     buffer = BytesIO()
 
     # --- 1. DEFINE DEFAULT CONFIG (Junaid Settings) ---
