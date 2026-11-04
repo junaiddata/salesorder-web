@@ -3494,6 +3494,7 @@ SALES_USER_MAP = {
     "alabamaaijaz": ["AIJAZ"],
     "alabamasreejith": ["SREEJITH","A.SREEJITH", "A. SREEJITH"],
     "alabamamuzammil":["MUZAMMIL"],
+    "alabamaashika":["ASHIKA"],
     "alabamaakhil": ["AKHIL"],
     "alabamakadhar": ["KADER", "A.KADER", "A. KADER"],
     "alabamakadar": ["KADER", "A.KADER", "A. KADER"],

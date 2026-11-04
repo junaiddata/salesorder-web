@@ -58,6 +58,39 @@ def quotation_customer_details(request):
     return JsonResponse(customer_details(customer) if customer else {})
 
 
+def _is_company_chooser(user):
+    """so / manager admins work for both companies and pick the company on the create-quotation form."""
+    role = getattr(user, 'role', None)
+    return bool(
+        user and user.is_authenticated and role is not None
+        and getattr(role, 'role', None) == 'Admin'
+        and (user.username or '').strip().lower() in ('so', 'manager')
+    )
+
+
+def _quotation_creation_division(request, requested=None):
+    """
+    Division ('ALABAMA' | 'JUNAID') a new quotation is created under.
+      * username containing 'alabama'            -> ALABAMA (unchanged rule, takes priority)
+      * so / manager admins                       -> the company they picked ('requested'), default JUNAID
+      * other Admin whose role company is Alabama -> ALABAMA
+      * everyone else                             -> JUNAID (unchanged)
+    'requested' is only trusted for so / manager; for anyone else it is ignored.
+    """
+    user = request.user
+    if not user.is_authenticated:
+        return 'JUNAID'
+    if 'alabama' in (user.username or '').lower():
+        return 'ALABAMA'
+    if _is_company_chooser(user):
+        picked = (requested or '').strip().upper()
+        return picked if picked in ('ALABAMA', 'JUNAID') else 'JUNAID'
+    role = getattr(user, 'role', None)
+    if role is not None and getattr(role, 'role', None) == 'Admin' and getattr(role, 'company', 'Junaid') == 'Alabama':
+        return 'ALABAMA'
+    return 'JUNAID'
+
+
 @csrf_exempt
 @transaction.atomic
 def create_quotation(request):
@@ -66,10 +99,8 @@ def create_quotation(request):
             # -------------------------
             # 0. Division & Remarks Setup
             # -------------------------
-            division = 'JUNAID' # Default
-            if request.user.is_authenticated and 'alabama' in request.user.username.lower():
-                division = 'ALABAMA'
-            
+            division = _quotation_creation_division(request, request.POST.get('division'))
+
             remarks = request.POST.get('remarks', '').strip()
             license_name = request.POST.get('license_name', 'JUNAID_MAIN').strip()
 
@@ -317,15 +348,17 @@ def create_quotation(request):
         # ---------------------------------------------------------------------
         # inactive items (no longer listed by the stock app) are not offered for a new quotation
         firms = limit_to_user_brands(active_items(Items.objects.all()), request.user).values_list('item_firm', flat=True).distinct().order_by('item_firm')
-        is_alabama_user = (
-            request.user.is_authenticated
-            and request.user.username.lower().startswith('alabama')
-        )
+        show_company_select = _is_company_chooser(request.user)
+        default_division = _quotation_creation_division(request, request.GET.get('division'))
+        # so/manager see the company dropdown (and the license block, toggled by JS); everyone else is fixed.
+        is_alabama_user = (default_division == 'ALABAMA') and not show_company_select
         return render(request, 'so/quotations/create_quotation.html', {
             'customers': customers,
             'salesmen': salesmen,
             'firms': firms,
             'is_alabama_user': is_alabama_user,
+            'show_company_select': show_company_select,
+            'default_division': default_division,
         })
 
 from django.shortcuts import render

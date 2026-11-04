@@ -407,8 +407,19 @@
                                   placeholder="Add payment details (optional) - printed as the last point under Terms and Conditions"></textarea>
                     </div>
 
-                    {% if not is_alabama_user %}
+                    {% if show_company_select %}
                     <div class="form-group">
+                        <label for="division">Company <span class="required-mark">*</span></label>
+                        <select id="division" name="division" required>
+                            <option value="JUNAID" {% if default_division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                            <option value="ALABAMA" {% if default_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+                        </select>
+                        <p class="help-text">Choose which company this quotation is issued under</p>
+                    </div>
+                    {% endif %}
+
+                    {% if not is_alabama_user %}
+                    <div class="form-group" id="license-group">
                         <label for="license_name">Our License <span class="required-mark">*</span></label>
                         <select id="license_name" name="license_name" required>
                             <option value="JUNAID_SME" selected>JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH</option>
@@ -416,6 +427,25 @@
                         </select>
                         <p class="help-text">Select the company license name to appear on the quotation PDF</p>
                     </div>
+                    {% endif %}
+
+                    {% if show_company_select %}
+                    <script>
+                    (function () {
+                        // Alabama quotations carry no Junaid license: hide the block and disable the select so it is not submitted/required.
+                        var company = document.getElementById('division');
+                        var group = document.getElementById('license-group');
+                        var license = document.getElementById('license_name');
+                        if (!company || !group || !license) return;
+                        function sync() {
+                            var alabama = company.value === 'ALABAMA';
+                            group.style.display = alabama ? 'none' : '';
+                            license.disabled = alabama;
+                        }
+                        company.addEventListener('change', sync);
+                        sync();
+                    })();
+                    </script>
                     {% endif %}
 
                     <div class="form-group">
