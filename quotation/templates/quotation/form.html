@@ -146,6 +146,7 @@
                         <input type="number" step="any" min="0" name="discount_value" id="discValue" class="input-x" placeholder="0" value="{{ values.discount_value }}">
                     </span>
                 </div>
+                <div id="discHint" class="u-muted" style="display:none;text-align:right;font-size:.78rem;margin:-.2rem 0 .3rem"></div>
                 <div class="sub"><span>Discount (AED)</span><span id="tDisc">0.00</span></div>
                 <div><span>Total amount excl. VAT (AED)</span><span id="tNet">0.00</span></div>
                 <div class="vat"><span>VAT 5% (AED)</span><span id="tVat">0.00</span></div>
@@ -488,6 +489,10 @@
         const dv = Math.max(parseFloat(document.getElementById('discValue').value) || 0, 0);
         let disc = document.getElementById('discType').value === 'percent' ? Math.round(sum * Math.min(dv, 100)) / 100 : dv;
         disc = Math.min(disc, sum);
+        const hint = document.getElementById('discHint');   // live AED value of a % discount
+        const showHint = document.getElementById('discType').value === 'percent' && dv > 0;
+        hint.style.display = showHint ? '' : 'none';
+        if (showHint) hint.textContent = Math.min(dv, 100) + '% of ' + fmt(sum) + ' = AED ' + fmt(disc);
         const net = Math.round((sum - disc) * 100) / 100;
         const vat = Math.round(net * 5) / 100;    // 5% VAT, to the cent
         document.getElementById('tTotal').textContent = fmt(sum);

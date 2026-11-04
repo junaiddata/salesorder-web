@@ -1775,3 +1775,12 @@ class SolarTermsTests(TestCase):
         text = self._text(self._quote(*['VERA SOLAR'] * 40))
         self.assertIn('ALL ELECTRICAL WORK IS NOT INCLUDED', text)
         self.assertIn('BANK ACCOUNT DETAILS', text)
+
+
+class DiscountHintTests(TestCase):
+    def test_form_has_live_aed_hint_for_percent_discount(self):
+        self.client.force_login(get_user_model().objects.create_user('u', password='x'))
+        page = self.client.get(reverse('quotation:new')).content.decode()
+        self.assertIn('id="discHint"', page)
+        self.assertIn("hint.textContent", page)
+        self.assertIn('name="discount_value"', page)
