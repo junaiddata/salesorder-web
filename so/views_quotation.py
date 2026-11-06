@@ -98,6 +98,62 @@ def _alabama_quotable_brands():
     return list(quotable_items().exclude(item_firm='').values_list('item_firm', flat=True).distinct().order_by('item_firm'))
 
 
+def _alabama_list_mode(request):
+    """True when the quotations list should speak Alabama's brands: the own-catalog switch is on and the list is the
+    Alabama one (locked to ALABAMA, or an Alabama user with no explicit lock). Junaid / so / manager lists: False."""
+    if not own_catalog_enabled():
+        return False
+    lock = _inapp_quotation_division_lock(request)
+    if lock is not None:
+        return lock == 'ALABAMA'
+    return _quotation_creation_division(request) == 'ALABAMA'
+
+
+def _alabama_list_firm_choices():
+    """Firm dropdown for the Alabama quotations list (read-only): the brands offered on new Alabama quotations, plus
+    the brands already on existing Alabama quotations. An old line (Junaid item) is shown under its Alabama brand when
+    the item code is in the Alabama catalog, else under its own name. Duplicates are merged by normalized name."""
+    from alabama.item_sync import norm_brand
+    from alabama.models import AlabamaItem
+    shown = {}
+
+    def add(name):
+        name = (name or '').strip()
+        key = norm_brand(name)
+        if key and key not in shown:
+            shown[key] = name
+
+    for b in _alabama_quotable_brands():
+        add(b)
+    lines = QuotationItem.objects.filter(quotation__division='ALABAMA')
+    for b in lines.exclude(alabama_item__isnull=True).values_list('alabama_item__item_firm', flat=True).distinct():
+        add(b)
+    old = list(lines.filter(alabama_item__isnull=True, item__isnull=False)
+               .values_list('item__item_code', 'item__item_firm').distinct())
+    code_brand = dict(AlabamaItem.objects.filter(item_code__in=[c for c, _ in old]).values_list('item_code', 'item_firm'))
+    for code, firm in old:
+        add(code_brand.get(code) or firm)
+    return sorted(shown.values(), key=str.lower)
+
+
+def _alabama_firm_extra_q(brand):
+    """Extra OR-condition for picking `brand` on the Alabama list, so old quotations are still found: lines whose Junaid
+    item has the same brand under a different spelling (VERA INDIA / VERA-INDIA), or whose item code belongs to that
+    brand in the Alabama catalog (ATLAS - HP FITTINGS / ATLAS-MPI)."""
+    from alabama.item_sync import norm_brand
+    from alabama.models import AlabamaItem
+    key = norm_brand(brand)
+    if not key:
+        return Q(pk__in=[])
+    ala_firms = [f for f in AlabamaItem.objects.values_list('item_firm', flat=True).distinct() if norm_brand(f) == key]
+    legacy_firms = [f for f in Items.objects.values_list('item_firm', flat=True).distinct() if f and norm_brand(f) == key]
+    q = Q(items__alabama_item__item_firm__in=ala_firms) | Q(items__item__item_firm__in=legacy_firms)
+    if ala_firms:
+        codes = list(AlabamaItem.objects.filter(item_firm__in=ala_firms).values_list('item_code', flat=True))
+        q |= Q(items__item__item_code__in=codes)
+    return q
+
+
 @csrf_exempt
 @transaction.atomic
 def create_quotation(request):
@@ -536,6 +592,7 @@ def inapp_quotations_filtered_qs(request):
 
     firm_filter_list = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
     if firm_filter_list:
+        alabama_mode = _alabama_list_mode(request)
         q_firm = Q()
         for f in firm_filter_list:
             q_firm |= (
@@ -544,6 +601,8 @@ def inapp_quotations_filtered_qs(request):
                 | Q(items__alabama_item__item_firm__icontains=f)
                 | Q(items__alabama_item__item_description__icontains=f)
             )
+            if alabama_mode:
+                q_firm |= _alabama_firm_extra_q(f)
         quotations = quotations.filter(q_firm).distinct()
 
     from django.db.models import Count
@@ -831,16 +890,19 @@ def view_quotations(request):
             query_params.append('firm=' + quote(f.strip()))
     query_string = "&".join(query_params)
 
-    firm_raw = (
-        Items.objects.exclude(item_firm__isnull=True)
-        .exclude(item_firm='')
-        .values_list('item_firm', flat=True)
-        .distinct()
-    )
-    firm_choices = sorted(
-        {str(x).strip() for x in firm_raw if x and str(x).strip()},
-        key=str.lower,
-    )
+    if _alabama_list_mode(request):
+        firm_choices = _alabama_list_firm_choices()
+    else:
+        firm_raw = (
+            Items.objects.exclude(item_firm__isnull=True)
+            .exclude(item_firm='')
+            .values_list('item_firm', flat=True)
+            .distinct()
+        )
+        firm_choices = sorted(
+            {str(x).strip() for x in firm_raw if x and str(x).strip()},
+            key=str.lower,
+        )
     firm_selected = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
 
     context = {
