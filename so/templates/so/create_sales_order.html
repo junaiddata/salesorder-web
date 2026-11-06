@@ -11,6 +11,19 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
+    <script>
+    // Which item catalog this page works with: 'ALABAMA' = this order is an Alabama order and uses the Alabama item
+    // master (ids look like 'a:123'); empty = Junaid items exactly as before. Stock / price lookups read the id's prefix.
+    window.QUOTE_CATALOG = '{{ catalog_division|default:"" }}';
+    if (window.QUOTE_CATALOG === 'ALABAMA') {
+        $.ajaxPrefilter(function (options) {
+            if (/\/(api\/items-search|get_items_by_firm)\//.test(options.url || '')) {
+                options.data = (options.data ? options.data + '&' : '') + 'division=ALABAMA';
+            }
+        });
+    }
+    </script>
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         html { height: 100%; -webkit-text-size-adjust: 100%; }
@@ -324,6 +337,37 @@
                 <div class="form-card">
                     <h2 class="section-header">Order Information</h2>
 
+                    {% if show_company_select %}
+                    <div class="form-group">
+                        <label for="division">Company <span class="required-mark">*</span></label>
+                        <select id="division" name="division" required>
+                            <option value="JUNAID" {% if default_division == 'JUNAID' %}selected{% endif %}>Junaid</option>
+                            <option value="ALABAMA" {% if default_division == 'ALABAMA' %}selected{% endif %}>Alabama</option>
+                        </select>
+                        <p class="help-text">Choose which company this order is for</p>
+                    </div>
+                    <script>
+                    (function () {
+                        // The item catalog depends on the company: reload the page for the other company (the brand list
+                        // and item lists come from the server), after confirming that the items added so far are cleared.
+                        var company = document.getElementById('division');
+                        var current = '{{ default_division }}';
+                        if (!company) return;
+                        company.addEventListener('change', function () {
+                            var want = company.value;
+                            if (want === current) return;
+                            var hasItems = Array.prototype.some.call(document.querySelectorAll('select.item-select'), function (s) { return s.value; });
+                            if (hasItems && !window.confirm('Changing the company reloads the page and clears the items added so far. Continue?')) {
+                                company.value = current;
+                                return;
+                            }
+                            try { isSubmitting = true; } catch (e) {}   // no unsaved-changes prompt: the user just confirmed
+                            window.location.href = window.location.pathname + '?division=' + encodeURIComponent(want);
+                        });
+                    })();
+                    </script>
+                    {% endif %}
+
                     <div class="form-group">
                         <label for="salesman">Salesman <span class="required-mark">*</span></label>
                         <select id="salesman" name="salesman" required onchange="loadCustomersBySalesman()" class="searchable-select">
@@ -458,7 +502,7 @@
 // ║                    DRAFT SYSTEM (localStorage)                  ║
 // ╚══════════════════════════════════════════════════════════════════╝
 
-const DRAFT_KEY      = 'customer_order_draft_v2';
+const DRAFT_KEY      = 'customer_order_draft_v2' + (window.QUOTE_CATALOG === 'ALABAMA' ? '_al' : '');   // a draft never crosses catalogs
 const DRAFT_DEBOUNCE = 3000;          // 3 seconds after last change
 const DRAFT_EXPIRY   = 24 * 60 * 60 * 1000;  // 24 hours
 

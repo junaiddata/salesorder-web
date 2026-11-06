@@ -223,9 +223,9 @@
             <a href="{% url 'view_quotations' %}" class="btn btn-light btn-sm"><i class="fas fa-file-alt me-1"></i>App quotations</a>
             <a href="{% url 'quotation_list' %}" class="btn btn-light btn-sm"><i class="fas fa-database me-1"></i>SAP quotations</a>
             {% if request.user.role.role == 'Salesman' %}
-            <a href="{% url 'sales_home' %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
+            <a href="{% if request.user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
             {% else %}
-            <a href="{% url 'home' %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
+            <a href="{% if request.user.role.company == 'Alabama' %}{% url 'alabama:home' %}{% else %}{% url 'home' %}{% endif %}" class="btn btn-outline-light btn-sm"><i class="fas fa-home me-1"></i>Home</a>
             {% endif %}
         </div>
     </div>

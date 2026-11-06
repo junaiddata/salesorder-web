@@ -344,32 +344,67 @@ class SalesOrder(models.Model):
             return '<span class="badge badge-success">Taken</span>'
         return '<span class="badge badge-warning">Pending</span>'
 
-class CustomerPrice(models.Model):
+class CatalogItemRefMixin:
+    """Lines (and customer prices) point at EITHER a Junaid item (`item`, so.Items) OR an Alabama item (`alabama_item`,
+    alabama.AlabamaItem) -- never both. `catalog_item` is whichever is set; `item_ref` is the value the quotation / order
+    forms post for it: the bare Items id for a Junaid item, 'a:<id>' for an Alabama item (an Alabama id can equal a
+    Junaid id, so the two must never be mixed up)."""
+
+    @property
+    def catalog_item(self):
+        return self.alabama_item or self.item
+
+    @property
+    def item_ref(self):
+        if self.alabama_item_id:
+            return f'a:{self.alabama_item_id}'
+        return str(self.item_id) if self.item_id else ''
+
+
+class CustomerPrice(CatalogItemRefMixin, models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    item = models.ForeignKey(Items, on_delete=models.CASCADE)
+    item = models.ForeignKey(Items, on_delete=models.CASCADE, null=True, blank=True)
+    # Alabama's own item master (alabama.AlabamaItem); set instead of `item` for prices on new Alabama quotations
+    alabama_item = models.ForeignKey('alabama.AlabamaItem', on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name='customer_prices')
     custom_price = models.FloatField(default=0.0)
 
     
     class Meta:
-        unique_together = ('customer', 'item')
+        unique_together = [('customer', 'item'), ('customer', 'alabama_item')]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(item__isnull=True) | models.Q(alabama_item__isnull=True),
+                                   name='customerprice_not_both_items'),
+        ]
 
     def __str__(self):
-        return f"{self.customer.customer_name} - {self.item.item_description}: {self.custom_price}"
+        it = self.catalog_item
+        return f"{self.customer.customer_name} - {it.item_description if it else ''}: {self.custom_price}"
 
-class OrderItem(models.Model):
+class OrderItem(CatalogItemRefMixin, models.Model):
     unit_choices = [
         ('pcs', 'pcs'),
         ('ctn', 'ctn')
     ]
     order = models.ForeignKey(SalesOrder, related_name='items', on_delete=models.CASCADE)
-    item = models.ForeignKey(Items, on_delete=models.CASCADE)
+    item = models.ForeignKey(Items, on_delete=models.CASCADE, null=True, blank=True)
+    # Alabama's own item master; set instead of `item` for lines created from new Alabama quotations
+    alabama_item = models.ForeignKey('alabama.AlabamaItem', on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name='order_lines')
     quantity = models.IntegerField(default=1)
     unit = models.CharField(max_length=20, default='pcs')
     price = models.FloatField(default=0.0)
     is_custom_price = models.BooleanField(default=False)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(item__isnull=True) | models.Q(alabama_item__isnull=True),
+                                   name='orderitem_not_both_items'),
+        ]
+
     def __str__(self):
-        return f"{self.quantity} x {self.item.item_description} for {self.order.id}"
+        it = self.catalog_item
+        return f"{self.quantity} x {it.item_description if it else ''} for {self.order.id}"
 
 
 #################################################  Quotation Models #################################################
@@ -480,17 +515,26 @@ class Quotation(models.Model):
         
         super().save(*args, **kwargs)
 
-class QuotationItem(models.Model):
+class QuotationItem(CatalogItemRefMixin, models.Model):
     quotation = models.ForeignKey(Quotation, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(Items, on_delete=models.CASCADE, null=True)  # link to Items table
+    # Alabama's own item master; set instead of `item` for lines added from the Alabama catalog
+    alabama_item = models.ForeignKey('alabama.AlabamaItem', on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name='quotation_lines')
     unit = models.CharField(max_length=20, default='pcs')
     quantity = models.PositiveIntegerField()
     price = models.FloatField(default=0.0)
     line_total = models.FloatField(default=0.0)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(item__isnull=True) | models.Q(alabama_item__isnull=True),
+                                   name='quotationitem_not_both_items'),
+        ]
 
     def __str__(self):
-        return f"{self.item.item_description} ({self.quantity})"
+        it = self.catalog_item
+        return f"{it.item_description if it else ''} ({self.quantity})"
 
 # Quotation models
 class SAPQuotation(models.Model):

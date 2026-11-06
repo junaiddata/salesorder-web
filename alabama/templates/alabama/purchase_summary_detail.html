@@ -134,9 +134,9 @@
       <tbody>
         {% for line in lines %}
         <tr>
-          <td>{{ line.item.item_code }}</td>
-          <td>{{ line.item_description|default:line.item.item_description|default:"—" }}</td>
-          <td>{{ line.item_manufacturer|default:line.item.item_firm|default:"—" }}</td>
+          <td>{{ line.catalog_item.item_code }}</td>
+          <td>{{ line.item_description|default:line.catalog_item.item_description|default:"—" }}</td>
+          <td>{{ line.item_manufacturer|default:line.catalog_item.item_firm|default:"—" }}</td>
           <td class="num">{{ line.quantity|default:0|floatformat:2 }}</td>
           <td class="num">{{ line.unit_price|default:0|floatformat:2 }}</td>
           <td class="num">{{ line.net_purchase|default:0|floatformat:2 }}</td>

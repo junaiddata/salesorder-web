@@ -11,6 +11,20 @@
     <!-- Select2 for searchable dropdowns -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+    // Which item catalog this page works with: 'ALABAMA' = new Alabama documents use the Alabama item master.
+    // Item search / brand item lists then ask the server for Alabama items (ids look like 'a:123'); empty = Junaid items
+    // exactly as before. Stock / price lookups need nothing extra: they read the id's prefix.
+    window.QUOTE_CATALOG = '{{ catalog_division|default:"" }}';
+    if (window.QUOTE_CATALOG === 'ALABAMA') {
+        $.ajaxPrefilter(function (options) {
+            if (/\/(api\/items-search|get_items_by_firm)\//.test(options.url || '')) {
+                options.data = (options.data ? options.data + '&' : '') + 'division=ALABAMA';
+            }
+        });
+    }
+    </script>
     
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -395,24 +409,24 @@
                                         <option value="">Select Firm</option>
                                         <option value="All">All Firms</option>
                                         {% for firm in firms %}
-                                            <option value="{{ firm }}" {% if firm == quotation_item.item.item_firm %}selected{% endif %}>{{ firm }}</option>
+                                            <option value="{{ firm }}" {% if firm == quotation_item.catalog_item.item_firm %}selected{% endif %}>{{ firm }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 
                                 <div class="form-group">
                                     <label>Item <span class="required-mark">*</span></label>
-                                    <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required data-item-details="{{ quotation_item.item.item_description }} ({{ quotation_item.item.item_code }} - {{ quotation_item.item.item_firm }} - {{ quotation_item.item.item_upvc }} - Stock: {{ quotation_item.item.item_stock }})">
-                                        <option value="{{ quotation_item.item.id }}" selected>
-                                            {{ quotation_item.item.item_description }}
+                                    <select name="item" class="item-select searchable-select" onchange="onItemChange(this)" required data-item-details="{{ quotation_item.catalog_item.item_description }} ({{ quotation_item.catalog_item.item_code }} - {{ quotation_item.catalog_item.item_firm }} - {{ quotation_item.catalog_item.item_upvc }} - Stock: {{ quotation_item.catalog_item.item_stock }})">
+                                        <option value="{{ quotation_item.item_ref }}" selected>
+                                            {{ quotation_item.catalog_item.item_description }}
                                         </option>
                                     </select>
-                                    <div class="item-details" style="font-size:14px;color:#888;">{{ quotation_item.item.item_description }}</div>
+                                    <div class="item-details" style="font-size:14px;color:#888;">{{ quotation_item.catalog_item.item_description }}</div>
                                 </div>
                                 
                                 <div class="form-group">
                                     <label>Stock</label>
-                                    <div class="item-stock" style="font-size:14px;color:#888;">{{ quotation_item.item.item_stock }}</div>
+                                    <div class="item-stock" style="font-size:14px;color:#888;">{{ quotation_item.catalog_item.item_stock }}</div>
                                 </div>
                                 
                                 <div class="qty-price-grid">

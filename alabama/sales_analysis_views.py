@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from datetime import date, datetime
 from decimal import Decimal
 
+from .item_sync import item_fk
 from .models import AlabamaSalesLine
 from .views import alabama_salesman_scope_q
 
@@ -150,7 +151,7 @@ def sales_analysis_dashboard(request):
     top_item_lines = apply_period_filter(top_item_lines, period)
 
     item_agg = (
-        top_item_lines.values('item__item_code', 'item__item_description')
+        top_item_lines.values(f'{item_fk()}__item_code', f'{item_fk()}__item_description')
         .annotate(
             total_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
@@ -162,8 +163,8 @@ def sales_analysis_dashboard(request):
     top_items = []
     for row in item_agg:
         top_items.append({
-            'item_code': row.get('item__item_code') or '—',
-            'item_description': row.get('item__item_description') or 'Unknown',
+            'item_code': row.get(f'{item_fk()}__item_code') or '—',
+            'item_description': row.get(f'{item_fk()}__item_description') or 'Unknown',
             'total_sales': row['total_sales'] or Decimal('0'),
             'total_gp': row['total_gp'] or Decimal('0'),
             'total_quantity': row['total_quantity'] or Decimal('0'),

@@ -35,14 +35,16 @@ def _parse_date(s):
 @login_required
 def credit_note_analysis(request):
     """Itemwise Credit Note Analysis - which items are returned most, Alabama."""
-    from so.models import Items
+    from .item_sync import item_model, item_fk
+    Items = item_model()
+    ITEM = item_fk()
 
     search_query = request.GET.get('q', '').strip()
     salesmen_filter = [s for s in request.GET.getlist('salesman') if s.strip()]
     start_date = _parse_date(request.GET.get('start', ''))
     end_date = _parse_date(request.GET.get('end', ''))
 
-    qs = AlabamaSalesLine.objects.filter(document_type='Credit Memo').select_related('item', 'customer')
+    qs = AlabamaSalesLine.objects.filter(document_type='Credit Memo').select_related(item_fk(), 'customer')
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -61,17 +63,17 @@ def credit_note_analysis(request):
                 | Q(item_upvc__icontains=search_query)
             ).values_list('pk', flat=True)
         )
-        qs = qs.filter(item_id__in=search_item_ids)
+        qs = qs.filter(**{f'{ITEM}_id__in': search_item_ids})
 
     # ── Item-level aggregates ────────────────────────────────────────────
-    item_aggs = qs.values('item').annotate(
+    item_aggs = qs.values(ITEM).annotate(
         total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
         total_value=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
         credit_memo_count=Count('document_number', distinct=True),
         customer_count=Count('customer', distinct=True),
     )
 
-    items_by_id = {row['item']: row for row in item_aggs if row['item']}
+    items_by_id = {row[ITEM]: row for row in item_aggs if row[ITEM]}
     items_info = {
         it.pk: it
         for it in Items.objects.filter(pk__in=items_by_id.keys())
@@ -117,8 +119,8 @@ def credit_note_analysis(request):
     customers_by_item = {}
     if page_item_ids:
         cust_aggs = (
-            qs.filter(item_id__in=page_item_ids)
-            .values('item_id', 'customer_id', 'customer__customer_name', 'customer__customer_code')
+            qs.filter(**{f'{ITEM}_id__in': page_item_ids})
+            .values(f'{ITEM}_id', 'customer_id', 'customer__customer_name', 'customer__customer_code')
             .annotate(
                 total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
                 total_value=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
@@ -126,20 +128,20 @@ def credit_note_analysis(request):
             )
         )
         doc_rows = (
-            qs.filter(item_id__in=page_item_ids)
-            .values('item_id', 'customer_id', 'document_number')
+            qs.filter(**{f'{ITEM}_id__in': page_item_ids})
+            .values(f'{ITEM}_id', 'customer_id', 'document_number')
             .distinct()
         )
         doc_lookup = {}
         for row in doc_rows:
-            doc_lookup.setdefault((row['item_id'], row['customer_id']), set()).add(row['document_number'])
+            doc_lookup.setdefault((row[f'{ITEM}_id'], row['customer_id']), set()).add(row['document_number'])
 
         for row in cust_aggs:
             qty = abs(row['total_quantity'] or 0)
             if not qty:
                 continue
-            key = (row['item_id'], row['customer_id'])
-            customers_by_item.setdefault(row['item_id'], []).append({
+            key = (row[f'{ITEM}_id'], row['customer_id'])
+            customers_by_item.setdefault(row[f'{ITEM}_id'], []).append({
                 'customer_name': row['customer__customer_name'] or 'Unknown',
                 'customer_code': row['customer__customer_code'] or '',
                 'total_quantity': int(qty),

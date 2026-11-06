@@ -74,7 +74,8 @@ def item_analysis(request):
     Alabama Item Analysis - 2025 and 2026 only.
     Data from AlabamaSalesLine.
     """
-    from so.models import Items
+    from .item_sync import item_model, item_fk
+    Items = item_model()
 
     current_year = datetime.now().year
     years = [current_year, current_year - 1]
@@ -90,7 +91,7 @@ def item_analysis(request):
     category_filter = request.GET.get('category', 'All').strip()
 
     # Base queryset with salesman scope
-    qs = AlabamaSalesLine.objects.all().select_related('item')
+    qs = AlabamaSalesLine.objects.all().select_related(item_fk())
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -149,7 +150,7 @@ def item_analysis(request):
 
     for year in years:
         year_qs = qs.filter(posting_date__year=year)
-        agg = year_qs.values('item').annotate(
+        agg = year_qs.values(item_fk()).annotate(
             total_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
             total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
@@ -161,7 +162,7 @@ def item_analysis(request):
             clean_firms = [f for f in firm_filter if f.strip()]
             if clean_firms:
                 firm_item_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
-                agg = [a for a in agg if a['item'] in firm_item_ids]
+                agg = [a for a in agg if a[item_fk()] in firm_item_ids]
 
         # Apply search filter
         if search_query:
@@ -172,10 +173,10 @@ def item_analysis(request):
                     | Q(item_upvc__icontains=search_query)
                 ).values_list('pk', flat=True)
             )
-            agg = [a for a in agg if a['item'] in search_item_ids]
+            agg = [a for a in agg if a[item_fk()] in search_item_ids]
 
         for row in agg:
-            item_id = row['item']
+            item_id = row[item_fk()]
             if not item_id:
                 continue
             try:
@@ -364,7 +365,8 @@ def export_item_analysis_pdf(request):
     from reportlab.lib.units import inch
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
     from django.http import HttpResponse
-    from so.models import Items
+    from .item_sync import item_model, item_fk
+    Items = item_model()
 
     current_year = datetime.now().year
     years = [current_year, current_year - 1]
@@ -375,7 +377,7 @@ def export_item_analysis_pdf(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
 
-    qs = AlabamaSalesLine.objects.all().select_related('item')
+    qs = AlabamaSalesLine.objects.all().select_related(item_fk())
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -416,7 +418,7 @@ def export_item_analysis_pdf(request):
     item_data = {}
     for year in years:
         year_qs = qs.filter(posting_date__year=year)
-        agg = year_qs.values('item').annotate(
+        agg = year_qs.values(item_fk()).annotate(
             total_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
             total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
@@ -426,7 +428,7 @@ def export_item_analysis_pdf(request):
             clean_firms = [f for f in firm_filter if f.strip()]
             if clean_firms:
                 firm_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
-                agg = [a for a in agg if a['item'] in firm_ids]
+                agg = [a for a in agg if a[item_fk()] in firm_ids]
         if search_query:
             search_ids = set(
                 Items.objects.filter(
@@ -435,10 +437,10 @@ def export_item_analysis_pdf(request):
                     | Q(item_upvc__icontains=search_query)
                 ).values_list('pk', flat=True)
             )
-            agg = [a for a in agg if a['item'] in search_ids]
+            agg = [a for a in agg if a[item_fk()] in search_ids]
         for row in agg:
             try:
-                item = Items.objects.get(pk=row['item'])
+                item = Items.objects.get(pk=row[item_fk()])
             except Items.DoesNotExist:
                 continue
             code = item.item_code or ''
@@ -620,7 +622,8 @@ def export_item_analysis_excel(request):
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from so.models import Items
+    from .item_sync import item_model, item_fk
+    Items = item_model()
 
     current_year = datetime.now().year
     years = [current_year, current_year - 1]
@@ -631,7 +634,7 @@ def export_item_analysis_excel(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
 
-    qs = AlabamaSalesLine.objects.all().select_related('item')
+    qs = AlabamaSalesLine.objects.all().select_related(item_fk())
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -671,7 +674,7 @@ def export_item_analysis_excel(request):
     item_data = {}
     for year in years:
         year_qs = qs.filter(posting_date__year=year)
-        agg = year_qs.values('item').annotate(
+        agg = year_qs.values(item_fk()).annotate(
             total_sales=Coalesce(Sum('net_sales'), Value(0, output_field=DecimalField())),
             total_gp=Coalesce(Sum('gross_profit'), Value(0, output_field=DecimalField())),
             total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=DecimalField())),
@@ -681,7 +684,7 @@ def export_item_analysis_excel(request):
             clean_firms = [f for f in firm_filter if f.strip()]
             if clean_firms:
                 firm_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
-                agg = [a for a in agg if a['item'] in firm_ids]
+                agg = [a for a in agg if a[item_fk()] in firm_ids]
         if search_query:
             search_ids = set(
                 Items.objects.filter(
@@ -690,10 +693,10 @@ def export_item_analysis_excel(request):
                     | Q(item_upvc__icontains=search_query)
                 ).values_list('pk', flat=True)
             )
-            agg = [a for a in agg if a['item'] in search_ids]
+            agg = [a for a in agg if a[item_fk()] in search_ids]
         for row in agg:
             try:
-                item = Items.objects.get(pk=row['item'])
+                item = Items.objects.get(pk=row[item_fk()])
             except Items.DoesNotExist:
                 continue
             code = item.item_code or ''
