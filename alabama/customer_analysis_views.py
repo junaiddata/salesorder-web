@@ -31,7 +31,9 @@ def customer_analysis(request):
     Alabama Customer Analysis - dynamic years (current and previous).
     Data from AlabamaSalesLine.
     """
-    from so.models import Items, Customer
+    from so.models import Customer
+    from .item_sync import item_model, item_fk
+    Items = item_model()
 
     current_year = datetime.now().year
     years = [current_year, current_year - 1]
@@ -46,7 +48,7 @@ def customer_analysis(request):
     end_date = request.GET.get('end', '').strip()
 
     # Base queryset with salesman scope
-    qs = AlabamaSalesLine.objects.all().select_related('customer', 'item')
+    qs = AlabamaSalesLine.objects.all().select_related('customer', item_fk())
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -83,7 +85,7 @@ def customer_analysis(request):
         clean_firms = [f for f in firm_filter if f.strip()]
         if clean_firms:
             firm_item_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
-            qs = qs.filter(item_id__in=firm_item_ids)
+            qs = qs.filter(**{f'{item_fk()}_id__in': firm_item_ids})
 
     # Item filter - customers who have transactions with selected items
     if item_filter:
@@ -92,7 +94,7 @@ def customer_analysis(request):
             # item_filter can be item codes
             item_ids = set(Items.objects.filter(item_code__in=clean_items).values_list('pk', flat=True))
             if item_ids:
-                qs = qs.filter(item_id__in=item_ids)
+                qs = qs.filter(**{f'{item_fk()}_id__in': item_ids})
             else:
                 qs = qs.none()
 
@@ -119,8 +121,8 @@ def customer_analysis(request):
     # Items for filter - from AlabamaSalesLine
     items_from_lines = (
         AlabamaSalesLine.objects.filter(scope_q)
-        .exclude(item__isnull=True)
-        .values_list('item__item_code', 'item__item_description', 'item__item_upvc')
+        .exclude(**{f'{item_fk()}__isnull': True})
+        .values_list(f'{item_fk()}__item_code', f'{item_fk()}__item_description', f'{item_fk()}__item_upvc')
         .distinct()
     )
     items_dict = {}
@@ -328,7 +330,9 @@ def export_customer_analysis_pdf(request):
     from reportlab.lib.units import inch
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
     from django.http import HttpResponse
-    from so.models import Items, Customer
+    from so.models import Customer
+    from .item_sync import item_model, item_fk
+    Items = item_model()
 
     current_year = datetime.now().year
     years = [current_year, current_year - 1]
@@ -341,7 +345,7 @@ def export_customer_analysis_pdf(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
 
-    qs = AlabamaSalesLine.objects.all().select_related('customer', 'item')
+    qs = AlabamaSalesLine.objects.all().select_related('customer', item_fk())
     scope_q = alabama_salesman_scope_q(request.user, field='sales_employee')
     qs = qs.filter(scope_q)
 
@@ -375,13 +379,13 @@ def export_customer_analysis_pdf(request):
         clean_firms = [f for f in firm_filter if f.strip()]
         if clean_firms:
             firm_item_ids = set(Items.objects.filter(item_firm__in=clean_firms).values_list('pk', flat=True))
-            qs = qs.filter(item_id__in=firm_item_ids)
+            qs = qs.filter(**{f'{item_fk()}_id__in': firm_item_ids})
     if item_filter:
         clean_items = [i for i in item_filter if i.strip()]
         if clean_items:
             item_ids = set(Items.objects.filter(item_code__in=clean_items).values_list('pk', flat=True))
             if item_ids:
-                qs = qs.filter(item_id__in=item_ids)
+                qs = qs.filter(**{f'{item_fk()}_id__in': item_ids})
             else:
                 qs = qs.none()
 

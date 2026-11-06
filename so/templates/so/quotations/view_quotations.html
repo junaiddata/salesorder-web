@@ -838,11 +838,11 @@
                         </a>
                     {% else %}
                         {% if request.user.role.role == 'Salesman' %}
-                            <a href="{% url 'sales_home' %}" class="btn btn-light">
+                            <a href="{% if request.user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}" class="btn btn-light">
                                 <i class="fas fa-home me-2"></i>Back to Home
                             </a>
                         {% else %}
-                            <a href="{% url 'home' %}" class="btn btn-light">
+                            <a href="{% if request.user.role.company == 'Alabama' %}{% url 'alabama:home' %}{% else %}{% url 'home' %}{% endif %}" class="btn btn-light">
                                 <i class="fas fa-home me-2"></i>Back to Home
                             </a>
                         {% endif %}

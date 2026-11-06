@@ -71,11 +71,13 @@ def convert_quotation_to_sales_order(quotation, *, username=None, created_via=Sa
     customer_price_updates = []
     total_amount = 0.0
 
-    for quotation_item in quotation.items.all():
-        if not quotation_item.item:
+    for quotation_item in quotation.items.select_related('item', 'alabama_item'):
+        item = quotation_item.catalog_item          # the Junaid item (old lines) or the Alabama item (new Alabama lines)
+        if not item:
             continue  # Skip items without valid item reference
 
-        item = quotation_item.item
+        # a line keeps pointing at the same kind of item it was quoted with
+        link = {'alabama_item': item} if quotation_item.alabama_item_id else {'item': item}
         quantity = quotation_item.quantity
         price = quotation_item.price
         unit = quotation_item.unit if quotation_item.unit in ['pcs', 'ctn', 'roll'] else 'pcs'
@@ -86,7 +88,7 @@ def convert_quotation_to_sales_order(quotation, *, username=None, created_via=Sa
 
         order_items.append(OrderItem(
             order=sales_order,
-            item=item,
+            **link,
             quantity=quantity,
             price=price,
             unit=unit,
@@ -94,7 +96,7 @@ def convert_quotation_to_sales_order(quotation, *, username=None, created_via=Sa
         ))
 
         if is_custom_price:
-            customer_price_updates.append((quotation.customer, item, price))
+            customer_price_updates.append((quotation.customer, link, price))
 
     if not order_items:
         sales_order.delete()
@@ -102,10 +104,10 @@ def convert_quotation_to_sales_order(quotation, *, username=None, created_via=Sa
 
     OrderItem.objects.bulk_create(order_items)
 
-    for customer, item, price in customer_price_updates:
+    for customer, link, price in customer_price_updates:
         CustomerPrice.objects.update_or_create(
             customer=customer,
-            item=item,
+            **link,
             defaults={'custom_price': price},
         )
 

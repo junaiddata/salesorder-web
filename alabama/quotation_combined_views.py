@@ -172,7 +172,8 @@ def _alabama_combined_quotation_calendar_context(request):
     count. Respects the combined list filters but ignores the list start/end date range.
     """
     import copy
-    from so.models import Items
+    from .item_sync import item_model
+    Items = item_model()   # Alabama item master when ALABAMA_OWN_ITEMS is on, else Junaid's Items (as before)
 
     today = date_cls.today()
     current_year = today.year
@@ -252,14 +253,15 @@ def _alabama_combined_quotation_calendar_context(request):
         app_list = list(
             alabama_inapp_quotations_filtered_qs(cal_request)
             .filter(quotation_date__year=qcal_year, quotation_date__month__in=qcal_months)
-            .prefetch_related('items__item')
+            .prefetch_related('items__item', 'items__alabama_item')
         )
         for qn in app_list:
             total = Decimal(str(qn.grand_total or 0))
             cost = Decimal('0')
             for it in qn.items.all():
-                if it.item_id and it.item.item_cost is not None:
-                    cost += Decimal(str(it.item.item_cost)) * Decimal(str(it.quantity or 0))
+                line_item = it.catalog_item
+                if line_item and line_item.item_cost is not None:
+                    cost += Decimal(str(line_item.item_cost)) * Decimal(str(it.quantity or 0))
             _bump(qn.quotation_date, total, total - cost)
 
     month_days = []
@@ -565,7 +567,7 @@ def export_combined_quotations_items_excel(request):
         app_base = alabama_inapp_quotations_filtered_qs(request)
         app_items = (
             QuotationItem.objects.filter(quotation__in=app_base)
-            .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item')
+            .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item', 'alabama_item')
             .order_by('quotation_id', 'id')
         )
         for li in app_items.iterator(chunk_size=1000):
@@ -573,8 +575,9 @@ def export_combined_quotations_items_excel(request):
             cust = qo.customer
             d = qo.quotation_date
             name = qo.customer_display_name or (cust.customer_name if cust else '')
-            item_no = li.item.item_code if li.item_id else ''
-            item_name = li.item.item_description if li.item_id else ''
+            line_item = li.catalog_item
+            item_no = line_item.item_code if line_item else ''
+            item_name = line_item.item_description if line_item else ''
             price = float(li.price or 0)
             qty = float(li.quantity or 0)
             line_total = float(li.line_total or (qty * price))

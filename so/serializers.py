@@ -2,6 +2,10 @@ from rest_framework import serializers
 from .models import SalesOrder, OrderItem, Customer, Salesman, Items, CustomerPrice
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    # `item` is optional on the model now (Alabama lines use alabama_item), but this API only ever creates Junaid-item
+    # lines: keep it required exactly as before.
+    item = serializers.PrimaryKeyRelatedField(queryset=Items.objects.all())
+
     class Meta:
         model = OrderItem
         fields = ('item', 'quantity', 'price', 'is_custom_price')
@@ -50,7 +54,7 @@ class OrderItemDetailSerializer(serializers.ModelSerializer):
         return float(obj.quantity) * float(obj.price)
 
     def get_item_description(self, obj):
-        return obj.item.item_description if obj.item else ""
+        return obj.catalog_item.item_description if obj.catalog_item else ""
 
 class SalesOrderListSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.customer_name', read_only=True)

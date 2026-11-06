@@ -6,6 +6,7 @@ from .models import Quotation, QuotationItem, Customer, Salesman, Items, Custome
 from .models import Quotation, QuotationItem, CustomerPrice, Customer, Items, Salesman, QuotationLog
 from .utils import get_client_ip, label_network
 from .item_status import active_items, firms_with_existing, limit_to_user_brands
+from .catalog_ref import line_kwargs, own_catalog_enabled, resolve_items, use_alabama_catalog
 from django.db.models import Q
 from .utils import parse_device_info
 from urllib.parse import quote
@@ -89,6 +90,12 @@ def _quotation_creation_division(request, requested=None):
     if role is not None and getattr(role, 'role', None) == 'Admin' and getattr(role, 'company', 'Junaid') == 'Alabama':
         return 'ALABAMA'
     return 'JUNAID'
+
+
+def _alabama_quotable_brands():
+    """Brand names offered on a new Alabama quotation: the brands (from the Alabama brand list) of the active items."""
+    from alabama.item_sync import quotable_items
+    return list(quotable_items().exclude(item_firm='').values_list('item_firm', flat=True).distinct().order_by('item_firm'))
 
 
 @csrf_exempt
@@ -226,11 +233,10 @@ def create_quotation(request):
             # -------------------------
             # 5. Process Items
             # -------------------------
-            # Batch-fetch all items to avoid N+1 queries
-            items_map = {
-                str(obj.id): obj
-                for obj in Items.objects.filter(id__in=item_ids)
-            }
+            # Batch-fetch all items to avoid N+1 queries. A bare id is a Junaid item (as always); 'a:<id>' is an
+            # Alabama item -- accepted only for an Alabama quotation while the Alabama catalog is switched on.
+            items_map = resolve_items(item_ids)
+            alabama_allowed = division == 'ALABAMA'
 
             quotation_items = []
             customer_price_updates = []
@@ -238,9 +244,12 @@ def create_quotation(request):
 
             for i, (item_id, qty, price_input, unit) in enumerate(zip(item_ids, quantities, prices, units)):
                 try:
-                    item = items_map.get(str(item_id))
-                    if item is None:
+                    entry = items_map.get(item_id)
+                    if entry is None:
                         raise Items.DoesNotExist(f"Item {item_id} not found")
+                    kind, item = entry
+                    if kind == 'alabama' and not alabama_allowed:
+                        raise Items.DoesNotExist(f"Item {item_id} is not available for this quotation")
                     quantity_val = int(qty)
                     unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'
 
@@ -268,7 +277,7 @@ def create_quotation(request):
 
                     quotation_items.append(QuotationItem(
                         quotation=quotation,
-                        item=item,
+                        **line_kwargs(kind, item),
                         quantity=quantity_val,
                         price=price_val,
                         unit=unit_val,
@@ -277,7 +286,7 @@ def create_quotation(request):
 
                     # CustomerPrice update if new price entered
                     if price_input:
-                        customer_price_updates.append((customer, item, price_val))
+                        customer_price_updates.append((customer, kind, item, price_val))
 
                 except (ValueError, Items.DoesNotExist) as e:
                     messages.error(request, f'Invalid data for item {i+1}: {str(e)}')
@@ -298,10 +307,10 @@ def create_quotation(request):
             QuotationItem.objects.bulk_create(quotation_items)
 
             # Update CustomerPrice
-            for c, it, pr in customer_price_updates:
+            for c, kind, it, pr in customer_price_updates:
                 CustomerPrice.objects.update_or_create(
                     customer=c,
-                    item=it,
+                    **line_kwargs(kind, it),
                     defaults={'custom_price': pr}
                 )
 
@@ -347,9 +356,14 @@ def create_quotation(request):
         # END: Salesman Filtering Logic
         # ---------------------------------------------------------------------
         # inactive items (no longer listed by the stock app) are not offered for a new quotation
-        firms = limit_to_user_brands(active_items(Items.objects.all()), request.user).values_list('item_firm', flat=True).distinct().order_by('item_firm')
         show_company_select = _is_company_chooser(request.user)
         default_division = _quotation_creation_division(request, request.GET.get('division'))
+        # New Alabama quotations use the Alabama item master (only while the Alabama catalog is switched on).
+        catalog_division = 'ALABAMA' if (own_catalog_enabled() and default_division == 'ALABAMA') else ''
+        if catalog_division:
+            firms = _alabama_quotable_brands()
+        else:
+            firms = limit_to_user_brands(active_items(Items.objects.all()), request.user).values_list('item_firm', flat=True).distinct().order_by('item_firm')
         # so/manager see the company dropdown (and the license block, toggled by JS); everyone else is fixed.
         is_alabama_user = (default_division == 'ALABAMA') and not show_company_select
         return render(request, 'so/quotations/create_quotation.html', {
@@ -359,6 +373,8 @@ def create_quotation(request):
             'is_alabama_user': is_alabama_user,
             'show_company_select': show_company_select,
             'default_division': default_division,
+            'catalog_division': catalog_division,
+            'own_catalog_enabled': own_catalog_enabled(),
         })
 
 from django.shortcuts import render
@@ -525,6 +541,8 @@ def inapp_quotations_filtered_qs(request):
             q_firm |= (
                 Q(items__item__item_firm__icontains=f)
                 | Q(items__item__item_description__icontains=f)
+                | Q(items__alabama_item__item_firm__icontains=f)
+                | Q(items__alabama_item__item_description__icontains=f)
             )
         quotations = quotations.filter(q_firm).distinct()
 
@@ -983,7 +1001,7 @@ def export_inapp_quotations_items_excel(request):
     base_qs = inapp_quotations_filtered_qs(request)
     item_qs = (
         QuotationItem.objects.filter(quotation__in=base_qs)
-        .select_related('quotation', 'quotation__customer', 'item')
+        .select_related('quotation', 'quotation__customer', 'item', 'alabama_item')
         .order_by('quotation_id', 'id')
     )
     rows = []
@@ -991,8 +1009,9 @@ def export_inapp_quotations_items_excel(request):
         q = li.quotation
         cust = q.customer
         name = q.customer_display_name or (cust.customer_name if cust else '')
-        item_no = li.item.item_code if li.item_id else ''
-        item_name = li.item.item_description if li.item_id else ''
+        ci = li.catalog_item
+        item_no = ci.item_code if ci else ''
+        item_name = ci.item_description if ci else ''
         price = float(li.price or 0)
         line_total = float(li.line_total or ((li.quantity or 0) * price))
         d = q.quotation_date
@@ -1163,7 +1182,7 @@ def export_combined_quotations_items_excel(request):
         app_base = inapp_quotations_filtered_qs(request).filter(division='JUNAID')
         app_items = (
             QuotationItem.objects.filter(quotation__in=app_base)
-            .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item')
+            .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item', 'alabama_item')
             .order_by('quotation_id', 'id')
         )
         for li in app_items.iterator(chunk_size=1000):
@@ -1172,8 +1191,9 @@ def export_combined_quotations_items_excel(request):
             d = qo.quotation_date
             date_str = d.strftime('%Y-%m-%d') if d else ''
             name = qo.customer_display_name or (cust.customer_name if cust else '')
-            item_no = li.item.item_code if li.item_id else ''
-            item_name = li.item.item_description if li.item_id else ''
+            ci = li.catalog_item
+            item_no = ci.item_code if ci else ''
+            item_name = ci.item_description if ci else ''
             price = float(li.price or 0)
             qty = float(li.quantity or 0)
             line_total = float(li.line_total or (qty * price))
@@ -1877,7 +1897,7 @@ def _attach_previous_prices(quotation, quotation_items):
     was never invoiced to them. None when neither exists."""
     from .models import SAPARInvoiceItem
 
-    item_codes = {qi.item.item_code for qi in quotation_items if getattr(qi, 'item', None)}
+    item_codes = {qi.catalog_item.item_code for qi in quotation_items if qi.catalog_item}
     customer_code = (quotation.customer.customer_code or '').strip()
 
     invoice_prices = {}
@@ -1896,10 +1916,15 @@ def _attach_previous_prices(quotation, quotation_items):
             .filter(customer=quotation.customer, item__item_code__in=item_codes)
             .values_list('item__item_code', 'custom_price')
         )
+        # prices saved against an Alabama item (new Alabama quotations); a Junaid price for the same code wins nothing here
+        for acode, aprice in (CustomerPrice.objects
+                              .filter(customer=quotation.customer, alabama_item__item_code__in=item_codes)
+                              .values_list('alabama_item__item_code', 'custom_price')):
+            custom_prices.setdefault(acode, aprice)
 
     for qi in quotation_items:
         qi.previous_price = qi.previous_price_source = qi.previous_price_date = None
-        code = qi.item.item_code if getattr(qi, 'item', None) else None
+        code = qi.catalog_item.item_code if qi.catalog_item else None
         if code in invoice_prices:
             price, inv_no, inv_date = invoice_prices[code]
             qi.previous_price = float(price)
@@ -1912,7 +1937,7 @@ def _attach_previous_prices(quotation, quotation_items):
 
 def view_quotation_details(request, quotation_id):
     quotation = get_object_or_404(Quotation, id=quotation_id)
-    quotation_items = list(quotation.items.select_related('item'))
+    quotation_items = list(quotation.items.select_related('item', 'alabama_item'))
     _attach_previous_prices(quotation, quotation_items)
 
     from django.utils.http import url_has_allowed_host_and_scheme
@@ -1941,8 +1966,9 @@ def view_quotation_details(request, quotation_id):
         grand_total += item.line_total
 
         # Check undercost
-        if hasattr(item, "item") and item.item:
-            undercost_limit = item.item.item_cost
+        line_item = item.catalog_item
+        if line_item:
+            undercost_limit = line_item.item_cost
             item.is_undercost = item.price < undercost_limit
             if item.is_undercost:
                 has_undercost_items = True
@@ -1952,15 +1978,15 @@ def view_quotation_details(request, quotation_id):
             # that's currently out of stock, see emailagent/quotation_agent.py)
             # is flagged on the page for the reviewer. Display only: it does
             # not block the auto-approval below.
-            live_stock = item.item.total_available_stock
+            live_stock = line_item.total_available_stock
             if live_stock is None:
-                live_stock = item.item.item_stock
+                live_stock = line_item.item_stock
             item.is_out_of_stock = not live_stock or live_stock <= 0
             if item.is_out_of_stock:
                 has_zero_stock_items = True
 
             # Margin per item (Admin only) - skip if cost is zero
-            cost_val = float(item.item.item_cost or 0)
+            cost_val = float(line_item.item_cost or 0)
             if cost_val == 0:
                 has_zero_cost_items = True
                 item.line_cost = None
@@ -2305,12 +2331,14 @@ def edit_quotation(request, quotation_id):
             messages.error(request, 'Invalid form data: mismatched item fields')
             return redirect('edit_quotation', quotation_id=quotation.id)
 
-        # Batch-fetch all items to avoid N+1 queries inside the loop
+        # Batch-fetch all items to avoid N+1 queries inside the loop. A bare id is a Junaid item (this is what every
+        # existing line posts back, so old lines are re-saved exactly as they were); 'a:<id>' is an Alabama item and
+        # only an Alabama quotation may hold one.
         valid_item_ids = [iid for iid in item_ids if iid]
-        items_map = {
-            str(obj.id): obj
-            for obj in Items.objects.filter(id__in=valid_item_ids)
-        }
+        items_map = resolve_items(valid_item_ids)
+        if quotation.division != 'ALABAMA' and any(k == 'alabama' for k, _ in items_map.values()):
+            messages.error(request, 'Alabama items can only be used on an Alabama quotation.')
+            return redirect('edit_quotation', quotation_id=quotation.id)
 
         quotation_items = []
         has_undercost_items = False
@@ -2327,9 +2355,10 @@ def edit_quotation(request, quotation_id):
                 if quantity <= 0 or price_val < 0:
                     continue  # Skip invalid items
                     
-                item = items_map.get(str(item_id))
-                if not item:
+                entry = items_map.get(item_id)
+                if not entry:
                     continue
+                kind, item = entry
                 
                 # Check if item is undercost
                 undercost_limit = item.item_cost  # 10% above cost
@@ -2338,7 +2367,7 @@ def edit_quotation(request, quotation_id):
                 
                 quotation_items.append(QuotationItem(
                     quotation=quotation,
-                    item=item,  # Link to Items model
+                    **line_kwargs(kind, item),  # Link to Items (Junaid) or AlabamaItem (Alabama)
                     quantity=quantity,
                     price=price_val,
                     unit=unit_val,
@@ -2437,12 +2466,22 @@ def edit_quotation(request, quotation_id):
     # -------------------------------------------------------------------------
     # END: Salesman Filtering Logic
     # active brands, plus the brands of the lines already on this quotation (so an old line's brand still shows)
-    firms = firms_with_existing((qi.item for qi in quotation.items.select_related('item') if qi.item), request.user)
+    existing_items = [qi.catalog_item for qi in quotation.items.select_related('item', 'alabama_item') if qi.catalog_item]
+    catalog_division = 'ALABAMA' if (own_catalog_enabled() and quotation.division == 'ALABAMA') else ''
+    if catalog_division:
+        # new lines come from the Alabama catalog; the brands of the lines already on the quotation stay selectable too
+        firms = _alabama_quotable_brands()
+        for it in existing_items:
+            if it.item_firm is not None and it.item_firm not in firms:
+                firms.append(it.item_firm)
+    else:
+        firms = firms_with_existing(existing_items, request.user)
 
     return render(request, 'so/quotations/edit_quotation.html', {
         'quotation': quotation,
         'salesmen': salesmen,
         'firms': firms,
+        'catalog_division': catalog_division,
         'quotation_items': quotation.items.all(),
         'source_email': getattr(_agent_draft_for_quotation(quotation), 'tracked_email', None),
     })
@@ -2710,7 +2749,7 @@ def _suggested_datasheets(quotation_items):
 
     suggestions = []
     for qi in quotation_items:
-        item = getattr(qi, 'item', None)
+        item = getattr(qi, 'catalog_item', None)
         if not item:
             continue
         item_brand = (item.item_firm or '').upper()
@@ -3044,7 +3083,7 @@ def export_quotation_to_excel(request, quotation_id):
         messages.error(request, 'This quotation has a discount pending manager approval and cannot be exported yet.')
         return redirect('view_quotation_details', quotation_id=quotation_id)
 
-    quotation_items = quotation.items.select_related('item').all()
+    quotation_items = quotation.items.select_related('item', 'alabama_item').all()
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -3126,8 +3165,8 @@ def export_quotation_to_excel(request, quotation_id):
     for idx, qi in enumerate(quotation_items, 1):
         line_total = qi.quantity * qi.price
         subtotal += line_total
-        desc = qi.item.item_description if qi.item else "N/A"
-        code = qi.item.item_code if qi.item else "N/A"
+        desc = qi.catalog_item.item_description if qi.catalog_item else "N/A"
+        code = qi.catalog_item.item_code if qi.catalog_item else "N/A"
         row_data = [idx, code, desc, qi.quantity, qi.unit or 'pcs', float(qi.price), float(line_total)]
         for col_num, value in enumerate(row_data, 1):
             cell = ws.cell(row=row_num, column=col_num, value=value)
@@ -3189,7 +3228,7 @@ LICENSE_NAME_MAP = {
 }
 
 def generate_junaid_quotation(buffer, quotation):
-    quotation_items = quotation.items.all()
+    quotation_items = quotation.items.select_related('item', 'alabama_item').all()
 
     company_display_name = LICENSE_NAME_MAP.get(
         quotation.license_name or 'JUNAID_SME',
@@ -3302,14 +3341,14 @@ def generate_junaid_quotation(buffer, quotation):
         subtotal += line_total
 
         desc_style = styles['ItemDescription']
-        description_text = getattr(item.item, 'item_description', 'No description available')
+        description_text = getattr(item.catalog_item, 'item_description', 'No description available')
         description_para = Paragraph(description_text, desc_style)
 
-        upc_raw = getattr(item.item, 'item_upvc', '')
+        upc_raw = getattr(item.catalog_item, 'item_upvc', '')
         if upc_raw is None: upc_raw = ""
         upc_para = Paragraph(str(upc_raw), styles['ItemCode'])
 
-        code_raw = getattr(item.item, 'item_code', '')
+        code_raw = getattr(item.catalog_item, 'item_code', '')
         if code_raw is None: code_raw = ""
         code_para = Paragraph(str(code_raw), styles['ItemCode'])
 
@@ -3414,7 +3453,7 @@ def generate_junaid_quotation(buffer, quotation):
 # 3. ALABAMA GENERATOR (Red/Black Theme)
 # ==========================================
 def generate_alabama_quotation(buffer, quotation):
-    quotation_items = quotation.items.all()
+    quotation_items = quotation.items.select_related('item', 'alabama_item').all()
     
     # --- CONFIGURATION ---
     company_config = {
@@ -3525,14 +3564,14 @@ def generate_alabama_quotation(buffer, quotation):
         # Set text color to black/grey for readability
         desc_style.textColor = black 
         
-        description_text = getattr(item.item, 'item_description', 'No description available')
+        description_text = getattr(item.catalog_item, 'item_description', 'No description available')
         description_para = Paragraph(description_text, desc_style)
 
-        upc_raw = getattr(item.item, 'item_upvc', '')
+        upc_raw = getattr(item.catalog_item, 'item_upvc', '')
         if upc_raw is None: upc_raw = ""
         upc_para = Paragraph(str(upc_raw), styles['ItemCode'])
 
-        code_raw = getattr(item.item, 'item_code', '')
+        code_raw = getattr(item.catalog_item, 'item_code', '')
         if code_raw is None: code_raw = ""
         code_para = Paragraph(str(code_raw), styles['ItemCode'])
 

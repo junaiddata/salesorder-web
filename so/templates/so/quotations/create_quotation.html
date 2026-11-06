@@ -11,6 +11,20 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
+    <script>
+    // Which item catalog this page works with: 'ALABAMA' = new Alabama documents use the Alabama item master.
+    // Item search / brand item lists then ask the server for Alabama items (ids look like 'a:123'); empty = Junaid items
+    // exactly as before. Stock / price lookups need nothing extra: they read the id's prefix.
+    window.QUOTE_CATALOG = '{{ catalog_division|default:"" }}';
+    if (window.QUOTE_CATALOG === 'ALABAMA') {
+        $.ajaxPrefilter(function (options) {
+            if (/\/(api\/items-search|get_items_by_firm)\//.test(options.url || '')) {
+                options.data = (options.data ? options.data + '&' : '') + 'division=ALABAMA';
+            }
+        });
+    }
+    </script>
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         html { height: 100%; -webkit-text-size-adjust: 100%; }
@@ -444,6 +458,23 @@
                         }
                         company.addEventListener('change', sync);
                         sync();
+                        {% if own_catalog_enabled %}
+                        // The item catalog depends on the company: reload the page for the other company (the brand list
+                        // and item lists come from the server), after confirming that the items added so far are cleared.
+                        var current = '{{ default_division }}';
+                        company.addEventListener('change', function () {
+                            var want = company.value;
+                            if (want === current) return;
+                            var hasItems = Array.prototype.some.call(document.querySelectorAll('select.item-select'), function (s) { return s.value; });
+                            if (hasItems && !window.confirm('Changing the company reloads the page and clears the items added so far. Continue?')) {
+                                company.value = current;
+                                sync();
+                                return;
+                            }
+                            window.isSubmitting = true;   // no unsaved-changes prompt: the user just confirmed
+                            window.location.href = window.location.pathname + '?division=' + encodeURIComponent(want);
+                        });
+                        {% endif %}
                     })();
                     </script>
                     {% endif %}
@@ -573,7 +604,7 @@
 // ║              DRAFT SYSTEM (localStorage)                    ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-var DRAFT_KEY      = 'quotation_draft_v2';
+var DRAFT_KEY      = 'quotation_draft_v2' + (window.QUOTE_CATALOG === 'ALABAMA' ? '_al' : '');   // a draft never crosses catalogs
 var DRAFT_DEBOUNCE = 3000;
 var DRAFT_EXPIRY   = 24 * 60 * 60 * 1000;   // 24 hours
 

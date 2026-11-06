@@ -167,12 +167,11 @@ def delivery_order_upload(request):
                         'invoice': _to_str(get_val(row, 'invoice')) or None,
                     }
 
-                item, _ = Items.objects.get_or_create(
-                    item_code=item_no,
-                    defaults={'item_description': item_desc or item_no}
-                )
+                from .item_sync import resolve_for_upload
+                alabama_item, item = resolve_for_upload(item_no, item_desc, '')
                 do_data[do_no]['items'].append({
                     'item': item,
+                    'alabama_item': alabama_item,
                     'item_description': item_desc or None,
                     'quantity': qty,
                     'price': price_val,
@@ -314,7 +313,7 @@ def delivery_order_detail(request, do_number):
         if not AlabamaDeliveryOrder.objects.filter(pk=do.pk).filter(scope_q).exists():
             raise Http404("Delivery order not found")
 
-    items = list(do.items.all().select_related('item').order_by('id'))
+    items = list(do.items.all().select_related('item', 'alabama_item').order_by('id'))
     total_amount = sum(float(i.amount) for i in items)
 
     return render(request, 'alabama/delivery_order_detail.html', {

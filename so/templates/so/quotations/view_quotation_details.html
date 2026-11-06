@@ -973,7 +973,7 @@
     <div class="container">
         <!-- Breadcrumb -->
         <nav class="sap-breadcrumb">
-            <a href="{% if user.role.role == 'Salesman' %}{% url 'sales_home' %}{% else %}{% url 'home' %}{% endif %}">Home</a>
+            <a href="{% if user.role.role == 'Salesman' %}{% if user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}{% else %}{% if user.role.company == 'Alabama' %}{% url 'alabama:home' %}{% else %}{% url 'home' %}{% endif %}{% endif %}">Home</a>
             <span class="separator">/</span>
             <a href="{% url 'view_quotations' %}">Quotations</a>
             <span class="separator">/</span>
@@ -1398,12 +1398,12 @@
                         {% for item in quotation_items %}
                         <tr>
                             <td class="table-number" data-label="#">{{ forloop.counter }}</td>
-                            <td data-label="Item Code">{{ item.item.item_code }}</td>
-                            <td data-label="UPC Code">{{ item.item.item_upvc|default:"—" }}</td>
-                            <td data-label="Item Description">{{ item.item.item_description }}</td>
+                            <td data-label="Item Code">{{ item.catalog_item.item_code }}</td>
+                            <td data-label="UPC Code">{{ item.catalog_item.item_upvc|default:"—" }}</td>
+                            <td data-label="Item Description">{{ item.catalog_item.item_description }}</td>
                             <td style="text-align: right;" data-label="Quantity">{{ item.quantity }} {{item.unit}}</td>
                             <td style="text-align: right;" data-label="DIP Stock">
-                                {% if item.item.dip_warehouse_stock is not None %}{{ item.item.dip_warehouse_stock|floatformat:0 }}{% else %}—{% endif %}
+                                {% if item.catalog_item.dip_warehouse_stock is not None %}{{ item.catalog_item.dip_warehouse_stock|floatformat:0 }}{% else %}—{% endif %}
                             </td>
                             <td
                                 {% if item.is_out_of_stock %}
@@ -1412,7 +1412,7 @@
                                     style="text-align: right;"
                                 {% endif %}
                                 data-label="Total Stock">
-                                {% if item.item.total_available_stock is not None %}{{ item.item.total_available_stock|floatformat:0 }}{% else %}{{ item.item.item_stock|default:"—" }}{% endif %}
+                                {% if item.catalog_item.total_available_stock is not None %}{{ item.catalog_item.total_available_stock|floatformat:0 }}{% else %}{{ item.catalog_item.item_stock|default:"—" }}{% endif %}
                                 {% if item.is_out_of_stock %}<i class="fas fa-triangle-exclamation" title="0 stock"></i>{% endif %}
                             </td>
 
@@ -1434,8 +1434,8 @@
                                 {% else %}—{% endif %}
                             </td>
                             {% if is_admin %}
-                            <td style="text-align: right;" data-label="Cost Price">AED {{ item.item.item_cost|floatformat:2 }}</td>
-                            <td style="text-align: right;" data-label="Min. Selling Price">AED {{ item.item.item_price|floatformat:2 }}</td>
+                            <td style="text-align: right;" data-label="Cost Price">AED {{ item.catalog_item.item_cost|floatformat:2 }}</td>
+                            <td style="text-align: right;" data-label="Min. Selling Price">AED {{ item.catalog_item.item_price|floatformat:2 }}</td>
                             {% if not has_zero_cost_items %}
                             <td style="text-align: right;" data-label="Margin %">{% if item.margin_pct is not None %}{{ item.margin_pct|floatformat:2 }}%{% else %}—{% endif %}</td>
                             {% endif %}
@@ -1602,7 +1602,7 @@
                 View Submittal
                 {% if existing_submittal.needs_verification %}<span class="status-badge warning" style="margin-left:6px;">Needs Review</span>{% endif %}
             </a>
-            {% else %}
+            {% elif quotation.division != 'ALABAMA' %}
             <button type="button" class="sap-button sap-button-secondary" data-bs-toggle="modal" data-bs-target="#generateSubmittalModal">
                 <i class="fas fa-file-circle-plus"></i>
                 Generate Submittal
@@ -1636,7 +1636,8 @@
         </div>
     </div>
 
-    <!-- Generate Submittal Item-Selection Modal -->
+    {% if quotation.division != 'ALABAMA' %}
+    <!-- Generate Submittal Item-Selection Modal (not shown for Alabama quotations: the submittal agent is Junaid-only) -->
     <div class="modal fade" id="generateSubmittalModal" tabindex="-1" aria-labelledby="generateSubmittalModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <form method="POST" action="{% url 'submittal:generate_from_quotation' quotation.id %}" id="generateSubmittalForm">
@@ -1664,8 +1665,8 @@
                                     {% for item in quotation_items %}
                                     <tr>
                                         <td style="text-align: center;"><input type="checkbox" name="item_ids" value="{{ item.id }}" class="submittal-item-checkbox"></td>
-                                        <td>{{ item.item.item_code }}</td>
-                                        <td>{{ item.item.item_description }}</td>
+                                        <td>{{ item.catalog_item.item_code }}</td>
+                                        <td>{{ item.catalog_item.item_description }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -1689,6 +1690,8 @@
             </form>
         </div>
     </div>
+
+    {% endif %}
 
     {% if can_proceed and quotation_items %}
     <!-- Send Quotation Modal -->

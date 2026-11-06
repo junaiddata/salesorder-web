@@ -492,7 +492,7 @@
     <div class="container">
         <!-- Breadcrumb -->
         <nav class="sap-breadcrumb">
-            <a href="{% if user.role.role == 'Salesman' %}{% url 'sales_home' %}{% else %}{% url 'home' %}{% endif %}">Home</a>
+            <a href="{% if user.role.role == 'Salesman' %}{% if user.role.company == 'Alabama' %}{% url 'alabama:alabama_sales_home' %}{% else %}{% url 'sales_home' %}{% endif %}{% else %}{% if user.role.company == 'Alabama' %}{% url 'alabama:home' %}{% else %}{% url 'home' %}{% endif %}{% endif %}">Home</a>
             <span class="separator">/</span>
             <a href="{% url 'view_sales_orders' %}">Customer Order Forms</a>
             <span class="separator">/</span>
@@ -679,8 +679,8 @@
                 {% for item in order_items %}
                 <tr>
                     <td class="table-number">{{ forloop.counter }}</td>
-                    <td>{{ item.item.item_code }}</td>
-                    <td>{{ item.item.item_description }}</td>
+                    <td>{{ item.catalog_item.item_code }}</td>
+                    <td>{{ item.catalog_item.item_description }}</td>
                     <td style="text-align: right;">{{ item.quantity }} {{item.unit}}</td>
                     <td
                     {% if item.is_undercost %}
@@ -691,8 +691,8 @@
                     >AED {{ item.price|floatformat:2 }}
                     </td>
                     {% if user.role.role == "Admin" %}  <!-- Only show for Admin -->
-                    <td style="text-align: right;">AED {{ item.item.item_cost|floatformat:2 }}</td>
-                    <td style="text-align: right;">AED {{ item.item.item_price|floatformat:2 }}</td>
+                    <td style="text-align: right;">AED {{ item.catalog_item.item_cost|floatformat:2 }}</td>
+                    <td style="text-align: right;">AED {{ item.catalog_item.item_price|floatformat:2 }}</td>
                     {% endif %}
                     <td style="text-align: right;">AED {{ item.line_total|floatformat:2 }}</td>
                 </tr>

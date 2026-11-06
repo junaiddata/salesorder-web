@@ -138,9 +138,9 @@
       <tbody>
         {% for line in lines %}
         <tr>
-          <td>{{ line.item.item_code }}</td>
-          <td>{{ line.item.item_description }}</td>
-          <td>{{ line.item.item_firm|default:"—" }}</td>
+          <td>{{ line.catalog_item.item_code }}</td>
+          <td>{{ line.catalog_item.item_description }}</td>
+          <td>{{ line.catalog_item.item_firm|default:"—" }}</td>
           <td class="num">{{ line.quantity|default:0|floatformat:2 }}</td>
           <td class="num">{{ line.net_sales|default:0|floatformat:2 }}</td>
           {% if is_admin %}

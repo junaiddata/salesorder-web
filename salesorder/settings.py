@@ -427,3 +427,13 @@ AWS_SECRET_ACCESS_KEY = os.getenv('S3_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
 AWS_S3_REGION_NAME = os.getenv('S3_REGION')
 AWS_S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')
+ALABAMA_API_KEY = os.getenv('ALABAMA_API_KEY', '')  # Alabama API key for /alabama/api/ endpoints
+
+# Alabama stock feed (own item master, separate from Junaid's so.Items). The key falls back to ALABAMA_API_KEY.
+ALABAMA_STOCK_API_URL = os.getenv('ALABAMA_STOCK_API_URL', 'https://stock.junaidworld.com/api/alabama/stock')
+ALABAMA_STOCK_API_KEY = os.getenv('ALABAMA_STOCK_API_KEY', '') or os.getenv('ALABAMA_API_KEY', '')
+# Switch the Alabama screens to the Alabama item master (analyses, uploads). Off = behave exactly as before.
+ALABAMA_OWN_ITEMS = os.getenv('ALABAMA_OWN_ITEMS', 'False').lower() in ('1', 'true', 'yes')
+# New Alabama quotations / their sales orders pick from the Alabama item master (and show only its values).
+# Off = the quotation pages behave exactly as before. Existing quotations / orders are never changed either way.
+ALABAMA_OWN_CATALOG = os.getenv('ALABAMA_OWN_CATALOG', 'False').lower() in ('1', 'true', 'yes')

@@ -133,12 +133,12 @@ def _solar_brand(q):
     the item master too). Any other brand on the quotation (VERA EDWIN, ARISTON - ITALY, EURO ...) or no items gives
     None and the standard TERMS are used. The first item's solar brand names the warranty point."""
     try:
-        lines = list(q.items.select_related('item'))
+        lines = list(q.items.select_related('item', 'alabama_item'))
     except Exception:
         return None
     brands = []
     for qi in lines:
-        firm = ' '.join(str(getattr(qi.item, 'item_firm', '') or '').upper().replace('-', ' ').split())
+        firm = ' '.join(str(getattr(qi.catalog_item, 'item_firm', '') or '').upper().replace('-', ' ').split())
         if firm == 'VERA SOLAR':
             brands.append('VERA')
         elif firm == 'ARISTON SOLAR':
@@ -272,10 +272,10 @@ def _items_table(q):
         ('LINEBELOW', (0, 0), (-1, 0), 0.8, colors.black),
     ]
     subtotal = 0.0
-    for n, qi in enumerate(q.items.select_related('item'), 1):
+    for n, qi in enumerate(q.items.select_related('item', 'alabama_item'), 1):
         line_total = qi.quantity * qi.price
         subtotal += line_total
-        item = qi.item
+        item = qi.catalog_item
         description = getattr(item, 'item_description', None) or 'No description available'
         rows.append([
             Paragraph(str(n), S_CELL_C),

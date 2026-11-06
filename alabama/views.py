@@ -9,6 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from .models import AlabamaSalesLine, AlabamaPurchaseLine, AlabamaSAPQuotation, AlabamaSAPQuotationItem, AlabamaSalesmanMapping
+from .item_sync import resolve_for_upload
 
 # Cache for salesman mappings; cleared when mappings are added/edited/deleted
 _salesman_mapping_cache = None
@@ -787,7 +788,7 @@ def sales_summary_detail(request, doc_type_slug, document_number):
     lines = (
         AlabamaSalesLine.objects
         .filter(document_type=doc_type, document_number=document_number)
-        .select_related('customer', 'item')
+        .select_related('customer', 'item', 'alabama_item')
         .order_by('id')
     )
     if not lines.exists():
@@ -963,13 +964,7 @@ def sales_summary_upload(request):
                     customer_code=cust_code,
                     defaults={'customer_name': cust_name}
                 )
-                item, _ = Items.objects.get_or_create(
-                    item_code=item_code,
-                    defaults={
-                        'item_description': item_desc or item_code,
-                        'item_firm': item_manu or '',
-                    }
-                )
+                alabama_item, item = resolve_for_upload(item_code, item_desc, item_manu)
 
                 rows_to_insert.append({
                     'document_type': doc_type,
@@ -978,6 +973,7 @@ def sales_summary_upload(request):
                     'customer': customer,
                     'sales_employee': sales_emp or None,
                     'item': item,
+                    'alabama_item': alabama_item,
                     'quantity': qty,
                     'net_sales': net_sales,
                     'gross_profit': gp,
@@ -1200,7 +1196,7 @@ def purchase_summary_detail(request, document_number):
     lines = (
         AlabamaPurchaseLine.objects
         .filter(document_number=document_number)
-        .select_related('item')
+        .select_related('item', 'alabama_item')
         .order_by('id')
     )
     if not lines.exists():
@@ -1347,13 +1343,7 @@ def purchase_summary_upload(request):
 
                 docs_to_replace.add((doc_type_raw, doc_no))
 
-                item, _ = Items.objects.get_or_create(
-                    item_code=item_code,
-                    defaults={
-                        'item_description': item_desc or item_code,
-                        'item_firm': item_manu or '',
-                    }
-                )
+                alabama_item, item = resolve_for_upload(item_code, item_desc, item_manu)
 
                 rows_to_insert.append({
                     'document_type': doc_type_raw,
@@ -1363,6 +1353,7 @@ def purchase_summary_upload(request):
                     'vendor_name': vendor_name,
                     'sales_employee': sales_emp or None,
                     'item': item,
+                    'alabama_item': alabama_item,
                     'item_description': item_desc or None,
                     'item_manufacturer': item_manu or None,
                     'quantity': qty,
@@ -1571,7 +1562,8 @@ def quotation_detail(request, q_number):
 
     total_estimated_cost = 0.0
     if is_admin and items:
-        from so.models import Items
+        from .item_sync import item_model
+        Items = item_model()
         item_codes = [str(i.item_no).strip() for i in items if i.item_no]
         if item_codes:
             cost_map = dict(

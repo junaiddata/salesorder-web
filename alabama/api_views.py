@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 
+from .item_sync import item_fk
 from .models import AlabamaSalesLine
 from .views import alabama_salesman_scope_q
 
@@ -42,23 +43,23 @@ def api_item_analysis_totals(request):
     # alabama_salesman_scope_q errors for an anonymous user, so only scope logged-in callers.
     scope_q = alabama_salesman_scope_q(request.user) if request.user.is_authenticated else Q()
     lines = (AlabamaSalesLine.objects.filter(scope_q)
-             .exclude(item__item_code__isnull=True)
-             .exclude(item__item_code=''))
+             .exclude(**{f'{item_fk()}__item_code__isnull': True})
+             .exclude(**{f'{item_fk()}__item_code': ''}))
     if firm_list:
-        lines = lines.filter(item__item_firm__in=firm_list)
+        lines = lines.filter(**{f'{item_fk()}__item_firm__in': firm_list})
 
     zero = Value(0, output_field=DecimalField())
-    rows = (lines.values('item__item_code')
+    rows = (lines.values(f'{item_fk()}__item_code')
             .annotate(
                 total_qty=Coalesce(Sum('quantity'), zero),
                 total_2025=Coalesce(Sum('quantity', filter=Q(posting_date__year=2025)), zero),
                 total_2026=Coalesce(Sum('quantity', filter=Q(posting_date__year=2026)), zero),
             )
-            .order_by('item__item_code'))
+            .order_by(f'{item_fk()}__item_code'))
 
     results = [
         {
-            'item_code': row['item__item_code'],
+            'item_code': row[f'{item_fk()}__item_code'],
             'total_qty': _num(row['total_qty']),
             'total_2025': _num(row['total_2025']),
             'total_2026': _num(row['total_2026']),

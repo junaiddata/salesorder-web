@@ -614,7 +614,7 @@ class AlabamaCatalogBrandAdminTests(TestCase):
         self.assertEqual(self.client.get('/admin/so/alabamacatalogbrand/add/').status_code, 200)
 
 
-@override_settings(ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'])
+@override_settings(ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'], ALABAMA_OWN_CATALOG=False)   # these tests describe the switch-off behaviour
 class AlabamaBrandListInPickersTests(TestCase):
     """The Alabama brand list also limits the brand / item pickers of NEW quotations and sales orders -- for Alabama users
     only, and never the lines already on a made document."""

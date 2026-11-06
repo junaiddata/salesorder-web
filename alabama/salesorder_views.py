@@ -237,7 +237,8 @@ def salesorder_detail(request, so_number):
     items = salesorder.items.all().order_by('line_no', 'id')
 
     # Stock from so.Items at display time; show '-' if item not found
-    from so.models import Items
+    from .item_sync import item_model
+    Items = item_model()
     item_codes = [str(it.item_no).strip() for it in items if it.item_no]
     stock_data = {}
     if item_codes:

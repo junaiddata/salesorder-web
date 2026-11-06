@@ -5,7 +5,7 @@ from openpyxl.styles import Font
 from django.contrib.auth import logout, authenticate, login
 # Create your views here .
 # Upload Items file from .xlsx file which contains item_code, item_description, item_firm
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 import pandas as pd
 from .models import Items,Customer
 from django.views.decorators.csrf import csrf_exempt
@@ -177,6 +177,12 @@ def create_sales_order(request):
     # OPTION A: Your suggested Username check (Simplest)
         if 'alabama' in request.user.username.lower():
             division = 'ALABAMA'
+        from .catalog_ref import line_kwargs, own_catalog_enabled, resolve_items
+        if own_catalog_enabled():
+            # Same rule as the quotation page: an "alabama" username, an Alabama-role admin, or the company that
+            # an so / manager admin picked on the form. The items offered on the page follow this same division.
+            from .views_quotation import _quotation_creation_division
+            division = _quotation_creation_division(request, request.POST.get('division'))
         try:
             customer_id = request.POST.get('customer')
             new_customer_name = request.POST.get('new_customer_name', '').strip()
@@ -259,13 +265,18 @@ def create_sales_order(request):
                 salesman_remarks=salesman_remarks
             )
 
-            # Process order items
+            # Process order items. A bare id is a Junaid item (as always); 'a:<id>' is an Alabama item and only an
+            # Alabama order may hold one.
             order_items = []
             customer_price_updates = []
+            resolved_items = resolve_items(item_ids)
 
             for i, (item_id, qty, price, unit) in enumerate(zip(item_ids, quantities, prices, units)):
                 try:
-                    item = Items.objects.get(id=item_id)
+                    entry = resolved_items.get(item_id)
+                    if entry is None or (entry[0] == 'alabama' and division != 'ALABAMA'):
+                        raise Items.DoesNotExist(f"Item {item_id} not found")
+                    kind, item = entry
                     price_val = float(price) if price else float(item.item_price)
                     quantity_val = int(qty)
                     unit_val = unit if unit in ['pcs', 'ctn','roll'] else 'pcs'  # Validate unit
@@ -280,7 +291,7 @@ def create_sales_order(request):
 
                     order_items.append(OrderItem(
                         order=sales_order,
-                        item=item,
+                        **line_kwargs(kind, item),
                         quantity=quantity_val,
                         price=price_val,
                         unit=unit_val,  # Add unit field
@@ -288,7 +299,7 @@ def create_sales_order(request):
                     ))
 
                     if price_val:
-                        customer_price_updates.append((customer, item, price_val))
+                        customer_price_updates.append((customer, kind, item, price_val))
                         
                 except (ValueError, Items.DoesNotExist) as e:
                     messages.error(request, f'Invalid data for item {i+1}.')
@@ -298,10 +309,10 @@ def create_sales_order(request):
             OrderItem.objects.bulk_create(order_items)
 
             # Update customer prices
-            for customer, item, price in customer_price_updates:
+            for customer, kind, item, price in customer_price_updates:
                 CustomerPrice.objects.update_or_create(
                     customer=customer,
-                    item=item,
+                    **line_kwargs(kind, item),
                     defaults={'custom_price': price}
                 )
 
@@ -352,23 +363,70 @@ def create_sales_order(request):
             salesmen = salesmen.none()
 
     # -------------------------------------------------------------------------
-    firms = active_firms(request.user)   # inactive items (and, for Alabama, brands off its list) are not offered for a new order
+    from .catalog_ref import own_catalog_enabled
+    own = own_catalog_enabled()
+    if own:
+        # Same company rule as the quotation page (so / manager admins get a company dropdown).
+        from .views_quotation import _is_company_chooser, _quotation_creation_division, _alabama_quotable_brands
+        show_company_select = _is_company_chooser(request.user)
+        default_division = _quotation_creation_division(request, request.GET.get('division'))
+    else:
+        show_company_select = False
+        default_division = 'ALABAMA' if 'alabama' in (request.user.username or '').lower() else 'JUNAID'
+    # New Alabama orders use the Alabama item master (only while the Alabama catalog is switched on).
+    catalog_division = 'ALABAMA' if (own and default_division == 'ALABAMA') else ''
+    if catalog_division:
+        firms = _alabama_quotable_brands()
+    else:
+        firms = active_firms(request.user)   # inactive items (and, for Alabama, brands off its list) are not offered for a new order
     customers = Customer.objects.all()
 
     return render(request, 'so/create_sales_order.html', {
         'salesmen': salesmen,
         'firms': firms,
         'customers': customers,
+        'catalog_division': catalog_division,
+        'show_company_select': show_company_select,
+        'default_division': default_division,
+        'own_catalog_enabled': own,
     })
 
 
 from django.http import JsonResponse
 from django.db.models import Q
 
+def _alabama_items_search(request, query, firms):
+    """New Alabama quotations / orders: the Alabama item master (quotable brands only). Ids are 'a:<id>'."""
+    from alabama.item_sync import quotable_items
+    base_qs = quotable_items()
+    if firms and 'All' not in firms:
+        base_qs = base_qs.filter(item_firm__in=firms)
+    if query:
+        base_qs = base_qs.filter(
+            Q(item_code__icontains=query) |
+            Q(item_description__icontains=query) |
+            Q(item_upvc__icontains=query)
+        )
+    return JsonResponse([{
+        'id': f'a:{item.pk}',
+        'item_code': item.item_code,
+        'item_description': item.item_description,
+        'item_upvc': item.item_upvc,
+        'item_stock': item.item_stock,
+        'item_firm': item.item_firm,
+        'source': 'alabama',
+        'text': f"{item.item_description}",
+    } for item in base_qs[:30]], safe=False)
+
+
 def items_search(request):
     query = request.GET.get('q', '')
     firms_param = request.GET.get('firms', '')
     firms = [f.strip() for f in firms_param.split(',') if f.strip()]
+
+    from .catalog_ref import use_alabama_catalog
+    if use_alabama_catalog(request):
+        return _alabama_items_search(request, query, firms)
 
     base_qs = limit_to_user_brands(active_items(Items.objects.all()), request.user)   # inactive items / brands off Alabama's list are not offered for new lines
     if firms and 'All' not in firms:
@@ -443,16 +501,23 @@ def edit_sales_order(request, order_id):
         prices = request.POST.getlist('price')
         units = request.POST.getlist('unit') 
 
+        # A bare id is a Junaid item (what every existing line posts back, so old lines are re-saved as they were);
+        # 'a:<id>' is an Alabama item and only an Alabama order may hold one.
+        from .catalog_ref import resolve_items, line_kwargs
+        resolved = resolve_items(item_ids)
         order_items = []
         for item_id, qty, price, unit in zip(item_ids, quantities, prices, units):
-            item = get_object_or_404(Items, id=item_id)
+            entry = resolved.get(item_id)
+            if entry is None or (entry[0] == 'alabama' and sales_order.division != 'ALABAMA'):
+                raise Http404('Item not found')
+            kind, item = entry
             price = float(price) if price else float(item.item_price)
             quantity = int(qty)
             unit_val = unit if unit in ['pcs', 'ctn', 'roll'] else 'pcs'
 
             order_items.append(OrderItem(
                 order=sales_order,
-                item=item,
+                **line_kwargs(kind, item),
                 quantity=quantity,
                 price=price,
                 unit=unit_val,
@@ -491,12 +556,23 @@ def edit_sales_order(request, order_id):
     # -------------------------------------------------------------------------
 
     # active brands, plus the brands of the lines already on this order (so an old line's brand still shows)
-    firms = firms_with_existing((oi.item for oi in sales_order.items.select_related('item')), request.user)
+    existing_items = [oi.catalog_item for oi in sales_order.items.select_related('item', 'alabama_item') if oi.catalog_item]
+    from .catalog_ref import own_catalog_enabled
+    catalog_division = 'ALABAMA' if (own_catalog_enabled() and sales_order.division == 'ALABAMA') else ''
+    if catalog_division:
+        from .views_quotation import _alabama_quotable_brands
+        firms = _alabama_quotable_brands()
+        for it in existing_items:
+            if it.item_firm is not None and it.item_firm not in firms:
+                firms.append(it.item_firm)
+    else:
+        firms = firms_with_existing(existing_items, request.user)
 
     return render(request, 'so/edit_sales_order.html', {
         'sales_order': sales_order,
         'salesmen': salesmen,
         'firms': firms,
+        'catalog_division': catalog_division,
         'order_items': sales_order.items.all()
     })
 
@@ -588,17 +664,27 @@ def get_item_price(request):
     item_id = request.GET.get('item_id')
     customer_id = request.GET.get('customer_id')
 
-    cache_key = f'item_price_{item_id}_{customer_id}'
+    cache_key = f'item_price_{item_id}_{customer_id}'    # the raw id: 'a:12' (Alabama) never collides with '12' (Junaid)
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
-    item = get_object_or_404(Items, id=item_id)
+    from .catalog_ref import parse_item_ref
+    kind, pk = parse_item_ref(item_id)
+    if kind is None:
+        raise Http404('Invalid item')
+    if kind == 'alabama':
+        from alabama.models import AlabamaItem
+        item = get_object_or_404(AlabamaItem, id=pk)
+        price_lookup = {'alabama_item_id': pk}
+    else:
+        item = get_object_or_404(Items, id=pk)
+        price_lookup = {'item_id': pk}
 
     # Try to get custom price if exists
     custom_price_obj = CustomerPrice.objects.filter(
         customer_id=customer_id,
-        item_id=item_id
+        **price_lookup
     ).first()
 
     default_price = item.item_price
@@ -659,6 +745,25 @@ def get_items_by_firm(request):
     firms_param = request.GET.get('firms', '') or request.GET.get('firm', '')
     firms = [f.strip() for f in firms_param.split(',') if f.strip()]
 
+    from .catalog_ref import use_alabama_catalog
+    if use_alabama_catalog(request):
+        from alabama.item_sync import latest_run as alabama_latest_run, quotable_items
+        a_run = alabama_latest_run()
+        a_key = f'al_items_by_firms_{"_".join(sorted(f.lower() for f in firms)) or "all"}_r{int(a_run.timestamp()) if a_run else 0}'
+        a_cached = cache.get(a_key)
+        if a_cached is not None:
+            return JsonResponse({'items': a_cached})
+        a_qs = quotable_items()
+        if firms and 'All' not in firms:
+            a_qs = a_qs.filter(item_firm__in=firms)
+        a_items = [
+            {'id': f'a:{r["id"]}', 'item_description': r['item_description'], 'item_code': r['item_code'],
+             'item_firm': r['item_firm'], 'item_upvc': r['item_upvc'], 'item_stock': r['item_stock']}
+            for r in a_qs.values('id', 'item_description', 'item_code', 'item_firm', 'item_upvc', 'item_stock')
+        ]
+        cache.set(a_key, a_items, 120)
+        return JsonResponse({'items': a_items})
+
     # the key carries the latest sync run, so a new sync is never served from a list cached before it
     run = latest_sync_run()
     limit = alabama_brand_limit(request.user)   # Alabama's brand list: part of the key so its list is never served to others
@@ -685,12 +790,20 @@ def get_items_by_firm(request):
 def get_item_stock(request):
     item_id = request.GET.get('item_id')
 
-    cache_key = f'item_stock_{item_id}'
+    cache_key = f'item_stock_{item_id}'          # the raw id: 'a:12' (Alabama) can never collide with '12' (Junaid)
     cached = cache.get(cache_key)
     if cached is not None:
         return JsonResponse(cached)
 
-    item = get_object_or_404(Items, id=item_id)
+    from .catalog_ref import parse_item_ref
+    kind, pk = parse_item_ref(item_id)
+    if kind is None:
+        raise Http404('Invalid item')
+    if kind == 'alabama':
+        from alabama.models import AlabamaItem
+        item = get_object_or_404(AlabamaItem, id=pk)
+    else:
+        item = get_object_or_404(Items, id=pk)
     data = {
         'stock': item.item_stock,
         'cost': float(item.item_cost),
@@ -738,7 +851,7 @@ def format_whatsapp_order(sales_order, order_items, request):
     sections.append("─" * 25)
     
     for idx, item in enumerate(order_items, 1):
-        sections.append(f"\n*{idx}. {item.item.item_description}*")
+        sections.append(f"\n*{idx}. {item.catalog_item.item_description}*")
         sections.append(f"   Qty: {item.quantity} × {format_currency(item.price)}")
         sections.append(f"   Amount: *{format_currency(item.line_total)}*")
     
@@ -1158,7 +1271,7 @@ def view_sales_order_details(request, order_id):
 
 
     grand_total = sales_order.total_amount + sales_order.tax
-    order_items = sales_order.items.all()
+    order_items = sales_order.items.select_related('item', 'alabama_item')
 
     has_undercost_items = False
     has_over_limit = False
@@ -1167,7 +1280,7 @@ def view_sales_order_details(request, order_id):
 
     for item in order_items:
         item.line_total = item.quantity * item.price
-        item.is_undercost = item.price < ( item.item.item_cost + (item.item.item_cost * 0.03) )  # Assuming 3% margin
+        item.is_undercost = item.price < ( item.catalog_item.item_cost + (item.catalog_item.item_cost * 0.03) )  # Assuming 3% margin
         if item.is_undercost:
             has_undercost_items = True
 
@@ -1234,7 +1347,7 @@ def export_sales_order_to_excel(request, order_id):
     
     
     sales_order = get_object_or_404(SalesOrder, id=order_id)
-    order_items = sales_order.items.all()
+    order_items = sales_order.items.select_related('item', 'alabama_item')
 
     # Create a workbook and sheet
     wb = openpyxl.Workbook()
@@ -1339,8 +1452,8 @@ def export_sales_order_to_excel(request, order_id):
         
         row_data = [
             idx,
-            item.item.item_code,
-            item.item.item_description,
+            item.catalog_item.item_code,
+            item.catalog_item.item_description,
             item.quantity,
             item.unit,
             float(item.price),
@@ -3018,13 +3131,13 @@ def _build_items_table(order_items, theme, styles, usable_width):
         subtotal += line_total
 
         # Truncate long descriptions gracefully
-        desc = item.item.item_description or ''
+        desc = item.catalog_item.item_description or ''
         if len(desc) > 55:
             desc = desc[:55] + '…'
 
         table_data.append([
             Paragraph(str(idx), styles['td_c']),
-            Paragraph(item.item.item_code, styles['td_c']),
+            Paragraph(item.catalog_item.item_code, styles['td_c']),
             Paragraph(desc, styles['td_bold']),
             Paragraph(f"{item.quantity} {item.unit}", styles['td_c']),
             Paragraph(f"{item.price:,.2f}", styles['td_r']),
@@ -3246,7 +3359,7 @@ def _generate_order_pdf(buffer, sales_order, theme_key):
     This eliminates all duplication between Junaid and Alabama generators.
     """
     theme = THEMES[theme_key]
-    order_items = sales_order.items.all()
+    order_items = sales_order.items.select_related('item', 'alabama_item')
 
     # ── Document setup ──
     page_w, page_h = A4
