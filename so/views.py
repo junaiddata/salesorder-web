@@ -3581,7 +3581,7 @@ SALES_USER_MAP = {
     "parthiban": ["B.MR.PARTHIBAN", "PARTHIBAN"],
     "siyab": ["A.MR.SIYAB", "A.MR.SIYAB CONT", "SIYAB", "R.ABUDHABI","ABUL"],
     "mr. nasheer": ["B.MR.NASHEER AHMAD", "NASHEER SIR"],
-    "abul": ["R.ABUDHABI" ,"ABUL","A.ABUL"],
+    "abul": ["R.ABUDHABI" ,"ABUL","A. ABUL"],
     "deira 2 store": ["R.DEIRA 2"],
     "rafiq": ["A.MR.RAFIQ","A. RAFIQ SHABBIR - RASHID", "RAFIQ","ABU BAQAR","A. RAFIQ ABU - RASHID","RASHID"],
     "krishnan": ["I.KRISHNAN", "A.KRISHNAN"],  # combined both
@@ -3596,7 +3596,7 @@ SALES_USER_MAP = {
     "stephy": ["A.DIP STEFFY", "STEPHY"],
     "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR","A.DIP ADIL","D.RETAIL CUST DIP", "MUZAMMIL"],
     "retail": ["R.NAH","R.ABUDHABI" ,"R.AJMAN","R.QUSAIS","R.STORES","E.DEIRA 1","R.DEIRA 2"],
-    "retailabudhabi": ["R.ABUDHABI","ABUL","A.ABUL"],
+    "retailabudhabi": ["R.ABUDHABI","ABUL","A. ABUL"],
     "retailajman": ["R.AJMAN"],
     "retailqusais": ["R.QUSAIS"],
     "retailstores": ["R.STORES"],
