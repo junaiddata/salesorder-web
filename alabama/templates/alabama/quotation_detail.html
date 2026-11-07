@@ -41,6 +41,9 @@
       <span class="badge badge-closed">{{ quotation.status|default:"—" }}</span>
       {% endif %}
     </div>
+    <a href="{% url 'alabama:export_quotation_pdf' quotation.q_number %}" class="btn btn-secondary" style="margin-left:auto; margin-right:0.5rem;">
+      <i class="fas fa-file-pdf"></i> Export PDF
+    </a>
     <a href="{% if back_url %}{{ back_url }}{% else %}{% url 'alabama:quotation_list' %}{% endif %}" class="btn btn-secondary">
       <i class="fas fa-arrow-left"></i> Back to Quotations
     </a>

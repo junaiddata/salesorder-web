@@ -8,6 +8,7 @@ from . import salesorder_views
 from . import quotation_combined_views
 from . import credit_note_analysis_views
 from . import api_views
+from . import quotation_pdf
 
 app_name = 'alabama'
 
@@ -43,6 +44,7 @@ urlpatterns = [
         quotation_combined_views.export_combined_quotations_items_excel,
         name='export_combined_quotations_items_excel',
     ),
+    path('quotations/<str:q_number>/export-pdf/', quotation_pdf.export_quotation_pdf, name='export_quotation_pdf'),
     path('quotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sales-orders/', salesorder_views.salesorder_list, name='salesorder_list'),
     path('sales-orders/upload/', salesorder_views.salesorder_upload, name='salesorder_upload'),
