@@ -4,7 +4,7 @@ from django.db.models import Count
 from django.utils.html import format_html, format_html_join
 
 from .item_sync import norm_brand, refresh_quotable_flags
-from .models import AlabamaFeedBrand, AlabamaItem
+from .models import AlabamaFeedBrand, AlabamaItem, AlabamaItemMedia, AlabamaMediaLink
 
 
 def alabama_brand_counts():
@@ -91,3 +91,37 @@ class AlabamaItemAdmin(admin.ModelAdmin):
     list_filter = ('quotable', 'source', 'item_firm')
     search_fields = ('item_code', 'item_description', 'item_upvc', 'item_firm')
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(AlabamaMediaLink)
+class AlabamaMediaLinkAdmin(admin.ModelAdmin):
+    """Reuse a Junaid item's photo / datasheet for an Alabama item whose code matches but whose description differs.
+    (Same code AND same description is reused automatically; list the candidates with `manage.py alabama_media_review`.)"""
+    list_display = ('alabama_item', 'junaid_item', 'approved_by', 'created_at')
+    raw_id_fields = ('alabama_item', 'junaid_item')
+    search_fields = ('alabama_item__item_code', 'junaid_item__item_code')
+    readonly_fields = ('approved_by', 'created_at')
+
+    def save_model(self, request, obj, form, change):
+        if not obj.approved_by_id:
+            obj.approved_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(AlabamaItemMedia)
+class AlabamaItemMediaAdmin(admin.ModelAdmin):
+    """Read-only overview: upload / remove files on the Item Catalog page."""
+    list_display = ('alabama_item', 'has_photo', 'has_datasheet', 'uploaded_by', 'updated_at')
+    search_fields = ('alabama_item__item_code',)
+    readonly_fields = ('alabama_item', 'photo', 'datasheet', 'uploaded_by', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.display(boolean=True)
+    def has_photo(self, obj):
+        return bool(obj.photo)
+
+    @admin.display(boolean=True)
+    def has_datasheet(self, obj):
+        return bool(obj.datasheet)

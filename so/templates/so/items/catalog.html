@@ -87,6 +87,7 @@
             <h2>Item Catalog <span class="count">({% if shown != total %}{{ shown }} of {% endif %}{{ total }})</span></h2>
             <div class="d-flex gap-2 flex-wrap">
                 <form method="get" class="d-flex gap-2 align-items-center cat-filters">
+                    {% if division_param %}<input type="hidden" name="division" value="{{ division_param }}">{% endif %}
                     <details class="brand-dd" id="brandDd">
                         <summary class="input-x{% if brand_count %} on{% endif %}">{{ brand_label }} <i class="fas fa-chevron-down"></i></summary>
                         <div class="brand-panel">
@@ -107,7 +108,7 @@
                     <input type="text" name="q" value="{{ q }}" class="input-x cat-search" placeholder="Search item code, UPC, description, brand…">
                     <button class="btn-x" type="submit"><i class="fas fa-search"></i></button>
                     <label class="btn-x" style="cursor:pointer;gap:.4rem" title="Show only items that have DIP stock above 0"><input type="checkbox" name="instock" value="1" {% if hide_zero %}checked{% endif %} onchange="this.form.submit()"> Hide 0 stock</label>
-                    {% if brand_count or q or hide_zero %}<a href="{% url 'item_catalog' %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
+                    {% if brand_count or q or hide_zero %}<a href="{% url 'item_catalog' %}{% if division_param %}?division={{ division_param }}{% endif %}" class="btn-x" title="Clear filters"><i class="fas fa-xmark"></i></a>{% endif %}
                 </form>
             </div>
         </div>
@@ -120,24 +121,24 @@
         {% if page.object_list %}
         <div class="tbl-x-wrap">
             <table class="tbl-x pl-table">
-                <thead><tr><th>Item Code</th><th>UPC / Model</th><th>Photo</th><th>Brand</th><th>Description</th><th>Total Stock</th><th>DIP Stock</th>{% if is_admin %}<th>Cost</th>{% endif %}<th>Min Price</th><th>Datasheet</th>{% if is_admin %}<th>Actions</th>{% endif %}</tr></thead>
+                <thead><tr><th>Item Code</th><th>UPC / Model</th><th>Photo</th><th>Brand</th><th>Description</th><th>Total Stock</th>{% if not is_alabama_catalog %}<th>DIP Stock</th>{% endif %}{% if is_admin %}<th>Cost</th>{% endif %}<th>Min Price</th><th>Datasheet</th>{% if is_admin %}<th>Actions</th>{% endif %}</tr></thead>
                 <tbody>
                 {% for it in page %}
                 <tr>
                     <td data-label="Item Code" class="nowrap"><b>{{ it.item_code }}</b></td>
                     <td data-label="UPC / Model" class="nowrap">{{ it.item_upvc|default:"—" }}</td>
-                    <td data-label="Photo">{% if it.has_photo %}<a href="{% url 'item_catalog_photo' it.pk %}?v={{ it.media_version }}" target="_blank" rel="noopener"><img class="thumb" loading="lazy" src="{% url 'item_catalog_photo' it.pk %}?v={{ it.media_version }}" alt=""></a>{% else %}<span class="u-muted">—</span>{% endif %}</td>
+                    <td data-label="Photo">{% if it.has_photo %}<a href="{{ it.photo_url }}?v={{ it.media_version }}" target="_blank" rel="noopener"><img class="thumb" loading="lazy" src="{{ it.photo_url }}?v={{ it.media_version }}" alt=""></a>{% else %}<span class="u-muted">—</span>{% endif %}</td>
                     <td data-label="Brand">{{ it.item_firm|default:"—" }}</td>
                     <td data-label="Description" class="desc">{{ it.item_description|truncatechars:140 }}</td>
                     <td data-label="Total Stock" class="nowrap">{{ it.total_stock_text|default:"—" }}</td>
-                    <td data-label="DIP Stock" class="nowrap">{{ it.dip_stock_text|default:"—" }}</td>
+                    {% if not is_alabama_catalog %}<td data-label="DIP Stock" class="nowrap">{{ it.dip_stock_text|default:"—" }}</td>{% endif %}
                     {% if is_admin %}<td data-label="Cost" class="nowrap">{{ it.item_cost|floatformat:2 }}</td>{% endif %}
                     <td data-label="Min Price" class="nowrap">{{ it.item_price|floatformat:2 }}</td>
-                    <td data-label="Datasheet">{% if it.has_datasheet %}<a href="{% url 'item_catalog_datasheet' it.pk %}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
+                    <td data-label="Datasheet">{% if it.has_datasheet %}<a href="{{ it.datasheet_url }}" target="_blank" rel="noopener" class="chip-x green" title="View datasheet">Yes <i class="fas fa-eye"></i></a>{% else %}<span class="chip-x gray">No</span>{% endif %}</td>
                     {% if is_admin %}
                     <td>
                         <div class="act">
-                            <button type="button" class="btn-x js-upload" data-code="{{ it.item_code }}" data-action="{% url 'item_catalog_upload' it.pk %}" title="Upload or replace photo / datasheet"><i class="fas fa-upload"></i></button>
+                            <button type="button" class="btn-x js-upload" data-code="{{ it.item_code }}" data-action="{{ it.upload_url }}" title="Upload or replace photo / datasheet"><i class="fas fa-upload"></i></button>
                             {% if it.can_modify %}
                             <button type="button" class="btn-x js-edit" title="Edit item" data-code="{{ it.item_code }}" data-action="{% url 'item_catalog_edit' it.pk %}"
                                     data-desc="{{ it.item_description }}" data-upc="{{ it.item_upvc|default:'' }}" data-firm="{{ it.item_firm }}"
@@ -148,15 +149,15 @@
                                 <button type="submit" class="btn-x btn-danger-x" title="Delete item"><i class="fas fa-trash"></i></button>
                             </form>
                             {% endif %}
-                            {% if it.has_photo %}
-                            <form method="post" action="{% url 'item_catalog_remove' it.pk %}" style="display:inline;"
+                            {% if it.can_remove_photo %}
+                            <form method="post" action="{{ it.remove_url }}" style="display:inline;"
                                   data-confirm="Remove the photo of {{ it.item_code }}?" data-confirm-title="Remove photo" data-confirm-ok="Remove">
                                 {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><input type="hidden" name="kind" value="photo">
                                 <button type="submit" class="btn-x btn-danger-x" title="Remove photo"><i class="fas fa-image"></i></button>
                             </form>
                             {% endif %}
-                            {% if it.has_datasheet %}
-                            <form method="post" action="{% url 'item_catalog_remove' it.pk %}" style="display:inline;"
+                            {% if it.can_remove_datasheet %}
+                            <form method="post" action="{{ it.remove_url }}" style="display:inline;"
                                   data-confirm="Remove the datasheet of {{ it.item_code }}?" data-confirm-title="Remove datasheet" data-confirm-ok="Remove">
                                 {% csrf_token %}<input type="hidden" name="next" value="{{ here }}"><input type="hidden" name="kind" value="datasheet">
                                 <button type="submit" class="btn-x btn-danger-x" title="Remove datasheet"><i class="fas fa-file"></i></button>

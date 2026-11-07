@@ -17,7 +17,7 @@ from django.views.decorators.http import require_GET
 
 from quotation.product_export import _thumb
 
-from .item_catalog_views import _describe, _filtered, _is_admin
+from .item_catalog_views import _filtered, _is_admin, describe_items
 
 log = logging.getLogger('so')
 
@@ -28,9 +28,9 @@ PDF_ROW_LIMIT = 3000   # a PDF with more rows is refused: use Excel, or filter f
 def _rows(request):
     f = _filtered(request)
     is_admin = _is_admin(request.user) and request.GET.get('nocost') != '1'
-    head = (['Item Code', 'UPC / Model', 'Brand', 'Description', 'Total Stock', 'DIP Stock']
+    head = (['Item Code', 'UPC / Model', 'Brand', 'Description', 'Total Stock'] + ([] if f.get('alabama') else ['DIP Stock'])
             + (['Cost'] if is_admin else []) + ['Min Price', 'Photo', 'Datasheet'] + (['Status'] if f['has_status'] else []))
-    items = [_describe(it, f['has_status'], f['latest_run']) for it in f['items']]
+    items = describe_items(f['items'], f)
     brand_text = ', '.join(f['chosen']) or 'All brands'
     status_text = 'Active items' if f['status'] == 'active' else ''
     return head, items, brand_text, status_text, f['q'], is_admin
@@ -38,7 +38,7 @@ def _rows(request):
 
 def _datasheet_url(request, it):
     """Login-only link to the item's datasheet (staff who are logged in can open it)."""
-    return request.build_absolute_uri(reverse('item_catalog_datasheet', args=[it.pk]))
+    return request.build_absolute_uri(it.datasheet_url)
 
 
 def _stamp():
@@ -138,14 +138,15 @@ def item_catalog_export_pdf(request):
 
     with_photos = len(items) <= PHOTO_LIMIT
     pdf_head = (['Item Code'] + (['Photo'] if with_photos else [])
-                + ['UPC / Model', 'Brand', 'Description', 'Total Stock', 'DIP Stock'] + (['Cost'] if is_admin else [])
+                + ['UPC / Model', 'Brand', 'Description', 'Total Stock'] + (['DIP Stock'] if 'DIP Stock' in head else [])
+                + (['Cost'] if is_admin else [])
                 + ['Min Price', 'Datasheet'] + (['Status'] if 'Status' in head else []))
     dash = Paragraph('-', cell)
     data = [[Paragraph(h, hcell) for h in pdf_head]]
     for it in items:
         line = [Paragraph(escape(it.item_code), cell)]
         if with_photos:
-            thumb = _thumb(it.media.photo) if it.has_photo else None
+            thumb = _thumb(it.thumb_file) if it.has_photo else None
             if thumb:
                 buf_img, w, h = thumb
                 scale = min(16 * mm / w, 16 * mm / h)
@@ -154,7 +155,9 @@ def item_catalog_export_pdf(request):
                 line.append(dash)
         line += [Paragraph(escape(it.item_upvc or '') or '-', cell), Paragraph(escape(it.item_firm or ''), cell),
                  Paragraph(escape(it.item_description or '').replace('\n', '<br/>'), cell),
-                 Paragraph(it.total_stock_text or '-', cell_r), Paragraph(it.dip_stock_text or '-', cell_r)]
+                 Paragraph(it.total_stock_text or '-', cell_r)]
+        if 'DIP Stock' in head:
+            line.append(Paragraph(it.dip_stock_text or '-', cell_r))
         if is_admin:
             line.append(Paragraph(money(it.item_cost), cell_r))
         line.append(Paragraph(money(it.item_price), cell_r))

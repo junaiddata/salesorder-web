@@ -34,7 +34,7 @@ def small_png(name='s.png'):
 
 
 @override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALABAMA_CATALOG_BRANDS=['ARISTON'],
-                   ALLOWED_HOSTS=['testserver'])
+                   ALLOWED_HOSTS=['testserver'], ALABAMA_OWN_CATALOG=False)
 class ItemCatalogTests(TestCase):
     @classmethod
     def tearDownClass(cls):
@@ -387,7 +387,7 @@ class InactiveItemsHiddenFromPickersTests(TestCase):
         self.assertEqual(Items.objects.filter(item_code='D1').count(), 1)                 # the item itself is untouched
 
 
-@override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALLOWED_HOSTS=['testserver'], ALABAMA_CATALOG_BRANDS=['ARISTON'])
+@override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALLOWED_HOSTS=['testserver'], ALABAMA_CATALOG_BRANDS=['ARISTON'], ALABAMA_OWN_CATALOG=False)
 class ItemCatalogEditDeleteExportTests(TestCase):
     """Edit / delete (only for items the stock app does not list, delete only when nothing uses the item) and the exports."""
 
@@ -563,7 +563,7 @@ class ItemCatalogEditDeleteExportTests(TestCase):
         self.assertEqual(self.client.get(reverse('item_catalog_export_pdf')).status_code, 302)
 
 
-@override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'])
+@override_settings(ITEM_MEDIA_PRIVATE_ROOT=TMP_ROOT, ALABAMA_CATALOG_BRANDS=[], ALLOWED_HOSTS=['testserver'], ALABAMA_OWN_CATALOG=False)
 class AlabamaCatalogBrandAdminTests(TestCase):
     """The Alabama brand list is managed in the admin site (AlabamaCatalogBrand)."""
 

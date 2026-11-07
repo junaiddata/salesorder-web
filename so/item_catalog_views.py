@@ -21,10 +21,14 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
+from alabama import media_match
+from alabama.item_sync import quotable_items
+from alabama.models import AlabamaItemMedia
 from quotation import pricing
 
 from .item_media import MediaError, datasheet_to_jpeg, photo_to_jpeg
 from .item_status import active_items, alabama_brand_limit, latest_sync_run
+from .catalog_ref import own_catalog_enabled
 from .models import AlabamaCatalogBrand, ItemMedia, Items, ItemSyncStatus
 
 log = logging.getLogger('so')
@@ -55,6 +59,32 @@ def _visible_items(user):
     return qs
 
 
+def _is_alabama_user(user):
+    role = getattr(user, 'role', None)
+    return bool((role is not None and role.company == 'Alabama') or 'alabama' in (getattr(user, 'username', '') or '').lower())
+
+
+def _is_company_chooser(user):
+    """so / manager admins work for both companies (same people as on the quotation pages)."""
+    role = getattr(user, 'role', None)
+    return bool(role is not None and role.role == 'Admin' and (user.username or '').strip().lower() in ('so', 'manager'))
+
+
+def _alabama_mode(request):
+    """True when this request shows Alabama's own catalog (AlabamaItem): the own-catalog switch is on and the user is an
+    Alabama user, or a so / manager admin who asked for it with ?division=ALABAMA. Everyone else keeps the Junaid catalog."""
+    if not own_catalog_enabled():
+        return False
+    if _is_alabama_user(request.user):
+        return True
+    return _is_company_chooser(request.user) and (request.GET.get('division') or '').strip().upper() == 'ALABAMA'
+
+
+def _alabama_files_allowed(user):
+    """Who may open Alabama catalog files / upload for Alabama items: the same people who can reach the Alabama catalog."""
+    return own_catalog_enabled() and (_is_alabama_user(user) or _is_company_chooser(user))
+
+
 def _back_url(request):
     """Back to the catalog as the user left it (filters, page); only an address inside the catalog is accepted."""
     plain = reverse('item_catalog')
@@ -67,6 +97,8 @@ def _back_url(request):
 def _filtered(request):
     """The items matching the search / brand / stock / missing-file / status filters on the page (shared by the list and
     its Excel / PDF exports). Always starts from _visible_items, so the Alabama brand rule applies everywhere."""
+    if _alabama_mode(request):
+        return _filtered_alabama(request)
     base = _visible_items(request.user)
     q = (request.GET.get('q') or '').strip()
     chosen = [b.strip() for b in request.GET.getlist('brand') if b.strip()]
@@ -101,6 +133,66 @@ def _filtered(request):
             'status': status, 'has_status': has_status, 'latest_run': latest_run, 'filter_qs': filter_qs}
 
 
+def _filtered_alabama(request):
+    """Same filters as `_filtered`, over Alabama's own items: the active items of the Alabama brand list (the same ones a
+    new Alabama quotation offers). Read-only: the Alabama stock API owns these rows."""
+    base = quotable_items()
+    q = (request.GET.get('q') or '').strip()
+    chosen = [b.strip() for b in request.GET.getlist('brand') if b.strip()]
+    hide_zero = request.GET.get('instock') == '1'
+    missing = request.GET.get('missing') if request.GET.get('missing') in ('photo', 'datasheet') else ''
+    items = base
+    if q:
+        items = items.filter(Q(item_code__icontains=q) | Q(item_description__icontains=q)
+                             | Q(item_upvc__icontains=q) | Q(item_firm__icontains=q))
+    if chosen:
+        items = items.filter(item_firm__in=chosen)
+    if hide_zero:
+        items = items.filter(total_available_stock__gt=0)       # Alabama's feed has one stock figure (StockQuantity), no DIP stock
+    if missing:
+        photo_ids, sheet_ids = media_match.ids_with_files()
+        items = items.exclude(pk__in=photo_ids if missing == 'photo' else sheet_ids)
+    items = items.order_by('item_firm', 'item_code')
+    division = 'ALABAMA' if _is_company_chooser(request.user) else ''
+    filter_qs = urlencode([('q', q)] + [('brand', b) for b in chosen]
+                          + ([('instock', '1')] if hide_zero else []) + ([('missing', missing)] if missing else [])
+                          + ([('division', division)] if division else []))
+    return {'base': base, 'items': items, 'q': q, 'chosen': chosen, 'hide_zero': hide_zero, 'missing': missing,
+            'status': '', 'has_status': False, 'latest_run': None, 'filter_qs': filter_qs, 'alabama': True,
+            'division_param': division}
+
+
+def _describe_alabama(items):
+    """Display values for a list of AlabamaItem rows (photo / datasheet resolved in bulk, see alabama/media_match.py)."""
+    items = list(items)
+    found = media_match.resolve(items)
+    for it in items:
+        r = found[it.pk]
+        it.dip_stock_text = pricing.format_stock(it.dip_warehouse_stock)
+        it.total_stock_text = pricing.format_stock(it.total_available_stock)
+        it.has_photo = bool(r.photo)
+        it.has_datasheet = bool(r.sheet)
+        it.thumb_file = r.photo
+        it.media_version = r.version
+        it.last_seen = None
+        it.is_active = True
+        it.can_modify = False                       # the Alabama stock API owns these rows: no edit / delete here
+        it.can_remove_photo = r.photo_src == 'own'  # a reused Junaid file is not Alabama's to remove
+        it.can_remove_datasheet = r.sheet_src == 'own'
+        it.photo_url = reverse('item_catalog_a_photo', args=[it.pk])
+        it.datasheet_url = reverse('item_catalog_a_datasheet', args=[it.pk])
+        it.upload_url = reverse('item_catalog_a_upload', args=[it.pk])
+        it.remove_url = reverse('item_catalog_a_remove', args=[it.pk])
+    return items
+
+
+def describe_items(items, f):
+    """`_describe` for every item of a filtered result `f` (Junaid or Alabama)."""
+    if f.get('alabama'):
+        return _describe_alabama(items)
+    return [_describe(it, f['has_status'], f['latest_run']) for it in items]
+
+
 def _describe(it, has_status, latest_run):
     """Attach the display values the page and the exports need to an item (loaded with select_related media / sync_status)."""
     it.dip_stock_text = pricing.format_stock(it.dip_warehouse_stock)
@@ -114,6 +206,12 @@ def _describe(it, has_status, latest_run):
     it.is_active = bool(has_status and seen and seen.last_seen_at >= latest_run)
     # Items the stock app lists are rewritten by the daily sync, so only the others can be edited or deleted here.
     it.can_modify = bool(has_status and not it.is_active)
+    it.thumb_file = media.photo if it.has_photo else None
+    it.can_remove_photo, it.can_remove_datasheet = it.has_photo, it.has_datasheet
+    it.photo_url = reverse('item_catalog_photo', args=[it.pk])
+    it.datasheet_url = reverse('item_catalog_datasheet', args=[it.pk])
+    it.upload_url = reverse('item_catalog_upload', args=[it.pk])
+    it.remove_url = reverse('item_catalog_remove', args=[it.pk])
     return it
 
 
@@ -122,18 +220,23 @@ def item_catalog(request):
     f = _filtered(request)
     base, is_admin = f['base'], _is_admin(request.user)
     # only brands that have at least one active item (a brand whose items are all inactive is not offered)
-    brands = list(active_items(base).exclude(item_firm='').order_by('item_firm').values_list('item_firm', flat=True).distinct())
+    if f.get('alabama'):
+        brands = list(base.exclude(item_firm='').order_by('item_firm').values_list('item_firm', flat=True).distinct())
+        total = base.count()
+    else:
+        brands = list(active_items(base).exclude(item_firm='').order_by('item_firm').values_list('item_firm', flat=True).distinct())
+        total = active_items(base).count()   # inactive items are not counted
     page = Paginator(f['items'], PAGE_SIZE).get_page(request.GET.get('page'))
-    for it in page:
-        _describe(it, f['has_status'], f['latest_run'])
+    page.object_list = describe_items(list(page.object_list), f)
     chosen = f['chosen']
     return render(request, 'so/items/catalog.html', {
-        'page': page, 'q': f['q'], 'shown': page.paginator.count, 'total': active_items(base).count(),   # inactive items are not counted
+        'page': page, 'q': f['q'], 'shown': page.paginator.count, 'total': total,
         'brand_options': [(b, b in chosen) for b in brands], 'brand_count': len(chosen),
         'brand_label': (chosen[0] if len(chosen) == 1 else f'{len(chosen)} brands') if chosen else 'All brands',
         'hide_zero': f['hide_zero'], 'missing': f['missing'], 'status': f['status'], 'has_status': f['has_status'],
         'latest_run': f['latest_run'], 'filter_qs': f['filter_qs'], 'is_admin': is_admin,
         'can_see_cost': _can_edit_cost(request.user), 'here': request.get_full_path(),
+        'division_param': f.get('division_param', ''), 'is_alabama_catalog': bool(f.get('alabama')),
     })
 
 
@@ -355,4 +458,116 @@ def item_catalog_delete(request, pk):
         except Exception:
             log.exception('Could not delete item file %s', f.name)
     messages.success(request, f'{code}: deleted.')
+    return redirect(back)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Alabama catalog files. Own URLs ('a/<pk>') so an Alabama item id can never be mistaken for a Junaid one. The file is the
+# one alabama/media_match.py picks for the item (its own upload, an approved link, or the matching Junaid item's file).
+# ---------------------------------------------------------------------------------------------------------------------
+def _alabama_item(request, pk):
+    if not _alabama_files_allowed(request.user):
+        raise Http404
+    return get_object_or_404(quotable_items(), pk=pk)
+
+
+def _stream(f, content_type, private_cache):
+    if not f:
+        raise Http404
+    try:
+        resp = FileResponse(f.open('rb'), content_type=content_type)
+    except FileNotFoundError:
+        raise Http404
+    resp['Cache-Control'] = 'private, max-age=300' if private_cache else 'private, no-store'
+    resp['X-Robots-Tag'] = 'noindex, nofollow'
+    return resp
+
+
+@login_required
+@require_GET
+def item_catalog_a_photo(request, pk):
+    item = _alabama_item(request, pk)
+    return _stream(media_match.resolve([item])[item.pk].photo, 'image/jpeg', True)
+
+
+@login_required
+@require_GET
+def item_catalog_a_datasheet(request, pk):
+    item = _alabama_item(request, pk)
+    resp = _stream(media_match.resolve([item])[item.pk].sheet, 'image/jpeg', False)
+    safe = ''.join(c for c in item.item_code if c.isalnum() or c in '-_.') or 'datasheet'
+    resp['Content-Disposition'] = f'{"attachment" if request.GET.get("download") == "1" else "inline"}; filename="{safe}.jpg"'
+    return resp
+
+
+@login_required
+@require_POST
+def item_catalog_a_upload(request, pk):
+    """Admin only: add or replace the photo / datasheet of one Alabama item (stored for Alabama only; a Junaid file is never touched)."""
+    back = _back_url(request)
+    if not _is_admin(request.user):
+        messages.error(request, 'Only an admin can upload photos and datasheets.')
+        return redirect(back)
+    item = _alabama_item(request, pk)
+    photo_file, sheet_file = request.FILES.get('photo'), request.FILES.get('datasheet')
+    if not photo_file and not sheet_file:
+        messages.error(request, 'Choose a photo or a datasheet to upload.')
+        return redirect(back)
+    try:
+        photo_data = photo_to_jpeg(photo_file) if photo_file else None
+    except MediaError as exc:
+        messages.error(request, f'{item.item_code}: {exc}')
+        return redirect(back)
+    try:
+        sheet_data = datasheet_to_jpeg(sheet_file) if sheet_file else None
+    except MediaError as exc:
+        messages.error(request, f'{item.item_code}: {exc}')
+        return redirect(back)
+    old_files = []
+    with transaction.atomic():
+        media, _ = AlabamaItemMedia.objects.select_for_update().get_or_create(alabama_item=item)
+        if photo_data is not None:
+            if media.photo:
+                old_files.append(media.photo.name)
+            media.photo.save('photo.jpg', ContentFile(photo_data), save=False)
+        if sheet_data is not None:
+            if media.datasheet:
+                old_files.append(media.datasheet.name)
+            media.datasheet.save('datasheet.jpg', ContentFile(sheet_data), save=False)
+        media.uploaded_by = request.user
+        media.save()
+    storage = media.photo.storage
+    for name in old_files:
+        try:
+            storage.delete(name)
+        except Exception:
+            log.exception('Could not delete replaced item file %s', name)
+    messages.success(request, f'{item.item_code}: saved.')
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def item_catalog_a_remove(request, pk):
+    """Admin only: remove the photo / datasheet that was uploaded for this Alabama item. A file reused from the Junaid
+    item is not Alabama's to remove (remove it on the Junaid catalog instead)."""
+    back = _back_url(request)
+    if not _is_admin(request.user):
+        messages.error(request, 'Only an admin can remove photos and datasheets.')
+        return redirect(back)
+    item = _alabama_item(request, pk)
+    kind = request.POST.get('kind')
+    media = AlabamaItemMedia.objects.filter(alabama_item=item).first()
+    if kind not in ('photo', 'datasheet', 'all') or not media:
+        messages.error(request, f'{item.item_code}: nothing uploaded for Alabama to remove (a reused Junaid file is managed on the Junaid catalog).')
+        return redirect(back)
+    if kind in ('photo', 'all') and media.photo:
+        media.photo.delete(save=False)
+    if kind in ('datasheet', 'all') and media.datasheet:
+        media.datasheet.delete(save=False)
+    if media.photo or media.datasheet:
+        media.save()
+    else:
+        media.delete()
+    messages.success(request, f'{item.item_code}: removed.')
     return redirect(back)

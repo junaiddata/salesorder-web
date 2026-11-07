@@ -1,4 +1,9 @@
+import secrets as _secrets
+
+from django.conf import settings
 from django.db import models
+
+from so.item_media_storage import get_item_media_storage
 
 
 class AlabamaItem(models.Model):
@@ -342,3 +347,49 @@ class AlabamaSalesOrderItem(models.Model):
 
     def __str__(self):
         return f"{self.salesorder.so_number} - {self.description}"
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Item Catalog photos / datasheets for Alabama items.
+#
+# Alabama normally REUSES the Junaid photo / datasheet of the same product (same item code AND same description, see
+# alabama/media_match.py). These two tables only hold the exceptions, so nothing is copied or stored twice:
+#   AlabamaItemMedia  - a photo / datasheet uploaded for an Alabama item (wins over a reused Junaid one)
+#   AlabamaMediaLink  - an admin-approved link to a Junaid item whose code matches but whose description differs
+# ---------------------------------------------------------------------------------------------------------------------
+def alabama_photo_upload_to(instance, filename):
+    return f'photos/al_{_secrets.token_hex(8)}.jpg'
+
+
+def alabama_datasheet_upload_to(instance, filename):
+    return f'datasheets/al_{_secrets.token_hex(8)}.jpg'
+
+
+class AlabamaItemMedia(models.Model):
+    alabama_item = models.OneToOneField(AlabamaItem, on_delete=models.CASCADE, related_name='media')
+    photo = models.ImageField(upload_to=alabama_photo_upload_to, storage=get_item_media_storage, blank=True, null=True)
+    datasheet = models.FileField(upload_to=alabama_datasheet_upload_to, storage=get_item_media_storage, blank=True, null=True)   # always a JPEG
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Alabama item photo / datasheet'
+        verbose_name_plural = 'Alabama item photos / datasheets'
+
+    def __str__(self):
+        return f'Media for {self.alabama_item.item_code}'
+
+
+class AlabamaMediaLink(models.Model):
+    """Reuse the photo / datasheet of a Junaid item for an Alabama item although the descriptions differ (approved by an admin)."""
+    alabama_item = models.OneToOneField(AlabamaItem, on_delete=models.CASCADE, related_name='media_link')
+    junaid_item = models.ForeignKey('so.Items', on_delete=models.CASCADE, related_name='+')
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Alabama media link'
+        verbose_name_plural = 'Alabama media links'
+
+    def __str__(self):
+        return f'{self.alabama_item.item_code} uses the files of Junaid {self.junaid_item.item_code}'

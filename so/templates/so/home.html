@@ -978,6 +978,14 @@
                     Item Catalog
                 </a>
             </li>
+            {% if alabama_catalog_link %}
+            <li>
+                <a href="{% url 'item_catalog' %}?division=ALABAMA">
+                    <i class="fas fa-boxes-stacked"></i>
+                    Alabama Item Catalog
+                </a>
+            </li>
+            {% endif %}
 
             <li>
                 <a href="{% url 'view_sales_orders' %}">

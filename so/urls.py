@@ -80,6 +80,10 @@ urlpatterns = [
     ################ ITEM MANAGEMENT ##################
     path('items/', views.item_list, name='item_list'),
     path('items/catalog/', item_catalog_views.item_catalog, name='item_catalog'),
+    path('items/catalog/a/<int:pk>/photo/', item_catalog_views.item_catalog_a_photo, name='item_catalog_a_photo'),
+    path('items/catalog/a/<int:pk>/datasheet/', item_catalog_views.item_catalog_a_datasheet, name='item_catalog_a_datasheet'),
+    path('items/catalog/a/<int:pk>/upload/', item_catalog_views.item_catalog_a_upload, name='item_catalog_a_upload'),
+    path('items/catalog/a/<int:pk>/remove/', item_catalog_views.item_catalog_a_remove, name='item_catalog_a_remove'),
     path('items/catalog/<int:pk>/photo/', item_catalog_views.item_catalog_photo, name='item_catalog_photo'),
     path('items/catalog/<int:pk>/datasheet/', item_catalog_views.item_catalog_datasheet, name='item_catalog_datasheet'),
     path('items/catalog/<int:pk>/upload/', item_catalog_views.item_catalog_upload, name='item_catalog_upload'),

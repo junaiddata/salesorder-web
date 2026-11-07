@@ -260,6 +260,14 @@
                     </li>
                 </ul>
             </li>
+            {% if show_item_catalog %}
+            <li>
+                <a href="{% url 'item_catalog' %}?division=ALABAMA">
+                    <i class="fas fa-boxes-stacked"></i>
+                    Item Catalog
+                </a>
+            </li>
+            {% endif %}
             <li>
                 <a href="{% url 'submittal:list' %}?company=alabama">
                     <i class="fas fa-file-contract"></i>
