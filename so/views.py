@@ -4772,6 +4772,60 @@ def quotation_detail(request, q_number):
 
     return render(request, 'quotes/quotation_detail.html', context)
 
+
+@login_required
+def export_sap_quotation_excel(request, q_number):
+    """Admin-only Excel export of a SAP quotation with all header + line fields (incl. cost/margin)."""
+    if not (hasattr(request.user, 'role') and request.user.role.role == 'Admin'):
+        return HttpResponseForbidden("Admin access required")
+
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+    items = list(quotation.items.all().order_by('id'))
+
+    codes = [str(i.item_no).strip() for i in items if i.item_no]
+    item_map = {}
+    if codes:
+        for it in Items.objects.filter(item_code__in=codes).only(
+            'item_code', 'item_cost', 'total_available_stock', 'dip_warehouse_stock'
+        ):
+            item_map[it.item_code] = it
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Quotation"
+    bold = Font(bold=True)
+
+    cols = ["#", "Item No", "Description", "Quantity", "Unit Price", "Row Total",
+            "Unit Cost", "Total Cost", "Profit", "Margin %", "Total Available Stock", "DIP Warehouse Stock"]
+    ws.append(cols)
+    for c in range(1, len(cols) + 1):
+        ws.cell(row=ws.max_row, column=c).font = bold
+
+    for n, it in enumerate(items, 1):
+        code = str(it.item_no).strip() if it.item_no else ''
+        master = item_map.get(code)
+        qty = float(it.quantity or 0)
+        price = float(it.price or 0)
+        row_total = float(it.row_total) if it.row_total is not None else qty * price
+        unit_cost = float(master.item_cost or 0) if master else 0.0
+        total_cost = unit_cost * qty
+        profit = row_total - total_cost
+        margin = (profit / row_total * 100) if row_total else 0.0
+        ws.append([n, it.item_no, it.description, qty, price, row_total, unit_cost, total_cost,
+                   profit, round(margin, 2),
+                   (master.total_available_stock or 0) if master else 0,
+                   (master.dip_warehouse_stock or 0) if master else 0])
+
+    for col, width in zip("ABCDEFGHIJKL", (24, 18, 50, 12, 12, 14, 12, 14, 14, 10, 20, 20)):
+        ws.column_dimensions[col].width = width
+
+    date_str = quotation.posting_date.strftime('%Y%m%d') if quotation.posting_date else 'NA'
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="SAP_Quotation_{quotation.q_number}_{date_str}.xlsx"'
+    wb.save(response)
+    return response
+
 # =====================
 # Quotation: AJAX Search (rows + pagination HTML)
 # =====================

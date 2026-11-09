@@ -163,6 +163,7 @@ urlpatterns += [
     path('sapquotations/ajax/', views.quotation_search, name='quotation_search'),
     path('sapquotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sapquotations/<str:q_number>/export/', views.export_sap_quotation_pdf, name='export_sap_quotation_pdf'),
+    path('sapquotations/<str:q_number>/export-excel/', views.export_sap_quotation_excel, name='export_sap_quotation_excel'),
     path('old-pi/<str:q_number>/export/', sap_salesorder_views.export_old_pi_pdf, name='export_old_pi_pdf'),
     path("sapquotations/<str:q_number>/remarks/", views.quotation_update_remarks, name="quotation_update_remarks"),
     path("sapquotations/<str:q_number>/close/", views.quotation_close, name="quotation_close"),
