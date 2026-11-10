@@ -72,7 +72,7 @@ def api_item_analysis_totals(request):
 # ---------------------------------------------------------------------------------------------------------------------
 # Alabama per-item quotation totals (read-only). Same query parameters and response shapes as the Junaid
 # /api/item-quotation-totals/, but reads ONLY Alabama tables (AlabamaSAPQuotation / AlabamaSAPQuotationItem /
-# AlabamaItem) -- never so.Items or so.SAPQuotation. Auth: the same shared key (PURCHASE_APP_API_KEY).
+# AlabamaItem) -- never so.Items or so.SAPQuotation. Auth: its own key, ALABAMA_QUOTATION_API_KEY.
 # ---------------------------------------------------------------------------------------------------------------------
 @csrf_exempt
 @require_GET
@@ -87,17 +87,21 @@ def api_alabama_item_quotation_totals(request):
     Cost / profit are never returned.
     """
     import hmac
+    import os
     from collections import defaultdict
     from decimal import Decimal
 
     from so.api_item_quotation_totals_views import (
-        _configured_key, _request_key, _split, _parse_date, _num as _fnum,
+        _request_key, _split, _parse_date, _num as _fnum,
     )
+
+    from django.conf import settings
 
     from .item_sync import brand_is_quotable, load_brand_rules, norm_brand
     from .models import AlabamaItem, AlabamaSAPQuotation, AlabamaSAPQuotationItem
 
-    expected = _configured_key()
+    # Own key (ALABAMA_QUOTATION_API_KEY), separate from the stock-feed ALABAMA_API_KEY and Junaid's PURCHASE_APP_API_KEY.
+    expected = (getattr(settings, 'ALABAMA_QUOTATION_API_KEY', '') or os.getenv('ALABAMA_QUOTATION_API_KEY', '')).strip()
     if not expected:
         return JsonResponse({'success': False, 'error': 'API key is not configured on the server'}, status=503)
     if not hmac.compare_digest(_request_key(request), expected):

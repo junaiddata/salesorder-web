@@ -437,4 +437,4 @@ ALABAMA_OWN_ITEMS = os.getenv('ALABAMA_OWN_ITEMS', 'False').lower() in ('1', 'tr
 # New Alabama quotations / their sales orders pick from the Alabama item master (and show only its values).
 # Off = the quotation pages behave exactly as before. Existing quotations / orders are never changed either way.
 ALABAMA_OWN_CATALOG = os.getenv('ALABAMA_OWN_CATALOG', 'False').lower() in ('1', 'true', 'yes')
-PURCHASE_APP_API_KEY = os.getenv('PURCHASE_APP_API_KEY', '')  # API key for the purchase app (purchase.junaidworld.com) to call our /purchase/api/ endpoints
+ALABAMA_QUOTATION_API_KEY = os.getenv('ALABAMA_QUOTATION_API_KEY', '')  # API key for Alabama quotations

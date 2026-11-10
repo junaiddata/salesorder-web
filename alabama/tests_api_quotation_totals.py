@@ -7,7 +7,7 @@ from .models import AlabamaFeedBrand, AlabamaItem, AlabamaSAPQuotation, AlabamaS
 URL = '/alabama/api/item-quotation-totals/'
 
 
-@override_settings(PURCHASE_APP_API_KEY='k')
+@override_settings(ALABAMA_QUOTATION_API_KEY='k', ALABAMA_API_KEY='stock', PURCHASE_APP_API_KEY='other')
 class AlabamaQuotationTotalsApiTests(TestCase):
     def setUp(self):
         AlabamaItem.objects.create(item_code='A1', item_firm='ARISTON - CHINA')
@@ -24,6 +24,10 @@ class AlabamaQuotationTotalsApiTests(TestCase):
     def test_auth(self):
         self.assertEqual(self.get(key='bad').status_code, 401)
         self.assertEqual(self.client.get(URL).status_code, 401)
+
+    def test_other_keys_do_not_open_it(self):
+        self.assertEqual(self.get(key='stock').status_code, 401)
+        self.assertEqual(self.get(key='other').status_code, 401)
 
     def test_totals(self):
         res = {r['item_code']: r for r in self.get().json()['results']}
