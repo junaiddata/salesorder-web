@@ -247,6 +247,12 @@ def quotation_form(request, pk=None):
         elif discount_type == 'amount' and discount_value > sum((line_amount(r['qty'], r['unit_price']) for r in rows), Decimal('0')):
             errors.append('The discount cannot be more than the total of the items.')
 
+        if quotation is None:   # mandatory on NEW quotations only; existing ones can still be edited as they are
+            if not (posted.get('customer_contact') or '').strip():
+                errors.append('Please enter the customer contact number.')
+            if not (posted.get('customer_email') or '').strip():
+                errors.append('Please enter the customer email.')
+
         if not errors:
             with transaction.atomic():
                 is_new = quotation is None

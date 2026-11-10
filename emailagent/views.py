@@ -899,6 +899,27 @@ def upload_enquiry(request):
             'error': f'Too large (limit {settings.EMAILAGENT_MAX_ATTACHMENT_MB} MB): ' + ', '.join(too_big),
         }, status=400)
 
+    from so.models import Customer
+    from so.quotation_customer_details import is_walkin_customer
+
+    def _picked(model, raw):
+        raw = (raw or '').strip()
+        return model.objects.filter(pk=int(raw)).first() if raw.isdigit() else None
+
+    # Customer contact number and email are mandatory (follow-ups); a CASH / walk-in customer, or no customer picked
+    # at all (the agent then quotes it under the walk-in record), also needs the display name. The page checks this
+    # first, so this is the backstop. Done before the duplicate check so a mistake costs the user nothing.
+    picked_customer = _picked(Customer, request.POST.get('customer_id'))
+    missing = []
+    if not request.POST.get('customer_contact_number', '').strip():
+        missing.append('the customer contact number')
+    if not request.POST.get('customer_email', '').strip():
+        missing.append('the customer email')
+    if (not picked_customer or is_walkin_customer(picked_customer)) and not request.POST.get('customer_display_name', '').strip():
+        missing.append('the customer display name (needed for a CASH / walk-in customer)')
+    if missing:
+        return JsonResponse({'ok': False, 'error': 'Please enter ' + ', '.join(missing) + '.'}, status=400)
+
     if request.POST.get('confirm_duplicate') != '1':
         info = []
         for f in files:
@@ -911,19 +932,15 @@ def upload_enquiry(request):
                 d['url'] = reverse('emailagent:email_detail', args=[d['email_id']])
             return JsonResponse({'ok': False, 'duplicate': True, 'matches': duplicates})
 
-    from so.models import Customer
-
-    def _picked(model, raw):
-        raw = (raw or '').strip()
-        return model.objects.filter(pk=int(raw)).first() if raw.isdigit() else None
-
     tracked_email = upload_service.create_upload(
         request.user, files,
         subject=request.POST.get('subject', ''),
         note=request.POST.get('note', ''),
-        customer=_picked(Customer, request.POST.get('customer_id')),
+        customer=picked_customer,
         salesman=_picked(Salesman, request.POST.get('salesman_id')),
         customer_display_name=request.POST.get('customer_display_name', ''),
+        customer_contact_number=request.POST.get('customer_contact_number', ''),
+        customer_email=request.POST.get('customer_email', ''),
     )
     upload_service.start_processing(tracked_email.pk)
     return JsonResponse({'ok': True, 'redirect': reverse('emailagent:upload_enquiry_progress', args=[tracked_email.pk])})

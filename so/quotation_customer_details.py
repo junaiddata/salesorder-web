@@ -21,6 +21,18 @@ def _norm(text):
     return ' '.join((text or '').lower().split())
 
 
+# Anonymous walk-in / generic customers: a quotation for one of these must carry a display name (who the buyer really is).
+# Real companies that merely pay cash are named "... (CASH)" and are NOT matched. Add a phrase here to cover a new one.
+WALKIN_NAME_PHRASES = ('cash customer', 'cash sales', 'debit customer', 'retail customer')
+
+
+def is_walkin_customer(customer_or_name):
+    """True when the customer (a so.Customer or just its name) is one of the generic walk-in/CASH records."""
+    name = getattr(customer_or_name, 'customer_name', customer_or_name)
+    name = _norm(name)
+    return bool(name) and any(p in name for p in WALKIN_NAME_PHRASES)
+
+
 def galleria_customer(customer, extra_names=()):
     """The quote-builder customer matching this so.Customer (by code, then by unique name), or None."""
     try:

@@ -61,6 +61,7 @@ class QuotationTests(TestCase):
             'remarks': 'Deposit before production\n\n2) Port of loading: Shenzhen\n3. Net packing', 'validity': '30 days', 'stock_availability': '2026-11-05', 'project_reference': 'PRJ-77 Marina Tower',
             'country_of_origin': 'Italy', 'sales_person': 'Aiswarya', 'email': 'a@x.com',
             'contact_number': '0501234567',
+            'customer_contact': '0507654321', 'customer_email': 'buyer@customer.test',   # mandatory on new quotations
             'row_key': ['n1', 'n2'], 'item_id': ['', ''],
             'item_no': ['H12', ''],
             'item_model': ['AR-50', 'PG-12'],
@@ -72,6 +73,28 @@ class QuotationTests(TestCase):
         }
         data.update(extra)
         return data
+
+    def test_new_quotation_needs_customer_contact_and_email_but_old_ones_still_edit(self):
+        url = reverse('quotation:new')
+        for field in ('customer_contact', 'customer_email'):
+            resp = self.client.post(url, self._payload(**{field: '   '}))
+            self.assertEqual(resp.status_code, 200)                      # form shown again with the error
+            self.assertTrue(resp.context['errors'])
+            self.assertEqual(resp.context['values'][field].strip(), '')
+            self.assertEqual(Quotation.objects.count(), 0, field)
+        page = self.client.get(url).content.decode()
+        self.assertIn('name="customer_contact"', page)
+        self.assertRegex(page, r'name="customer_email"[^>]* required')
+        old = Quotation.objects.create(qtn_no='OLD-1', date='2026-10-20')   # saved before the rule: no contact, no email
+        edit_url = reverse('quotation:edit', args=[old.pk])
+        self.assertNotRegex(self.client.get(edit_url).content.decode(), r'name="customer_email"[^>]* required')
+        resp = self.client.post(edit_url, self._payload(customer_contact='', customer_email='', row_key=['n1'], item_id=[''],
+                                                        item_no=[''], item_model=['AR-50'], item_brand=['ARISTON'], item_description=['Heater'],
+                                                        item_size=[''], item_color=[''], item_qty=['1'], item_price=['10'],
+                                                        item_warranty=[''], remove_photo=['0'], remove_ds=['0']))
+        self.assertRedirects(resp, reverse('quotation:list'))
+        old.refresh_from_db()
+        self.assertEqual((old.customer_contact, old.customer_email), ('', ''))
 
     def test_create_with_files_and_totals(self):
         resp = self.client.post(reverse('quotation:new'), self._payload(
@@ -495,7 +518,7 @@ class QuotationTests(TestCase):
         old = Quotation.objects.get()
         text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[old.pk])).content)).pages[0].extract_text()
         flat = ' '.join(text.split())
-        self.assertIn('TO: Customer name Contact person Contact number Address TRN number Customer ID Customer email ACME LLC Dubai', flat)
+        self.assertIn('TO: Customer name Contact person Contact number 0507654321 Address TRN number Customer ID Customer email buyer@customer.test ACME LLC Dubai', flat)
         # all four filled: TO -> customer name -> contact -> address -> TRN number -> other details
         self.client.post(reverse('quotation:new'), self._payload(
             customer_name='A&B <Trading> LLC', customer_contact='Mr Ahmed, 050 123 4567',
@@ -1002,7 +1025,7 @@ class QuotationEmailTests(TestCase):
         self.assertFalse(log.success)
         self.assertIn('connection refused', log.error)
         self.q.refresh_from_db()
-        self.assertEqual(self.q.customer_email, '')   # nothing remembered after a failure
+        self.assertEqual(self.q.customer_email, 'buyer@customer.test')   # a failed send leaves the saved email untouched
         self.assertContains(self.client.get(reverse('quotation:list')), 'Mail failed')
 
     def test_validation_and_not_configured(self):
@@ -1509,7 +1532,8 @@ class PaymentTermsAndDefaultsTests(TestCase):
         data = {'date': '2026-10-20', 'to_text': 'ACME', 'sales_person': 'A', 'row_key': ['n1'], 'item_id': [''],
                 'item_no': [''], 'item_model': ['M1'], 'item_brand': ['B'], 'item_description': ['Thing'], 'item_size': [''],
                 'item_color': [''], 'item_qty': ['1'], 'item_price': ['10'], 'item_warranty': [''],
-                'remove_photo': ['0'], 'remove_ds': ['0']}
+                'remove_photo': ['0'], 'remove_ds': ['0'],
+                'customer_contact': '0507654321', 'customer_email': 'buyer@customer.test'}   # mandatory on new quotations
         data.update(extra)
         return data
 

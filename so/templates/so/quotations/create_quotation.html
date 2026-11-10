@@ -346,14 +346,14 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="new_customer_name">Customer Display Name (Optional)</label>
+                        <label for="new_customer_name">Customer Display Name <span id="display-name-opt">(Optional)</span><span id="display-name-req" class="required-mark" style="display:none;">* required for a CASH / walk-in customer</span></label>
                         <input type="text" name="new_customer_name" id="new_customer_name"
                                placeholder="E.g. Walk-in customer name, project reference">
                         <p class="help-text">For CASH/walk-in customers - this name will appear on the quotation</p>
                     </div>
 
                     <div class="form-group">
-                        <label>PDF Header Details (Optional)</label>
+                        <label>PDF Header Details (Contact Number and Email are required)</label>
                         <p class="help-text">Printed in the quotation PDF header. Greyed text shows what will print from the customer list if you leave a box empty &ndash; type here only to add or correct a detail for this quotation.</p>
                     </div>
 
@@ -363,8 +363,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="customer_contact_number">Customer Contact Number</label>
-                        <input type="text" name="customer_contact_number" id="customer_contact_number" maxlength="255" placeholder="">
+                        <label for="customer_contact_number">Customer Contact Number <span class="required-mark">*</span></label>
+                        <input type="text" name="customer_contact_number" id="customer_contact_number" maxlength="255" placeholder=""
+                               required pattern=".*\S.*" title="Customer contact number is required">
                     </div>
 
                     <div class="form-group">
@@ -378,8 +379,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="customer_email">Customer Email</label>
-                        <input type="text" name="customer_email" id="customer_email" maxlength="255" placeholder="">
+                        <label for="customer_email">Customer Email <span class="required-mark">*</span></label>
+                        <input type="text" name="customer_email" id="customer_email" maxlength="255" placeholder=""
+                               required pattern=".*\S.*" title="Customer email is required">
                     </div>
 
                     <div class="form-group">
@@ -1541,12 +1543,32 @@ document.addEventListener('DOMContentLoaded', function() {
     (function () {
         var map = {contact_person: 'customer_contact_person', contact_number: 'customer_contact_number',
                    address: 'customer_address', trn: 'customer_trn', email: 'customer_email'};
+        // A generic CASH / walk-in customer must have a display name (who the buyer really is).
+        function setDisplayNameRequired(on) {
+            $('#new_customer_name').prop('required', !!on);
+            if (on) { $('#new_customer_name').attr('pattern', '.*\\S.*').attr('title', 'Customer display name is required'); }
+            else { $('#new_customer_name').removeAttr('pattern').removeAttr('title'); }
+            $('#display-name-req').toggle(!!on);
+            $('#display-name-opt').toggle(!on);
+        }
         function showFallbacks() {
             var id = $('#customer').val();
             Object.keys(map).forEach(function (k) { $('#' + map[k]).attr('placeholder', ''); });
+            setDisplayNameRequired(false);
             if (!id) return;
             $.getJSON("{% url 'quotation_customer_details' %}", {customer_id: id}, function (d) {
+                setDisplayNameRequired(d.is_walkin);
                 Object.keys(map).forEach(function (k) { $('#' + map[k]).attr('placeholder', d[k] || ''); });
+                // Contact number and email are mandatory: pre-fill them from the customer's record when the box is
+                // empty (or still holds an earlier auto-filled value), so the user only types when nothing is on file.
+                ['contact_number', 'email'].forEach(function (k) {
+                    var $f = $('#' + map[k]);
+                    if (d[k] && (!$f.val() || $f.data('autofilled') === $f.val())) {
+                        $f.val(d[k]).data('autofilled', d[k]);
+                    } else if (!d[k] && $f.data('autofilled') === $f.val()) {
+                        $f.val('').removeData('autofilled');
+                    }
+                });
             });
         }
         $(function () { $('#customer').on('change', showFallbacks); showFallbacks(); });

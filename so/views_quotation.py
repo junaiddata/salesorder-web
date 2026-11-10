@@ -54,9 +54,12 @@ def quotation_customer_details(request):
     """JSON of what the PDF would print for a customer (quote-builder list, then SAP data) -- shown as placeholders
     in the quotation form's optional detail inputs."""
     from django.http import JsonResponse
-    from .quotation_customer_details import customer_details
+    from .quotation_customer_details import customer_details, is_walkin_customer
     customer = Customer.objects.filter(pk=request.GET.get('customer_id') or 0).first()
-    return JsonResponse(customer_details(customer) if customer else {})
+    if not customer:
+        return JsonResponse({})
+    # 'is_walkin' tells the create form that a display name is mandatory for this customer
+    return JsonResponse({**customer_details(customer), 'is_walkin': is_walkin_customer(customer)})
 
 
 def _is_company_chooser(user):
@@ -209,6 +212,20 @@ def create_quotation(request):
                 messages.error(request, 'Salesman is required.')
                 return redirect('create_quotation')
                 
+            # Customer contact number and email are mandatory on every NEW quotation. The form's `required`
+            # attributes stop the submit in the browser (nothing typed is lost); this is only the backstop.
+            # A generic walk-in/CASH customer also needs the display name (who the buyer really is).
+            from .quotation_customer_details import is_walkin_customer
+            if is_walkin_customer(Customer.objects.filter(pk=customer_id).first()) and not customer_display_name:
+                messages.error(request, 'Customer display name is required for a CASH / walk-in customer.')
+                return redirect('create_quotation')
+            if not (request.POST.get('customer_contact_number') or '').strip():
+                messages.error(request, 'Customer contact number is required.')
+                return redirect('create_quotation')
+            if not (request.POST.get('customer_email') or '').strip():
+                messages.error(request, 'Customer email is required.')
+                return redirect('create_quotation')
+
             salesman = get_object_or_404(Salesman, id=salesman_id)
             customer = get_object_or_404(Customer, id=customer_id)
 

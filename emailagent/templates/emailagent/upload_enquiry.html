@@ -198,8 +198,8 @@
                 <div class="up-sec-head">
                     <span class="up-step">2</span>
                     <div>
-                        <h2 class="up-sec-title">Customer &amp; salesman <span class="up-opt">Optional</span></h2>
-                        <p class="up-sec-sub">Tell the agent who this quotation is for. Leave blank and it works it out from the file.</p>
+                        <h2 class="up-sec-title">Customer &amp; salesman</h2>
+                        <p class="up-sec-sub">Tell the agent who this quotation is for. Salesman and customer are optional (it works them out from the file), but the customer's contact number and email are required for follow-ups.</p>
                     </div>
                 </div>
                 <div class="up-fields">
@@ -225,10 +225,20 @@
                         <p class="up-help">Search by name or code. Choosing a customer also fills in their salesman.</p>
                     </div>
                     <div class="up-field full">
-                        <label class="up-label" for="customer_display_name">Customer display name <span class="up-opt">Optional</span></label>
+                        <label class="up-label" for="customer_display_name">Customer display name <span class="up-opt" id="displayNameFlag">Optional</span></label>
                         <input type="text" id="customer_display_name" name="customer_display_name" class="up-input"
                                placeholder="e.g. walk-in customer name or project reference">
-                        <p class="up-help">For CASH / walk-in customers &mdash; this name is printed on the quotation.</p>
+                        <p class="up-help">For CASH / walk-in customers &mdash; this name is printed on the quotation. Required when no customer is picked or a CASH / walk-in customer is picked.</p>
+                    </div>
+                    <div class="up-field">
+                        <label class="up-label" for="customer_contact_number">Customer contact number <span class="up-opt" style="color:#dc2626;">Required</span></label>
+                        <input type="text" id="customer_contact_number" name="customer_contact_number" class="up-input" maxlength="100"
+                               placeholder="e.g. +971 50 123 4567">
+                    </div>
+                    <div class="up-field">
+                        <label class="up-label" for="customer_email">Customer email <span class="up-opt" style="color:#dc2626;">Required</span></label>
+                        <input type="text" id="customer_email" name="customer_email" class="up-input" maxlength="255"
+                               placeholder="e.g. purchase@customer.com">
                     </div>
                 </div>
             </section>
@@ -404,7 +414,43 @@
     let fillingSalesman = false;
     $sm.on('change', () => { if (!fillingSalesman) $cu.val(null).trigger('change'); });
     // Picking a customer fills in their salesman when none is chosen yet.
+    // Contact number / email are mandatory. Picking a customer pre-fills them from that customer's record when the
+    // box is empty (or still holds an earlier auto-filled value); the user types them when nothing is on file.
+    const contactBox = document.getElementById('customer_contact_number');
+    const emailBox = document.getElementById('customer_email');
+    const nameBox = document.getElementById('customer_display_name');
+    const nameFlag = document.getElementById('displayNameFlag');
+    let pickedIsWalkin = false;
+    function syncDisplayNameFlag() {
+        // needed for a CASH / walk-in customer, and when no customer is picked (the agent then uses the walk-in record)
+        const needed = !$cu.val() || pickedIsWalkin;
+        nameFlag.textContent = needed ? 'Required' : 'Optional';
+        nameFlag.style.color = needed ? '#dc2626' : '';
+    }
+    function autofill(box, value) {
+        if (value && (!box.value.trim() || box.dataset.auto === box.value)) { box.value = value; box.dataset.auto = value; }
+        else if (!value && box.dataset.auto && box.dataset.auto === box.value) { box.value = ''; delete box.dataset.auto; }
+    }
+    function customerChanged(id) {
+        pickedIsWalkin = false;
+        syncDisplayNameFlag();
+        if (!id) return;
+        fetch("{% url 'quotation_customer_details' %}?customer_id=" + encodeURIComponent(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(d => {
+                if ($cu.val() !== String(id)) return;   // the user already picked someone else
+                pickedIsWalkin = !!d.is_walkin;
+                syncDisplayNameFlag();
+                autofill(contactBox, d.contact_number || '');
+                autofill(emailBox, d.email || '');
+            })
+            .catch(() => {});   // pre-fill is only a convenience; the user can type the details
+    }
+    // clearing the customer (the x button, or picking a different salesman) goes through "change" with an empty value
+    $cu.on('change', () => { if (!$cu.val()) customerChanged(''); });
+    syncDisplayNameFlag();
     $cu.on('select2:select', e => {
+        customerChanged(e.params.data.id);
         const sid = e.params.data.salesman_id;
         if (sid && !$sm.val() && $sm.find('option[value="' + sid + '"]').length) {
             fillingSalesman = true;
@@ -447,6 +493,16 @@
     form.addEventListener('submit', e => {
         e.preventDefault();
         if (!selected.length) { showError('Add at least one enquiry file first.'); return; }
+        // Mandatory details (the form is novalidate, so check here; nothing the user typed or picked is lost).
+        const missing = [];
+        if (!contactBox.value.trim()) missing.push(['the customer contact number', contactBox]);
+        if (!emailBox.value.trim()) missing.push(['the customer email', emailBox]);
+        if ((!$cu.val() || pickedIsWalkin) && !nameBox.value.trim()) missing.push(['the customer display name (needed for a CASH / walk-in customer)', nameBox]);
+        if (missing.length) {
+            showError('Please enter ' + missing.map(m => m[0]).join(', ') + '.');
+            missing[0][1].focus();
+            return;
+        }
         dupBox.style.display = 'none';
         send(false);
     });

@@ -84,8 +84,8 @@
                     <input type="text" name="customer_name" class="input-x" placeholder="e.g. JUNAID SANITARY &amp; ELECTRICAL REQUISITES TRADING LLC" value="{{ values.customer_name }}">
                 </div>
                 <div class="field-x">
-                    <label class="label-x">Contact Number</label>
-                    <input type="text" name="customer_contact" class="input-x" placeholder="e.g. +971 50 123 4567" value="{{ values.customer_contact }}">
+                    <label class="label-x">Contact Number{% if not quotation %} <span style="color:#e74c3c">*</span>{% endif %}</label>
+                    <input type="text" name="customer_contact" class="input-x" placeholder="e.g. +971 50 123 4567" value="{{ values.customer_contact }}"{% if not quotation %} required pattern=".*\S.*" title="Customer contact number is required"{% endif %}>
                 </div>
             </div>
             <div class="field-x mt-3">
@@ -107,8 +107,8 @@
                 </div>
             </div>
             <div class="field-x mt-3">
-                <label class="label-x">Customer Email <small class="u-muted">(printed on the PDF; also used by the Email button)</small></label>
-                <input type="text" name="customer_email" class="input-x" placeholder="e.g. purchase@customer.com" value="{{ values.customer_email }}">
+                <label class="label-x">Customer Email{% if not quotation %} <span style="color:#e74c3c">*</span>{% endif %} <small class="u-muted">(printed on the PDF; also used by the Email button)</small></label>
+                <input type="text" name="customer_email" class="input-x" placeholder="e.g. purchase@customer.com" value="{{ values.customer_email }}"{% if not quotation %} required pattern=".*\S.*" title="Customer email is required"{% endif %}>
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Other details <small class="u-muted">(optional — printed after the lines above, one per line)</small></label>

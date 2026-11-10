@@ -65,7 +65,8 @@ class Base(TestCase):
 
     def post_quote(self, items, division=None, **extra):
         """items: list of (item_ref, qty, price)."""
-        data = {'customer': self.cust.id, 'salesman': self.salesman.id, 'remarks': ''}
+        data = {'customer': self.cust.id, 'salesman': self.salesman.id, 'remarks': '',
+                'customer_contact_number': '0501234567', 'customer_email': 'buyer@example.com'}   # mandatory on new quotations
         if division:
             data['division'] = division
         data.update(extra)
@@ -97,6 +98,15 @@ class SwitchOffTests(Base):
         self.assertEqual(q.division, 'ALABAMA')
         line = q.items.get()
         self.assertEqual((line.item_id, line.alabama_item_id), (1, None))
+
+    def test_new_quotation_needs_contact_number_and_email(self):
+        self.login(self.alabama)
+        for missing in ('customer_contact_number', 'customer_email'):
+            self.post_quote([('1', 2, 20)], **{missing: '   '})
+            self.assertEqual(Quotation.objects.count(), 0, missing)
+        self.post_quote([('1', 2, 20)])
+        q = Quotation.objects.get()
+        self.assertEqual((q.customer_contact_number, q.customer_email), ('0501234567', 'buyer@example.com'))
 
 
 @override_settings(ALABAMA_OWN_CATALOG=True, ALLOWED_HOSTS=HOSTS)

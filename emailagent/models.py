@@ -135,6 +135,9 @@ class TrackedEmail(models.Model):
     # uploads, the customer name typed as free text).
     upload_customer_name = models.CharField(max_length=255, blank=True, default='')
     upload_salesman_name = models.CharField(max_length=255, blank=True, default='')
+    # Customer contact number / email typed on the upload form (mandatory there); copied onto the drafted quotation(s).
+    upload_customer_contact_number = models.CharField(max_length=100, blank=True, default='')
+    upload_customer_email = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         ordering = ['-received_at']

@@ -99,7 +99,8 @@ def find_duplicates(files_info):
 
 # ── create the upload ───────────────────────────────────────────────────
 
-def create_upload(user, files, subject='', note='', customer=None, salesman=None, customer_display_name=''):
+def create_upload(user, files, subject='', note='', customer=None, salesman=None, customer_display_name='',
+                  customer_contact_number='', customer_email=''):
     """Stores the files and returns the new (still 'pending') TrackedEmail. `customer` /
     `salesman` are the objects picked in the form's dropdowns (both optional);
     `customer_display_name` is the optional name to print on the quotation (walk-in/cash)."""
@@ -131,6 +132,8 @@ def create_upload(user, files, subject='', note='', customer=None, salesman=None
             upload_salesman=salesman,
             upload_customer_name=(customer_display_name or customer_label)[:255],
             upload_salesman_name=salesman_label[:255],
+            upload_customer_contact_number=(customer_contact_number or '').strip()[:100],
+            upload_customer_email=(customer_email or '').strip()[:255],
         )
         for f in files:
             data = f.read()
@@ -316,7 +319,9 @@ def _apply_typed_names(tracked_email):
     picked_customer = tracked_email.upload_customer
     picked_salesman = tracked_email.upload_salesman
     display_name = tracked_email.upload_customer_name.strip()
-    if not (picked_customer or picked_salesman or display_name):
+    contact_number = (tracked_email.upload_customer_contact_number or '').strip()
+    customer_email = (tracked_email.upload_customer_email or '').strip()
+    if not (picked_customer or picked_salesman or display_name or contact_number or customer_email):
         return
 
     draft = QuotationDraft.objects.filter(tracked_email=tracked_email).select_related('quotation').first()
@@ -350,6 +355,10 @@ def _apply_typed_names(tracked_email):
             q.customer_display_name = display_name[:255]
             notes.append(f'Customer "{display_name}" was not found (or matched several) in the customer '
                          'list -- shown by the typed name under the walk-in customer; pick the right customer when editing.')
+        if contact_number:   # typed on the form (mandatory there): kept on the quotation for follow-ups
+            q.customer_contact_number = contact_number[:100]
+        if customer_email:
+            q.customer_email = customer_email[:255]
         if picked_salesman:
             q.salesman = picked_salesman
         elif customer and customer.salesman_id:
