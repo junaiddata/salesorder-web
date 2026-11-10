@@ -64,4 +64,5 @@ urlpatterns = [
     path('customer-analysis/', customer_analysis_views.customer_analysis, name='customer_analysis'),
     path('customer-analysis/export-pdf/', customer_analysis_views.export_customer_analysis_pdf, name='export_customer_analysis_pdf'),
     path('api/item-analysis-totals/', api_views.api_item_analysis_totals, name='api_item_analysis_totals'),
+    path('api/item-quotation-totals/', api_views.api_alabama_item_quotation_totals, name='api_item_quotation_totals'),
 ]
