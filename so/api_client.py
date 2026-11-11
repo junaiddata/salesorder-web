@@ -1607,7 +1607,8 @@ class SAPAPIClient:
         bp = api_quotation.get('BusinessPartner', {})
         customer_code = bp.get('CardCode', '') or api_quotation.get('CardCode', '')
         customer_name = bp.get('CardName', '') or api_quotation.get('CardName', '')
-        
+        customer_phone = str(bp.get('Phone1', '')).strip() if bp.get('Phone1') else ''
+
         # Sales Person
         sales_person = api_quotation.get('SalesPerson', {})
         salesman_name = sales_person.get('SalesEmployeeName', '') or ''
@@ -1670,6 +1671,7 @@ class SAPAPIClient:
             'discount_percent': discount_percent,  # Optional, but store it
             'status': status,
             'bill_to': bill_to,
+            'customer_phone': customer_phone,
             'remarks': comments,
             'items': items,
         }

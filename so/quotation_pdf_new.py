@@ -550,6 +550,9 @@ def _sap_header_block(q):
     to_rows = [('Customer name', _val(q.customer_name, True)), ('Customer ID', _val(q.customer_code))]
     if address:
         to_rows.insert(1, ('Address', Paragraph(address, S_VAL)))
+    phone = (getattr(q, 'customer_phone', '') or '').strip()
+    if phone:
+        to_rows.append(('Contact no.', _val(phone)))
     to = [Paragraph('<b>TO:</b>', S_ADDR), Spacer(1, 2), _label_table(to_rows, w1 - gap)]
 
     ref = _label_table([

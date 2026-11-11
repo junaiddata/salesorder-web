@@ -564,6 +564,7 @@ class SAPQuotation(models.Model):
         null=True
     )
     bill_to = models.TextField(blank=True, null=True)  # 👈 added field
+    customer_phone = models.CharField(max_length=50, blank=True, null=True)  # BusinessPartner.Phone1
 
     def __str__(self):
         return f"{self.q_number} - {self.customer_name}"

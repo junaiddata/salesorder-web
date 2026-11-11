@@ -394,6 +394,12 @@
               <span class="info-label">Q No</span>
               <span class="info-value">{{ quotation.q_number }}</span>
             </div>
+            {% if quotation.customer_phone %}
+            <div class="info-item">
+              <span class="info-label">Phone</span>
+              <span class="info-value">{{ quotation.customer_phone }}</span>
+            </div>
+            {% endif %}
             {% if quotation.bill_to %}
             <div class="info-item" style="grid-column: 1 / -1;">
               <span class="info-label">Bill To</span>
