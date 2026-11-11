@@ -763,6 +763,26 @@
             opacity: 0.5;
         }
         
+        /* Follow-up history modal */
+        #followupHistoryModal .modal-content { border: none; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); overflow: hidden; }
+        #followupHistoryModal .fu-modal-header { background: linear-gradient(135deg, #1e3a5f, #2b5a8c); color: #fff; padding: 18px 22px; border: none; }
+        #followupHistoryModal .fu-modal-header .modal-title { font-size: 16px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 10px; }
+        #followupHistoryModal .fu-modal-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; font-weight: 400; }
+        #followupHistoryModal .btn-close { filter: invert(1) grayscale(100%) brightness(200%); opacity: 0.85; }
+        #followupHistoryModal .modal-body { padding: 18px 22px 8px; background: #f8fafc; max-height: 60vh; }
+        #followupHistoryModal .fu-item { display: flex; gap: 12px; position: relative; padding-bottom: 16px; }
+        #followupHistoryModal .fu-item:not(:last-child)::before { content: ''; position: absolute; left: 16px; top: 36px; bottom: 0; width: 2px; background: #dbe3ec; }
+        #followupHistoryModal .fu-avatar { flex: 0 0 34px; height: 34px; border-radius: 50%; background: #2b5a8c; color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-transform: uppercase; }
+        #followupHistoryModal .fu-card { flex: 1; min-width: 0; background: #fff; border: 1px solid #e5e9f0; border-radius: 10px; padding: 10px 14px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+        #followupHistoryModal .fu-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 4px; }
+        #followupHistoryModal .fu-author { font-size: 13px; font-weight: 600; color: #1f2937; }
+        #followupHistoryModal .fu-time { font-size: 11.5px; color: #6b7280; }
+        #followupHistoryModal .fu-note { font-size: 13.5px; color: #374151; line-height: 1.5; word-break: break-word; }
+        #followupHistoryModal .fu-badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e0ecf8; color: #1e3a5f; margin-right: 6px; }
+        #followupHistoryModal .fu-empty { text-align: center; color: #6b7280; padding: 30px 0 38px; font-size: 13.5px; }
+        #followupHistoryModal .fu-empty i { display: block; font-size: 30px; color: #c3cdda; margin-bottom: 8px; }
+        #followupHistoryModal .modal-footer { border-top: 1px solid #e5e9f0; background: #fff; padding: 12px 22px; }
+
         /* Remarks Section Styles */
         .remarks-section {
             margin-top: 24px;
@@ -1524,6 +1544,32 @@
         </div>
         {% endif %}
 
+        <!-- Follow-ups (internal only: never printed on the PDF or emailed) -->
+        <div class="remarks-section" id="followup-section">
+            <div class="remarks-header">
+                <h5>Follow-ups <span style="font-size: 11px; font-weight: 500; color: var(--sap-gray-500);">(internal, not in PDF)</span></h5>
+                <button type="button" class="sap-button sap-button-secondary" style="padding: 6px 12px; font-size: 13px;"
+                        data-bs-toggle="modal" data-bs-target="#followupHistoryModal">
+                    <i class="fas fa-clock-rotate-left"></i> View History (<span id="followup-count">{{ followups|length }}</span>)
+                </button>
+            </div>
+            <form id="followup-form" class="remarks-form" style="display: block;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_followup">
+                <textarea name="note" placeholder="Add a follow-up note (e.g. customer asked to revise price)..." required></textarea>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px;">
+                    <select name="outcome" style="padding: 6px 8px; display: none;">
+                        <option value="">Status (optional)</option>
+                        {% for value, label in followup_outcomes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </select>
+                    <label style="font-size: 12px; display: none;">Next follow-up
+                        <input type="date" name="next_followup_date" style="padding: 5px 8px;">
+                    </label>
+                    <button type="submit" class="sap-button sap-button-primary" style="padding: 6px 12px; margin-left: auto;">Add Follow-up</button>
+                </div>
+            </form>
+        </div>
+
         <!-- Action Buttons -->
         <div class="action-area">
             {% if not is_incomplete_agent_quotation %}
@@ -1609,6 +1655,10 @@
             </button>
             {% endif %}
             {% if can_proceed %}
+            <a href="{% url 'export_quotation_to_pdf' quotation.id %}?inline=1" target="_blank" rel="noopener" class="sap-button sap-button-secondary">
+                <i class="fas fa-eye"></i>
+                View PDF
+            </a>
             <a href="{% url 'export_quotation_to_pdf' quotation.id %}" class="sap-button sap-button-secondary">
                 <i class="fas fa-file-pdf"></i>
                 Export to PDF
@@ -1692,6 +1742,46 @@
     </div>
 
     {% endif %}
+
+    <!-- Follow-up History Modal (internal only) -->
+    <div class="modal fade" id="followupHistoryModal" tabindex="-1" aria-labelledby="followupHistoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header fu-modal-header">
+                    <div>
+                        <h5 class="modal-title" id="followupHistoryModalLabel"><i class="fas fa-clock-rotate-left"></i> Follow-up History</h5>
+                        <div class="fu-modal-sub">Quotation {{ quotation.quotation_number }}</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="followup-list">
+                        {% for fu in followups %}
+                        <div class="fu-item followup-entry">
+                            <div class="fu-avatar">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username|slice:":1" }}{% else %}?{% endif %}</div>
+                            <div class="fu-card">
+                                <div class="fu-meta">
+                                    <span class="fu-author">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username }}{% else %}Unknown user{% endif %}</span>
+                                    <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}</span>
+                                </div>
+                                <div class="fu-note">
+                                    {% if fu.outcome %}<span class="fu-badge">{{ fu.get_outcome_display }}</span>{% endif %}
+                                    {% if fu.next_followup_date %}<span class="fu-badge">Next: {{ fu.next_followup_date|date:"d M Y" }}</span>{% endif %}
+                                    {{ fu.note|linebreaksbr }}
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div id="followup-empty" class="fu-empty"><i class="fas fa-comments"></i>No follow-ups added yet.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="sap-button sap-button-secondary" data-bs-dismiss="modal" style="padding: 6px 16px;">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     {% if can_proceed and quotation_items %}
     <!-- Send Quotation Modal -->
@@ -1939,6 +2029,48 @@
             }
         });
         
+        // Follow-ups (internal history)
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('followup-form');
+            const list = document.getElementById('followup-list');
+            if (!form || !list) return;
+            const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = form.querySelector('button[type="submit"]');
+                btn.disabled = true;
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) { alert(data.error || 'Could not add the follow-up.'); return; }
+                    const f = data.followup;
+                    const empty = document.getElementById('followup-empty');
+                    if (empty) empty.remove();
+                    const badges = (f.outcome ? '<span class="fu-badge">' + esc(f.outcome) + '</span>' : '') +
+                                   (f.next_followup_date ? '<span class="fu-badge">Next: ' + esc(f.next_followup_date) + '</span>' : '');
+                    const div = document.createElement('div');
+                    div.className = 'fu-item followup-entry';
+                    div.innerHTML =
+                        '<div class="fu-avatar">' + esc((f.created_by || '?').charAt(0)) + '</div>' +
+                        '<div class="fu-card">' +
+                          '<div class="fu-meta"><span class="fu-author">' + esc(f.created_by || 'Unknown user') + '</span>' +
+                          '<span class="fu-time">' + esc(f.created_at) + '</span></div>' +
+                          '<div class="fu-note">' + badges + esc(f.note).replace(/\n/g, '<br>') + '</div>' +
+                        '</div>';
+                    list.insertBefore(div, list.firstChild);
+                    const count = document.getElementById('followup-count');
+                    if (count) count.textContent = (parseInt(count.textContent, 10) || 0) + 1;
+                    form.reset();
+                })
+                .catch(() => alert('An error occurred while adding the follow-up.'))
+                .finally(() => { btn.disabled = false; });
+            });
+        });
+
         // Auto-refresh if quotation is pending (every 30 seconds)
     </script>
     <script>

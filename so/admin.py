@@ -93,9 +93,18 @@ class QuotationLogInline(admin.TabularInline):
     )
 
 
+from .models import QuotationFollowUp
+
+
+class QuotationFollowUpInline(admin.TabularInline):
+    model = QuotationFollowUp
+    extra = 0
+    readonly_fields = ('created_by', 'created_at')
+
+
 @admin.register(Quotation)
 class QuotationAdmin(admin.ModelAdmin):
-    inlines = [QuotationLogInline]
+    inlines = [QuotationLogInline, QuotationFollowUpInline]
     list_display = ('id', 'customer', 'salesman', 'total_amount', 'grand_total')
 
 

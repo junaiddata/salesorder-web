@@ -1281,7 +1281,32 @@ class QuotationLog(models.Model):
 
     def __str__(self):
         return f"{self.quotation.id} - {self.action} by {self.user or 'Anonymous'}"
-    
+
+
+class QuotationFollowUp(models.Model):
+    """Internal follow-up history for a quotation. Never printed on the PDF or emailed (the PDF reads Quotation.remarks only)."""
+    OUTCOME_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('WAITING', 'Waiting for customer'),
+        ('NEGOTIATING', 'Negotiating'),
+        ('WON', 'Won'),
+        ('LOST', 'Lost'),
+    )
+
+    quotation = models.ForeignKey('Quotation', related_name='followups', on_delete=models.CASCADE)
+    note = models.TextField()
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, blank=True, default='')
+    next_followup_date = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='quotation_followups',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f"Follow-up on quotation {self.quotation_id} at {self.created_at:%Y-%m-%d %H:%M}"
 
 
 

@@ -2158,6 +2158,49 @@ def view_quotation_details(request, quotation_id):
                 messages.success(request, 'Remarks updated successfully!')
                 return redirect('view_quotation_details', quotation_id=quotation_id)
 
+        elif action == 'add_followup':
+            # Internal follow-up history: separate table, never read by the PDF or the email.
+            from .models import QuotationFollowUp
+            from datetime import datetime as _dt
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            note = (request.POST.get('note') or '').strip()
+            outcome = (request.POST.get('outcome') or '').strip()
+            next_raw = (request.POST.get('next_followup_date') or '').strip()
+            error = ''
+            next_date = None
+            if not note:
+                error = 'Please enter a follow-up note.'
+            elif outcome and outcome not in dict(QuotationFollowUp.OUTCOME_CHOICES):
+                error = 'Invalid outcome.'
+            elif next_raw:
+                try:
+                    next_date = _dt.strptime(next_raw, '%Y-%m-%d').date()
+                except ValueError:
+                    error = 'Invalid next follow-up date.'
+            if error:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error}, status=400)
+                messages.error(request, error)
+                return redirect('view_quotation_details', quotation_id=quotation_id)
+            fu = QuotationFollowUp.objects.create(
+                quotation=quotation, note=note, outcome=outcome, next_followup_date=next_date,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            if is_ajax:
+                from django.utils import timezone as _tz
+                return JsonResponse({
+                    'success': True,
+                    'followup': {
+                        'note': fu.note,
+                        'outcome': fu.get_outcome_display(),
+                        'next_followup_date': fu.next_followup_date.strftime('%d %b %Y') if fu.next_followup_date else '',
+                        'created_by': (fu.created_by.get_full_name() or fu.created_by.get_username()) if fu.created_by else '',
+                        'created_at': _tz.localtime(fu.created_at).strftime('%d %b %Y, %I:%M %p'),
+                    },
+                })
+            messages.success(request, 'Follow-up added.')
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
         elif action == 'approve':
             quotation.status = 'Approved'
             quotation.save()
@@ -2271,6 +2314,8 @@ def view_quotation_details(request, quotation_id):
     return render(request, "so/quotations/view_quotation_details.html", {
         "quotation": quotation,
         "quotation_items": quotation_items,
+        "followups": list(quotation.followups.select_related('created_by')),
+        "followup_outcomes": __import__('so.models', fromlist=['QuotationFollowUp']).QuotationFollowUp.OUTCOME_CHOICES,
         "grand_total": grand_total,
         "discount_amount": discount_amount,
         "net_after_discount": net_after_discount,
@@ -2766,8 +2811,10 @@ def export_quotation_to_pdf(request, quotation_id):
     # Setup Response
     response = HttpResponse(content_type='application/pdf')
     filename = f"Quotation_{quotation.quotation_number}_{quotation.quotation_date.strftime('%Y%m%d')}.pdf"
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
+    # ?inline=1 opens the PDF in the browser (View PDF); without it the PDF downloads exactly as before.
+    disposition = 'inline' if request.GET.get('inline') == '1' else 'attachment'
+    response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
+
     response.write(_render_quotation_pdf(quotation))
     return response
 
