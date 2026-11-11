@@ -763,6 +763,20 @@
             opacity: 0.5;
         }
         
+        /* Enquiry files (source images / PDFs / Excel) */
+        .src-files-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 14px; background: linear-gradient(90deg, #eaf2fb 0%, #f6f9fd 100%); border: 1px solid #cfe0f2; border-left: 4px solid #2b5a8c; border-radius: 8px; box-shadow: 0 1px 3px rgba(30, 58, 95, 0.08); }
+        .src-files-label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #1e3a5f; margin-right: 6px; }
+        .src-files-label .src-files-badge { width: 26px; height: 26px; border-radius: 7px; background: #2b5a8c; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+        .src-files-label .src-files-count { background: #2b5a8c; color: #fff; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+        .src-file { display: inline-flex; align-items: center; gap: 8px; max-width: 300px; padding: 5px 12px 5px 8px; text-decoration: none; color: #1f2937; border: 1px solid #c3d6ea; border-radius: 8px; background: #fff; font-size: 12.5px; font-weight: 500; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); transition: box-shadow .15s, border-color .15s, transform .15s; }
+        .src-file:hover { border-color: #2b5a8c; box-shadow: 0 3px 8px rgba(30, 58, 95, 0.18); transform: translateY(-1px); color: #1e3a5f; }
+        .src-file img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; flex: 0 0 26px; border: 1px solid #dbe3ec; }
+        .src-file-icon { font-size: 18px; flex: 0 0 auto; color: #2b5a8c; }
+        .src-file-icon.fa-file-pdf { color: #d93025; }
+        .src-file-icon.fa-file-excel { color: #1e8e3e; }
+        .src-file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .src-file-open { font-size: 10.5px; color: #6b7280; flex: 0 0 auto; }
+
         /* Follow-up history modal */
         #followupHistoryModal .modal-content { border: none; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); overflow: hidden; }
         #followupHistoryModal .fu-modal-header { background: linear-gradient(135deg, #1e3a5f, #2b5a8c); color: #fff; padding: 18px 22px; border: none; }
@@ -1053,6 +1067,46 @@
                 </div>
             </div>
             <a href="{% url 'emailagent:email_detail' source_email.pk %}" class="btn-view-email">View Email</a>
+        </div>
+        {% endif %}
+
+        {% if source_files %}
+        <div class="src-files-bar mb-3" id="source-files-section">
+            <span class="src-files-label"><span class="src-files-badge"><i class="fas fa-paperclip"></i></span> Enquiry Files <span class="src-files-count">{{ source_files|length }}</span></span>
+            {% for f in source_files %}
+            {% if f.kind == 'image' %}
+            <a href="{% url 'emailagent:attachment_download' f.pk %}" class="src-file src-file-img" title="Click to preview: {{ f.name }}"
+               data-src="{% url 'emailagent:attachment_download' f.pk %}" data-name="{{ f.name }}">
+                <img src="{% url 'emailagent:attachment_download' f.pk %}" alt="" loading="lazy">
+                <span class="src-file-name">{{ f.name }}</span>
+                <i class="fas fa-eye src-file-open"></i>
+            </a>
+            {% else %}
+            <a href="{% url 'emailagent:attachment_download' f.pk %}" class="src-file" target="_blank" rel="noopener" title="Open: {{ f.name }}">
+                <i class="fas {% if f.kind == 'pdf' %}fa-file-pdf{% elif f.kind == 'excel' %}fa-file-excel{% else %}fa-file{% endif %} src-file-icon"></i>
+                <span class="src-file-name">{{ f.name }}</span>
+                <i class="fas fa-arrow-up-right-from-square src-file-open"></i>
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="modal fade" id="sourceImageModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="sourceImageTitle">Enquiry Image</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" style="text-align: center; background: #f8fafc;">
+                        <img id="sourceImageFull" src="" alt="" style="max-width: 100%; height: auto;">
+                    </div>
+                    <div class="modal-footer">
+                        <a id="sourceImageOpen" href="#" target="_blank" rel="noopener" class="sap-button sap-button-secondary" style="padding: 6px 14px;">Open in new tab</a>
+                        <button type="button" class="sap-button sap-button-secondary" data-bs-dismiss="modal" style="padding: 6px 14px;">Close</button>
+                    </div>
+                </div>
+            </div>
         </div>
         {% endif %}
 
@@ -2029,6 +2083,22 @@
             }
         });
         
+        // Enquiry files: click an image to preview it in a popup
+        document.addEventListener('DOMContentLoaded', function() {
+            const modalEl = document.getElementById('sourceImageModal');
+            if (!modalEl || typeof bootstrap === 'undefined') return;
+            const modal = new bootstrap.Modal(modalEl);
+            document.querySelectorAll('.src-file-img').forEach(function(a) {
+                a.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.getElementById('sourceImageFull').src = a.dataset.src;
+                    document.getElementById('sourceImageTitle').textContent = a.dataset.name || 'Enquiry Image';
+                    document.getElementById('sourceImageOpen').href = a.dataset.src;
+                    modal.show();
+                });
+            });
+        });
+
         // Follow-ups (internal history)
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('followup-form');

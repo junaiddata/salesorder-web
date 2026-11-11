@@ -96,6 +96,28 @@ class QuotationTests(TestCase):
         old.refresh_from_db()
         self.assertEqual((old.customer_contact, old.customer_email), ('', ''))
 
+    def test_email_later_tick_lets_a_new_quotation_save_without_an_email(self):
+        url = reverse('quotation:new')
+        resp = self.client.post(url, self._payload(customer_email=''))                 # no tick: still mandatory
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Quotation.objects.count(), 0)
+        self.assertTrue(any("I'll enter it later" in e for e in resp.context['errors']))   # the error points to the switch
+        self.assertContains(resp, 'id="emailLaterHint"')
+        resp = self.client.post(url, self._payload(customer_email='', customer_contact='', customer_email_later='on'))
+        self.assertEqual(resp.status_code, 200)                                         # contact number stays mandatory
+        self.assertTrue(resp.context['values']['customer_email_later'])                 # tick is kept after a rejected save
+        self.assertEqual(Quotation.objects.count(), 0)
+        resp = self.client.post(url, self._payload(customer_email='', customer_email_later='on'))
+        self.assertRedirects(resp, reverse('quotation:list'))
+        q = Quotation.objects.get()
+        self.assertEqual((q.customer_email, q.customer_contact), ('', '0507654321'))
+        # the saved quotation opens and edits normally (the tick is not a model field)
+        edit_url = reverse('quotation:edit', args=[q.pk])
+        self.assertEqual(self.client.get(edit_url).status_code, 200)
+        self.assertNotContains(self.client.get(edit_url), 'customer_email_later')
+        page = self.client.get(url).content.decode()
+        self.assertIn('name="customer_email_later"', page)
+
     def test_create_with_files_and_totals(self):
         resp = self.client.post(reverse('quotation:new'), self._payload(
             photo_n1=png_file(), ds_n1=SimpleUploadedFile('sheet.pdf', PDF_BYTES, 'application/pdf')))

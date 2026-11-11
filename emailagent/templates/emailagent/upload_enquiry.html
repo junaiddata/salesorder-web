@@ -33,6 +33,17 @@
         font-size: .82rem; font-weight: 800; color: #fff; background: var(--primary, #003399); }
     .up-sec-title { font-size: 1rem; font-weight: 700; color: var(--ink, #0f172a); margin: 0; }
     .up-sec-sub { font-size: .82rem; color: var(--muted, #64748b); margin: .1rem 0 0; }
+    /* "Email not available now, I'll enter it later" toggle */
+    label.email-later { display: inline-flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 6px 14px 6px 8px; border: 1px solid #d6dde8; border-radius: 999px; background: #f8fafc; color: #475569; font-size: .85rem; font-weight: 500; cursor: pointer; user-select: none; position: relative; transition: background .15s, border-color .15s; }
+    label.email-later:hover { border-color: #94a3b8; }
+    label.email-later input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+    label.email-later .sw { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: #cbd5e1; transition: background .2s; }
+    label.email-later .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s; }
+    label.email-later input:checked + .sw { background: var(--primary, #003399); }
+    label.email-later input:checked + .sw::after { transform: translateX(14px); }
+    label.email-later input:checked ~ .txt { color: var(--ink, #0f172a); font-weight: 600; }
+    label.email-later:has(input:checked) { background: #eef3ff; border-color: #99b0e6; }
+    label.email-later input:focus-visible + .sw { box-shadow: 0 0 0 3px rgba(0,51,153,.25); }
     .up-opt { font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--faint, #94a3b8);
         background: var(--line-soft, #f1f5f9); padding: .15rem .5rem; border-radius: 999px; margin-left: .5rem; vertical-align: middle; }
 
@@ -239,6 +250,12 @@
                         <label class="up-label" for="customer_email">Customer email <span class="up-opt" style="color:#dc2626;">Required</span></label>
                         <input type="text" id="customer_email" name="customer_email" class="up-input" maxlength="255"
                                placeholder="e.g. purchase@customer.com">
+                        <p class="up-help" id="emailLaterHint" style="display:none;color:#b45309;">No email address yet? Turn on the switch below and add it later.</p>
+                        <label class="email-later">
+                            <input type="checkbox" id="customer_email_later" name="customer_email_later" value="on">
+                            <span class="sw"></span>
+                            <span class="txt">Email not available now, I'll enter it later.</span>
+                        </label>
                     </div>
                 </div>
             </section>
@@ -418,9 +435,16 @@
     // box is empty (or still holds an earlier auto-filled value); the user types them when nothing is on file.
     const contactBox = document.getElementById('customer_contact_number');
     const emailBox = document.getElementById('customer_email');
+    const emailLater = document.getElementById('customer_email_later');
     const nameBox = document.getElementById('customer_display_name');
     const nameFlag = document.getElementById('displayNameFlag');
     let pickedIsWalkin = false;
+    // "No email address yet? Turn on the switch" hint: only while the box is empty and the switch is off
+    const emailHint = document.getElementById('emailLaterHint');
+    function updateEmailHint() { emailHint.style.display = (!emailLater.checked && !emailBox.value.trim()) ? 'block' : 'none'; }
+    emailBox.addEventListener('input', updateEmailHint);
+    emailLater.addEventListener('change', updateEmailHint);
+    updateEmailHint();
     function syncDisplayNameFlag() {
         // needed for a CASH / walk-in customer, and when no customer is picked (the agent then uses the walk-in record)
         const needed = !$cu.val() || pickedIsWalkin;
@@ -443,6 +467,7 @@
                 syncDisplayNameFlag();
                 autofill(contactBox, d.contact_number || '');
                 autofill(emailBox, d.email || '');
+                updateEmailHint();
             })
             .catch(() => {});   // pre-fill is only a convenience; the user can type the details
     }
@@ -496,7 +521,7 @@
         // Mandatory details (the form is novalidate, so check here; nothing the user typed or picked is lost).
         const missing = [];
         if (!contactBox.value.trim()) missing.push(['the customer contact number', contactBox]);
-        if (!emailBox.value.trim()) missing.push(['the customer email', emailBox]);
+        if (!emailBox.value.trim() && !emailLater.checked) missing.push(['the customer email (or turn on "Email not available now, I\'ll enter it later")', emailBox]);
         if ((!$cu.val() || pickedIsWalkin) && !nameBox.value.trim()) missing.push(['the customer display name (needed for a CASH / walk-in customer)', nameBox]);
         if (missing.length) {
             showError('Please enter ' + missing.map(m => m[0]).join(', ') + '.');

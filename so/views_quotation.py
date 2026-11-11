@@ -222,8 +222,9 @@ def create_quotation(request):
             if not (request.POST.get('customer_contact_number') or '').strip():
                 messages.error(request, 'Customer contact number is required.')
                 return redirect('create_quotation')
-            if not (request.POST.get('customer_email') or '').strip():
-                messages.error(request, 'Customer email is required.')
+            # ...unless the user ticked "Email not available now, I'll enter it later" (then it can be left empty).
+            if not (request.POST.get('customer_email') or '').strip() and request.POST.get('customer_email_later') != 'on':
+                messages.error(request, "Customer email is required. If you don't have it yet, turn on \"Email not available now, I'll enter it later\".")
                 return redirect('create_quotation')
 
             salesman = get_object_or_404(Salesman, id=salesman_id)
@@ -1621,6 +1622,35 @@ def _agent_draft_for_quotation(quotation):
     return getattr(quotation, 'quotation_draft', None) or getattr(quotation, 'additional_quotation_draft', None)
 
 
+def _source_files(quotation, source_email):
+    """The enquiry files (images / PDFs / Excel) the quotation was drafted from, for the details page.
+    Read-only; returns [] for a hand-made quotation or on any problem. When one enquiry produced several
+    quotations, the file this quotation came from is listed first."""
+    if not source_email:
+        return []
+    import logging
+    try:
+        extra = getattr(quotation, 'additional_quotation_draft', None)
+        wanted = ((getattr(extra, 'source_attachment', '') or '').strip().lower()) if extra else ''
+        files = []
+        for att in source_email.attachments.all():
+            if not att.file:
+                continue
+            name = att.filename or f'attachment-{att.pk}'
+            files.append({
+                'pk': att.pk,
+                'name': name,
+                'size': att.size_bytes,
+                'kind': 'image' if att.is_image() else 'pdf' if att.is_pdf() else 'excel' if att.is_excel() else 'other',
+                'primary': bool(wanted) and name.lower() == wanted,
+            })
+        files.sort(key=lambda f: not f['primary'])   # stable: primary first, original order otherwise
+        return files
+    except Exception:
+        logging.getLogger(__name__).exception('Could not list source files for quotation %s', quotation.pk)
+        return []
+
+
 def _substitute_reason(suggestion):
     """The agent's reason for one substitute, with any leading repeat of the
     item's own description stripped off.
@@ -2334,6 +2364,7 @@ def view_quotation_details(request, quotation_id):
         "is_manager": _is_manager_account(request.user),
         "back_url": back_url,
         "source_email": source_email,
+        "source_files": _source_files(quotation, source_email),
         "agent_draft": _agent_draft_for_quotation(quotation),
         "default_to_email": default_to_email,
         "default_cc_email": default_cc_email,

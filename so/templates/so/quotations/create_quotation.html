@@ -117,6 +117,17 @@
         .form-group { margin-bottom: 16px; }
         label { display: block; font-weight: 500; color: #495057; margin-bottom: 6px; font-size: 14px; }
         .required-mark { color: #e74c3c; margin-left: 2px; }
+        /* "Email not available now, I'll enter it later" toggle */
+        label.email-later { display: inline-flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 6px 14px 6px 8px; border: 1px solid #d6dde8; border-radius: 999px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 500; cursor: pointer; user-select: none; position: relative; transition: background .15s, border-color .15s; }
+        label.email-later:hover { border-color: #94a3b8; }
+        label.email-later input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+        label.email-later .sw { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: #cbd5e1; transition: background .2s; }
+        label.email-later .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s; }
+        label.email-later input:checked + .sw { background: #003399; }
+        label.email-later input:checked + .sw::after { transform: translateX(14px); }
+        label.email-later input:checked ~ .txt { color: #0f172a; font-weight: 600; }
+        label.email-later:has(input:checked) { background: #eef3ff; border-color: #99b0e6; }
+        label.email-later input:focus-visible + .sw { box-shadow: 0 0 0 3px rgba(0,51,153,.25); }
 
         /* Select2 */
         .select2-container { width: 100% !important; }
@@ -381,7 +392,13 @@
                     <div class="form-group">
                         <label for="customer_email">Customer Email <span class="required-mark">*</span></label>
                         <input type="text" name="customer_email" id="customer_email" maxlength="255" placeholder=""
-                               required pattern=".*\S.*" title="Customer email is required">
+                               required pattern=".*\S.*" title="Enter the customer email, or turn on the switch below if you don't have it yet">
+                        <p class="help-text" id="email-later-hint" style="display:none;color:#b45309;margin:6px 0 0;">No email address yet? Turn on the switch below and add it later.</p>
+                        <label class="email-later">
+                            <input type="checkbox" name="customer_email_later" id="customer_email_later" value="on">
+                            <span class="sw"></span>
+                            <span class="txt">Email not available now, I'll enter it later.</span>
+                        </label>
                     </div>
 
                     <div class="form-group">
@@ -1569,9 +1586,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         $f.val('').removeData('autofilled');
                     }
                 });
+                updateEmailHint();   // the email box may just have been filled from the customer record
             });
         }
-        $(function () { $('#customer').on('change', showFallbacks); showFallbacks(); });
+        // "Email not available now, I'll enter it later": ticked = the email box is optional; unticked = mandatory.
+        function syncEmailLater() {
+            var later = $('#customer_email_later').is(':checked');
+            $('#customer_email').prop('required', !later);
+            if (later) { $('#customer_email').removeAttr('pattern'); }
+            else { $('#customer_email').attr('pattern', '.*\\S.*'); }
+            updateEmailHint();
+        }
+        // The "no email? turn on the switch" hint shows only while the box is empty and the switch is off.
+        function updateEmailHint() {
+            var needed = !$('#customer_email_later').is(':checked') && !$.trim($('#customer_email').val());
+            $('#email-later-hint').toggle(needed);
+        }
+        $(function () { $('#customer').on('change', showFallbacks); showFallbacks();
+                        $('#customer_email').on('input change', updateEmailHint);
+                        $('#customer_email_later').on('change', syncEmailLater); syncEmailLater(); });
     })();
     </script>
 </body>

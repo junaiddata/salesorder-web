@@ -250,8 +250,10 @@ def quotation_form(request, pk=None):
         if quotation is None:   # mandatory on NEW quotations only; existing ones can still be edited as they are
             if not (posted.get('customer_contact') or '').strip():
                 errors.append('Please enter the customer contact number.')
-            if not (posted.get('customer_email') or '').strip():
-                errors.append('Please enter the customer email.')
+            # ...unless "Email not available now, I'll enter it later" was ticked (kept out of TEXT_FIELDS on purpose:
+            # that list is saved onto the model and read back from it).
+            if not (posted.get('customer_email') or '').strip() and posted.get('customer_email_later') != 'on':
+                errors.append('Please enter the customer email, or turn on "Email not available now, I\'ll enter it later".')
 
         if not errors:
             with transaction.atomic():
@@ -311,6 +313,7 @@ def quotation_form(request, pk=None):
         values['discount_value'] = posted.get('discount_value', '')
         values['add_stamp'] = (posted.get('add_stamp') == 'on') if can_use_stamp(request.user) else bool(quotation and quotation.add_stamp)
         values['delivery_subject_to_stock'] = posted.get('delivery_subject_to_stock') == 'on'
+        values['customer_email_later'] = posted.get('customer_email_later') == 'on'   # keeps the tick after a rejected save
         values['payment_terms'] = [t for t in PAYMENT_TERM_CHOICES if t in posted.getlist('payment_terms')]
     elif quotation:
         values = {k: getattr(quotation, k) for k in TEXT_FIELDS}

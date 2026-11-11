@@ -14,6 +14,17 @@
     table.items-tbl input.input-x, table.items-tbl textarea.input-x { padding: .4rem .55rem; font-size: .85rem; }
     table.items-tbl input[type=file] { font-size: .72rem; max-width: 150px; }
     input.caps { text-transform: uppercase; }
+    /* "Email not available now, I'll enter it later" toggle */
+    label.email-later { display: inline-flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 6px 14px 6px 8px; border: 1px solid #d6dde8; border-radius: 999px; background: #f8fafc; color: #475569; font-size: .85rem; font-weight: 500; cursor: pointer; user-select: none; position: relative; transition: background .15s, border-color .15s; }
+    label.email-later:hover { border-color: #94a3b8; }
+    label.email-later input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+    label.email-later .sw { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: #cbd5e1; transition: background .2s; }
+    label.email-later .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s; }
+    label.email-later input:checked + .sw { background: #003399; }
+    label.email-later input:checked + .sw::after { transform: translateX(14px); }
+    label.email-later input:checked ~ .txt { color: #0f172a; font-weight: 600; }
+    label.email-later:has(input:checked) { background: #eef3ff; border-color: #99b0e6; }
+    label.email-later input:focus-visible + .sw { box-shadow: 0 0 0 3px rgba(0,51,153,.25); }
     input.row-no { text-align: center; font-weight: 600; }
     .amt { padding-top: .55rem !important; text-align: right; font-weight: 600; white-space: nowrap; }
     .thumb { width: 64px; height: 64px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; display: block; margin-bottom: .3rem; }
@@ -108,7 +119,15 @@
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Customer Email{% if not quotation %} <span style="color:#e74c3c">*</span>{% endif %} <small class="u-muted">(printed on the PDF; also used by the Email button)</small></label>
-                <input type="text" name="customer_email" class="input-x" placeholder="e.g. purchase@customer.com" value="{{ values.customer_email }}"{% if not quotation %} required pattern=".*\S.*" title="Customer email is required"{% endif %}>
+                <input type="text" name="customer_email" class="input-x" placeholder="e.g. purchase@customer.com" value="{{ values.customer_email }}"{% if not quotation %} required pattern=".*\S.*" title="Enter the customer email, or turn on the switch below if you don't have it yet"{% endif %}>
+                {% if not quotation %}
+                <div id="emailLaterHint" style="display:none;color:#b45309;font-size:.85rem;margin-top:6px;">No email address yet? Turn on the switch below and add it later.</div>
+                <label class="email-later">
+                    <input type="checkbox" name="customer_email_later" id="customerEmailLater" value="on"{% if values.customer_email_later %} checked{% endif %}>
+                    <span class="sw"></span>
+                    <span class="txt">Email not available now, I'll enter it later.</span>
+                </label>
+                {% endif %}
             </div>
             <div class="field-x mt-3">
                 <label class="label-x">Other details <small class="u-muted">(optional — printed after the lines above, one per line)</small></label>
@@ -514,7 +533,24 @@
         document.querySelector('[name=customer_person]').value = c.person || '';
         document.querySelector('[name=customer_code]').value = c.code || '';
         document.querySelector('[name=customer_email]').value = c.email || '';
+        if (window.updateEmailLaterHint) window.updateEmailLaterHint();   // the email box may have just been filled / cleared
         hideMenu();
+    }
+    // "Email not available now, I'll enter it later" (new quotations only): ticked = the Customer Email box is optional
+    const emailLater = document.getElementById('customerEmailLater');
+    if (emailLater) {
+        const emailBox = document.querySelector('[name=customer_email]');
+        const emailHint = document.getElementById('emailLaterHint');
+        // the hint shows only while the box is empty and the switch is off
+        window.updateEmailLaterHint = () => { emailHint.style.display = (!emailLater.checked && !emailBox.value.trim()) ? 'block' : 'none'; };
+        const syncEmailLater = () => {
+            emailBox.required = !emailLater.checked;
+            if (emailLater.checked) emailBox.removeAttribute('pattern'); else emailBox.setAttribute('pattern', '.*\\S.*');
+            window.updateEmailLaterHint();
+        };
+        emailLater.addEventListener('change', syncEmailLater);
+        emailBox.addEventListener('input', window.updateEmailLaterHint);
+        syncEmailLater();
     }
     custName.setAttribute('autocomplete', 'off');
     custName.addEventListener('input', () => suggest(custName, pickCustomer, CUSTOMER_LIST));

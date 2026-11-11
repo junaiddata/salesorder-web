@@ -77,6 +77,48 @@ class MandatoryCustomerDetailsTests(Base):
         self._create(self.walkin, new_customer_name='Mr Ahmed', customer_email='')
         self.assertEqual(Quotation.objects.count(), 0)
 
+    # ── "Email not available now, I'll enter it later" ───────────────────
+    def test_create_form_email_later_tick(self):
+        self._create(self.cust, customer_email='')                                   # no tick: still mandatory
+        self.assertEqual(Quotation.objects.count(), 0)
+        self._create(self.cust, customer_email='', customer_email_later='on', customer_contact_number='')   # contact stays mandatory
+        self.assertEqual(Quotation.objects.count(), 0)
+        self._create(self.cust, customer_email='  ', customer_email_later='on')     # tick: saves without an email
+        self.assertEqual(Quotation.objects.get().customer_email, None)
+        Quotation.objects.all().delete()
+        self._create(self.cust, customer_email='typed@example.com', customer_email_later='on')   # typed + tick: typed one is kept
+        self.assertEqual(Quotation.objects.get().customer_email, 'typed@example.com')
+
+    def test_create_page_has_the_email_later_tick(self):
+        page = self.client.get(reverse('create_quotation')).content.decode()
+        self.assertIn('name="customer_email_later"', page)
+        self.assertIn('id="email-later-hint"', page)                  # "No email address yet? Turn on the switch below..."
+
+    def test_blocked_email_messages_point_to_the_switch(self):
+        from django.contrib.messages import get_messages
+        resp = self._create(self.cust, customer_email='')
+        self.assertTrue(any("I'll enter it later" in str(m) for m in get_messages(resp.wsgi_request)))
+        resp, _ = self._upload(self.cust, customer_email='')
+        self.assertIn("I'll enter it later", resp.json()['error'])
+
+    def test_upload_email_later_tick(self):
+        resp, start = self._upload(self.cust, customer_email='')                      # no tick: rejected
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('customer email', resp.json()['error'])
+        start.assert_not_called()
+        resp, _ = self._upload(self.cust, customer_email='', customer_contact_number='', customer_email_later='on')
+        self.assertEqual(resp.status_code, 400)                                         # contact still mandatory
+        self.assertNotIn('customer email', resp.json()['error'])
+        resp, start = self._upload(self.cust, customer_email='', customer_email_later='on')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        start.assert_called_once()
+        self.assertEqual(TrackedEmail.objects.get().upload_customer_email, '')
+
+    def test_upload_page_has_the_email_later_tick(self):
+        page = self.client.get(reverse('emailagent:upload_enquiry')).content.decode()
+        self.assertIn('name="customer_email_later"', page)
+        self.assertIn('id="emailLaterHint"', page)
+
     def test_create_page_has_the_display_name_toggle(self):
         page = self.client.get(reverse('create_quotation')).content.decode()
         self.assertIn('setDisplayNameRequired', page)

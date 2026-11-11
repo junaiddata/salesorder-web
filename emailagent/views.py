@@ -913,8 +913,8 @@ def upload_enquiry(request):
     missing = []
     if not request.POST.get('customer_contact_number', '').strip():
         missing.append('the customer contact number')
-    if not request.POST.get('customer_email', '').strip():
-        missing.append('the customer email')
+    if not request.POST.get('customer_email', '').strip() and request.POST.get('customer_email_later') != 'on':
+        missing.append('the customer email (or turn on "Email not available now, I\'ll enter it later")')
     if (not picked_customer or is_walkin_customer(picked_customer)) and not request.POST.get('customer_display_name', '').strip():
         missing.append('the customer display name (needed for a CASH / walk-in customer)')
     if missing:
