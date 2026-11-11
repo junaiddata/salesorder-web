@@ -158,6 +158,7 @@ def pi_form(request, pk=None):
                 pi.date = pi_date
                 pi.freight_charges = _dec(posted.get('freight_charges'))
                 pi.bank_freight_charges = _dec(posted.get('bank_freight_charges'))
+                pi.is_revised = posted.get('is_revised') == 'on'
                 if can_use_seal(request.user):   # everyone else leaves the existing choice untouched
                     pi.add_signature = posted.get('add_signature') == 'on'
                     pi.add_stamp = posted.get('add_stamp') == 'on'
@@ -182,13 +183,14 @@ def pi_form(request, pk=None):
 
     if posted is not None:
         values = {k: posted.get(k, '') for k in ['ref_suffix', 'date', 'freight_charges', 'bank_freight_charges'] + TEXT_FIELDS}
-        values.update(add_signature=posted.get('add_signature') == 'on', add_stamp=posted.get('add_stamp') == 'on')
+        values.update(add_signature=posted.get('add_signature') == 'on', add_stamp=posted.get('add_stamp') == 'on',
+                      is_revised=posted.get('is_revised') == 'on')
         if not can_use_seal(request.user) and pi:
             values.update(add_signature=pi.add_signature, add_stamp=pi.add_stamp)
     elif pi:
         values = {k: getattr(pi, k) for k in TEXT_FIELDS}
         values.update(ref_suffix=pi.ref_suffix, date=pi.date.isoformat(), freight_charges=pi.freight_charges,
-                      bank_freight_charges=pi.bank_freight_charges,
+                      bank_freight_charges=pi.bank_freight_charges, is_revised=pi.is_revised,
                       add_signature=pi.add_signature, add_stamp=pi.add_stamp)
     else:
         values = {'date': timezone.localdate().isoformat(), 'freight_charges': '0', 'bank_freight_charges': '0',

@@ -370,7 +370,7 @@ def _body(pi, variant='customer', mode='normal', marks=None):
     'together' (notes, terms, signature and bank kept together on one page)."""
     compact = mode == 'compact'
     story = [
-        Paragraph('<u>PROFORMA INVOICE</u>', S_TITLE),
+        Paragraph('<u>PROFORMA INVOICE (Revised)</u>' if pi.is_revised else '<u>PROFORMA INVOICE</u>', S_TITLE),
         Spacer(1, 6),
         _header_block(pi),
         Spacer(1, 4),

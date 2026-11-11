@@ -28,6 +28,8 @@ class BangladeshPI(models.Model):
     payment = models.CharField(max_length=400, blank=True)
     freight_charges = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     freight_valid_till = models.CharField(max_length=100, blank=True)
+    # Ticked = both PDFs/Excel titles read "PROFORMA INVOICE (Revised)".
+    is_revised = models.BooleanField(default=False)
     # Bank copy freight: DEDUCTED from the bank total. 0 = the Bank PDF/Excel keep their single total line.
     bank_freight_charges = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     # Bank copy only: Terms & Conditions for issuing L/C, plus optional wording

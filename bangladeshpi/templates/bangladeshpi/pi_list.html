@@ -70,7 +70,7 @@
             <tbody>
                 {% for p in pis %}
                 <tr>
-                    <td class="ref" data-label="Ref No">{{ p.ref_no }}</td>
+                    <td class="ref" data-label="Ref No">{{ p.ref_no }}{% if p.is_revised %} <span class="chip-x amber">Revised</span>{% endif %}</td>
                     <td class="nowrap" data-label="Date">{{ p.date|date:"d M Y" }}</td>
                     <td data-label="Destination">{{ p.destination|default:"—" }}</td>
                     <td data-label="Items">{{ p.items.all|length }}</td>

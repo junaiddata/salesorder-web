@@ -82,6 +82,10 @@
                            value="{{ values.date }}">
                 </div>
             </div>
+            <label class="mt-3 d-inline-flex align-items-center gap-2" style="font-weight:600;cursor:pointer">
+                <input type="checkbox" name="is_revised" {% if values.is_revised %}checked{% endif %}>
+                Revised <small class="u-muted" style="font-weight:400">(prints "PROFORMA INVOICE (Revised)" on both PDFs and Excel files)</small>
+            </label>
             <div class="grid-2 mt-3">
                 <div class="fixed-box"><b>Exporter (fixed)</b><br>JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING LLC<br>PO BOX NO: 34862, DIP - 2, DUBAI - U.A.E</div>
                 <div class="fixed-box"><b>Importer / Client (fixed)</b><br>IMAA CORPORATION<br>316, Chowdhury Machinery Market, Jubilee Road, Enayet Bazar, Chattogram, Bangladesh</div>

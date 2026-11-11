@@ -63,7 +63,7 @@ def build_pi_xlsx(pi, variant='customer'):
 
     r = LOGO_ROWS + 1
     ws.merge_cells(f'A{r}:E{r}')
-    ws[f'A{r}'] = 'PROFORMA INVOICE'
+    ws[f'A{r}'] = 'PROFORMA INVOICE (Revised)' if pi.is_revised else 'PROFORMA INVOICE'
     ws[f'A{r}'].font = Font(name='Arial', size=12, bold=True, underline='single')
     ws[f'A{r}'].alignment = Alignment(horizontal='center')
     r += 2

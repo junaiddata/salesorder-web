@@ -405,3 +405,27 @@ class BankFocAndFreightTests(FOCTests):
         pi = self._setup('250.00')
         html = self.client.get(reverse('bangladeshpi:list')).content.decode().replace(',', '')
         self.assertIn(f'{pi.bank_grand_total:.2f}', html)
+
+
+class RevisedTests(BangladeshPITests):
+    def test_revised_title_on_both_pdfs_and_excels(self):
+        import fitz, openpyxl
+        data = {**self._payload(), 'is_revised': 'on'}
+        self.client.post(reverse('bangladeshpi:new'), data)
+        pi = BangladeshPI.objects.get()
+        self.assertTrue(pi.is_revised)
+        for q in ({}, {'copy': 'bank'}):
+            text = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk]), q).content, filetype='pdf')[0].get_text()
+            self.assertIn('PROFORMA INVOICE (Revised)', text)
+            xl = self.client.get(reverse('bangladeshpi:excel', args=[pi.pk]), q).content
+            cells = [c.value for row in openpyxl.load_workbook(io.BytesIO(xl)).active.iter_rows() for c in row]
+            self.assertIn('PROFORMA INVOICE (Revised)', cells)
+        self.assertIn('Revised', self.client.get(reverse('bangladeshpi:list')).content.decode())
+        # edit form is pre-ticked, and unticking removes it again
+        self.assertIn('name="is_revised" checked', self.client.get(reverse('bangladeshpi:edit', args=[pi.pk])).content.decode())
+        self.client.post(reverse('bangladeshpi:edit', args=[pi.pk]), self._payload())
+        pi.refresh_from_db()
+        self.assertFalse(pi.is_revised)
+        text = fitz.open(stream=self.client.get(reverse('bangladeshpi:pdf', args=[pi.pk])).content, filetype='pdf')[0].get_text()
+        self.assertNotIn('(Revised)', text)
+        self.assertIn('PROFORMA INVOICE', text)
