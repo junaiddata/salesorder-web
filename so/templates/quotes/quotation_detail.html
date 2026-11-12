@@ -213,6 +213,50 @@
       margin-bottom: 4px;
     }
 
+    .fu-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+    .fu-row select, .fu-row input[type="date"] {
+      padding: 4px 6px; font-size: 0.72rem; font-family: inherit;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface-alt); color: var(--text);
+    }
+    .fu-row label { font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
+    .fu-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .fu-history-btn {
+      padding: 3px 10px; font-size: 0.72rem; font-family: inherit; font-weight: 600; cursor: pointer;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    }
+    .fu-history-btn:hover { background: var(--surface-alt); }
+
+    /* Follow-up history modal (plain CSS, page has no Bootstrap) */
+    .fu-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(15, 23, 42, 0.5); align-items: center; justify-content: center; padding: 16px;
+    }
+    .fu-overlay.open { display: flex; }
+    .fu-modal {
+      background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+      width: 100%; max-width: 520px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .fu-modal-header {
+      background: linear-gradient(135deg, #1e3a5f, #2b5a8c); color: #fff; padding: 16px 20px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+    }
+    .fu-modal-title { font-size: 0.95rem; font-weight: 600; margin: 0; }
+    .fu-modal-sub { font-size: 0.72rem; opacity: 0.8; margin-top: 2px; }
+    .fu-modal-x { background: none; border: none; color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; opacity: 0.85; }
+    .fu-modal-body { padding: 16px 20px 6px; background: #f8fafc; overflow-y: auto; flex: 1; }
+    .fu-modal-footer { border-top: 1px solid #e5e9f0; background: #fff; padding: 10px 20px; text-align: right; }
+    .fu-item { display: flex; gap: 12px; position: relative; padding-bottom: 14px; }
+    .fu-item:not(:last-child)::before { content: ''; position: absolute; left: 16px; top: 36px; bottom: 0; width: 2px; background: #dbe3ec; }
+    .fu-avatar { flex: 0 0 34px; height: 34px; border-radius: 50%; background: #2b5a8c; color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-transform: uppercase; }
+    .fu-card { flex: 1; min-width: 0; background: #fff; border: 1px solid #e5e9f0; border-radius: 10px; padding: 8px 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+    .fu-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 3px; }
+    .fu-author { font-size: 0.78rem; font-weight: 600; color: #1f2937; }
+    .fu-time { font-size: 0.68rem; color: #6b7280; }
+    .fu-note { font-size: 0.8rem; color: #374151; line-height: 1.5; word-break: break-word; }
+    .fu-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e0ecf8; color: #1e3a5f; margin-right: 6px; }
+    .fu-empty { text-align: center; color: #6b7280; padding: 28px 0 34px; font-size: 0.8rem; }
+
     .table-wrap { overflow-x: auto; }
 
     table { width: 100%; border-collapse: collapse; }
@@ -563,6 +607,67 @@
       </div>
     </div>
 
+    <!-- Follow-ups (internal only: never printed on the PDF) -->
+    <div class="card" id="followup-section">
+      <div class="card-header fu-header-row">
+        <span>Follow-ups <span style="font-weight:400; color:var(--text-muted);">(internal, not in PDF)</span></span>
+        <button type="button" class="fu-history-btn" id="followup-open">View History (<span id="followup-count">{{ followups|length }}</span>)</button>
+      </div>
+      <div class="card-body">
+        <form id="followup-form" method="post" action="{% url 'quotation_add_followup' quotation.q_number %}">
+          {% csrf_token %}
+          <textarea name="note" class="remarks-textarea" rows="2" required
+                    placeholder="Add a follow-up note (e.g. customer asked to revise price)..."></textarea>
+          <div class="fu-row">
+            <select name="outcome" style="display:none;">
+              <option value="">Status (optional)</option>
+              {% for value, label in followup_outcomes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select>
+            <label style="display:none;">Next follow-up <input type="date" name="next_followup_date"></label>
+            <button class="btn btn-success btn-sm" type="submit" style="margin-left:auto;">Add Follow-up</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Follow-up History Modal (internal only) -->
+    <div class="fu-overlay" id="followupHistoryModal" role="dialog" aria-modal="true" aria-labelledby="followupHistoryTitle">
+      <div class="fu-modal">
+        <div class="fu-modal-header">
+          <div>
+            <h5 class="fu-modal-title" id="followupHistoryTitle">Follow-up History</h5>
+            <div class="fu-modal-sub">Quotation {{ quotation.q_number }}</div>
+          </div>
+          <button type="button" class="fu-modal-x" data-fu-close aria-label="Close">&times;</button>
+        </div>
+        <div class="fu-modal-body">
+          <div id="followup-list">
+            {% for fu in followups %}
+            <div class="fu-item followup-entry">
+              <div class="fu-avatar">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username|slice:":1" }}{% else %}?{% endif %}</div>
+              <div class="fu-card">
+                <div class="fu-meta">
+                  <span class="fu-author">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username }}{% else %}Unknown user{% endif %}</span>
+                  <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}</span>
+                </div>
+                <div class="fu-note">
+                  {% if fu.outcome %}<span class="fu-badge">{{ fu.get_outcome_display }}</span>{% endif %}
+                  {% if fu.next_followup_date %}<span class="fu-badge">Next: {{ fu.next_followup_date|date:"d M Y" }}</span>{% endif %}
+                  {{ fu.note|linebreaksbr }}
+                </div>
+              </div>
+            </div>
+            {% empty %}
+            <div id="followup-empty" class="fu-empty">No follow-ups added yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="fu-modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-fu-close>Close</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card line-items-card">
       <div class="card-header">Line Items ({{ items|length }})</div>
       <div class="card-body" style="padding:0;">
@@ -642,6 +747,61 @@
         var url = '{% url "quotation_list" %}' + '?' + saved;
         document.querySelectorAll('a.back-to-list').forEach(function(a) { a.href = url; });
       }
+    })();
+
+    // Follow-up history modal open/close
+    (function() {
+      var modal = document.getElementById('followupHistoryModal');
+      var openBtn = document.getElementById('followup-open');
+      if (!modal || !openBtn) return;
+      function close() { modal.classList.remove('open'); }
+      openBtn.addEventListener('click', function() { modal.classList.add('open'); });
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal || e.target.hasAttribute('data-fu-close')) close();
+      });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
+    })();
+
+    // Follow-ups: add via AJAX; falls back to a normal form post if JS fails.
+    (function() {
+      var form = document.getElementById('followup-form');
+      if (!form || !window.fetch) return;
+      function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+          if (!res.ok || !res.data.success) { alert(res.data.error || 'Could not add the follow-up.'); return; }
+          var f = res.data.followup;
+          var badges = (f.outcome ? '<span class="fu-badge">' + esc(f.outcome) + '</span>' : '') +
+                       (f.next_followup_date ? '<span class="fu-badge">Next: ' + esc(f.next_followup_date) + '</span>' : '');
+          var div = document.createElement('div');
+          div.className = 'fu-item followup-entry';
+          div.innerHTML = '<div class="fu-avatar">' + esc((f.created_by || '?').charAt(0)) + '</div>' +
+                          '<div class="fu-card">' +
+                            '<div class="fu-meta"><span class="fu-author">' + esc(f.created_by || 'Unknown user') + '</span>' +
+                            '<span class="fu-time">' + esc(f.created_at) + '</span></div>' +
+                            '<div class="fu-note">' + badges + esc(f.note).replace(/\n/g, '<br>') + '</div>' +
+                          '</div>';
+          var list = document.getElementById('followup-list');
+          var empty = document.getElementById('followup-empty');
+          if (empty) empty.remove();
+          list.insertBefore(div, list.firstChild);
+          var count = document.getElementById('followup-count');
+          if (count) count.textContent = (parseInt(count.textContent, 10) || 0) + 1;
+          form.reset();
+        })
+        .catch(function() { alert('An error occurred while adding the follow-up.'); })
+        .finally(function() { if (btn) btn.disabled = false; });
+      });
     })();
   </script>
 </body>

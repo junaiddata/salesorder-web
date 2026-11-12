@@ -1309,6 +1309,26 @@ class QuotationFollowUp(models.Model):
         return f"Follow-up on quotation {self.quotation_id} at {self.created_at:%Y-%m-%d %H:%M}"
 
 
+class SAPQuotationFollowUp(models.Model):
+    """Internal follow-up history for a SAP quotation. Separate table so SAP syncs never overwrite it."""
+    OUTCOME_CHOICES = QuotationFollowUp.OUTCOME_CHOICES
+
+    quotation = models.ForeignKey('SAPQuotation', related_name='followups', on_delete=models.CASCADE)
+    note = models.TextField()
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, blank=True, default='')
+    next_followup_date = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='sap_quotation_followups',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return f"Follow-up on SAP quotation {self.quotation_id} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
 
 class ProformaInvoiceLog(models.Model):
     ACTION_CHOICES = (

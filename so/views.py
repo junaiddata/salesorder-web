@@ -4768,6 +4768,8 @@ def quotation_detail(request, q_number):
         'back_url': back_url,
         'is_admin': is_admin,
         'has_zero_cost_items': has_zero_cost_items,
+        'followups': list(quotation.followups.select_related('created_by')),
+        'followup_outcomes': SAPQuotationFollowUp.OUTCOME_CHOICES,
     }
 
     return render(request, 'quotes/quotation_detail.html', context)
@@ -5183,6 +5185,61 @@ def quotation_update_remarks(request, q_number):
         "quotation_detail",
         q_number=quotation.q_number
     )
+
+
+@login_required
+@require_POST
+def quotation_add_followup(request, q_number):
+    """Add an internal follow-up note to a SAP quotation (never printed on PDFs)."""
+    from datetime import datetime as _dt
+    from django.utils import timezone as _tz
+
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Same scope rules as the detail view
+    if not (request.user.is_superuser or request.user.is_staff):
+        if not SAPQuotation.objects.filter(pk=quotation.pk).filter(salesman_scope_q(request.user)).exists():
+            raise Http404("Quotation not found")
+
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    note = (request.POST.get('note') or '').strip()
+    outcome = (request.POST.get('outcome') or '').strip()
+    next_raw = (request.POST.get('next_followup_date') or '').strip()
+    error = ''
+    next_date = None
+    if not note:
+        error = 'Please enter a follow-up note.'
+    elif outcome and outcome not in dict(SAPQuotationFollowUp.OUTCOME_CHOICES):
+        error = 'Invalid outcome.'
+    elif next_raw:
+        try:
+            next_date = _dt.strptime(next_raw, '%Y-%m-%d').date()
+        except ValueError:
+            error = 'Invalid next follow-up date.'
+
+    if error:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': error}, status=400)
+        messages.error(request, error)
+        return redirect("quotation_detail", q_number=quotation.q_number)
+
+    fu = SAPQuotationFollowUp.objects.create(
+        quotation=quotation, note=note, outcome=outcome, next_followup_date=next_date,
+        created_by=request.user,
+    )
+    if is_ajax:
+        return JsonResponse({
+            'success': True,
+            'followup': {
+                'note': fu.note,
+                'outcome': fu.get_outcome_display(),
+                'next_followup_date': fu.next_followup_date.strftime('%d %b %Y') if fu.next_followup_date else '',
+                'created_by': (fu.created_by.get_full_name() or fu.created_by.get_username()) if fu.created_by else '',
+                'created_at': _tz.localtime(fu.created_at).strftime('%d %b %Y, %I:%M %p'),
+            },
+        })
+    messages.success(request, 'Follow-up added.')
+    return redirect("quotation_detail", q_number=quotation.q_number)
 
 
 @login_required
