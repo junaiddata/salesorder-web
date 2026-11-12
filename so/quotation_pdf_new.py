@@ -27,6 +27,7 @@ from reportlab.platypus import (
     BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 
+from quotation.pdf_utils import clean_pdf
 from quotation.words import amount_in_words
 
 from .quotation_customer_details import customer_details
@@ -519,7 +520,7 @@ def build_so_quotation_pdf(quotation):
         writer.add_page(base)
     out = BytesIO()
     writer.write(out)
-    return out.getvalue()
+    return clean_pdf(out.getvalue())   # re-save cleanly so Adobe Acrobat opens it (error 14 otherwise)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

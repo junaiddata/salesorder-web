@@ -22,6 +22,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus.doctemplate import LayoutError
 
 from .models import DELIVERY_SUBJECT_TO_STOCK, VAT_RATE, QuotationStamp
+from .pdf_utils import clean_pdf
 from .words import amount_in_words
 from reportlab.platypus import (
     BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer,
@@ -626,4 +627,4 @@ def build_quotation_pdf(quotation, base_url, orientation='portrait', with_stamp=
 
     out = BytesIO()
     writer.write(out)
-    return out.getvalue()
+    return clean_pdf(out.getvalue())   # re-save cleanly so Adobe Acrobat opens it (error 14 otherwise)
