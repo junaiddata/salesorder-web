@@ -2221,6 +2221,8 @@ def view_quotation_details(request, quotation_id):
                 return JsonResponse({
                     'success': True,
                     'followup': {
+                        'id': fu.id,
+                        'can_delete': fu.can_be_deleted_by(request.user),
                         'note': fu.note,
                         'outcome': fu.get_outcome_display(),
                         'next_followup_date': fu.next_followup_date.strftime('%d %b %Y') if fu.next_followup_date else '',
@@ -2229,6 +2231,29 @@ def view_quotation_details(request, quotation_id):
                     },
                 })
             messages.success(request, 'Follow-up added.')
+            return redirect('view_quotation_details', quotation_id=quotation_id)
+
+        elif action == 'delete_followup':
+            # Only the author or staff may remove a follow-up; it must belong to this quotation.
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            fu = None
+            try:
+                fu = quotation.followups.select_related('created_by').filter(pk=int(request.POST.get('followup_id') or 0)).first()
+            except (TypeError, ValueError):
+                fu = None
+            if fu is None:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': 'Follow-up not found.'}, status=404)
+                messages.error(request, 'Follow-up not found.')
+            elif not fu.can_be_deleted_by(request.user):
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': 'You are not allowed to delete this follow-up.'}, status=403)
+                messages.error(request, 'You are not allowed to delete this follow-up.')
+            else:
+                fu.delete()
+                if is_ajax:
+                    return JsonResponse({'success': True})
+                messages.success(request, 'Follow-up deleted.')
             return redirect('view_quotation_details', quotation_id=quotation_id)
 
         elif action == 'approve':
@@ -2341,10 +2366,14 @@ def view_quotation_details(request, quotation_id):
     # offering to generate a duplicate.
     existing_submittal = quotation.generated_submittals.order_by('-created_at').first()
 
+    followups = list(quotation.followups.select_related('created_by'))
+    for _fu in followups:
+        _fu.can_delete = _fu.can_be_deleted_by(request.user)
+
     return render(request, "so/quotations/view_quotation_details.html", {
         "quotation": quotation,
         "quotation_items": quotation_items,
-        "followups": list(quotation.followups.select_related('created_by')),
+        "followups": followups,
         "followup_outcomes": __import__('so.models', fromlist=['QuotationFollowUp']).QuotationFollowUp.OUTCOME_CHOICES,
         "grand_total": grand_total,
         "discount_amount": discount_amount,

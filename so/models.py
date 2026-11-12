@@ -554,6 +554,11 @@ class SAPQuotation(models.Model):
     status = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True, null=True)
+    closing_remarks = models.TextField(
+        blank=True,
+        null=True,
+        help_text="ClosingRemarks from SAP API (quotation terms: brand, stock status, validity). Read-only, overwritten by sync."
+    )
     salesman_remarks = models.TextField(
         blank=True,
         null=True
@@ -1305,6 +1310,14 @@ class QuotationFollowUp(models.Model):
     class Meta:
         ordering = ['-created_at', '-id']
 
+    def can_be_deleted_by(self, user):
+        """Author, or staff/superuser. Entries with no author can only be removed by staff."""
+        if not getattr(user, 'is_authenticated', False):
+            return False
+        if user.is_superuser or user.is_staff:
+            return True
+        return self.created_by_id is not None and self.created_by_id == user.pk
+
     def __str__(self):
         return f"Follow-up on quotation {self.quotation_id} at {self.created_at:%Y-%m-%d %H:%M}"
 
@@ -1324,6 +1337,14 @@ class SAPQuotationFollowUp(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+    def can_be_deleted_by(self, user):
+        """Author, or staff/superuser. Entries with no author can only be removed by staff."""
+        if not getattr(user, 'is_authenticated', False):
+            return False
+        if user.is_superuser or user.is_staff:
+            return True
+        return self.created_by_id is not None and self.created_by_id == user.pk
 
     def __str__(self):
         return f"Follow-up on SAP quotation {self.quotation_id} at {self.created_at:%Y-%m-%d %H:%M}"

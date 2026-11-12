@@ -791,6 +791,29 @@
         #followupHistoryModal .fu-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 4px; }
         #followupHistoryModal .fu-author { font-size: 13px; font-weight: 600; color: #1f2937; }
         #followupHistoryModal .fu-time { font-size: 11.5px; color: #6b7280; }
+        /* Confirmation / notice dialog (replaces the browser's confirm/alert popups) */
+        .fu-dlg-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fuDlgFade 0.15s ease; }
+        .fu-dlg { background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3); width: 100%; max-width: 400px; padding: 26px 24px 20px; text-align: center; animation: fuDlgPop 0.18s ease; }
+        .fu-dlg-icon { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; }
+        .fu-dlg-icon.danger { background: #fee2e2; color: #dc2626; }
+        .fu-dlg-icon.info { background: #e0ecf8; color: #1e3a5f; }
+        .fu-dlg h4 { margin: 0 0 6px; font-size: 17px; font-weight: 600; color: #111827; }
+        .fu-dlg p { margin: 0 0 20px; font-size: 14px; color: #6b7280; line-height: 1.5; word-break: break-word; }
+        .fu-dlg-actions { display: flex; gap: 10px; justify-content: center; }
+        .fu-dlg-btn { flex: 1; max-width: 150px; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+        .fu-dlg-btn.secondary { background: #fff; border-color: #d1d5db; color: #374151; }
+        .fu-dlg-btn.secondary:hover { background: #f3f4f6; }
+        .fu-dlg-btn.danger { background: #dc2626; color: #fff; }
+        .fu-dlg-btn.danger:hover { background: #b91c1c; }
+        .fu-dlg-btn.primary { background: #1e3a5f; color: #fff; }
+        .fu-dlg-btn.primary:hover { background: #16304f; }
+        .fu-dlg-btn:focus-visible { outline: 2px solid #2b5a8c; outline-offset: 2px; }
+        @keyframes fuDlgFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fuDlgPop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+        #followupHistoryModal .fu-delete { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 0 0 0 10px; font-size: 12px; }
+        #followupHistoryModal .fu-delete:hover { color: #dc2626; }
+        #followupHistoryModal .fu-delete:disabled { opacity: 0.4; cursor: default; }
         #followupHistoryModal .fu-note { font-size: 13.5px; color: #374151; line-height: 1.5; word-break: break-word; }
         #followupHistoryModal .fu-badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e0ecf8; color: #1e3a5f; margin-right: 6px; }
         #followupHistoryModal .fu-empty { text-align: center; color: #6b7280; padding: 30px 0 38px; font-size: 13.5px; }
@@ -1816,7 +1839,7 @@
                             <div class="fu-card">
                                 <div class="fu-meta">
                                     <span class="fu-author">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username }}{% else %}Unknown user{% endif %}</span>
-                                    <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}</span>
+                                    <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}{% if fu.can_delete %}<button type="button" class="fu-delete" data-id="{{ fu.id }}" title="Delete follow-up" aria-label="Delete follow-up"><i class="fas fa-trash"></i></button>{% endif %}</span>
                                 </div>
                                 <div class="fu-note">
                                     {% if fu.outcome %}<span class="fu-badge">{{ fu.get_outcome_display }}</span>{% endif %}
@@ -2104,6 +2127,50 @@
             const form = document.getElementById('followup-form');
             const list = document.getElementById('followup-list');
             if (!form || !list) return;
+
+            // Styled confirm/notice dialog; resolves true (confirm) or false (cancel).
+            const fuDialog = (o) => new Promise(resolve => {
+                o = o || {};
+                const tone = o.tone || 'info';
+                const showCancel = o.showCancel !== false;
+                const overlay = document.createElement('div');
+                overlay.className = 'fu-dlg-overlay';
+                const box = document.createElement('div');
+                box.className = 'fu-dlg';
+                box.setAttribute('role', 'alertdialog');
+                box.setAttribute('aria-modal', 'true');
+                const icon = document.createElement('div');
+                icon.className = 'fu-dlg-icon ' + tone;
+                icon.innerHTML = tone === 'danger'
+                    ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'
+                    : '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+                const h = document.createElement('h4'); h.textContent = o.title || '';
+                const p = document.createElement('p'); p.textContent = o.message || '';
+                const actions = document.createElement('div'); actions.className = 'fu-dlg-actions';
+                let cancelBtn = null;
+                if (showCancel) {
+                    cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button'; cancelBtn.className = 'fu-dlg-btn secondary';
+                    cancelBtn.textContent = o.cancelText || 'Cancel';
+                    actions.appendChild(cancelBtn);
+                }
+                const okBtn = document.createElement('button');
+                okBtn.type = 'button'; okBtn.className = 'fu-dlg-btn ' + (tone === 'danger' ? 'danger' : 'primary');
+                okBtn.textContent = o.confirmText || 'OK';
+                actions.appendChild(okBtn);
+                box.append(icon, h, p, actions);
+                overlay.appendChild(box);
+                const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+                const done = (v) => { document.removeEventListener('keydown', onKey, true); overlay.remove(); resolve(v); };
+                document.addEventListener('keydown', onKey, true);
+                okBtn.addEventListener('click', () => done(true));
+                if (cancelBtn) cancelBtn.addEventListener('click', () => done(false));
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
+                // Inside the Bootstrap modal so its focus trap does not fight the dialog.
+                (document.getElementById('followupHistoryModal') || document.body).appendChild(overlay);
+                (cancelBtn || okBtn).focus();
+            });
+            const fuNotice = (message) => fuDialog({ title: 'Something went wrong', message: message, showCancel: false, confirmText: 'OK' });
             const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
@@ -2116,7 +2183,7 @@
                 })
                 .then(r => r.json())
                 .then(data => {
-                    if (!data.success) { alert(data.error || 'Could not add the follow-up.'); return; }
+                    if (!data.success) { fuNotice(data.error || 'Could not add the follow-up.'); return; }
                     const f = data.followup;
                     const empty = document.getElementById('followup-empty');
                     if (empty) empty.remove();
@@ -2128,7 +2195,9 @@
                         '<div class="fu-avatar">' + esc((f.created_by || '?').charAt(0)) + '</div>' +
                         '<div class="fu-card">' +
                           '<div class="fu-meta"><span class="fu-author">' + esc(f.created_by || 'Unknown user') + '</span>' +
-                          '<span class="fu-time">' + esc(f.created_at) + '</span></div>' +
+                          '<span class="fu-time">' + esc(f.created_at) +
+                          (f.can_delete && f.id ? '<button type="button" class="fu-delete" data-id="' + esc(f.id) + '" title="Delete follow-up" aria-label="Delete follow-up"><i class="fas fa-trash"></i></button>' : '') +
+                          '</span></div>' +
                           '<div class="fu-note">' + badges + esc(f.note).replace(/\n/g, '<br>') + '</div>' +
                         '</div>';
                     list.insertBefore(div, list.firstChild);
@@ -2136,8 +2205,49 @@
                     if (count) count.textContent = (parseInt(count.textContent, 10) || 0) + 1;
                     form.reset();
                 })
-                .catch(() => alert('An error occurred while adding the follow-up.'))
+                .catch(() => fuNotice('An error occurred while adding the follow-up.'))
                 .finally(() => { btn.disabled = false; });
+            });
+
+            // Delete a follow-up (author or staff only; enforced again on the server)
+            list.addEventListener('click', async function(e) {
+                const del = e.target.closest('.fu-delete');
+                if (!del) return;
+                const confirmed = await fuDialog({
+                    tone: 'danger',
+                    title: 'Delete follow-up?',
+                    message: 'This follow-up will be permanently removed. This cannot be undone.',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel'
+                });
+                if (!confirmed) return;
+                const csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+                const fd = new FormData();
+                fd.append('action', 'delete_followup');
+                fd.append('followup_id', del.dataset.id);
+                if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+                del.disabled = true;
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) { fuNotice(data.error || 'Could not delete the follow-up.'); del.disabled = false; return; }
+                    const entry = del.closest('.followup-entry');
+                    if (entry) entry.remove();
+                    const count = document.getElementById('followup-count');
+                    if (count) count.textContent = Math.max(0, (parseInt(count.textContent, 10) || 0) - 1);
+                    if (!list.querySelector('.followup-entry')) {
+                        const empty = document.createElement('div');
+                        empty.id = 'followup-empty';
+                        empty.className = 'fu-empty';
+                        empty.innerHTML = '<i class="fas fa-comments"></i>No follow-ups added yet.';
+                        list.appendChild(empty);
+                    }
+                })
+                .catch(() => { fuNotice('An error occurred while deleting the follow-up.'); del.disabled = false; });
             });
         });
 

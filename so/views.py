@@ -4757,6 +4757,10 @@ def quotation_detail(request, q_number):
         (getattr(it, 'unit_cost') or 0) == 0 for it in items
     )
 
+    followups = list(quotation.followups.select_related('created_by'))
+    for _fu in followups:
+        _fu.can_delete = _fu.can_be_deleted_by(request.user)
+
     context = {
         'quotation': quotation,
         'items': items,
@@ -4768,7 +4772,7 @@ def quotation_detail(request, q_number):
         'back_url': back_url,
         'is_admin': is_admin,
         'has_zero_cost_items': has_zero_cost_items,
-        'followups': list(quotation.followups.select_related('created_by')),
+        'followups': followups,
         'followup_outcomes': SAPQuotationFollowUp.OUTCOME_CHOICES,
     }
 
@@ -5231,6 +5235,8 @@ def quotation_add_followup(request, q_number):
         return JsonResponse({
             'success': True,
             'followup': {
+                'id': fu.id,
+                'can_delete': fu.can_be_deleted_by(request.user),
                 'note': fu.note,
                 'outcome': fu.get_outcome_display(),
                 'next_followup_date': fu.next_followup_date.strftime('%d %b %Y') if fu.next_followup_date else '',
@@ -5239,6 +5245,37 @@ def quotation_add_followup(request, q_number):
             },
         })
     messages.success(request, 'Follow-up added.')
+    return redirect("quotation_detail", q_number=quotation.q_number)
+
+
+@login_required
+@require_POST
+def quotation_delete_followup(request, q_number, followup_id):
+    """Delete one internal follow-up on a SAP quotation (author or staff only)."""
+    quotation = get_object_or_404(SAPQuotation, q_number=q_number)
+
+    # Same scope rules as the detail view
+    if not (request.user.is_superuser or request.user.is_staff):
+        if not SAPQuotation.objects.filter(pk=quotation.pk).filter(salesman_scope_q(request.user)).exists():
+            raise Http404("Quotation not found")
+
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    # Looked up through the quotation so an id from another quotation can never be deleted here.
+    fu = quotation.followups.select_related('created_by').filter(pk=followup_id).first()
+
+    if fu is None:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Follow-up not found.'}, status=404)
+        messages.error(request, 'Follow-up not found.')
+    elif not fu.can_be_deleted_by(request.user):
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'You are not allowed to delete this follow-up.'}, status=403)
+        messages.error(request, 'You are not allowed to delete this follow-up.')
+    else:
+        fu.delete()
+        if is_ajax:
+            return JsonResponse({'success': True})
+        messages.success(request, 'Follow-up deleted.')
     return redirect("quotation_detail", q_number=quotation.q_number)
 
 

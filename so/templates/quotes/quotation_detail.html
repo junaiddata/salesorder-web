@@ -213,6 +213,18 @@
       margin-bottom: 4px;
     }
 
+    .sap-closing-remarks {
+      padding: 7px 10px;
+      font-size: 0.76rem;
+      line-height: 1.5;
+      color: var(--text);
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
+      border-radius: var(--radius-sm);
+      word-break: break-word;
+    }
+
     .fu-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
     .fu-row select, .fu-row input[type="date"] {
       padding: 4px 6px; font-size: 0.72rem; font-family: inherit;
@@ -253,6 +265,29 @@
     .fu-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 3px; }
     .fu-author { font-size: 0.78rem; font-weight: 600; color: #1f2937; }
     .fu-time { font-size: 0.68rem; color: #6b7280; }
+    /* Confirmation / notice dialog (replaces the browser's confirm/alert popups) */
+    .fu-dlg-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fuDlgFade 0.15s ease; }
+    .fu-dlg { background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3); width: 100%; max-width: 400px; padding: 26px 24px 20px; text-align: center; animation: fuDlgPop 0.18s ease; }
+    .fu-dlg-icon { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; }
+    .fu-dlg-icon.danger { background: #fee2e2; color: #dc2626; }
+    .fu-dlg-icon.info { background: #e0ecf8; color: #1e3a5f; }
+    .fu-dlg h4 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 600; color: #111827; }
+    .fu-dlg p { margin: 0 0 20px; font-size: 0.86rem; color: #6b7280; line-height: 1.5; word-break: break-word; }
+    .fu-dlg-actions { display: flex; gap: 10px; justify-content: center; }
+    .fu-dlg-btn { flex: 1; max-width: 150px; padding: 9px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; font-family: inherit; cursor: pointer; border: 1px solid transparent; }
+    .fu-dlg-btn.secondary { background: #fff; border-color: #d1d5db; color: #374151; }
+    .fu-dlg-btn.secondary:hover { background: #f3f4f6; }
+    .fu-dlg-btn.danger { background: #dc2626; color: #fff; }
+    .fu-dlg-btn.danger:hover { background: #b91c1c; }
+    .fu-dlg-btn.primary { background: #1e3a5f; color: #fff; }
+    .fu-dlg-btn.primary:hover { background: #16304f; }
+    .fu-dlg-btn:focus-visible { outline: 2px solid #2b5a8c; outline-offset: 2px; }
+    @keyframes fuDlgFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fuDlgPop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+    .fu-delete { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 0 0 0 10px; font-size: 0.8rem; line-height: 1; }
+    .fu-delete:hover { color: #dc2626; }
+    .fu-delete:disabled { opacity: 0.4; cursor: default; }
     .fu-note { font-size: 0.8rem; color: #374151; line-height: 1.5; word-break: break-word; }
     .fu-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e0ecf8; color: #1e3a5f; margin-right: 6px; }
     .fu-empty { text-align: center; color: #6b7280; padding: 28px 0 34px; font-size: 0.8rem; }
@@ -538,7 +573,19 @@
       <div class="card-body">
         <form method="post" action="{% url 'quotation_update_remarks' quotation.q_number %}">
           {% csrf_token %}
-    
+
+          <!-- SAP Closing Remarks (read-only, synced from SAP) -->
+          <div style="margin-bottom:12px;">
+            <div class="info-label" style="margin-bottom:4px;">
+              SAP Closing Remarks <span style="text-transform:none; letter-spacing:0;">(from SAP, read-only)</span>
+            </div>
+            {% if quotation.closing_remarks %}
+              <div class="sap-closing-remarks">{{ quotation.closing_remarks|linebreaksbr }}</div>
+            {% else %}
+              <div class="empty-remarks">No SAP closing remarks.</div>
+            {% endif %}
+          </div>
+
           <!-- General Remarks -->
           <div style="margin-bottom:12px;">
             <div class="info-label" style="margin-bottom:4px;">
@@ -648,7 +695,7 @@
               <div class="fu-card">
                 <div class="fu-meta">
                   <span class="fu-author">{% if fu.created_by %}{{ fu.created_by.get_full_name|default:fu.created_by.get_username }}{% else %}Unknown user{% endif %}</span>
-                  <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}</span>
+                  <span class="fu-time">{{ fu.created_at|date:"d M Y, h:i A" }}{% if fu.can_delete %}<button type="button" class="fu-delete" data-url="{% url 'quotation_delete_followup' quotation.q_number fu.id %}" title="Delete follow-up" aria-label="Delete follow-up">&#128465;</button>{% endif %}</span>
                 </div>
                 <div class="fu-note">
                   {% if fu.outcome %}<span class="fu-badge">{{ fu.get_outcome_display }}</span>{% endif %}
@@ -767,6 +814,98 @@
       var form = document.getElementById('followup-form');
       if (!form || !window.fetch) return;
       function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+      var delUrlTpl = "{% url 'quotation_delete_followup' quotation.q_number 0 %}";
+
+      // Styled confirm/notice dialog; resolves true (confirm) or false (cancel).
+      function fuDialog(o) {
+        o = o || {};
+        return new Promise(function(resolve) {
+          var tone = o.tone || 'info';
+          var showCancel = o.showCancel !== false;
+          var overlay = document.createElement('div');
+          overlay.className = 'fu-dlg-overlay';
+          var box = document.createElement('div');
+          box.className = 'fu-dlg';
+          box.setAttribute('role', 'alertdialog');
+          box.setAttribute('aria-modal', 'true');
+          var icon = document.createElement('div');
+          icon.className = 'fu-dlg-icon ' + tone;
+          icon.innerHTML = tone === 'danger'
+            ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'
+            : '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+          var h = document.createElement('h4'); h.textContent = o.title || '';
+          var p = document.createElement('p'); p.textContent = o.message || '';
+          var actions = document.createElement('div'); actions.className = 'fu-dlg-actions';
+          var cancelBtn = null;
+          if (showCancel) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button'; cancelBtn.className = 'fu-dlg-btn secondary';
+            cancelBtn.textContent = o.cancelText || 'Cancel';
+            actions.appendChild(cancelBtn);
+          }
+          var okBtn = document.createElement('button');
+          okBtn.type = 'button'; okBtn.className = 'fu-dlg-btn ' + (tone === 'danger' ? 'danger' : 'primary');
+          okBtn.textContent = o.confirmText || 'OK';
+          actions.appendChild(okBtn);
+          box.appendChild(icon); box.appendChild(h); box.appendChild(p); box.appendChild(actions);
+          overlay.appendChild(box);
+          function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); done(false); } }
+          function done(v) { document.removeEventListener('keydown', onKey, true); overlay.remove(); resolve(v); }
+          document.addEventListener('keydown', onKey, true);
+          okBtn.addEventListener('click', function() { done(true); });
+          if (cancelBtn) cancelBtn.addEventListener('click', function() { done(false); });
+          overlay.addEventListener('click', function(e) { if (e.target === overlay) done(false); });
+          document.body.appendChild(overlay);
+          (cancelBtn || okBtn).focus();
+        });
+      }
+      function fuNotice(message) {
+        return fuDialog({ title: 'Something went wrong', message: message, showCancel: false, confirmText: 'OK' });
+      }
+
+      // Delete a follow-up (author or staff only; enforced again on the server)
+      document.getElementById('followup-list').addEventListener('click', function(e) {
+        var del = e.target.closest ? e.target.closest('.fu-delete') : null;
+        if (!del) return;
+        fuDialog({
+          tone: 'danger',
+          title: 'Delete follow-up?',
+          message: 'This follow-up will be permanently removed. This cannot be undone.',
+          confirmText: 'Delete',
+          cancelText: 'Cancel'
+        }).then(function(confirmed) { if (confirmed) doDelete(del); });
+      });
+
+      function doDelete(del) {
+        var csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+        var fd = new FormData();
+        if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+        del.disabled = true;
+        fetch(del.getAttribute('data-url'), {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+        .then(function(res) {
+          if (!res.ok || !res.data.success) { fuNotice(res.data.error || 'Could not delete the follow-up.'); del.disabled = false; return; }
+          var entry = del.closest('.followup-entry');
+          if (entry) entry.remove();
+          var count = document.getElementById('followup-count');
+          if (count) count.textContent = Math.max(0, (parseInt(count.textContent, 10) || 0) - 1);
+          var list = document.getElementById('followup-list');
+          if (!list.querySelector('.followup-entry')) {
+            var empty = document.createElement('div');
+            empty.id = 'followup-empty';
+            empty.className = 'fu-empty';
+            empty.textContent = 'No follow-ups added yet.';
+            list.appendChild(empty);
+          }
+        })
+        .catch(function() { fuNotice('An error occurred while deleting the follow-up.'); del.disabled = false; });
+      }
+
       form.addEventListener('submit', function(e) {
         e.preventDefault();
         var btn = form.querySelector('button[type="submit"]');
@@ -779,7 +918,7 @@
         })
         .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
         .then(function(res) {
-          if (!res.ok || !res.data.success) { alert(res.data.error || 'Could not add the follow-up.'); return; }
+          if (!res.ok || !res.data.success) { fuNotice(res.data.error || 'Could not add the follow-up.'); return; }
           var f = res.data.followup;
           var badges = (f.outcome ? '<span class="fu-badge">' + esc(f.outcome) + '</span>' : '') +
                        (f.next_followup_date ? '<span class="fu-badge">Next: ' + esc(f.next_followup_date) + '</span>' : '');
@@ -788,7 +927,9 @@
           div.innerHTML = '<div class="fu-avatar">' + esc((f.created_by || '?').charAt(0)) + '</div>' +
                           '<div class="fu-card">' +
                             '<div class="fu-meta"><span class="fu-author">' + esc(f.created_by || 'Unknown user') + '</span>' +
-                            '<span class="fu-time">' + esc(f.created_at) + '</span></div>' +
+                            '<span class="fu-time">' + esc(f.created_at) +
+                            (f.can_delete && f.id ? '<button type="button" class="fu-delete" data-url="' + esc(delUrlTpl.replace('/0/delete/', '/' + f.id + '/delete/')) + '" title="Delete follow-up" aria-label="Delete follow-up">&#128465;</button>' : '') +
+                            '</span></div>' +
                             '<div class="fu-note">' + badges + esc(f.note).replace(/\n/g, '<br>') + '</div>' +
                           '</div>';
           var list = document.getElementById('followup-list');
@@ -799,7 +940,7 @@
           if (count) count.textContent = (parseInt(count.textContent, 10) || 0) + 1;
           form.reset();
         })
-        .catch(function() { alert('An error occurred while adding the follow-up.'); })
+        .catch(function() { fuNotice('An error occurred while adding the follow-up.'); })
         .finally(function() { if (btn) btn.disabled = false; });
       });
     })();

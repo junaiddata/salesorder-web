@@ -167,6 +167,7 @@ urlpatterns += [
     path('old-pi/<str:q_number>/export/', sap_salesorder_views.export_old_pi_pdf, name='export_old_pi_pdf'),
     path("sapquotations/<str:q_number>/remarks/", views.quotation_update_remarks, name="quotation_update_remarks"),
     path("sapquotations/<str:q_number>/followup/", views.quotation_add_followup, name="quotation_add_followup"),
+    path("sapquotations/<str:q_number>/followup/<int:followup_id>/delete/", views.quotation_delete_followup, name="quotation_delete_followup"),
     path("sapquotations/<str:q_number>/close/", views.quotation_close, name="quotation_close"),
     path('update-device-location/', update_device_location, name='update_device_location'),
         # 1. Export the List (Summary)

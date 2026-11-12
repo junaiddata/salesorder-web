@@ -605,6 +605,8 @@ def sync_quotations_core(days_back=3, specific_date=None, from_date=None, to_dat
                 }
                 if 'customer_phone' in mapped:
                     defaults["customer_phone"] = mapped.get('customer_phone', '') or ''
+                if 'closing_remarks' in mapped:
+                    defaults["closing_remarks"] = mapped.get('closing_remarks', '') or ''
                 if mapped.get('internal_number'):
                     defaults["internal_number"] = mapped.get('internal_number')
 
@@ -625,7 +627,7 @@ def sync_quotations_core(days_back=3, specific_date=None, from_date=None, to_dat
                     "posting_date", "customer_code", "customer_name", "bp_reference_no",
                     "salesman_name", "document_total", "vat_sum", "total_discount",
                     "rounding_diff_amount", "discount_percent", "status", "bill_to",
-                    "customer_phone", "remarks", "internal_number"
+                    "customer_phone", "remarks", "closing_remarks", "internal_number"
                 ]
                 SAPQuotation.objects.bulk_update(to_update, fields=update_fields, batch_size=5000)
 

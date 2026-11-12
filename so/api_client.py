@@ -1617,7 +1617,10 @@ class SAPAPIClient:
         bp_reference = api_quotation.get('NumAtCard', '') or ''
         bill_to = str(api_quotation.get('Address', '')).strip() if api_quotation.get('Address') else ''
         comments = str(api_quotation.get('Comments', '')).strip() if api_quotation.get('Comments') else ''
-        
+        closing_remarks = str(api_quotation.get('ClosingRemarks', '')).strip() if api_quotation.get('ClosingRemarks') else ''
+        if closing_remarks:
+            closing_remarks = closing_remarks.replace('\r\n', '\n').replace('\r', '\n')
+
         # Financial fields
         doc_total = api_quotation.get('DocTotal', 0) or 0
         vat_sum = api_quotation.get('VatSum', 0) or 0
@@ -1673,6 +1676,7 @@ class SAPAPIClient:
             'bill_to': bill_to,
             'customer_phone': customer_phone,
             'remarks': comments,
+            'closing_remarks': closing_remarks,
             'items': items,
         }
     

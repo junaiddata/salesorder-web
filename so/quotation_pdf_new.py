@@ -678,8 +678,11 @@ def _sap_body(q, cfg):
         _sap_items_table(q),
         Spacer(1, 14),
     ]
-    if q.remarks and q.remarks.strip():
-        remark_rows = [[Paragraph(escape(ln.strip()) or '&nbsp;', S_CELL)] for ln in q.remarks.splitlines() if ln.strip()]
+    # REMARKS on the SAP quotation PDF = SAP's ClosingRemarks. Falls back to the old remarks text only when a quotation
+    # has not been re-synced yet (closing_remarks still empty), so those PDFs do not lose their remarks.
+    pdf_remarks = (getattr(q, 'closing_remarks', None) or '').strip() or (q.remarks or '').strip()
+    if pdf_remarks:
+        remark_rows = [[Paragraph(escape(ln.strip()) or '&nbsp;', S_CELL)] for ln in pdf_remarks.splitlines() if ln.strip()]
         story += [KeepTogether([_section('REMARKS', remark_rows)]), Spacer(1, 10)]
     stamp = _stamp(cfg.get('stamp'))
     stamp_row = None
