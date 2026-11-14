@@ -37,6 +37,8 @@ SALESMAN_MAPPING = {
     "A.MR.RASHID CONT": "RASHID",
     "A.DIP ADIL": "DIP",
     "PALSON": "DIP",
+    "A. ABUL": "ABUL",   # SAP spelling (with the space)
+    "A.ABUL": "ABUL",    # same person, spelled without the space
 
 }
 
