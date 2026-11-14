@@ -306,6 +306,18 @@
                     <option value="Pending" {% if current_status == 'Pending' %}selected{% endif %}>Pending</option>
                 </select>
             </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted">Total Amount</label>
+                <select class="form-select form-select-sm" name="total">
+                    <option value="" {% if selected_total == '' %}selected{% endif %}>All</option>
+                    <option value="0-5000" {% if selected_total == '0-5000' %}selected{% endif %}>0 to 5,000</option>
+                    <option value="5001-10000" {% if selected_total == '5001-10000' %}selected{% endif %}>5,001 to 10,000</option>
+                    <option value="10001-25000" {% if selected_total == '10001-25000' %}selected{% endif %}>10,001 to 25,000</option>
+                    <option value="25001-50000" {% if selected_total == '25001-50000' %}selected{% endif %}>25,001 to 50,000</option>
+                    <option value="50001-100000" {% if selected_total == '50001-100000' %}selected{% endif %}>50,001 to 100,000</option>
+                    <option value="100000+" {% if selected_total == '100000+' %}selected{% endif %}>100,000 and above</option>
+                </select>
+            </div>
             <div class="col-md-1">
                 <label class="form-label small text-muted">Rows</label>
                 <select class="form-select form-select-sm" name="page_size">
@@ -350,7 +362,7 @@
             </div>
         </div>
         <div id="qcal-grid-container">
-            {% include 'so/quotations/_combined_calendar_body.html' with month_days=combined_month_days weekly_totals=combined_weekly_totals today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_quotation_count=combined_month_quotation_count %}
+            {% include 'so/quotations/_combined_calendar_body.html' with month_days=combined_month_days weekly_totals=combined_weekly_totals today=today qcal_months=qcal_months combined_month_total_value=combined_month_total_value combined_month_total_gp=combined_month_total_gp combined_month_gp_pct=combined_month_gp_pct combined_month_quotation_count=combined_month_quotation_count %}
         </div>
     </div>
 

@@ -627,6 +627,29 @@ def inapp_quotations_filtered_qs(request):
     return quotations.annotate(items_count=Count('items', distinct=True)).order_by('-created_at')
 
 
+# Total Amount bands for the combined list (same choices as /sapquotations/). value -> (min inclusive, max exclusive)
+COMBINED_TOTAL_BANDS = {
+    '0-5000': (0, 5001),
+    '5001-10000': (5001, 10001),
+    '10001-25000': (10001, 25001),
+    '25001-50000': (25001, 50001),
+    '50001-100000': (50001, 100001),
+    '100000+': (100001, None),
+}
+
+
+def _apply_combined_total_filter(qs, request, field):
+    """Narrow a queryset to the selected Total Amount band (GET ``total``). Unknown/blank = no filter."""
+    band = COMBINED_TOTAL_BANDS.get((request.GET.get('total') or '').strip())
+    if not band:
+        return qs
+    low, high = band
+    qs = qs.filter(**{field + '__gte': low})
+    if high is not None:
+        qs = qs.filter(**{field + '__lt': high})
+    return qs
+
+
 def sap_quotations_filtered_qs_combined(request):
     """
     SAP quotations with salesman_scope_q and GET filters aligned with the combined list:
@@ -684,7 +707,7 @@ def sap_quotations_filtered_qs_combined(request):
                 Q(customer_name__icontains=q) |
                 Q(salesman_name__icontains=q)
             )
-    return qs
+    return _apply_combined_total_filter(qs, request, 'document_total')
 
 
 def _style_inapp_quotation_excel_worksheet(worksheet):
@@ -1173,7 +1196,7 @@ def export_combined_quotations_consolidated_excel(request):
             })
     if source in ('all', 'app'):
         # Only Junaid in-app quotations are merged into the combined list.
-        app_qs = inapp_quotations_filtered_qs(request).filter(division='JUNAID').order_by('-quotation_date', '-id')
+        app_qs = _apply_combined_total_filter(inapp_quotations_filtered_qs(request).filter(division='JUNAID'), request, 'grand_total').order_by('-quotation_date', '-id')
         for a in app_qs.iterator(chunk_size=500):
             cust = a.customer
             d = a.quotation_date
@@ -1259,7 +1282,7 @@ def export_combined_quotations_items_excel(request):
             })
     if source in ('all', 'app'):
         # Only Junaid in-app quotations are merged into the combined list.
-        app_base = inapp_quotations_filtered_qs(request).filter(division='JUNAID')
+        app_base = _apply_combined_total_filter(inapp_quotations_filtered_qs(request).filter(division='JUNAID'), request, 'grand_total')
         app_items = (
             QuotationItem.objects.filter(quotation__in=app_base)
             .select_related('quotation', 'quotation__customer', 'quotation__salesman', 'item', 'alabama_item')
@@ -1418,7 +1441,7 @@ def _combined_quotation_calendar_context(request):
     # --- Junaid in-app quotations (quotation_date) ---
     if source in ('all', 'app'):
         app_list = list(
-            inapp_quotations_filtered_qs(cal_request)
+            _apply_combined_total_filter(inapp_quotations_filtered_qs(cal_request), cal_request, 'grand_total')
             .filter(division='JUNAID')
             .filter(quotation_date__year=qcal_year, quotation_date__month__in=qcal_months)
             .prefetch_related('items__item')
@@ -1472,7 +1495,12 @@ def _combined_quotation_calendar_context(request):
         _wv = float(week['total_value'])
         week['gp_pct'] = round(float(week['gp']) / _wv * 100, 1) if _wv else 0
 
+    _month_value = sum((d['total_value'] for d in month_days), Decimal('0'))
+    _month_gp = sum((d['gp'] for d in month_days), Decimal('0'))
+    month_gp_pct = round(float(_month_gp) / float(_month_value) * 100, 1) if _month_value else 0
+
     return {
+        'combined_month_gp_pct': month_gp_pct,
         'today': today,
         'qcal_year': qcal_year,
         'qcal_months': qcal_months,
@@ -1508,6 +1536,7 @@ def combined_quotations_list(request):
                 'qcal_months': cal_ctx['qcal_months'],
                 'combined_month_total_value': cal_ctx['combined_month_total_value'],
                 'combined_month_total_gp': cal_ctx['combined_month_total_gp'],
+                'combined_month_gp_pct': cal_ctx['combined_month_gp_pct'],
                 'combined_month_quotation_count': cal_ctx['combined_month_quotation_count'],
             },
             request=request,
@@ -1539,7 +1568,7 @@ def combined_quotations_list(request):
             })
     if source in ('all', 'app'):
         # Only Junaid in-app quotations are merged into the combined list.
-        app_qs = inapp_quotations_filtered_qs(request).filter(division='JUNAID').order_by('-quotation_date', '-id')
+        app_qs = _apply_combined_total_filter(inapp_quotations_filtered_qs(request).filter(division='JUNAID'), request, 'grand_total').order_by('-quotation_date', '-id')
         for a in app_qs.iterator(chunk_size=500):
             cust = a.customer
             d = a.quotation_date
@@ -1602,6 +1631,7 @@ def combined_quotations_list(request):
         'current_status': request.GET.get('status', 'All'),
         'source': source,
         'page_size': page_size,
+        'selected_total': (request.GET.get('total') or '').strip(),
     })
 
 

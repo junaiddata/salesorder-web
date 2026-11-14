@@ -1,5 +1,6 @@
 """In-app reminders on quotation follow-ups: saved with the follow-up, shown only to the author once due, dismiss/snooze."""
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -164,3 +165,50 @@ class FollowUpReminderTests(Base):
         resp = self.client.get(reverse('combined_quotations_list'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, reverse('followup_reminders_js'))
+
+
+@override_settings(ALLOWED_HOSTS=HOSTS)
+class CombinedGpPercentTests(Base):
+    def test_summary_shows_gp_percent_on_page_and_ajax(self):
+        self.login(self.so_admin)
+        resp = self.client.get(reverse('combined_quotations_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'GP %')
+        self.assertIn('combined_month_gp_pct', resp.context)
+        ajax = self.client.get(reverse('combined_quotations_list') + '?ajax=combined_calendar', **AJAX)
+        self.assertEqual(ajax.status_code, 200)
+        self.assertContains(ajax, 'GP %')
+
+
+@override_settings(ALLOWED_HOSTS=HOSTS)
+class CombinedTotalFilterTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.login(self.so_admin)
+        for num, amount in (('S-LOW', 3000), ('S-MID', 7000), ('S-HIGH', 150000)):
+            SAPQuotation.objects.create(q_number=num, customer_name='SAPCO', document_total=amount)
+        for amount in (3000, 30000):
+            Quotation.objects.create(customer=self.cust, salesman=self.salesman, division='JUNAID', grand_total=amount)
+
+    def _rows(self, total=None):
+        url = reverse('combined_quotations_list') + (('?' + urlencode({'total': total})) if total is not None else '')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        return resp
+
+    def test_all_and_unknown_values_do_not_filter(self):
+        self.assertEqual(self._rows().context['total_count'], 5)
+        self.assertEqual(self._rows('').context['total_count'], 5)
+        self.assertEqual(self._rows('bogus').context['total_count'], 5)
+
+    def test_each_band_keeps_only_matching_quotations_from_both_sources(self):
+        self.assertEqual(self._rows('0-5000').context['total_count'], 2)       # S-LOW + app 3000
+        self.assertEqual(self._rows('5001-10000').context['total_count'], 1)   # S-MID
+        self.assertEqual(self._rows('25001-50000').context['total_count'], 1)  # app 30000
+        self.assertEqual(self._rows('100000+').context['total_count'], 1)      # S-HIGH
+        self.assertEqual(self._rows('10001-25000').context['total_count'], 0)
+
+    def test_selected_band_stays_selected_and_summary_follows_it(self):
+        resp = self._rows('5001-10000')
+        self.assertEqual(resp.context['selected_total'], '5001-10000')
+        self.assertContains(resp, 'name="total"')
