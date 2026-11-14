@@ -291,11 +291,28 @@ def _items_table(q):
     if first_total_row > 1:
         style.append(('LINEBELOW', (0, first_total_row - 1), (-1, first_total_row - 1), 0.6, colors.black))
 
-    vat = subtotal * VAT_RATE
-    grand_total = subtotal + vat
-    for label, value, bold in ((f'TOTAL AMOUNT EXCL. VAT ({CURRENCY})', subtotal, False),
-                               (f'VAT {VAT_RATE:.0%} ({CURRENCY})', vat, False),
-                               (f'GRAND TOTAL ({CURRENCY})', grand_total, True)):
+    # Discount, resolved against the line subtotal exactly like the quotation screen does (PERCENT or AMOUNT);
+    # VAT is applied after the discount. With no discount this is identical to the old totals.
+    d_type = getattr(q, 'discount_type', None)
+    d_value = float(getattr(q, 'discount_value', 0) or 0)
+    if d_type == 'PERCENT':
+        discount = subtotal * (d_value / 100)
+    elif d_type == 'AMOUNT':
+        discount = min(d_value, subtotal)
+    else:
+        discount = 0.0
+    discount = max(discount, 0.0)
+
+    net = subtotal - discount
+    vat = net * VAT_RATE
+    grand_total = net + vat
+    total_rows = [(f'TOTAL AMOUNT EXCL. VAT ({CURRENCY})', subtotal, False)]
+    if discount > 0:
+        total_rows += [(f'DISCOUNT ({CURRENCY})', -discount, False),
+                       (f'NET AMOUNT EXCL. VAT ({CURRENCY})', net, False)]
+    total_rows += [(f'VAT {VAT_RATE:.0%} ({CURRENCY})', vat, False),
+                   (f'GRAND TOTAL ({CURRENCY})', grand_total, True)]
+    for label, value, bold in total_rows:
         r = len(rows)
         s = S_RIGHT_B if bold else S_RIGHT
         rows.append([''] * 3 + [Paragraph(label, s)] + [''] * 2 + [Paragraph(_money(value), s)])

@@ -4065,6 +4065,11 @@ def quotation_list(request):
         for d in quotation_month_days
     )
 
+    quotation_month_gp_pct = (
+        round(float(quotation_month_total_gp) / float(quotation_month_total_value) * 100, 1)
+        if quotation_month_total_value else 0
+    )
+
     if request.GET.get('ajax') == 'quotation_calendar' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         calendar_html = render_to_string(
             'quotes/_quotation_calendar_body.html',
@@ -4075,6 +4080,7 @@ def quotation_list(request):
                 'quotation_month_total_value': quotation_month_total_value,
                 'quotation_month_quotation_count': quotation_month_quotation_count,
                 'quotation_month_total_gp': quotation_month_total_gp,
+                'quotation_month_gp_pct': quotation_month_gp_pct,
             },
             request=request,
         )
@@ -4179,6 +4185,7 @@ def quotation_list(request):
         'quotation_month_total_value': quotation_month_total_value,
         'quotation_month_quotation_count': quotation_month_quotation_count,
         'quotation_month_total_gp': quotation_month_total_gp,
+        'quotation_month_gp_pct': quotation_month_gp_pct,
         'today': today,
         'firm_choices': firm_choices,
         'filters': {
