@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from so.views import *
 from . import views_quotation
+from . import followup_reminders
 from . import item_catalog_views
 from . import item_catalog_export
 from . import sap_salesorder_views
@@ -169,6 +170,9 @@ urlpatterns += [
     path("sapquotations/<str:q_number>/followup/", views.quotation_add_followup, name="quotation_add_followup"),
     path("sapquotations/<str:q_number>/followup/<int:followup_id>/delete/", views.quotation_delete_followup, name="quotation_delete_followup"),
     path("sapquotations/<str:q_number>/close/", views.quotation_close, name="quotation_close"),
+    path('followup-reminders/due/', followup_reminders.due, name='followup_reminders_due'),
+    path('followup-reminders/act/', followup_reminders.act, name='followup_reminders_act'),
+    path('followup-reminders/widget.js', followup_reminders.widget_js, name='followup_reminders_js'),
     path('update-device-location/', update_device_location, name='update_device_location'),
         # 1. Export the List (Summary)
     path('quotations/export-list/', views.export_quotation_list_pdf, name='export_quotation_list_pdf'),

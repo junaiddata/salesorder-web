@@ -671,6 +671,7 @@
               {% for value, label in followup_outcomes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
             </select>
             <label style="display:none;">Next follow-up <input type="date" name="next_followup_date"></label>
+            {% include "so/partials/_followup_remind_field.html" %}
             <button class="btn btn-success btn-sm" type="submit" style="margin-left:auto;">Add Follow-up</button>
           </div>
         </form>
@@ -700,6 +701,7 @@
                 <div class="fu-note">
                   {% if fu.outcome %}<span class="fu-badge">{{ fu.get_outcome_display }}</span>{% endif %}
                   {% if fu.next_followup_date %}<span class="fu-badge">Next: {{ fu.next_followup_date|date:"d M Y" }}</span>{% endif %}
+                  {% if fu.remind_at %}<span class="fu-badge">&#9200; Remind: {{ fu.remind_at|date:"d M Y, h:i A" }}</span>{% endif %}
                   {{ fu.note|linebreaksbr }}
                 </div>
               </div>
@@ -921,7 +923,8 @@
           if (!res.ok || !res.data.success) { fuNotice(res.data.error || 'Could not add the follow-up.'); return; }
           var f = res.data.followup;
           var badges = (f.outcome ? '<span class="fu-badge">' + esc(f.outcome) + '</span>' : '') +
-                       (f.next_followup_date ? '<span class="fu-badge">Next: ' + esc(f.next_followup_date) + '</span>' : '');
+                       (f.next_followup_date ? '<span class="fu-badge">Next: ' + esc(f.next_followup_date) + '</span>' : '') +
+                       (f.remind_at ? '<span class="fu-badge">&#9200; Remind: ' + esc(f.remind_at) + '</span>' : '');
           var div = document.createElement('div');
           div.className = 'fu-item followup-entry';
           div.innerHTML = '<div class="fu-avatar">' + esc((f.created_by || '?').charAt(0)) + '</div>' +
@@ -945,5 +948,6 @@
       });
     })();
   </script>
+<script src="{% url 'followup_reminders_js' %}" defer></script>
 </body>
 </html>

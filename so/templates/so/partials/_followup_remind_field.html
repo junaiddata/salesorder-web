@@ -1,0 +1,108 @@
+{# Reminder picker for the follow-up form (shared by both quotation detail pages). Posts as name="remind_at" ("YYYY-MM-DDTHH:MM"). #}
+<style>
+  .fu-remind { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: inherit; }
+  .fu-remind-field {
+    display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 10px; flex-wrap: wrap;
+    background: #fff; border: 1px solid #d1d5db; border-radius: 10px; transition: border-color .15s, box-shadow .15s;
+  }
+  .fu-remind-field:hover { border-color: #9ca3af; }
+  .fu-remind-field:focus-within { border-color: var(--primary, #1e3a5f); box-shadow: 0 0 0 3px rgba(43, 90, 140, .16); }
+  .fu-remind-field.is-set { border-color: var(--primary, #1e3a5f); background: #f3f7fc; }
+  .fu-remind-field.is-bad { border-color: #dc2626; background: #fef2f2; }
+  .fu-remind-ico { display: inline-flex; color: #b45309; flex: 0 0 auto; }
+  .fu-remind-lbl { font-size: 12px; font-weight: 600; color: #374151; white-space: nowrap; margin: 0; }
+  .fu-remind-date, .fu-remind-sel {
+    border: 1px solid #e5e7eb; outline: 0; background: #fff; font: inherit; font-size: 12.5px; color: #111827;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer; min-width: 0;
+  }
+  .fu-remind-sel { padding-right: 2px; }
+  .fu-remind-date:focus, .fu-remind-sel:focus { border-color: var(--primary, #1e3a5f); }
+  .fu-remind-date::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .6; }
+  .fu-remind-date::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+  .fu-remind-time { display: inline-flex; align-items: center; gap: 4px; }
+  .fu-remind-colon { font-weight: 700; color: #6b7280; }
+  .fu-remind-clear {
+    border: 0; background: #e5e7eb; color: #4b5563; width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .fu-remind-clear:hover { background: #fecaca; color: #b91c1c; }
+  .fu-remind-clear[hidden] { display: none; }
+  .fu-remind-clear:focus-visible { outline: 2px solid var(--primary, #1e3a5f); outline-offset: 2px; }
+  .fu-remind-msg { font-size: 11.5px; color: #b91c1c; width: 100%; }
+  .fu-remind-msg[hidden] { display: none; }
+</style>
+<div class="fu-remind" id="fu-remind" title="You will get an in-app reminder at this time (Dubai time)">
+  <span class="fu-remind-field" id="fu-remind-field">
+    <span class="fu-remind-ico" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    </span>
+    <span class="fu-remind-lbl">Remind me</span>
+    <input type="date" id="fu-remind-date" class="fu-remind-date" aria-label="Reminder date">
+    <span class="fu-remind-time">
+      <select id="fu-remind-hour" class="fu-remind-sel" aria-label="Hour"><option value="">HH</option></select>
+      <span class="fu-remind-colon">:</span>
+      <select id="fu-remind-min" class="fu-remind-sel" aria-label="Minute"><option value="">MM</option></select>
+      <select id="fu-remind-ampm" class="fu-remind-sel" aria-label="AM or PM"><option value="AM">AM</option><option value="PM">PM</option></select>
+    </span>
+    <button type="button" class="fu-remind-clear" id="fu-remind-clear" hidden title="Clear reminder" aria-label="Clear reminder">&times;</button>
+    <input type="hidden" name="remind_at" id="fu-remind-value">
+    <span class="fu-remind-msg" id="fu-remind-msg" hidden>Choose a time in the future.</span>
+  </span>
+</div>
+<script>
+(function () {
+  var root = document.getElementById('fu-remind');
+  if (!root) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var field = $('fu-remind-field'), date = $('fu-remind-date'), hour = $('fu-remind-hour'), min = $('fu-remind-min'),
+      ampm = $('fu-remind-ampm'), clear = $('fu-remind-clear'), value = $('fu-remind-value'), msg = $('fu-remind-msg');
+  var form = root.closest('form');
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+  for (var h = 1; h <= 12; h++) hour.add(new Option(pad(h), h));
+  for (var m = 0; m < 60; m++) min.add(new Option(pad(m), m));   // every minute, so "exactly 10:00" is possible
+
+  function compose() {
+    if (!date.value || hour.value === '' || min.value === '') return '';
+    var hh = parseInt(hour.value, 10) % 12 + (ampm.value === 'PM' ? 12 : 0);
+    return date.value + 'T' + pad(hh) + ':' + pad(parseInt(min.value, 10));
+  }
+  function refresh() {
+    var v = compose();
+    value.value = v;
+    var set = !!date.value || hour.value !== '' || min.value !== '';
+    var past = false;
+    if (v) {
+      var p = v.split(/[-T:]/).map(Number);
+      past = new Date(p[0], p[1] - 1, p[2], p[3], p[4]).getTime() <= Date.now();
+    }
+    field.classList.toggle('is-set', set && !past);
+    field.classList.toggle('is-bad', past);
+    msg.hidden = !past;
+    clear.hidden = !set;
+  }
+  function fillDefaultTime() {   // a date was picked but no time yet: start from the next full hour
+    if (hour.value !== '' && min.value !== '') return;
+    var d = new Date(Date.now() + 3600000);
+    hour.value = d.getHours() % 12 || 12;
+    min.value = 0;
+    ampm.value = d.getHours() >= 12 ? 'PM' : 'AM';
+  }
+  function reset() { date.value = ''; hour.value = ''; min.value = ''; ampm.value = 'AM'; refresh(); }
+
+  date.min = ymd(new Date());
+  date.addEventListener('focus', function () { date.min = ymd(new Date()); });
+  date.addEventListener('change', function () { if (date.value) fillDefaultTime(); refresh(); });
+  [hour, min, ampm].forEach(function (el) { el.addEventListener('change', function () {
+    if (!date.value && (hour.value !== '' || min.value !== '')) date.value = ymd(new Date());   // a time without a date means today
+    if (hour.value !== '' && min.value === '') min.value = 0;
+    if (min.value !== '' && hour.value === '') hour.value = 12;
+    refresh();
+  }); });
+  clear.addEventListener('click', reset);
+  if (form) form.addEventListener('reset', function () { setTimeout(reset, 0); });   // after a follow-up is added
+  refresh();
+})();
+</script>

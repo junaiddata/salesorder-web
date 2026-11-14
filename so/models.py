@@ -1302,6 +1302,9 @@ class QuotationFollowUp(models.Model):
     note = models.TextField()
     outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, blank=True, default='')
     next_followup_date = models.DateField(null=True, blank=True)
+    # In-app reminder for the author: shown once remind_at has passed, until dismissed (see so/followup_reminders.py).
+    remind_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    reminder_dismissed_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='quotation_followups',
     )
@@ -1330,6 +1333,9 @@ class SAPQuotationFollowUp(models.Model):
     note = models.TextField()
     outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, blank=True, default='')
     next_followup_date = models.DateField(null=True, blank=True)
+    # In-app reminder for the author: shown once remind_at has passed, until dismissed (see so/followup_reminders.py).
+    remind_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    reminder_dismissed_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='sap_quotation_followups',
     )

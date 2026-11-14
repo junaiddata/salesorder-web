@@ -2196,9 +2196,13 @@ def view_quotation_details(request, quotation_id):
             note = (request.POST.get('note') or '').strip()
             outcome = (request.POST.get('outcome') or '').strip()
             next_raw = (request.POST.get('next_followup_date') or '').strip()
+            from .followup_reminders import parse_remind_at, remind_at_display
+            remind_at, remind_error = parse_remind_at(request.POST.get('remind_at'))
             error = ''
             next_date = None
-            if not note:
+            if remind_error:
+                error = remind_error
+            elif not note:
                 error = 'Please enter a follow-up note.'
             elif outcome and outcome not in dict(QuotationFollowUp.OUTCOME_CHOICES):
                 error = 'Invalid outcome.'
@@ -2215,6 +2219,7 @@ def view_quotation_details(request, quotation_id):
             fu = QuotationFollowUp.objects.create(
                 quotation=quotation, note=note, outcome=outcome, next_followup_date=next_date,
                 created_by=request.user if request.user.is_authenticated else None,
+                remind_at=remind_at if request.user.is_authenticated else None,   # reminders need an author to notify
             )
             if is_ajax:
                 from django.utils import timezone as _tz
@@ -2226,6 +2231,7 @@ def view_quotation_details(request, quotation_id):
                         'note': fu.note,
                         'outcome': fu.get_outcome_display(),
                         'next_followup_date': fu.next_followup_date.strftime('%d %b %Y') if fu.next_followup_date else '',
+                        'remind_at': remind_at_display(fu.remind_at),
                         'created_by': (fu.created_by.get_full_name() or fu.created_by.get_username()) if fu.created_by else '',
                         'created_at': _tz.localtime(fu.created_at).strftime('%d %b %Y, %I:%M %p'),
                     },
