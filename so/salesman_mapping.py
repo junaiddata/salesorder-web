@@ -147,7 +147,36 @@ def get_quotation_salesman_groups():
         if n:
             _place_salesman_name_in_groups(groups, n)
 
+    _apply_fixed_quotation_groups(groups)
+
     return {k: frozenset(v) for k, v in groups.items() if v}
+
+
+# Groups whose membership is fixed explicitly for the quotation salesman filters (this does NOT affect
+# SALESMAN_MAPPING / map_salesman_name, so syncs, finance and analysis pages are unchanged).
+# label -> exact salesman_name spellings (matched case-insensitively by the filters).
+FIXED_QUOTATION_GROUPS = {
+    "DIP": ["D.RETAIL CUST DIP", "A.DIP ADIL", "DIP", "A.DIP STORE"],
+}
+
+
+def _apply_fixed_quotation_groups(groups):
+    """Force each FIXED_QUOTATION_GROUPS label to contain exactly its listed names. Any other name that was in
+    that group (e.g. -No Sales Employee-, Z.ONLINE SALES, PALSON, ADIL) is moved to its own entry so it stays selectable,
+    and the fixed names are removed from every other group so none appears under two labels."""
+    for label, members in FIXED_QUOTATION_GROUPS.items():
+        fixed = {m.strip() for m in members if m and m.strip()}
+        fixed_lower = {m.lower() for m in fixed}
+        displaced = {n for n in groups.get(label, set()) if n.lower() not in fixed_lower and n != label}
+        for canon in list(groups.keys()):
+            if canon == label:
+                continue
+            groups[canon] = {n for n in groups[canon] if n.lower() not in fixed_lower}
+        groups[label] = set(fixed) | {label}
+        for n in displaced:
+            # keep it selectable under its own name unless some other group already holds it
+            if not any(n in v for c, v in groups.items() if c != label):
+                groups[n].add(n)
 
 
 def get_quotation_salesman_canonical_choices_sorted():

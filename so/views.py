@@ -3594,7 +3594,7 @@ SALES_USER_MAP = {
 
     
     "stephy": ["A.DIP STEFFY", "STEPHY"],
-    "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR","A.DIP ADIL","D.RETAIL CUST DIP", "MUZAMMIL"],
+    "muzammil1": ["A.DIP MUZAMMIL" ,"A.DIP STEFFY","A.DIP KADAR", "MUZAMMIL"],
     "retail": ["R.NAH","R.ABUDHABI" ,"R.AJMAN","R.QUSAIS","R.STORES","E.DEIRA 1","R.DEIRA 2"],
     "retailabudhabi": ["R.ABUDHABI","ABUL","A. ABUL"],
     "retailajman": ["R.AJMAN"],
