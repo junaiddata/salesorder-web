@@ -239,6 +239,10 @@ def export_item_sold_analysis_pdf(request):
 
     data_table = Table(table_data, colWidths=col_widths, repeatRows=1)
     table_style = _build_analysis_table_style(num_rows=len(table_data), customer_row_indices=set())
+    # Header text is white (shared style); force a dark background so it is visible.
+    # (Shared CLR_BG_HEADER was redefined as light grey in finance_statement_pdf_export.)
+    from reportlab.lib.colors import HexColor
+    table_style.add('BACKGROUND', (0, 0), (-1, 0), HexColor('#1B2A4A'))
     table_style.add('ALIGN', (4, 0), (11, -1), 'RIGHT')
     table_style.add('ALIGN', (12, 0), (12, -1), 'CENTER')
     table_style.add('ALIGN', (0, 0), (0, -1), 'CENTER')
