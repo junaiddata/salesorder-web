@@ -655,7 +655,8 @@ def export_customer_analysis_pdf(request):
     start_date = request.GET.get('start', '').strip()
     end_date = request.GET.get('end', '').strip()
     category_filter = request.GET.get('category', 'All').strip()
-    
+    hide_zero_sales = request.GET.get('hide_zero') == '1'
+
     # Get base querysets
     invoice_qs = SAPARInvoice.objects.filter(salesman_scope_q_salesorder(request.user))
     creditmemo_qs = SAPARCreditMemo.objects.filter(salesman_scope_q_salesorder(request.user))
@@ -900,9 +901,17 @@ def export_customer_analysis_pdf(request):
             customer_data[key]['years'][year]['total_sales'] += item.get('total_sales', Decimal('0'))
             customer_data[key]['years'][year]['total_gp'] += item.get('total_gp', Decimal('0'))
     
+    # Optional: hide customers whose total sales (all years) is 0 — same as on-screen view
+    customer_values = list(customer_data.values())
+    if hide_zero_sales:
+        customer_values = [
+            c for c in customer_values
+            if sum(y.get('total_sales', Decimal('0')) for y in c['years'].values()) != 0
+        ]
+
     # Convert to sorted list
     customers_list = sorted(
-        customer_data.values(),
+        customer_values,
         key=lambda x: sum(y.get('total_sales', Decimal('0')) for y in x['years'].values()),
         reverse=True
     )
@@ -926,11 +935,13 @@ def export_customer_analysis_pdf(request):
     styles = getSampleStyleSheet()
     
     # Logo
-    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    # Load logo from local media dir (no network / WebP dependency); skip if unavailable
     try:
-        logo = Image(logo_url, width=2*inch, height=0.7*inch)
-        elements.append(logo)
-        elements.append(Spacer(1, 0.2*inch))
+        from .finance_statement_pdf_export import _get_logo
+        logo = _get_logo()
+        if logo is not None:
+            elements.append(logo)
+            elements.append(Spacer(1, 0.2*inch))
     except Exception:
         pass
     

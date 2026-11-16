@@ -631,7 +631,7 @@
           <i class="fas fa-chart-bar"></i>
           Item Analysis
         </a>
-        <a href="{% url 'export_customer_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
+        <a id="export-pdf-link" href="{% url 'export_customer_analysis_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-primary" style="background: #dc3545; border-color: #dc3545;">
           <i class="fas fa-file-pdf"></i>
           Export PDF
         </a>
@@ -1239,6 +1239,16 @@
         });
       });
 
+      // Keep Export PDF link in sync with the current (AJAX-applied) filters
+      function syncExportPdfLink() {
+        const link = document.getElementById('export-pdf-link');
+        if (!link) return;
+        const p = new URLSearchParams(window.location.search);
+        p.delete('ajax');
+        p.delete('page');
+        link.href = '{% url "export_customer_analysis_pdf" %}' + (p.toString() ? '?' + p.toString() : '');
+      }
+
       // Apply filters button - AJAX version
       const applyBtn = document.getElementById('apply-filters');
       const filtersForm = document.getElementById('filters-form');
@@ -1316,6 +1326,7 @@
             
             // Update URL without reload
             window.history.pushState({}, '', '{% url "customer_analysis" %}?' + params.toString());
+            syncExportPdfLink();
           } else {
             console.error('Error:', data.error);
             // Fallback to page reload
@@ -1395,6 +1406,7 @@
               
               // Update URL without reload
               window.history.pushState({}, '', '{% url "customer_analysis" %}?' + currentParams.toString());
+              syncExportPdfLink();
             } else {
               console.error('Error:', data.error);
               window.location.href = '{% url "customer_analysis" %}?' + currentParams.toString();
