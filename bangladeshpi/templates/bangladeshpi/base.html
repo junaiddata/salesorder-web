@@ -106,6 +106,23 @@
             document.getElementById('appNav').classList.toggle('open');
         });
 
+        // Flash messages close by themselves: 5 s (8 s for errors), fade out, and stay open while hovered.
+        document.querySelectorAll('#flashStack .flash').forEach(function (flash) {
+            var isError = flash.classList.contains('error') || flash.classList.contains('danger');
+            var remaining = isError ? 8000 : 5000, started = null, timer = null;
+            function close() {
+                flash.style.transition = 'opacity .4s, transform .4s';
+                flash.style.opacity = '0';
+                flash.style.transform = 'translateX(12px)';
+                setTimeout(function () { flash.remove(); }, 420);
+            }
+            function start() { started = Date.now(); timer = setTimeout(close, remaining); }
+            function pause() { clearTimeout(timer); remaining -= Date.now() - started; if (remaining < 1500) remaining = 1500; }
+            flash.addEventListener('mouseenter', pause);
+            flash.addEventListener('mouseleave', start);
+            start();
+        });
+
         // <form data-confirm="..."> shows the dialog above before submitting.
         document.querySelectorAll('form[data-confirm]').forEach(function (form) {
             form.addEventListener('submit', function (e) {

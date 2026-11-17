@@ -94,6 +94,13 @@
                                 <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-file-excel"></i> Bank Excel</span>
                                 {% endif %}
                             </span>
+                            <span class="act-group">
+                                {% if p.has_bank_prices %}
+                                <a href="{% url 'bangladeshpi:ci_edit' p.pk %}" class="btn-x" title="Make or open the commercial invoice for this PI"><i class="fas fa-file-contract"></i> Commercial Invoice</a>
+                                {% else %}
+                                <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-file-contract"></i> Commercial Invoice</span>
+                                {% endif %}
+                            </span>
                             <span class="act-group end">
                                 <a href="{% url 'bangladeshpi:edit' p.pk %}" class="btn-x" title="Edit"><i class="fas fa-pen"></i></a>
                                 <form method="post" action="{% url 'bangladeshpi:delete' p.pk %}" style="display:inline;"

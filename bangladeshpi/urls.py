@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import commercial_views, views
 
 app_name = 'bangladeshpi'
 
@@ -13,4 +13,6 @@ urlpatterns = [
     path('<int:pk>/delete/', views.pi_delete, name='delete'),
     path('<int:pk>/pdf/', views.pi_pdf, name='pdf'),
     path('<int:pk>/excel/', views.pi_excel, name='excel'),
+    path('<int:pk>/commercial-invoice/', commercial_views.ci_edit, name='ci_edit'),
+    path('<int:pk>/commercial-invoice/pdf/', commercial_views.ci_pdf, name='ci_pdf'),
 ]

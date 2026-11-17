@@ -133,3 +133,71 @@ class BangladeshPISeal(models.Model):
     def get_instance(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class BangladeshCommercialInvoice(models.Model):
+    """Commercial invoice made from a Bangladesh PI's bank copy.
+
+    Everything that comes from the PI (invoice no, items, bank prices, bank freight,
+    PI ref/date, origin) is COPIED here when the invoice is created, so editing or
+    re-saving the PI later never changes an issued invoice. "Refresh from PI" re-copies.
+    """
+
+    pi = models.OneToOneField(BangladeshPI, on_delete=models.CASCADE, related_name='commercial_invoice')
+    # copied from the PI
+    invoice_no = models.CharField(max_length=60)
+    pi_ref_no = models.CharField(max_length=80)
+    pi_date = models.DateField(null=True, blank=True)
+    country_of_origin = models.CharField(max_length=200, blank=True)
+    hs_code = models.CharField(max_length=60, blank=True)
+    freight_charges = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
+    # typed by the user
+    invoice_date = models.DateField(default=timezone.localdate)
+    comm_ref_no = models.CharField(max_length=60, blank=True)
+    to_order_of = models.TextField(blank=True)
+    packages = models.CharField(max_length=40, blank=True)
+    lc_number = models.CharField(max_length=80, blank=True)
+    lc_date = models.DateField(null=True, blank=True)
+    container_no = models.CharField(max_length=60, blank=True)
+    gross_weight = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    net_weight = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    volume = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    add_signature = models.BooleanField(default=False)
+    add_stamp = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Commercial invoice {self.invoice_no}'
+
+    @property
+    def cfr_total(self):
+        return sum((l.amount for l in self.lines.all() if l.kind == 'item'), Decimal('0'))
+
+    @property
+    def fob_total(self):
+        return self.cfr_total - (self.freight_charges or Decimal('0'))
+
+
+class BangladeshCommercialInvoiceLine(models.Model):
+    ci = models.ForeignKey(BangladeshCommercialInvoice, on_delete=models.CASCADE, related_name='lines')
+    position = models.PositiveIntegerField(default=0)
+    kind = models.CharField(max_length=10, default='item')       # 'item' or 'heading'
+    code = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    qty = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))   # the bank price
+    pack = models.PositiveIntegerField(null=True, blank=True)
+    gross_kg = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    net_kg = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+
+    @property
+    def amount(self):
+        return (self.qty or Decimal('0')) * (self.unit_price or Decimal('0'))
