@@ -105,6 +105,7 @@ def _analysis_data(request):
     )
 
     brand_summaries = []
+    brand_totals = None
     rank_rows = []
     grand_sales = Decimal('0')
 
@@ -217,6 +218,20 @@ def _analysis_data(request):
         for s in brand_summaries:
             s['share'] = _pct(s['sales'], grand_sales)
 
+        # Combined totals across all selected brands (stock intentionally omitted)
+        t_sales = sum((s['sales'] for s in brand_summaries), Decimal('0'))
+        t_gp = sum((s['gp'] for s in brand_summaries), Decimal('0'))
+        t_qty = sum((s['qty'] for s in brand_summaries), Decimal('0'))
+        brand_totals = {
+            'sales': t_sales,
+            'gp': t_gp,
+            'gp_pct': _pct(t_gp, t_sales),
+            'qty': t_qty,
+            'item_count': sum(s['item_count'] for s in brand_summaries),
+            'avg_rate': (t_sales / t_qty) if t_qty else Decimal('0'),
+            'share': Decimal('100') if t_sales else Decimal('0'),
+        }
+
         # Side-by-side rank table: row i holds each brand's i-th best item
         max_items = max((len(v) for v in ranked.values()), default=0)
         for i in range(max_items):
@@ -252,6 +267,7 @@ def _analysis_data(request):
         'hide_zero': hide_zero,
         'is_admin': is_admin,
         'brand_summaries': brand_summaries,
+        'brand_totals': brand_totals,
         'rank_rows': rank_rows,
         'grand_sales': grand_sales,
     }
@@ -328,7 +344,11 @@ def export_supplier_brandwise_item_analysis_excel(request):
     ws.cell(row=r, column=1, value='Metric')
     for i, b in enumerate(summaries):
         ws.cell(row=r, column=2 + i, value=b['brand'])
-    for c in range(1, 2 + len(summaries)):
+    totals = d.get('brand_totals')
+    if totals:
+        ws.cell(row=r, column=2 + len(summaries), value='Total')
+    n_cols = len(summaries) + (1 if totals else 0)
+    for c in range(1, 2 + n_cols):
         cell = ws.cell(row=r, column=c)
         cell.fill, cell.font, cell.alignment, cell.border = head_fill, head_font, center, border
 
@@ -350,8 +370,15 @@ def export_supplier_brandwise_item_analysis_excel(request):
             cell = ws.cell(row=r, column=2 + i, value=float(b[key]))
             cell.number_format = fmt
             cell.border = border
+        if totals and key != 'stock':
+            cell = ws.cell(row=r, column=2 + len(summaries), value=float(totals[key]))
+            cell.number_format = fmt
+            cell.border = border
+            cell.font = Font(bold=True)
+        elif totals:
+            ws.cell(row=r, column=2 + len(summaries)).border = border
     ws.column_dimensions['A'].width = 16
-    for i in range(len(summaries)):
+    for i in range(n_cols):
         ws.column_dimensions[get_column_letter(2 + i)].width = 22
 
     # Item comparison sheet: one block of columns per brand
@@ -453,16 +480,23 @@ def export_supplier_brandwise_item_analysis_pdf(request):
     grid = colors.HexColor('#CBD5E1')
 
     # Summary: metric rows x brand columns
-    rows = [['Metric'] + [b['brand'] for b in summaries]]
-    rows.append(['Sales'] + [_num(b['sales']) for b in summaries])
+    tt = d.get('brand_totals')
+
+    def _tot(v):
+        return [v] if tt else []
+
+    rows = [['Metric'] + [b['brand'] for b in summaries] + _tot('Total')]
+    rows.append(['Sales'] + [_num(b['sales']) for b in summaries] + (_tot(_num(tt['sales']))))
     if is_admin:
-        rows.append(['GP'] + [_num(b['gp']) for b in summaries])
-        rows.append(['GP %'] + [f"{_num(b['gp_pct'])}%" for b in summaries])
-    rows.append(['Stock'] + [_num(b['stock'], 0) for b in summaries])
-    rows.append(['Quantity'] + [_num(b['qty'], 0) for b in summaries])
-    rows.append(['Items'] + [str(b['item_count']) for b in summaries])
-    rows.append(['Avg Rate'] + [_num(b['avg_rate']) for b in summaries])
-    rows.append(['Share %'] + [f"{_num(b['share'])}%" for b in summaries])
+        rows.append(['GP'] + [_num(b['gp']) for b in summaries] + _tot(_num(tt['gp']) if tt else ''))
+        rows.append(['GP %'] + [f"{_num(b['gp_pct'])}%" for b in summaries]
+                    + _tot(f"{_num(tt['gp_pct'])}%" if tt else ''))
+    rows.append(['Stock'] + [_num(b['stock'], 0) for b in summaries] + _tot('-'))
+    rows.append(['Quantity'] + [_num(b['qty'], 0) for b in summaries] + _tot(_num(tt['qty'], 0) if tt else ''))
+    rows.append(['Items'] + [str(b['item_count']) for b in summaries] + _tot(str(tt['item_count']) if tt else ''))
+    rows.append(['Avg Rate'] + [_num(b['avg_rate']) for b in summaries] + _tot(_num(tt['avg_rate']) if tt else ''))
+    rows.append(['Share %'] + [f"{_num(b['share'])}%" for b in summaries]
+                + _tot(f"{_num(tt['share'])}%" if tt else ''))
     t = Table(rows, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), navy), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),

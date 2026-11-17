@@ -3810,6 +3810,13 @@ def _sap_quotation_list_apply_request_filters(base_qs, request, *, apply_posting
         if q_firm is not None:
             qs = qs.filter(q_firm).distinct()
 
+    customer_filter = request.GET.get('customer', '').strip()
+    if customer_filter:
+        qs = qs.filter(
+            Q(customer_name__icontains=customer_filter)
+            | Q(customer_code__icontains=customer_filter)
+        )
+
     if total_range:
         if total_range == "0-5000":
             qs = qs.filter(document_total__gte=0, document_total__lte=5000)
@@ -4167,7 +4174,21 @@ def quotation_list(request):
         key=str.lower,
     )
 
+    try:
+        customer_choices = sorted(
+            {
+                (n or '').strip()
+                for n in quotation_scope_qs.order_by()
+                .values_list('customer_name', flat=True).distinct()
+                if n and n.strip()
+            },
+            key=str.lower,
+        )
+    except Exception:
+        customer_choices = []
+
     return render(request, 'quotes/quotation_list.html', {
+        'customer_choices': customer_choices,
         'page_obj': page_obj,
         'total_count': paginator.count,
         'total_2025': total_2025,      # ✅ send to template
@@ -4198,6 +4219,7 @@ def quotation_list(request):
             'total': total_range,      # ✅ for keeping dropdown selected
             'remarks': remarks_filter, # ✅ for keeping dropdown selected
             'firm_selected': request.GET.getlist('firm'),
+            'customer_selected': request.GET.get('customer', '').strip(),
         }
     })
 
@@ -4515,6 +4537,10 @@ def export_quotation_list_pdf(request):
         q_firm = _sap_quotation_firm_filter_q(firm_filter_list)
         if q_firm is not None:
             qs = qs.filter(q_firm).distinct()
+
+    customer_filter = request.GET.get('customer', '').strip()
+    if customer_filter:
+        qs = qs.filter(Q(customer_name__icontains=customer_filter) | Q(customer_code__icontains=customer_filter))
 
     # Apply Total Range Filter
     if total_range:

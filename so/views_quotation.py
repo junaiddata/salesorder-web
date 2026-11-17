@@ -594,6 +594,14 @@ def inapp_quotations_filtered_qs(request):
             | Q(customer_display_name__icontains=q)
         )
 
+    customer_filter = (request.GET.get('customer') or '').strip()
+    if customer_filter:
+        quotations = quotations.filter(
+            Q(customer__customer_name__icontains=customer_filter)
+            | Q(customer__customer_code__icontains=customer_filter)
+            | Q(customer_display_name__icontains=customer_filter)
+        )
+
     source = (request.GET.get('source') or 'All').strip()
     if source == 'agent':
         # quotation_draft is the reverse OneToOne from emailagent.QuotationDraft
@@ -707,6 +715,12 @@ def sap_quotations_filtered_qs_combined(request):
                 Q(customer_name__icontains=q) |
                 Q(salesman_name__icontains=q)
             )
+    customer_filter = (request.GET.get('customer') or '').strip()
+    if customer_filter:
+        qs = qs.filter(
+            Q(customer_name__icontains=customer_filter)
+            | Q(customer_code__icontains=customer_filter)
+        )
     return _apply_combined_total_filter(qs, request, 'document_total')
 
 
@@ -929,6 +943,8 @@ def view_quotations(request):
     for f in request.GET.getlist('firm'):
         if (f or '').strip():
             query_params.append('firm=' + quote(f.strip()))
+    if (request.GET.get('customer') or '').strip():
+        query_params.append('customer=' + quote(request.GET.get('customer').strip()))
     query_string = "&".join(query_params)
 
     if _alabama_list_mode(request):
@@ -946,7 +962,29 @@ def view_quotations(request):
         )
     firm_selected = [f.strip() for f in request.GET.getlist('firm') if f.strip()]
 
+    # Customer dropdown suggestions: customers on quotations visible to this user
+    # (same role/division/salesman scoping, but ignoring the current list filters).
+    customer_choices = []
+    try:
+        import copy
+        from django.http import QueryDict
+        scope_request = copy.copy(request)
+        scope_request.GET = QueryDict('')
+        names = set()
+        for n, dn in inapp_quotations_filtered_qs(scope_request).order_by().values_list(
+            'customer__customer_name', 'customer_display_name'
+        ):
+            n = (n or dn or '').strip()
+            if n:
+                names.add(n)
+        customer_choices = sorted(names, key=str.lower)
+    except Exception:
+        customer_choices = []
+    customer_selected = (request.GET.get('customer') or '').strip()
+
     context = {
+        'customer_choices': customer_choices,
+        'customer_selected': customer_selected,
         'quotations': quotations_page,
         'all_salesmen': all_salesmen,
         'selected_salesman': request.GET.get('salesman_filter'),
@@ -1031,6 +1069,8 @@ def view_quotations_ajax(request):
     for f in request.GET.getlist('firm'):
         if (f or '').strip():
             query_params.append('firm=' + quote(f.strip()))
+    if (request.GET.get('customer') or '').strip():
+        query_params.append('customer=' + quote(request.GET.get('customer').strip()))
     query_string = "&".join(query_params)
 
     html = render_to_string(
@@ -1615,7 +1655,33 @@ def combined_quotations_list(request):
 
     calendar_ctx = _combined_quotation_calendar_context(request)
 
+    # Customer dropdown suggestions (SAP + in-app), scoped to what this user may see,
+    # ignoring the current list filters. Failure just leaves the list empty.
+    customer_choices = []
+    try:
+        import copy
+        from django.http import QueryDict
+        scope_request = copy.copy(request)
+        scope_request.GET = QueryDict('')
+        names = set()
+        for n in sap_quotations_filtered_qs_combined(scope_request).order_by().values_list(
+            'customer_name', flat=True
+        ).distinct():
+            if n and n.strip():
+                names.add(n.strip())
+        for n, dn in inapp_quotations_filtered_qs(scope_request).filter(division='JUNAID').order_by().values_list(
+            'customer__customer_name', 'customer_display_name'
+        ):
+            n = (n or dn or '').strip()
+            if n:
+                names.add(n)
+        customer_choices = sorted(names, key=str.lower)
+    except Exception:
+        customer_choices = []
+
     return render(request, 'so/quotations/combined_quotations.html', {
+        'customer_choices': customer_choices,
+        'customer_selected': (request.GET.get('customer') or '').strip(),
         'page_obj': page_obj,
         'total_count': paginator.count,
         'query_string': query_string,

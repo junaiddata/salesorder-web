@@ -287,34 +287,41 @@
             <tr>
               <th class="col-brand">Metric</th>
               {% for b in brand_summaries %}<th>{{ b.brand }}</th>{% endfor %}
+              {% if brand_totals %}<th>Total</th>{% endif %}
             </tr>
           </thead>
           <tbody>
             <tr>
               <td class="col-brand">Sales</td>
               {% for b in brand_summaries %}<td>{{ b.sales|floatformat:2|intcomma }}</td>{% endfor %}
+              {% if brand_totals %}<td><strong>{{ brand_totals.sales|floatformat:2|intcomma }}</strong></td>{% endif %}
             </tr>
             {% if is_admin %}
             <tr>
               <td class="col-brand">Gross Profit</td>
               {% for b in brand_summaries %}<td>{{ b.gp|floatformat:2|intcomma }}</td>{% endfor %}
+              {% if brand_totals %}<td><strong>{{ brand_totals.gp|floatformat:2|intcomma }}</strong></td>{% endif %}
             </tr>
             <tr>
               <td class="col-brand">GP %</td>
               {% for b in brand_summaries %}<td>{{ b.gp_pct|floatformat:2 }}%</td>{% endfor %}
+              {% if brand_totals %}<td><strong>{{ brand_totals.gp_pct|floatformat:2 }}%</strong></td>{% endif %}
             </tr>
             {% endif %}
             <tr>
               <td class="col-brand">Total Stock</td>
               {% for b in brand_summaries %}<td>{{ b.stock|floatformat:"-2"|intcomma }}</td>{% endfor %}
+              {% if brand_totals %}<td>-</td>{% endif %}
             </tr>
             <tr>
               <td class="col-brand">Quantity</td>
               {% for b in brand_summaries %}<td>{{ b.qty|floatformat:"-2"|intcomma }}</td>{% endfor %}
+              {% if brand_totals %}<td><strong>{{ brand_totals.qty|floatformat:"-2"|intcomma }}</strong></td>{% endif %}
             </tr>
             <tr>
               <td class="col-brand">Average Rate</td>
               {% for b in brand_summaries %}<td>{{ b.avg_rate|floatformat:2|intcomma }}</td>{% endfor %}
+              {% if brand_totals %}<td><strong>{{ brand_totals.avg_rate|floatformat:2|intcomma }}</strong></td>{% endif %}
             </tr>
           </tbody>
         </table>

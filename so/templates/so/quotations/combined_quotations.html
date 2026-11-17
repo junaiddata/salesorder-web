@@ -207,6 +207,7 @@
             color: white; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         }
         .filter-card .option-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .filter-card .option-label.cust-selected { background: var(--combo-primary-ghost); font-weight: 600; }
         .filter-card .options-empty {
             padding: 20px 14px; text-align: center; color: var(--combo-text-muted); font-size: 0.8125rem;
         }
@@ -289,6 +290,36 @@
                 </div>
             </div>
             {% endif %}
+            <div class="col-md-3 col-lg-3">
+                <div class="field-ms">
+                    <label>Customer</label>
+                    <input type="hidden" id="customerFilter" name="customer" value="{{ customer_selected|default:'' }}">
+                    <div class="multi-select" id="cust-wrapper">
+                        <div class="select-box" id="cust-trigger" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
+                            <span class="select-box-text{% if not customer_selected %} placeholder{% endif %}" id="cust-display">{% if customer_selected %}{{ customer_selected }}{% else %}All customers{% endif %}</span>
+                            <button type="button" class="select-box-clear{% if customer_selected %} visible{% endif %}" id="cust-clear" title="Clear" aria-label="Clear customer">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <i class="fas fa-chevron-down select-box-chevron"></i>
+                        </div>
+                        <div class="options-container" id="cust-options" role="listbox" aria-label="Select customer">
+                            <div class="options-header">
+                                <div class="options-search-wrap">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="cust-search" class="options-search" placeholder="Search customers…" autocomplete="off" aria-label="Search customers">
+                                </div>
+                            </div>
+                            <div class="options-list" id="cust-options-list" role="group">
+                                <label class="option-label" data-value="" role="option"><span class="option-text">All customers</span></label>
+                                {% for c in customer_choices %}
+                                <label class="option-label{% if c == customer_selected %} cust-selected{% endif %}" data-value="{{ c }}" role="option"><span class="option-text">{{ c }}</span></label>
+                                {% endfor %}
+                            </div>
+                            <div class="options-empty" id="cust-no-results" style="display:none;">No customers found</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-md-2">
                 <label class="form-label small text-muted">Division</label>
                 <select class="form-select form-select-sm" name="division">
@@ -615,6 +646,86 @@
     if (e.key === 'Escape') closeDropdown();
   });
   updateDisplay();
+})();
+
+// Customer single-select with search (value goes in hidden input "customer"; applied with the Apply button)
+(function () {
+  'use strict';
+  var wrap = document.getElementById('cust-wrapper');
+  var trigger = document.getElementById('cust-trigger');
+  var panel = document.getElementById('cust-options');
+  var list = document.getElementById('cust-options-list');
+  var display = document.getElementById('cust-display');
+  var search = document.getElementById('cust-search');
+  var clearBtn = document.getElementById('cust-clear');
+  var noRes = document.getElementById('cust-no-results');
+  var hidden = document.getElementById('customerFilter');
+  if (!wrap || !trigger || !panel || !list || !hidden) return;
+
+  function labels() { return Array.from(list.querySelectorAll('.option-label')); }
+  function open() {
+    panel.classList.add('active'); trigger.classList.add('active');
+    trigger.setAttribute('aria-expanded', 'true');
+    setTimeout(function () { if (search) search.focus(); }, 50);
+  }
+  function close() {
+    panel.classList.remove('active'); trigger.classList.remove('active');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (search) search.value = '';
+    labels().forEach(function (l) { l.classList.remove('option-hidden'); });
+    if (noRes) noRes.style.display = 'none';
+  }
+  function setValue(v) {
+    hidden.value = v;
+    display.textContent = v || 'All customers';
+    display.className = 'select-box-text' + (v ? '' : ' placeholder');
+    if (clearBtn) clearBtn.classList.toggle('visible', !!v);
+    labels().forEach(function (l) {
+      l.classList.toggle('cust-selected', !!v && l.getAttribute('data-value') === v);
+    });
+    close();
+  }
+  trigger.addEventListener('click', function (e) {
+    if (e.target.closest('.select-box-clear')) return;
+    e.preventDefault(); e.stopPropagation();
+    if (panel.classList.contains('active')) close(); else open();
+  });
+  trigger.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (panel.classList.contains('active')) close(); else open();
+    }
+  });
+  panel.addEventListener('click', function (e) { e.stopPropagation(); });
+  list.addEventListener('click', function (e) {
+    var l = e.target.closest('.option-label');
+    if (l) setValue(l.getAttribute('data-value') || '');
+  });
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      setValue('');
+    });
+  }
+  if (search) {
+    search.addEventListener('input', function () {
+      var term = search.value.trim().toLowerCase();
+      var shown = 0;
+      labels().forEach(function (l) {
+        var text = (l.querySelector('.option-text') || {}).textContent || '';
+        var ok = !term || text.toLowerCase().indexOf(term) !== -1;
+        l.classList.toggle('option-hidden', !ok);
+        if (ok) shown++;
+      });
+      if (noRes) noRes.style.display = shown ? 'none' : 'block';
+    });
+  }
+  document.addEventListener('click', function (e) {
+    if (!wrap.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+  });
 })();
 
 // Combined quotations calendar: multi-month checkboxes; qcal_year / repeated qcal_month via AJAX
