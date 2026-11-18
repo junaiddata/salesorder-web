@@ -1317,7 +1317,13 @@
                             {% endif %}
                         </span>
                     </div>
-                    
+                    <div class="info-item">
+                        <span class="info-label">Created By</span>
+                        <span class="info-value">
+                            {% if creator_name %}{{ creator_name }}{% else %}<span style="color: var(--sap-gray-500);">-</span>{% endif %}
+                        </span>
+                    </div>
+
                     <div class="info-item">
                         <span class="info-label">Grand Total (incl. 5% VAT)</span>
                         <span class="info-value" style="color: var(--sap-blue); font-size: 18px; font-weight: 600;">

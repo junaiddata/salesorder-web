@@ -924,6 +924,9 @@ def view_quotations(request):
     except EmptyPage:
         quotations_page = paginator.page(paginator.num_pages)
 
+    from .quotation_creator import attach_creator_names
+    quotations_page.object_list = attach_creator_names(quotations_page.object_list)   # sets .creator_name (display only)
+
     # Build query string for pagination links
     query_params = []
     if status and status != 'All':
@@ -1050,6 +1053,9 @@ def view_quotations_ajax(request):
         quotations_page = paginator.page(1)
     except EmptyPage:
         quotations_page = paginator.page(paginator.num_pages)
+
+    from .quotation_creator import attach_creator_names
+    quotations_page.object_list = attach_creator_names(quotations_page.object_list)   # sets .creator_name (display only)
 
     query_params = []
     if status and status != 'All':
@@ -2472,7 +2478,11 @@ def view_quotation_details(request, quotation_id):
     for _fu in followups:
         _fu.can_delete = _fu.can_be_deleted_by(request.user)
 
+    from .quotation_creator import attach_creator_names
+    creator_name = attach_creator_names([quotation])[0].creator_name   # display only
+
     return render(request, "so/quotations/view_quotation_details.html", {
+        "creator_name": creator_name,
         "quotation": quotation,
         "quotation_items": quotation_items,
         "followups": followups,

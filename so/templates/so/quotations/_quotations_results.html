@@ -40,6 +40,9 @@
           {% if quotation.salesman %}
             <p class="salesman-name mb-0">({{ quotation.salesman.salesman_name }})</p>
           {% endif %}
+          {% if quotation.creator_name %}
+            <p class="salesman-name mb-0" style="font-size: 0.8rem; color: #999;" title="Created by"><i class="fas fa-user-pen me-1"></i>{{ quotation.creator_name }}</p>
+          {% endif %}
         </div>
 
         <div class="d-flex justify-content-between align-items-center">
