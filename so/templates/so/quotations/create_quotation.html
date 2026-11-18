@@ -1555,6 +1555,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+    {% include 'so/_input_checks_js.html' %}
     <script>
     // Show, as placeholders, what the PDF will print for the chosen customer (quote-builder customer list, then SAP data).
     (function () {
@@ -1587,7 +1588,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
                 updateEmailHint();   // the email box may just have been filled from the customer record
+                checkTypedDetails();
             });
+        }
+        // Contact number / email / walk-in display name must look real. Uses the browser's own form check, so the
+        // message pops up on the box and nothing typed is lost (the server repeats the same checks).
+        function checkTypedDetails() {
+            if (!window.QInputChecks) return;
+            var c = $('#customer_contact_number')[0], e = $('#customer_email')[0], n = $('#new_customer_name')[0];
+            if (c) c.setCustomValidity(window.QInputChecks.contact(c.value));
+            if (e) e.setCustomValidity(window.QInputChecks.email(e.value));
+            if (n) n.setCustomValidity($(n).prop('required') ? window.QInputChecks.name(n.value) : '');
         }
         // "Email not available now, I'll enter it later": ticked = the email box is optional; unticked = mandatory.
         function syncEmailLater() {
@@ -1604,6 +1615,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         $(function () { $('#customer').on('change', showFallbacks); showFallbacks();
                         $('#customer_email').on('input change', updateEmailHint);
+                        $('#customer_contact_number, #customer_email, #new_customer_name').on('input change', checkTypedDetails);
+                        // also just before the browser validates on Save (covers values restored from a draft or filled in by script)
+                        $('#quotation-form').on('click', 'button:not([type=button]), input[type=submit]', checkTypedDetails);
+                        checkTypedDetails();
                         $('#customer_email_later').on('change', syncEmailLater); syncEmailLater(); });
     })();
     </script>

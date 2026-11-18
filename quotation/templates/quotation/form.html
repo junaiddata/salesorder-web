@@ -247,6 +247,7 @@
 
 {% block extra_js %}
 {{ items_data|json_script:"itemsData" }}
+{% if not quotation %}{% include 'so/_input_checks_js.html' %}{% endif %}
 <style>
     .pick-modal .modal-content { border-radius: 14px; }
     .pick-bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .6rem; }
@@ -534,6 +535,7 @@
         document.querySelector('[name=customer_code]').value = c.code || '';
         document.querySelector('[name=customer_email]').value = c.email || '';
         if (window.updateEmailLaterHint) window.updateEmailLaterHint();   // the email box may have just been filled / cleared
+        if (window.checkTypedDetails) window.checkTypedDetails();
         hideMenu();
     }
     // "Email not available now, I'll enter it later" (new quotations only): ticked = the Customer Email box is optional
@@ -551,6 +553,20 @@
         emailLater.addEventListener('change', syncEmailLater);
         emailBox.addEventListener('input', window.updateEmailLaterHint);
         syncEmailLater();
+    }
+    // NEW quotations only (the switch above exists only then): the contact number and email must look real. Uses the
+    // browser's own form check, so the message pops up on the box and nothing typed is lost (the server repeats it).
+    if (emailLater && window.QInputChecks) {
+        const contactBox = document.querySelector('[name=customer_contact]');
+        const emailField = document.querySelector('[name=customer_email]');
+        window.checkTypedDetails = () => {
+            contactBox.setCustomValidity(window.QInputChecks.contact(contactBox.value));
+            emailField.setCustomValidity(window.QInputChecks.email(emailField.value));
+        };
+        [contactBox, emailField].forEach(b => b.addEventListener('input', window.checkTypedDetails));
+        // also just before the browser validates on Save (covers values filled in by script)
+        document.querySelector('#qtForm [type=submit]').addEventListener('click', window.checkTypedDetails);
+        window.checkTypedDetails();
     }
     custName.setAttribute('autocomplete', 'off');
     custName.addEventListener('input', () => suggest(custName, pickCustomer, CUSTOMER_LIST));

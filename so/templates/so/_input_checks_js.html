@@ -1,0 +1,132 @@
+{% comment %}
+Browser copy of so/quotation_input_checks.py -- keep the two in step (so/tests_input_checks.py checks the word lists).
+window.QInputChecks.contact / .email / .name each return an error message, or '' when the value is fine (or empty:
+"is it required" is decided by the page). The server repeats every check, so this only saves the user a round trip.
+{% endcomment %}{% verbatim %}<script>
+(function () {
+    var PHONE_MESSAGE = 'Enter a valid phone number, for example 0501234567 or 04-3362775 (digits only, no letters).';
+    var PHONE_FAKE_MESSAGE = "That phone number doesn't look real. Enter the customer's actual mobile or landline number.";
+    var EMAIL_MESSAGE = 'Enter a valid email address, for example name@company.com.';
+    var EMAIL_FAKE_MESSAGE = "That email address doesn't look real. Enter the customer's actual email address.";
+    var NAME_MESSAGE = 'Enter the real customer name (at least 3 letters), for example "Mr Ahmed" or "Al Noor Trading".';
+    var NAME_FAKE_MESSAGE = "That name doesn't look real. Enter who the customer actually is.";
+
+    var PHONE_MIN_DIGITS = 7, PHONE_MAX_DIGITS = 20, PHONE_MAX_RUN = 9;
+    var EXT_RE = /\b(?:ext|extn|extension|ex|x)\.?\s*\d{1,6}\b/gi;
+    var PHONE_CHARS_RE = /^[0-9+\-\/,;().\s]+$/;
+
+    function looksFakeDigits(d) {
+        var n = d.length, i, k, step, run, counts = {}, maxCount = 0;
+        if (n < PHONE_MIN_DIGITS) return false;
+        for (i = 0; i < n; i++) { counts[d[i]] = (counts[d[i]] || 0) + 1; if (counts[d[i]] > maxCount) maxCount = counts[d[i]]; }
+        if (maxCount >= Math.max(6, n - 2)) return true;
+        for (k = 2; k <= Math.min(5, Math.floor(n / 2)); k++) {
+            if (n % k === 0 && d === new Array(n / k + 1).join(d.slice(0, k))) return true;
+        }
+        for (step = 1; step >= -1; step -= 2) {
+            run = 1;
+            for (i = 1; i < n; i++) {
+                run = (parseInt(d[i], 10) - parseInt(d[i - 1], 10) === step) ? run + 1 : 1;
+                if (run >= PHONE_MAX_RUN) return true;
+            }
+        }
+        return false;
+    }
+
+    function contact(value) {
+        value = (value || '').trim();
+        if (!value) return '';
+        value = value.replace(EXT_RE, ' ');
+        if (!PHONE_CHARS_RE.test(value)) return PHONE_MESSAGE;
+        var segments = value.split(/[\/,;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+        if (!segments.length) return PHONE_MESSAGE;
+        for (var i = 0; i < segments.length; i++) {
+            var seg = segments[i], digits = seg.replace(/\D/g, '');
+            if (seg.slice(1).indexOf('+') !== -1) return PHONE_MESSAGE;
+            if (i === 0) {
+                if (digits.length < PHONE_MIN_DIGITS || digits.length > PHONE_MAX_DIGITS) return PHONE_MESSAGE;
+            } else if (digits.length < 2 || digits.length > PHONE_MAX_DIGITS) {
+                return PHONE_MESSAGE;
+            }
+            if (looksFakeDigits(digits)) return PHONE_FAKE_MESSAGE;
+        }
+        return '';
+    }
+
+    var JUNK_EMAIL_DOMAINS = ['test.com', 'abc.com', 'xyz.com', 'xxx.com', 'aaa.com', 'asd.com', 'asdf.com', 'a.com', 'no.com', 'na.com',
+        'none.com', 'nomail.com', 'noemail.com', 'email.com', 'domain.com', 'yourdomain.com', 'company.com',
+        'sample.com', 'demo.com', 'example.com', 'example.org', 'example.net'];
+    var JUNK_EMAIL_TLDS = ['local', 'test', 'invalid', 'example', 'localhost'];
+    var JUNK_EMAIL_LOCALS = ['test', 'testing', 'abc', 'abcd', 'xyz', 'xxx', 'na', 'none', 'no', 'noemail', 'nomail', 'asd', 'asdf', 'aaa',
+        'demo', 'sample', 'name', 'customer', 'nil', 'null', 'dummy'];
+    var EMAIL_LOCAL_RE = /^[-!#$%&'*+\/=?^_`{}|~0-9A-Z]+(\.[-!#$%&'*+\/=?^_`{}|~0-9A-Z]+)*$/i;
+    var EMAIL_DOMAIN_RE = /^(?:[\p{L}0-9](?:[\p{L}0-9-]{0,61}[\p{L}0-9])?\.)+[\p{L}0-9](?:[\p{L}0-9-]{0,61}[\p{L}0-9])?$/u;
+
+    function emailCandidates(value) {
+        var found = [];
+        value = value.replace(/[​-‏‪-‮﻿]/g, '');
+        value.split(/[,;\/|\s]+/).forEach(function (token) {
+            token = token.replace(/^['"<>()\[\]:.]+|['"<>()\[\]:.]+$/g, '');
+            if (token.split('@').length > 2) {
+                var pieces = token.split('-').filter(Boolean), i = 0;
+                while (i < pieces.length) {
+                    var piece = pieces[i];
+                    while (piece.indexOf('@') !== -1 && piece.slice(piece.lastIndexOf('@') + 1).indexOf('.') === -1 &&
+                           i + 1 < pieces.length && pieces[i + 1].indexOf('@') === -1) {
+                        i++;
+                        piece += '-' + pieces[i];
+                    }
+                    if (piece.indexOf('@') !== -1) found.push(piece.replace(/^[:.]+|[:.]+$/g, ''));
+                    i++;
+                }
+            } else if (token.indexOf('@') !== -1) {
+                found.push(token);
+            }
+        });
+        return found;
+    }
+
+    function email(value) {
+        value = (value || '').trim();
+        if (!value) return '';
+        var addresses = emailCandidates(value);
+        if (!addresses.length) return EMAIL_MESSAGE;
+        for (var i = 0; i < addresses.length; i++) {
+            var address = addresses[i];
+            if (address.length > 254) return EMAIL_MESSAGE;
+            var at = address.lastIndexOf('@'), local = address.slice(0, at), domain = address.slice(at + 1).toLowerCase();
+            if (!EMAIL_LOCAL_RE.test(local) || !EMAIL_DOMAIN_RE.test(domain)) return EMAIL_MESSAGE;
+            var tld = domain.slice(domain.lastIndexOf('.') + 1);
+            if (tld.length < 2 || !/^\p{L}+$/u.test(tld)) return EMAIL_MESSAGE;
+            var localKey = local.toLowerCase();
+            if (JUNK_EMAIL_DOMAINS.indexOf(domain) !== -1 || JUNK_EMAIL_TLDS.indexOf(tld) !== -1 ||
+                JUNK_EMAIL_LOCALS.indexOf(localKey) !== -1 ||
+                (localKey.length >= 3 && localKey.split('').every(function (c) { return c === localKey[0]; }))) {
+                return EMAIL_FAKE_MESSAGE;
+            }
+        }
+        return '';
+    }
+
+    var JUNK_NAMES = ['test', 'testing', 'na', 'n a', 'none', 'nil', 'null', 'customer', 'name', 'cash', 'unknown', 'no name', 'noname',
+        'dummy', 'sample', 'demo', 'abc', 'abcd', 'xyz', 'xxx', 'asdf', 'asdfg', 'qwe', 'qwerty', 'walk in', 'walkin',
+        'walk in customer', 'walkin customer', 'cash customer', 'cash sales', 'debit customer', 'retail customer'];
+    var KEYBOARD_MASH = ['asdf', 'qwer', 'zxcv', 'sdfg', 'dfgh'];
+
+    function name(value) {
+        value = (value || '').split(/\s+/).filter(Boolean).join(' ');
+        if (!value) return '';
+        var letters = value.replace(/[^\p{L}]/gu, '');
+        if (value.length > 100 || letters.length < 3) return NAME_MESSAGE;
+        var key = value.toLowerCase().replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean).join(' ');
+        var squashed = key.replace(/ /g, '');
+        if (JUNK_NAMES.indexOf(key) !== -1 || squashed.split('').every(function (c) { return c === squashed[0]; }) ||
+            KEYBOARD_MASH.some(function (m) { return squashed.indexOf(m) !== -1; })) {
+            return NAME_FAKE_MESSAGE;
+        }
+        return '';
+    }
+
+    window.QInputChecks = { contact: contact, email: email, name: name };
+})();
+</script>{% endverbatim %}

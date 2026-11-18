@@ -66,7 +66,7 @@ class Base(TestCase):
     def post_quote(self, items, division=None, **extra):
         """items: list of (item_ref, qty, price)."""
         data = {'customer': self.cust.id, 'salesman': self.salesman.id, 'remarks': '',
-                'customer_contact_number': '0501234567', 'customer_email': 'buyer@example.com'}   # mandatory on new quotations
+                'customer_contact_number': '0501234567', 'customer_email': 'buyer@acmetrading.ae'}   # mandatory on new quotations
         if division:
             data['division'] = division
         data.update(extra)
@@ -106,7 +106,7 @@ class SwitchOffTests(Base):
             self.assertEqual(Quotation.objects.count(), 0, missing)
         self.post_quote([('1', 2, 20)])
         q = Quotation.objects.get()
-        self.assertEqual((q.customer_contact_number, q.customer_email), ('0501234567', 'buyer@example.com'))
+        self.assertEqual((q.customer_contact_number, q.customer_email), ('0501234567', 'buyer@acmetrading.ae'))
 
 
 @override_settings(ALABAMA_OWN_CATALOG=True, ALLOWED_HOSTS=HOSTS)

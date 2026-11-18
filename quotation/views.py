@@ -254,6 +254,11 @@ def quotation_form(request, pk=None):
             # that list is saved onto the model and read back from it).
             if not (posted.get('customer_email') or '').strip() and posted.get('customer_email_later') != 'on':
                 errors.append('Please enter the customer email, or turn on "Email not available now, I\'ll enter it later".')
+            # What was typed must also look real (no names or random text in the phone box, no placeholder emails).
+            from so.quotation_input_checks import validate_contact_number, validate_customer_email
+            for message in (validate_contact_number(posted.get('customer_contact')), validate_customer_email(posted.get('customer_email'))):
+                if message:
+                    errors.append(message)
 
         if not errors:
             with transaction.atomic():

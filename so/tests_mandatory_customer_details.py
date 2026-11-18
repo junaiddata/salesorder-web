@@ -38,7 +38,7 @@ class MandatoryCustomerDetailsTests(Base):
 
     def _create(self, customer, **extra):
         data = {'customer': customer.id, 'salesman': self.salesman.id, 'remarks': '',
-                'customer_contact_number': '0501234567', 'customer_email': 'buyer@example.com',
+                'customer_contact_number': '0501234567', 'customer_email': 'buyer@acmetrading.ae',
                 'item': ['1'], 'quantity': ['1'], 'price': ['10'], 'unit': ['pcs']}
         data.update(extra)
         return self.client.post(reverse('create_quotation'), data)
@@ -86,8 +86,8 @@ class MandatoryCustomerDetailsTests(Base):
         self._create(self.cust, customer_email='  ', customer_email_later='on')     # tick: saves without an email
         self.assertEqual(Quotation.objects.get().customer_email, None)
         Quotation.objects.all().delete()
-        self._create(self.cust, customer_email='typed@example.com', customer_email_later='on')   # typed + tick: typed one is kept
-        self.assertEqual(Quotation.objects.get().customer_email, 'typed@example.com')
+        self._create(self.cust, customer_email='typed@acmetrading.ae', customer_email_later='on')   # typed + tick: typed one is kept
+        self.assertEqual(Quotation.objects.get().customer_email, 'typed@acmetrading.ae')
 
     def test_create_page_has_the_email_later_tick(self):
         page = self.client.get(reverse('create_quotation')).content.decode()
@@ -127,7 +127,7 @@ class MandatoryCustomerDetailsTests(Base):
     # ── manual enquiry upload ─────────────────────────────────────────────
     def _upload(self, customer=None, **extra):
         data = {'files': SimpleUploadedFile('boq.pdf', b'%PDF-1.4 x', content_type='application/pdf'),
-                'customer_contact_number': '0501234567', 'customer_email': 'buyer@example.com',
+                'customer_contact_number': '0501234567', 'customer_email': 'buyer@acmetrading.ae',
                 'customer_display_name': 'Mr Ahmed'}
         if customer is not None:
             data['customer_id'] = customer.id
@@ -166,13 +166,13 @@ class MandatoryCustomerDetailsTests(Base):
         resp, _ = self._upload(self.cust, customer_display_name='')
         self.assertEqual(resp.status_code, 200, resp.content)
         te = TrackedEmail.objects.get()
-        self.assertEqual((te.upload_customer_contact_number, te.upload_customer_email), ('0501234567', 'buyer@example.com'))
+        self.assertEqual((te.upload_customer_contact_number, te.upload_customer_email), ('0501234567', 'buyer@acmetrading.ae'))
         # what the background step does once the agent has drafted the quotation
         q = Quotation.objects.create(customer=self.cust, salesman=self.salesman)
         QuotationDraft.objects.create(tracked_email=te, status=QuotationDraft.STATUS_CONFIRMED, quotation=q)
         upload_service._apply_typed_names(te)
         q.refresh_from_db()
-        self.assertEqual((q.customer_contact_number, q.customer_email), ('0501234567', 'buyer@example.com'))
+        self.assertEqual((q.customer_contact_number, q.customer_email), ('0501234567', 'buyer@acmetrading.ae'))
 
     def test_upload_without_the_new_values_still_works_for_existing_callers(self):
         te = upload_service.create_upload(self.junaid, [SimpleUploadedFile('a.pdf', b'%PDF-1.4 x', content_type='application/pdf')])

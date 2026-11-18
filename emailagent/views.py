@@ -919,6 +919,14 @@ def upload_enquiry(request):
         missing.append('the customer display name (needed for a CASH / walk-in customer)')
     if missing:
         return JsonResponse({'ok': False, 'error': 'Please enter ' + ', '.join(missing) + '.'}, status=400)
+    # What was typed must also look real (no names or random text in the phone box, no placeholder emails / names).
+    from so.quotation_input_checks import validate_contact_number, validate_customer_email, validate_display_name
+    input_error = (validate_contact_number(request.POST.get('customer_contact_number'))
+                   or validate_customer_email(request.POST.get('customer_email'))
+                   or (validate_display_name(request.POST.get('customer_display_name'))
+                       if (not picked_customer or is_walkin_customer(picked_customer)) else ''))
+    if input_error:
+        return JsonResponse({'ok': False, 'error': input_error}, status=400)
 
     if request.POST.get('confirm_duplicate') != '1':
         info = []

@@ -61,7 +61,7 @@ class QuotationTests(TestCase):
             'remarks': 'Deposit before production\n\n2) Port of loading: Shenzhen\n3. Net packing', 'validity': '30 days', 'stock_availability': '2026-11-05', 'project_reference': 'PRJ-77 Marina Tower',
             'country_of_origin': 'Italy', 'sales_person': 'Aiswarya', 'email': 'a@x.com',
             'contact_number': '0501234567',
-            'customer_contact': '0507654321', 'customer_email': 'buyer@customer.test',   # mandatory on new quotations
+            'customer_contact': '0507654321', 'customer_email': 'buyer@acmetrading.ae',   # mandatory on new quotations
             'row_key': ['n1', 'n2'], 'item_id': ['', ''],
             'item_no': ['H12', ''],
             'item_model': ['AR-50', 'PG-12'],
@@ -540,10 +540,10 @@ class QuotationTests(TestCase):
         old = Quotation.objects.get()
         text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[old.pk])).content)).pages[0].extract_text()
         flat = ' '.join(text.split())
-        self.assertIn('TO: Customer name Contact person Contact number 0507654321 Address TRN number Customer ID Customer email buyer@customer.test ACME LLC Dubai', flat)
+        self.assertIn('TO: Customer name Contact person Contact number 0507654321 Address TRN number Customer ID Customer email buyer@acmetrading.ae ACME LLC Dubai', flat)
         # all four filled: TO -> customer name -> contact -> address -> TRN number -> other details
         self.client.post(reverse('quotation:new'), self._payload(
-            customer_name='A&B <Trading> LLC', customer_contact='Mr Ahmed, 050 123 4567',
+            customer_name='A&B <Trading> LLC', customer_contact='050 123 4567',
             customer_address='PO BOX 34862\nDubai Investment Park 2', customer_trn='100123456700003',
             to_text='Other line'))
         q = Quotation.objects.order_by('-id').first()
@@ -551,7 +551,7 @@ class QuotationTests(TestCase):
         for query in ('', '?orientation=landscape'):
             text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[q.pk]) + query).content)).pages[0].extract_text()
             flat = ' '.join(text.split())
-            order = ['TO:', 'Customer name A&B <Trading> LLC', 'Contact number Mr Ahmed, 050 123 4567',
+            order = ['TO:', 'Customer name A&B <Trading> LLC', 'Contact number 050 123 4567',
                      'Address PO BOX 34862 Dubai Investment Park 2', 'TRN number 100123456700003', 'Other line']
             positions = [flat.index(x) for x in order]
             self.assertEqual(positions, sorted(positions), query)
@@ -587,7 +587,7 @@ class QuotationTests(TestCase):
 
     def test_top_block_has_three_sections_and_the_bottom_contact_box_is_gone(self):
         self.client.post(reverse('quotation:new'), self._payload(
-            customer_name='ACME TRADING LLC', customer_contact='Mr Ahmed', customer_address='Dubai', customer_trn='100123',
+            customer_name='ACME TRADING LLC', customer_contact='050 123 4567', customer_address='Dubai', customer_trn='100123',
             customer_ref='RFQ-8841'))
         q = Quotation.objects.get()
         self.assertEqual(q.customer_ref, 'RFQ-8841')
@@ -595,7 +595,7 @@ class QuotationTests(TestCase):
             text = PdfReader(BytesIO(self.client.get(reverse('quotation:pdf', args=[q.pk]) + query).content)).pages[0].extract_text()
             flat = ' '.join(text.split())
             # section 1: To
-            for x in ('TO:', 'Customer name ACME TRADING LLC', 'Contact number Mr Ahmed', 'Address Dubai', 'TRN number 100123'):
+            for x in ('TO:', 'Customer name ACME TRADING LLC', 'Contact number 050 123 4567', 'Address Dubai', 'TRN number 100123'):
                 self.assertIn(x, flat, (query, x))
             # section 2: reference details, with the salesperson / email / contact that used to be in the bottom box
             for x in ('Quotation no. JG-2026-001', 'Customer ref. RFQ-8841', 'Salesperson Aiswarya', 'Email a@x.com',
@@ -960,8 +960,8 @@ class ProductLibraryTests(TestCase):
         def make(date, name, address, trn='', contact=''):
             self.client.post(reverse('quotation:new'), self._payload(
                 date=date, customer_name=name, customer_address=address, customer_trn=trn, customer_contact=contact))
-        make('2026-03-01', 'Al Noor Trading LLC', 'Old address', '111', '0501')
-        make('2026-09-01', 'AL NOOR  trading llc', 'New address\nDubai', '222', '0502')   # same customer, newer
+        make('2026-03-01', 'Al Noor Trading LLC', 'Old address', '111', '0501112233')
+        make('2026-09-01', 'AL NOOR  trading llc', 'New address\nDubai', '222', '0504445566')   # same customer, newer
         make('2026-05-01', 'Beta Contracting', 'Sharjah')
         url = reverse('quotation:customer_search')
 
@@ -969,7 +969,7 @@ class ProductLibraryTests(TestCase):
             return self.client.get(url, {'q': q}).json()['results']
         res = find('al noor')
         self.assertEqual(len(res), 1)   # one customer, not two
-        self.assertEqual((res[0]['address'], res[0]['trn'], res[0]['contact']), ('New address\nDubai', '222', '0502'))   # newest quotation
+        self.assertEqual((res[0]['address'], res[0]['trn'], res[0]['contact']), ('New address\nDubai', '222', '0504445566'))   # newest quotation
         self.assertEqual(find('NOOR trading')[0]['name'], 'AL NOOR trading llc')
         self.assertEqual(find('zzz'), [])
         self.assertEqual(find(''), [])
@@ -1047,7 +1047,7 @@ class QuotationEmailTests(TestCase):
         self.assertFalse(log.success)
         self.assertIn('connection refused', log.error)
         self.q.refresh_from_db()
-        self.assertEqual(self.q.customer_email, 'buyer@customer.test')   # a failed send leaves the saved email untouched
+        self.assertEqual(self.q.customer_email, 'buyer@acmetrading.ae')   # a failed send leaves the saved email untouched
         self.assertContains(self.client.get(reverse('quotation:list')), 'Mail failed')
 
     def test_validation_and_not_configured(self):
@@ -1555,7 +1555,7 @@ class PaymentTermsAndDefaultsTests(TestCase):
                 'item_no': [''], 'item_model': ['M1'], 'item_brand': ['B'], 'item_description': ['Thing'], 'item_size': [''],
                 'item_color': [''], 'item_qty': ['1'], 'item_price': ['10'], 'item_warranty': [''],
                 'remove_photo': ['0'], 'remove_ds': ['0'],
-                'customer_contact': '0507654321', 'customer_email': 'buyer@customer.test'}   # mandatory on new quotations
+                'customer_contact': '0507654321', 'customer_email': 'buyer@acmetrading.ae'}   # mandatory on new quotations
         data.update(extra)
         return data
 

@@ -334,6 +334,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+{% include 'so/_input_checks_js.html' %}
 <script>
 (function () {
     const MAX_BYTES = {{ max_mb }} * 1024 * 1024;
@@ -527,6 +528,13 @@
             showError('Please enter ' + missing.map(m => m[0]).join(', ') + '.');
             missing[0][1].focus();
             return;
+        }
+        // What was typed must also look real (no names or random text in the phone box, no placeholder emails / names).
+        if (window.QInputChecks) {
+            const Q = window.QInputChecks;
+            const bad = [[Q.contact(contactBox.value), contactBox], [Q.email(emailBox.value), emailBox],
+                         [(!$cu.val() || pickedIsWalkin) ? Q.name(nameBox.value) : '', nameBox]].find(x => x[0]);
+            if (bad) { showError(bad[0]); bad[1].focus(); return; }
         }
         dupBox.style.display = 'none';
         send(false);

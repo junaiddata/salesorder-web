@@ -226,6 +226,14 @@ def create_quotation(request):
             if not (request.POST.get('customer_email') or '').strip() and request.POST.get('customer_email_later') != 'on':
                 messages.error(request, "Customer email is required. If you don't have it yet, turn on \"Email not available now, I'll enter it later\".")
                 return redirect('create_quotation')
+            # What was typed must also look real (no names or random text in the phone box, no placeholder emails / names).
+            from .quotation_input_checks import validate_contact_number, validate_customer_email, validate_display_name
+            input_error = (validate_contact_number(request.POST.get('customer_contact_number'))
+                           or validate_customer_email(request.POST.get('customer_email'))
+                           or (validate_display_name(customer_display_name) if is_walkin_customer(Customer.objects.filter(pk=customer_id).first()) else ''))
+            if input_error:
+                messages.error(request, input_error)
+                return redirect('create_quotation')
 
             salesman = get_object_or_404(Salesman, id=salesman_id)
             customer = get_object_or_404(Customer, id=customer_id)
