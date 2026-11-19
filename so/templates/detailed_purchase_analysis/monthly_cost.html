@@ -1,0 +1,471 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monthly Purchase Cost</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --surface-hover: #fafbfc;
+      --text: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
+      --border: #e2e8f0; --border-light: #f1f5f9;
+      --primary: #2C5530; --primary-dark: #1e3d21;
+      --radius: 12px; --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .header h1 { font-size: 1.5rem; font-weight: 700; }
+    .header p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 2px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .filters-card { margin-bottom: 16px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; padding: 16px 18px; align-items: end; }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .input, .select { width: 100%; padding: 9px 11px; font-size: 0.875rem; font-family: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44,85,48,0.12); }
+    .note { padding: 10px 18px; font-size: 0.8rem; color: var(--text-secondary); background: var(--bg); border-top: 1px solid var(--border-light); border-radius: 0 0 var(--radius) var(--radius); }
+    .multi-select { position: relative; }
+    .select-box { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 11px; font-size: 0.875rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+    .options-container { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 260px; max-height: 280px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.12); z-index: 100; }
+    .options-container.active { display: block; }
+    .option-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; }
+    .option-label:hover { background: var(--bg); }
+    .option-label input { width: 14px; height: 14px; accent-color: var(--primary); }
+    .option-label.option-hidden { display: none; }
+    .search-box-container { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; }
+    .search-box { width: 100%; padding: 6px 10px; font-size: 0.813rem; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .options-actions { display: flex; justify-content: space-between; margin-top: 6px; }
+    .options-action-btn { font-size: 0.68rem; font-weight: 700; font-family: inherit; color: var(--primary); background: none; border: none; cursor: pointer; padding: 3px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .options-action-btn.danger { color: #b91c1c; }
+    .table-card { overflow: hidden; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 200px); }
+    table { width: 100%; border-collapse: collapse; min-width: 1300px; }
+    thead th { position: sticky; top: 0; z-index: 2; padding: 8px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    thead th.left { text-align: left; }
+    /* main table headings: bold and a little larger than the values (values are 0.8rem) */
+    .table-wrap > table thead th { font-size: 0.875rem; font-weight: 700; color: var(--text); letter-spacing: 0.03em; padding: 10px 10px; }
+    tbody td { padding: 7px 10px; font-size: 0.8rem; line-height: 1.35; border-bottom: 1px solid var(--border-light); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    tbody td.left { text-align: left; white-space: normal; }
+    tbody tr:hover td { background: var(--surface-hover); }
+    .item-code { font-weight: 700; }
+    .item-desc { display: block; font-size: 0.72rem; color: var(--text-secondary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .zero { color: var(--text-muted); }
+    .col-cur, .col-avg { border-left: 2px solid var(--border); font-weight: 600; }
+    .table-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); font-size: 0.813rem; color: var(--text-secondary); }
+    .pagination { display: flex; gap: 6px; align-items: center; }
+    .pagination a { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; font-weight: 500; }
+    .pagination a:hover { border-color: var(--primary); color: var(--primary); }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    a.item-open { color: var(--primary); text-decoration: none; cursor: pointer; }
+    a.item-open:hover { text-decoration: underline; }
+    th.col-trend, td.col-trend { text-align: center; border-left: 2px solid var(--border); }
+    svg.spark { display: block; margin: 0 auto; cursor: pointer; }
+    .chart-wrap { padding: 4px 0 0; }
+    .chart-wrap svg { width: 100%; height: auto; display: block; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; }
+    .chart-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+    .modal.wide { max-width: 760px; }
+    td.has-detail { cursor: pointer; }
+    td.has-detail:hover { background: #eef6ef; }
+    td.changed { background: #fffbeb; }
+    .chg-badge { display: inline-block; margin-left: 5px; padding: 0 5px; font-size: 0.68rem; font-weight: 700; color: #92400e; background: #fde68a; border-radius: 8px; vertical-align: middle; }
+    .po-link { color: var(--primary); font-weight: 600; text-decoration: none; }
+    .po-link:hover { text-decoration: underline; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 500; padding: 16px; }
+    .modal-bg.active { display: flex; }
+    .modal { background: var(--surface); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,0.25); width: 100%; max-width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .modal-head h3 { font-size: 1rem; }
+    .modal-close { border: none; background: none; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--text-secondary); }
+    .modal-body { padding: 14px 18px; overflow: auto; }
+    .po-sum { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 10px; }
+    table.po-table { min-width: 0; width: 100%; }
+    table.po-table thead th { position: static; text-align: left; }
+    table.po-table tbody td { text-align: left; white-space: nowrap; }
+    table.po-table td:last-child, table.po-table th:last-child { text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Monthly Purchase Cost</h1>
+        <p>Average price paid on purchase orders, per item, month by month &middot; {{ selected_year }}</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'detailed_purchase_analysis_list' %}">Detailed Purchase Analysis</a>
+        <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+      </div>
+    </header>
+
+    {% if not show_price %}
+    <div class="card"><div class="empty-state">You do not have permission to view purchase prices.</div></div>
+    {% else %}
+
+    <div class="card filters-card">
+      <form class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Item, Supplier, PO No...">
+        </div>
+        <div class="field">
+          <label>Year</label>
+          <select class="select" name="year">
+            {% for y in years %}
+              <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select class="select" name="status">
+            <option value="">All</option>
+            <option value="O" {% if filters.status == 'O' %}selected{% endif %}>Open</option>
+            <option value="C" {% if filters.status == 'C' %}selected{% endif %}>Closed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Warehouse</label>
+          <select class="select" name="warehouse">
+            <option value="">All</option>
+            {% for w in warehouses %}
+              <option value="{{ w }}" {% if filters.warehouse == w %}selected{% endif %}>{{ w }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Purchaser</label>
+          <div class="multi-select">
+            <div class="select-box" id="purchaser-trigger"><span id="purchaser-text">All Purchasers</span></div>
+            <div class="options-container" id="purchaser-options">
+              <div class="search-box-container">
+                <input type="text" id="purchaser-search" class="search-box" placeholder="Search purchasers..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              {% for p in purchasers %}
+                <label class="option-label">
+                  <input type="checkbox" name="purchaser" value="{{ p }}" {% if p in filters.purchaser_filter %}checked{% endif %}>
+                  <span class="option-text">{{ p }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <div class="multi-select">
+            <div class="select-box" id="brand-trigger"><span id="brand-text">All Brands</span></div>
+            <div class="options-container" id="brand-options">
+              <div class="search-box-container">
+                <input type="text" id="brand-search" class="search-box" placeholder="Search brands..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              <label class="option-label">
+                <input type="checkbox" name="brand" value="{{ no_brand }}" {% if no_brand in filters.brand_filter %}checked{% endif %}>
+                <span class="option-text"><em>{{ no_brand_label }}</em></span>
+              </label>
+              {% for b in brands %}
+                <label class="option-label">
+                  <input type="checkbox" name="brand" value="{{ b }}" {% if b in filters.brand_filter %}checked{% endif %}>
+                  <span class="option-text">{{ b }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}">
+        </div>
+        <div class="field" style="display:flex;gap:8px;">
+          <a class="btn btn-secondary" href="{% url 'detailed_purchase_monthly_cost' %}">Clear</a>
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="left">Item</th>
+              <th class="left">Brand</th>
+              {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
+              {# Year Avg / Year Qty hidden for now #}
+              <th class="col-trend">Trend</th>
+              <th class="col-cur">Current Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the price chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
+              <td class="left">{{ r.brand|default:"&mdash;" }}</td>
+              {% for c in r.months %}
+                {% if c %}
+                <td class="has-detail{% if c.changes %} changed{% endif %}" title="Last price {{ c.last|floatformat:2 }} | Average {{ c.avg|floatformat:2 }} | Qty {{ c.qty|floatformat:'-2' }} | Min {{ c.min|floatformat:2 }} | Max {{ c.max|floatformat:2 }} | POs {{ c.pos }}{% if c.changes %} | Price changed {{ c.changes }} time{{ c.changes|pluralize }}: {{ c.trail }}{% endif %} (click for PO list)" data-title="{{ c.label }}">{{ c.last|floatformat:2|intcomma }}{% if c.changes %}<span class="chg-badge">&times;{{ c.changes }}</span>{% endif %}
+                  <div class="po-detail" hidden>
+                    <p class="po-sum">Last price {{ c.last|floatformat:2|intcomma }} &middot; Average {{ c.avg|floatformat:2|intcomma }} &middot; Min {{ c.min|floatformat:2 }} &middot; Max {{ c.max|floatformat:2 }} &middot; {{ c.changes }} price change{{ c.changes|pluralize }}{% if c.changes %}: {{ c.trail }}{% endif %}</p>
+                    <table class="po-table">
+                      <thead><tr><th>Date</th><th>PO No</th><th>Status</th><th>Qty</th><th>Unit Price</th></tr></thead>
+                      <tbody>
+                      {% for l in c.lines %}
+                        <tr><td>{{ l.date|date:"d.m.y" }}</td><td><a class="po-link" href="{% url 'detailed_purchase_analysis_detail' l.po %}" target="_blank" rel="noopener">{{ l.po }}</a></td><td>{% if l.status == 'O' %}Open{% else %}Closed{% endif %}</td><td>{{ l.qty|floatformat:"-2" }}</td><td>{{ l.price|floatformat:2|intcomma }}</td></tr>
+                      {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+                {% else %}
+                <td class="zero">&ndash;</td>
+                {% endif %}
+              {% endfor %}
+              <td class="col-trend"><svg class="spark" width="110" height="30" viewBox="0 0 110 30" data-chart="{{ r.chart_json }}"></svg></td>
+              <td class="col-cur">{% if r.current_cost is not None %}{{ r.current_cost|floatformat:2|intcomma }}{% else %}<span class="zero">&ndash;</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="16" class="empty-state">No purchases found for the selected filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj %}
+      <div class="table-footer">
+        <div class="pagination">
+          {% if page_obj.has_previous %}<a href="?{{ querystring }}&page={{ page_obj.previous_page_number }}">&laquo; Prev</a>{% endif %}
+          <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          {% if page_obj.has_next %}<a href="?{{ querystring }}&page={{ page_obj.next_page_number }}">Next &raquo;</a>{% endif %}
+        </div>
+        <div>Showing <strong>{{ rows|length }}</strong> of <strong>{{ total_count }}</strong> items</div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="modal-bg" id="po-modal-bg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="po-modal-title">PO lines</h3><button type="button" class="modal-close" id="po-modal-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body" id="po-modal-body"></div>
+    </div>
+  </div>
+  <div class="modal-bg" id="chart-modal-bg">
+    <div class="modal wide" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="chart-modal-title">Price trend</h3><button type="button" class="modal-close" id="chart-modal-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <p class="po-sum" id="chart-modal-sub"></p>
+        <div class="chart-wrap"><svg id="chart-big" viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet"></svg></div>
+        <div class="chart-legend">
+          <span><i style="background:#2C5530"></i>Last price of the month</span>
+          <span><i style="background:#cfe5d2"></i>Min&ndash;max range in the month</span>
+          <span><i style="background:#f59e0b"></i>Price changed in the month</span>
+          <span><i style="background:none;border-top:2px dashed #b91c1c;height:0;border-radius:0;vertical-align:3px"></i>Current cost</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function initMultiSelect(id, allText) {
+      var trigger = document.getElementById(id + '-trigger');
+      if (!trigger) return;
+      var options = document.getElementById(id + '-options');
+      var text = document.getElementById(id + '-text');
+      var search = document.getElementById(id + '-search');
+      var boxes = options.querySelectorAll('input[type="checkbox"]');
+      function label() {
+        var checked = Array.prototype.filter.call(boxes, function (b) { return b.checked; });
+        text.textContent = checked.length === 0 ? allText : checked.length === 1 ? checked[0].closest('.option-label').textContent.trim() : checked.length + ' Selected';
+      }
+      label();
+      boxes.forEach(function (b) { b.addEventListener('change', label); });
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('.options-container.active').forEach(function (o) { if (o !== options) o.classList.remove('active'); });
+        options.classList.toggle('active');
+        if (options.classList.contains('active')) search.focus();
+      });
+      options.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { options.classList.remove('active'); });
+      options.querySelectorAll('.options-action-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var selectAll = btn.getAttribute('data-action') === 'select-all';
+          boxes.forEach(function (b) {
+            var lbl = b.closest('.option-label');
+            if (selectAll) { if (!lbl.classList.contains('option-hidden')) b.checked = true; }
+            else { b.checked = false; }
+          });
+          label();
+        });
+      });
+      search.addEventListener('input', function () {
+        var term = this.value.toLowerCase().trim();
+        options.querySelectorAll('.option-label').forEach(function (l) {
+          l.classList.toggle('option-hidden', term !== '' && l.textContent.toLowerCase().indexOf(term) === -1);
+        });
+      });
+    }
+    initMultiSelect('brand', 'All Brands');
+    initMultiSelect('purchaser', 'All Purchasers');
+
+    // ---- Price trend charts (plain SVG, no external library) ----
+    (function () {
+      var NS = 'http://www.w3.org/2000/svg';
+      var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      function el(name, attrs, parent) {
+        var n = document.createElementNS(NS, name);
+        for (var k in attrs) { if (Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, attrs[k]); }
+        if (parent) parent.appendChild(n);
+        return n;
+      }
+      function fmt(v) { return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+      function parse(str) { try { return JSON.parse(str); } catch (e) { return null; } }
+
+      // runs of consecutive months that have a purchase
+      function runs(m) {
+        var out = [], cur = [];
+        for (var i = 0; i < 12; i++) {
+          if (m[i]) { cur.push(i); } else if (cur.length) { out.push(cur); cur = []; }
+        }
+        if (cur.length) out.push(cur);
+        return out;
+      }
+
+      function draw(svg, d, big, W, H) {
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        var m = d.m, any = false, i, k;
+        for (i = 0; i < 12; i++) if (m[i]) any = true;
+        if (!any) return;
+        var L = big ? 56 : 4, R = big ? 16 : 4, T = big ? 16 : 4, B = big ? 30 : 4;
+        var iw = W - L - R, ih = H - T - B;
+        var lo = Infinity, hi = -Infinity;
+        for (i = 0; i < 12; i++) if (m[i]) {
+          lo = Math.min(lo, big ? m[i].lo : m[i].l);
+          hi = Math.max(hi, big ? m[i].hi : m[i].l);
+        }
+        // current cost only joins the scale if it is in a comparable range (otherwise it would flatten the chart)
+        var showCur = false;
+        if (big && d.cur && d.cur >= lo * 0.2 && d.cur <= hi * 5) {
+          showCur = true; lo = Math.min(lo, d.cur); hi = Math.max(hi, d.cur);
+        }
+        if (hi - lo < 1e-9) { var pad0 = Math.abs(hi) * 0.1 || 1; lo -= pad0; hi += pad0; }
+        var pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+        if (lo < 0 && lo > -pad * 2) lo = 0;
+        function X(n) { return L + n * (iw / 11); }
+        function Y(v) { return T + ih - ((v - lo) / (hi - lo)) * ih; }
+
+        if (big) {
+          for (var g = 0; g <= 4; g++) {
+            var gv = lo + (hi - lo) * g / 4, gy = Y(gv);
+            el('line', { x1: L, x2: W - R, y1: gy, y2: gy, stroke: '#e2e8f0', 'stroke-width': 1 }, svg);
+            var t = el('text', { x: L - 8, y: gy + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#64748b' }, svg);
+            t.textContent = fmt(gv);
+          }
+          for (i = 0; i < 12; i++) {
+            var xt = el('text', { x: X(i), y: H - 9, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b' }, svg);
+            xt.textContent = MONTHS[i];
+          }
+          if (showCur) {
+            var cy = Y(d.cur);
+            el('line', { x1: L, x2: W - R, y1: cy, y2: cy, stroke: '#b91c1c', 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }, svg);
+            var ct = el('text', { x: W - R, y: cy - 5, 'text-anchor': 'end', 'font-size': 11, fill: '#b91c1c' }, svg);
+            ct.textContent = 'Current cost ' + fmt(d.cur);
+          }
+        }
+
+        var rs = runs(m), r, pts;
+        for (r = 0; r < rs.length; r++) {
+          var run = rs[r];
+          if (big && run.length > 1) {   // min-max band
+            var up = [], dn = [];
+            for (k = 0; k < run.length; k++) { up.push(X(run[k]) + ',' + Y(m[run[k]].hi)); }
+            for (k = run.length - 1; k >= 0; k--) { dn.push(X(run[k]) + ',' + Y(m[run[k]].lo)); }
+            el('polygon', { points: up.concat(dn).join(' '), fill: '#cfe5d2', opacity: 0.7 }, svg);
+          }
+          if (run.length > 1) {
+            pts = [];
+            for (k = 0; k < run.length; k++) pts.push(X(run[k]) + ',' + Y(m[run[k]].l));
+            el('polyline', { points: pts.join(' '), fill: 'none', stroke: '#2C5530', 'stroke-width': big ? 2.2 : 1.6, 'stroke-linejoin': 'round' }, svg);
+          }
+        }
+        for (i = 0; i < 12; i++) {
+          if (!m[i]) continue;
+          var changed = m[i].c > 0;
+          if (big && m[i].lo !== m[i].hi) {   // range tick for months that had different prices
+            el('line', { x1: X(i), x2: X(i), y1: Y(m[i].hi), y2: Y(m[i].lo), stroke: '#2C5530', 'stroke-width': 1, opacity: 0.5 }, svg);
+          }
+          var dot = el('circle', { cx: X(i), cy: Y(m[i].l), r: big ? 4.5 : (changed ? 2.6 : 2), fill: changed ? '#f59e0b' : '#2C5530', stroke: '#fff', 'stroke-width': big ? 1.5 : 0.8 }, svg);
+          if (big) {
+            var tip = el('title', {}, dot);
+            tip.textContent = MONTHS[i] + ': last ' + fmt(m[i].l) + ' | avg ' + fmt(m[i].a) + ' | min ' + fmt(m[i].lo) + ' | max ' + fmt(m[i].hi) + (changed ? ' | price changed ' + m[i].c + 'x' : '');
+          }
+        }
+      }
+
+      // sparklines in every row
+      Array.prototype.forEach.call(document.querySelectorAll('svg.spark'), function (s) {
+        var d = parse(s.getAttribute('data-chart'));
+        if (d) draw(s, d, false, 110, 30);
+      });
+
+      // big chart popup
+      var bg = document.getElementById('chart-modal-bg');
+      if (!bg) return;
+      var bigSvg = document.getElementById('chart-big');
+      function closeChart() { bg.classList.remove('active'); }
+      function openChart(str) {
+        var d = parse(str);
+        if (!d) return;
+        document.getElementById('chart-modal-title').textContent = d.code + ' - Price trend ' + d.year;
+        document.getElementById('chart-modal-sub').textContent = d.desc || '';
+        draw(bigSvg, d, true, 700, 320);
+        bg.classList.add('active');
+      }
+      document.addEventListener('click', function (e) {
+        var t = e.target.closest ? e.target.closest('a.item-open, svg.spark') : null;
+        if (!t) return;
+        e.preventDefault();
+        openChart(t.getAttribute('data-chart'));
+      });
+      bg.addEventListener('click', function (e) { if (e.target === bg) closeChart(); });
+      document.getElementById('chart-modal-close').addEventListener('click', closeChart);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChart(); });
+    })();
+
+    // Click a month cell -> list of the PO lines behind that price
+    (function () {
+      var bg = document.getElementById('po-modal-bg');
+      if (!bg) return;
+      var title = document.getElementById('po-modal-title');
+      var body = document.getElementById('po-modal-body');
+      function close() { bg.classList.remove('active'); }
+      document.addEventListener('click', function (e) {
+        var cell = e.target.closest('td.has-detail');
+        if (!cell || e.target.closest('a')) return;
+        title.textContent = cell.getAttribute('data-title') || 'PO lines';
+        body.innerHTML = cell.querySelector('.po-detail').innerHTML;
+        bg.classList.add('active');
+      });
+      bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
+      document.getElementById('po-modal-close').addEventListener('click', close);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    })();
+  </script>
+</body>
+</html>

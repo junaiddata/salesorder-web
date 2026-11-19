@@ -9,6 +9,7 @@ from . import sap_salesorder_views
 from . import sap_purchaseorder_views
 from . import sap_purchaseorder_pdf_export
 from . import detailed_purchase_analysis_views
+from . import detailed_purchase_cost_views
 from . import po_receiving_views
 from . import po_updates_export
 from . import finance_statement_views
@@ -185,7 +186,8 @@ urlpatterns += [
     # Detailed Purchase Analysis (open + closed POs, with warehouse) - separate from sappurchaseorders/
     path('detailed-purchase-analysis/sync-receive/', detailed_purchase_analysis_views.detailed_purchase_analysis_receive, name='detailed_purchase_analysis_receive'),
     path('detailed-purchase-analysis/', detailed_purchase_analysis_views.detailed_purchase_analysis_list, name='detailed_purchase_analysis_list'),
-    path('detailed-purchase-analysis/<str:po_number>/', detailed_purchase_analysis_views.detailed_purchase_analysis_detail, name='detailed_purchase_analysis_detail'),
+    path('detailed-purchase-analysis/monthly-cost/', detailed_purchase_cost_views.detailed_purchase_monthly_cost, name='detailed_purchase_monthly_cost'),
+    path('detailed-purchase-analysis/<str:po_number>/',detailed_purchase_analysis_views.detailed_purchase_analysis_detail, name='detailed_purchase_analysis_detail'),
     path('sappurchaseorders/sync-api/', sap_purchaseorder_views.sync_purchaseorders_from_api, name='sync_purchaseorders_api'),
     path('sappurchaseorders/sync-api-receive/', sap_purchaseorder_views.sync_purchaseorders_api_receive, name='sync_purchaseorders_api_receive'),
     path('sappurchaseorders/api/item-totals/', sap_purchaseorder_views.api_open_purchaseorder_item_totals, name='api_open_purchaseorder_item_totals'),
