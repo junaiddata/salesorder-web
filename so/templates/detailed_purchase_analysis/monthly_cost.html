@@ -67,6 +67,12 @@
     .pagination a { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; font-weight: 500; }
     .pagination a:hover { border-color: var(--primary); color: var(--primary); }
     .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    th.col-chg, td.col-chg { border-left: 2px solid var(--border); text-align: right; white-space: nowrap; }
+    .table-wrap > table thead th.col-chg { text-align: center; }
+    .th-sub { font-size: 0.72rem; font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+    .chg-up { color: #b91c1c; font-weight: 700; }
+    .chg-down { color: #15803d; font-weight: 700; }
+    .chg-note { color: var(--text-secondary); font-size: 0.74rem; }
     a.item-open { color: var(--primary); text-decoration: none; cursor: pointer; }
     a.item-open:hover { text-decoration: underline; }
     th.col-trend, td.col-trend { text-align: center; border-left: 2px solid var(--border); }
@@ -76,6 +82,28 @@
     .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; }
     .chart-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
     .modal.wide { max-width: 760px; }
+    .chart-detail { min-height: 2.6em; margin-top: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
+    table.chart-table { margin-top: 12px; }
+    table.chart-table th, table.chart-table td { text-align: right; }
+    table.chart-table th:first-child, table.chart-table td:first-child { text-align: left; }
+    .chart-wrap svg circle { touch-action: manipulation; }
+    @media (max-width: 600px) { .modal-bg { padding: 8px; } .modal-body { padding: 10px 12px; } }
+
+    /* Use the full width of the screen */
+    .container { max-width: none; padding: 16px 12px 40px; }
+    /* Wide screens: the table fits the page, so no inner scrolling (the page itself scrolls). On smaller
+       screens the table keeps its own scroll area instead of squeezing the columns unreadably. */
+    @media (min-width: 1280px) {
+      .table-card { overflow: visible; }
+      .table-wrap { overflow: visible; max-height: none; }
+      .table-wrap > table { min-width: 0; width: 100%; }
+      .table-wrap > table thead th { padding: 10px 6px; }
+      .table-wrap > table tbody td { padding: 6px 6px; }
+      .table-wrap > table thead th.left, .table-wrap > table tbody td.left { padding-left: 10px; }
+      th.col-chg, td.col-chg { white-space: normal; min-width: 150px; }
+      .item-desc { max-width: 22vw; }
+      thead th { top: 0; }
+    }
     td.has-detail { cursor: pointer; }
     td.has-detail:hover { background: #eef6ef; }
     td.changed { background: #fffbeb; }
@@ -198,6 +226,10 @@
           <a class="btn btn-secondary" href="{% url 'detailed_purchase_monthly_cost' %}">Clear</a>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
+        <div class="field" style="display:flex;gap:8px;">
+          <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=xlsx" title="Download all items matching the applied filters as Excel">Excel</a>
+          <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=pdf" title="Download all items matching the applied filters as PDF">PDF</a>
+        </div>
       </form>
     </div>
 
@@ -212,6 +244,7 @@
               {# Year Avg / Year Qty hidden for now #}
               <th class="col-trend">Trend</th>
               <th class="col-cur">Current Cost</th>
+              <th class="col-chg" title="Change from the January price (or the first month with a purchase) to today's Current Cost">Change in Price %<br><span class="th-sub">(from Jan to current date)</span></th>
             </tr>
           </thead>
           <tbody>
@@ -240,9 +273,10 @@
               {% endfor %}
               <td class="col-trend"><svg class="spark" width="110" height="30" viewBox="0 0 110 30" data-chart="{{ r.chart_json }}"></svg></td>
               <td class="col-cur">{% if r.current_cost is not None %}{{ r.current_cost|floatformat:2|intcomma }}{% else %}<span class="zero">&ndash;</span>{% endif %}</td>
+              <td class="col-chg">{% with pc=r.price_change %}{% if pc %}<span class="{% if pc.pct > 0 %}chg-up{% elif pc.pct < 0 %}chg-down{% endif %}">{% if pc.pct > 0 %}+{% endif %}{{ pc.pct|floatformat:1 }}%</span> <span class="chg-note">({{ pc.from_month }} {{ pc.from_price|floatformat:2 }} &rarr; {{ pc.to_month }} {{ pc.to_price|floatformat:2 }})</span>{% else %}<span class="zero">&ndash;</span>{% endif %}{% endwith %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="16" class="empty-state">No purchases found for the selected filters.</td></tr>
+            <tr><td colspan="17" class="empty-state">No purchases found for the selected filters.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -272,12 +306,17 @@
       <div class="modal-body">
         <p class="po-sum" id="chart-modal-sub"></p>
         <div class="chart-wrap"><svg id="chart-big" viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet"></svg></div>
+        <div class="chart-detail" id="chart-detail" aria-live="polite"></div>
         <div class="chart-legend">
           <span><i style="background:#2C5530"></i>Last price of the month</span>
           <span><i style="background:#cfe5d2"></i>Min&ndash;max range in the month</span>
           <span><i style="background:#f59e0b"></i>Price changed in the month</span>
           <span><i style="background:none;border-top:2px dashed #b91c1c;height:0;border-radius:0;vertical-align:3px"></i>Current cost</span>
         </div>
+        <table class="po-table chart-table">
+          <thead><tr><th>Month</th><th>Last</th><th>Average</th><th>Min</th><th>Max</th><th>Changes</th></tr></thead>
+          <tbody id="chart-table-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -347,12 +386,21 @@
         return out;
       }
 
-      function draw(svg, d, big, W, H) {
+      function describe(i, c) {
+        return MONTHS[i] + ': last ' + fmt(c.l) + ' | avg ' + fmt(c.a) + ' | min ' + fmt(c.lo) + ' | max ' + fmt(c.hi) +
+          (c.c > 0 ? ' | price changed ' + c.c + 'x' : '');
+      }
+
+      function draw(svg, d, big, W, H, onPick) {
+        // On narrow screens the big chart is scaled down, so text and dots are drawn larger to stay readable
+        var shown = big ? (svg.getBoundingClientRect().width || W) : W;
+        var scale = big ? Math.min(2.2, Math.max(1, W / shown)) : 1;
+        var fs = 11 * scale;
         while (svg.firstChild) svg.removeChild(svg.firstChild);
         var m = d.m, any = false, i, k;
         for (i = 0; i < 12; i++) if (m[i]) any = true;
         if (!any) return;
-        var L = big ? 56 : 4, R = big ? 16 : 4, T = big ? 16 : 4, B = big ? 30 : 4;
+        var L = big ? 44 + 12 * scale : 4, R = big ? 16 : 4, T = big ? 16 : 4, B = big ? 18 + 12 * scale : 4;
         var iw = W - L - R, ih = H - T - B;
         var lo = Infinity, hi = -Infinity;
         for (i = 0; i < 12; i++) if (m[i]) {
@@ -374,22 +422,22 @@
           for (var g = 0; g <= 4; g++) {
             var gv = lo + (hi - lo) * g / 4, gy = Y(gv);
             el('line', { x1: L, x2: W - R, y1: gy, y2: gy, stroke: '#e2e8f0', 'stroke-width': 1 }, svg);
-            var t = el('text', { x: L - 8, y: gy + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#64748b' }, svg);
+            var t = el('text', { x: L - 8, y: gy + fs * 0.36, 'text-anchor': 'end', 'font-size': fs, fill: '#64748b' }, svg);
             t.textContent = fmt(gv);
           }
           for (i = 0; i < 12; i++) {
-            var xt = el('text', { x: X(i), y: H - 9, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b' }, svg);
+            var xt = el('text', { x: X(i), y: H - 6 * scale, 'text-anchor': 'middle', 'font-size': fs * (scale > 1.4 ? 0.85 : 1), fill: '#64748b' }, svg);
             xt.textContent = MONTHS[i];
           }
           if (showCur) {
             var cy = Y(d.cur);
             el('line', { x1: L, x2: W - R, y1: cy, y2: cy, stroke: '#b91c1c', 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }, svg);
-            var ct = el('text', { x: W - R, y: cy - 5, 'text-anchor': 'end', 'font-size': 11, fill: '#b91c1c' }, svg);
+            var ct = el('text', { x: W - R, y: cy - 5, 'text-anchor': 'end', 'font-size': fs, fill: '#b91c1c' }, svg);
             ct.textContent = 'Current cost ' + fmt(d.cur);
           }
         }
 
-        var rs = runs(m), r, pts;
+        var rs = runs(m), r, pts, ring = null;
         for (r = 0; r < rs.length; r++) {
           var run = rs[r];
           if (big && run.length > 1) {   // min-max band
@@ -410,10 +458,21 @@
           if (big && m[i].lo !== m[i].hi) {   // range tick for months that had different prices
             el('line', { x1: X(i), x2: X(i), y1: Y(m[i].hi), y2: Y(m[i].lo), stroke: '#2C5530', 'stroke-width': 1, opacity: 0.5 }, svg);
           }
-          var dot = el('circle', { cx: X(i), cy: Y(m[i].l), r: big ? 4.5 : (changed ? 2.6 : 2), fill: changed ? '#f59e0b' : '#2C5530', stroke: '#fff', 'stroke-width': big ? 1.5 : 0.8 }, svg);
+          var dot = el('circle', { cx: X(i), cy: Y(m[i].l), r: big ? 4.5 * scale : (changed ? 2.6 : 2), fill: changed ? '#f59e0b' : '#2C5530', stroke: '#fff', 'stroke-width': big ? 1.5 : 0.8 }, svg);
           if (big) {
-            var tip = el('title', {}, dot);
-            tip.textContent = MONTHS[i] + ': last ' + fmt(m[i].l) + ' | avg ' + fmt(m[i].a) + ' | min ' + fmt(m[i].lo) + ' | max ' + fmt(m[i].hi) + (changed ? ' | price changed ' + m[i].c + 'x' : '');
+            var tip = el('title', {}, dot);   // hover text on desktop
+            tip.textContent = describe(i, m[i]);
+            if (onPick) {
+              // large invisible target so a finger can hit the dot; click / tap shows the values under the chart
+              (function (idx) {
+                var hit = el('circle', { cx: X(idx), cy: Y(m[idx].l), r: 16 * scale, fill: 'transparent', style: 'cursor:pointer' }, svg);
+                hit.addEventListener('click', function () {
+                  if (ring && ring.parentNode) ring.parentNode.removeChild(ring);
+                  ring = el('circle', { cx: X(idx), cy: Y(m[idx].l), r: 8 * scale, fill: 'none', stroke: '#0f172a', 'stroke-width': 1.5, 'pointer-events': 'none' }, svg);
+                  onPick(idx);
+                });
+              })(i);
+            }
           }
         }
       }
@@ -434,8 +493,18 @@
         if (!d) return;
         document.getElementById('chart-modal-title').textContent = d.code + ' - Price trend ' + d.year;
         document.getElementById('chart-modal-sub').textContent = d.desc || '';
-        draw(bigSvg, d, true, 700, 320);
-        bg.classList.add('active');
+        bg.classList.add('active');   // show first so the real chart width is known when drawing
+        var detail = document.getElementById('chart-detail');
+        detail.textContent = 'Tap a dot to see its values.';
+        draw(bigSvg, d, true, 700, 320, function (i) { detail.textContent = describe(i, d.m[i]); });
+        // month-by-month values (readable on any device, no tapping needed)
+        var rows = '';
+        for (var i = 0; i < 12; i++) {
+          var c = d.m[i];
+          if (!c) continue;
+          rows += '<tr><td>' + MONTHS[i] + '</td><td>' + fmt(c.l) + '</td><td>' + fmt(c.a) + '</td><td>' + fmt(c.lo) + '</td><td>' + fmt(c.hi) + '</td><td>' + (c.c > 0 ? c.c + '&times;' : '&ndash;') + '</td></tr>';
+        }
+        document.getElementById('chart-table-body').innerHTML = rows;
       }
       document.addEventListener('click', function (e) {
         var t = e.target.closest ? e.target.closest('a.item-open, svg.spark') : null;

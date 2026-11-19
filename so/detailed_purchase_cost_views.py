@@ -19,11 +19,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Min, Q, Sum
 from django.db.models.functions import ExtractMonth
+from django.http import HttpResponse
 from django.shortcuts import render
 
 from .detailed_purchase_analysis_views import (
     DEFAULT_YEAR, FIRST_YEAR, NO_BRAND, NO_BRAND_LABEL, _with_brand,
 )
+from .detailed_purchase_cost_export import PDF_ROW_LIMIT, pdf_response, xlsx_response
 from .models import DetailedPurchaseOrder, DetailedPurchaseOrderItem, Items
 from .sap_purchaseorder_views import _user_can_see_price
 
@@ -120,9 +122,17 @@ def detailed_purchase_monthly_cost(request):
     item_rows = qs.values('item_no').annotate(
         description=Max('description'), brand_name=Max('brand'),
     ).order_by('item_no')
-    paginator = Paginator(item_rows, page_size)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    page_items = list(page_obj.object_list)
+    export = request.GET.get('export', '').strip().lower()
+    if export not in ('xlsx', 'pdf'):
+        export = ''
+    if export:
+        # export covers every matching item (not just one page)
+        paginator, page_obj = None, None
+        page_items = list(item_rows)
+    else:
+        paginator = Paginator(item_rows, page_size)
+        page_obj = paginator.get_page(request.GET.get('page'))
+        page_items = list(page_obj.object_list)
     codes = [r['item_no'] for r in page_items]
 
     # 2) monthly + yearly aggregates for the items on this page only
@@ -197,6 +207,22 @@ def detailed_purchase_monthly_cost(request):
         y = yearly.get(code)
         year_avg = (y['value'] / y['qty']) if y and y['qty'] else None
         cur = cost_map.get(code)
+        # Change from the January price to today's Current Cost (Item Master). If the item was not bought in
+        # January, the first month with a purchase is used instead (its month is shown in the bracket).
+        # The month price is the "last price" shown in that month's cell. No change is shown when there is
+        # no purchase in the year, or no Current Cost.
+        bought = [i for i, c in enumerate(months) if c is not None]
+        price_change = None
+        if bought and cur and cur > 0:
+            first_i = bought[0]
+            first_p = months[first_i]['last']
+            cur_p = Decimal(str(cur)).quantize(Decimal('0.01'))
+            if first_p and first_p > 0:
+                price_change = {
+                    'pct': (cur_p - first_p) / first_p * 100,
+                    'from_month': calendar.month_abbr[first_i + 1], 'to_month': 'Current',
+                    'from_price': first_p, 'to_price': cur_p,
+                }
         # Compact data for the trend charts (drawn in the browser, no chart library needed)
         chart_data = {
             'code': code, 'desc': r['description'] or '', 'year': selected_year,
@@ -215,7 +241,26 @@ def detailed_purchase_monthly_cost(request):
             'months': months, 'year_avg': year_avg, 'year_changes': year_changes,
             'year_qty': y['qty'] if y else Decimal('0'),
             'current_cost': cur if cur else None,
+            'price_change': price_change,
         })
+
+    if export:
+        filter_lines = [
+            ('Status', {'O': 'Open', 'C': 'Closed'}.get(status, 'All')),
+            ('Warehouse', warehouse or 'All'),
+            ('Purchaser', ', '.join(purchaser_filter) or 'All'),
+            ('Brand', ', '.join(NO_BRAND_LABEL if b == NO_BRAND else b for b in brand_filter) or 'All'),
+            ('Search', q or '-'),
+        ]
+        if export == 'xlsx':
+            return xlsx_response(rows, selected_year, filter_lines)
+        resp = pdf_response(rows, selected_year, filter_lines)
+        if resp is None:
+            return HttpResponse(
+                f'{len(rows)} items are too many for one PDF (max {PDF_ROW_LIMIT}). '
+                'Filter by brand first, or download the Excel file instead.',
+                status=400, content_type='text/plain')
+        return resp
 
     context.update({'rows': rows, 'page_obj': page_obj, 'total_count': paginator.count})
     return render(request, 'detailed_purchase_analysis/monthly_cost.html', context)
