@@ -10,6 +10,7 @@ from . import sap_purchaseorder_views
 from . import sap_purchaseorder_pdf_export
 from . import detailed_purchase_analysis_views
 from . import detailed_purchase_cost_views
+from . import item_monthly_sales_views
 from . import po_receiving_views
 from . import po_updates_export
 from . import finance_statement_views
@@ -256,6 +257,7 @@ urlpatterns += [
     path('saparinvoices/brandwise-sales-analysis/', brandwise_sales_analysis_views.brandwise_sales_analysis, name='brandwise_sales_analysis'),
     path('saparinvoices/brandwise-sales-analysis/export-excel/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_excel, name='export_brandwise_sales_analysis_excel'),
     path('saparinvoices/brandwise-sales-analysis/export-pdf/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_pdf, name='export_brandwise_sales_analysis_pdf'),
+    path('item-monthly-sales/', item_monthly_sales_views.item_monthly_sales, name='item_monthly_sales'),
     path('saparinvoices/customer-item-monthwise-analysis/', customer_item_monthwise_analysis_views.customer_item_monthwise_analysis, name='customer_item_monthwise_analysis'),
     path('saparinvoices/customer-item-monthwise-analysis/export-pdf/', customer_item_monthwise_analysis_views.export_customer_item_monthwise_analysis_pdf, name='export_customer_item_monthwise_analysis_pdf'),
     path('saparinvoices/customer-item-yearwise-analysis/', customer_item_yearwise_analysis_views.customer_item_yearwise_analysis, name='customer_item_yearwise_analysis'),

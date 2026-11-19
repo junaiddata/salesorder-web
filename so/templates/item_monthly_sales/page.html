@@ -1,0 +1,438 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Item Monthly Sales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --surface-hover: #fafbfc;
+      --text: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
+      --border: #e2e8f0; --border-light: #f1f5f9;
+      --primary: #2C5530; --primary-dark: #1e3d21;
+      --radius: 12px; --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .header h1 { font-size: 1.5rem; font-weight: 700; }
+    .header p { color: var(--text-secondary); font-size: 0.875rem; margin-top: 2px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 0.875rem; font-weight: 600; border-radius: var(--radius-sm); border: none; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .filters-card { margin-bottom: 16px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; padding: 16px 18px; align-items: end; }
+    .field label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+    .input, .select { width: 100%; padding: 9px 11px; font-size: 0.875rem; font-family: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(44,85,48,0.12); }
+    .note { padding: 10px 18px; font-size: 0.8rem; color: var(--text-secondary); background: var(--bg); border-top: 1px solid var(--border-light); border-radius: 0 0 var(--radius) var(--radius); }
+    .multi-select { position: relative; }
+    .select-box { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 11px; font-size: 0.875rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+    .options-container { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 260px; max-height: 280px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.12); z-index: 100; }
+    .options-container.active { display: block; }
+    .option-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; }
+    .option-label:hover { background: var(--bg); }
+    .option-label input { width: 14px; height: 14px; accent-color: var(--primary); }
+    .option-label.option-hidden { display: none; }
+    .search-box-container { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; }
+    .search-box { width: 100%; padding: 6px 10px; font-size: 0.813rem; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    .options-actions { display: flex; justify-content: space-between; margin-top: 6px; }
+    .options-action-btn { font-size: 0.68rem; font-weight: 700; font-family: inherit; color: var(--primary); background: none; border: none; cursor: pointer; padding: 3px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .options-action-btn.danger { color: #b91c1c; }
+    .table-card { overflow: hidden; }
+    .table-wrap { overflow: auto; max-height: calc(100vh - 200px); }
+    table { width: 100%; border-collapse: collapse; min-width: 1300px; }
+    thead th { position: sticky; top: 0; z-index: 2; padding: 8px 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    thead th.left { text-align: left; }
+    /* main table headings: bold and a little larger than the values (values are 0.8rem) */
+    .table-wrap > table thead th { font-size: 0.875rem; font-weight: 700; color: var(--text); letter-spacing: 0.03em; padding: 10px 10px; }
+    tbody td { padding: 7px 10px; font-size: 0.8rem; line-height: 1.35; border-bottom: 1px solid var(--border-light); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    tbody td.left { text-align: left; white-space: normal; }
+    tbody tr:hover td { background: var(--surface-hover); }
+    .item-code { font-weight: 700; }
+    .item-desc { display: block; font-size: 0.72rem; color: var(--text-secondary); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .zero { color: var(--text-muted); }
+    .col-cur, .col-avg { border-left: 2px solid var(--border); font-weight: 600; }
+    .table-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--border-light); font-size: 0.813rem; color: var(--text-secondary); }
+    .pagination { display: flex; gap: 6px; align-items: center; }
+    .pagination a { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; font-weight: 500; }
+    .pagination a:hover { border-color: var(--primary); color: var(--primary); }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    th.col-chg, td.col-chg { border-left: 2px solid var(--border); text-align: right; white-space: nowrap; }
+    .table-wrap > table thead th.col-chg { text-align: center; }
+    .th-sub { font-size: 0.72rem; font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+    .chg-up { color: #b91c1c; font-weight: 700; }
+    .chg-down { color: #15803d; font-weight: 700; }
+    .chg-note { color: var(--text-secondary); font-size: 0.74rem; }
+    a.item-open { color: var(--primary); text-decoration: none; cursor: pointer; }
+    a.item-open:hover { text-decoration: underline; }
+    th.col-trend, td.col-trend { text-align: center; border-left: 2px solid var(--border); }
+    svg.spark { display: block; margin: 0 auto; cursor: pointer; }
+    .chart-wrap { padding: 4px 0 0; }
+    .chart-wrap svg { width: 100%; height: auto; display: block; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; }
+    .chart-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+    .modal.wide { max-width: 760px; }
+    .chart-detail { min-height: 2.6em; margin-top: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
+    table.chart-table { margin-top: 12px; }
+    table.chart-table th, table.chart-table td { text-align: right; }
+    table.chart-table th:first-child, table.chart-table td:first-child { text-align: left; }
+    .chart-wrap svg circle { touch-action: manipulation; }
+    @media (max-width: 600px) { .modal-bg { padding: 8px; } .modal-body { padding: 10px 12px; } }
+
+    /* Use the full width of the screen */
+    .container { max-width: none; padding: 16px 12px 40px; }
+    /* Wide screens: the table fits the page, so no inner scrolling (the page itself scrolls). On smaller
+       screens the table keeps its own scroll area instead of squeezing the columns unreadably. */
+    @media (min-width: 1280px) {
+      .table-card { overflow: visible; }
+      .table-wrap { overflow: visible; max-height: none; }
+      .table-wrap > table { min-width: 0; width: 100%; }
+      .table-wrap > table thead th { padding: 10px 6px; }
+      .table-wrap > table tbody td { padding: 6px 6px; }
+      .table-wrap > table thead th.left, .table-wrap > table tbody td.left { padding-left: 10px; }
+      th.col-chg, td.col-chg { white-space: normal; min-width: 150px; }
+      .item-desc { max-width: 22vw; }
+      thead th { top: 0; }
+    }
+    td.has-detail { cursor: pointer; }
+    td.has-detail:hover { background: #eef6ef; }
+    td.changed { background: #fffbeb; }
+    .chg-badge { display: inline-block; margin-left: 5px; padding: 0 5px; font-size: 0.68rem; font-weight: 700; color: #92400e; background: #fde68a; border-radius: 8px; vertical-align: middle; }
+    .po-link { color: var(--primary); font-weight: 600; text-decoration: none; }
+    .po-link:hover { text-decoration: underline; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 500; padding: 16px; }
+    .modal-bg.active { display: flex; }
+    .modal { background: var(--surface); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0,0,0,0.25); width: 100%; max-width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .modal-head h3 { font-size: 1rem; }
+    .modal-close { border: none; background: none; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--text-secondary); }
+    .modal-body { padding: 14px 18px; overflow: auto; }
+    .po-sum { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 10px; }
+    table.po-table { min-width: 0; width: 100%; }
+    table.po-table thead th { position: static; text-align: left; }
+    table.po-table tbody td { text-align: left; white-space: nowrap; }
+    table.po-table td:last-child, table.po-table th:last-child { text-align: right; }
+  </style>
+  <style>
+    th.col-tot, td.col-tot { border-left: 2px solid var(--border); font-weight: 700; }
+    tr.totals td { font-weight: 700; background: var(--bg); border-top: 2px solid var(--border); }
+    td.neg { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Item Monthly Sales</h1>
+        <p>Net sales amount (invoices less credit memos), per item, month by month &middot; {{ selected_year }}</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
+      </div>
+    </header>
+
+    <div class="card filters-card">
+      <form class="filters-grid" method="get">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Item code or description...">
+        </div>
+        <div class="field">
+          <label>Year</label>
+          <select class="select" name="year">
+            {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Store</label>
+          <select class="select" name="store">
+            <option value="">All</option>
+            <option value="HO" {% if filters.store == 'HO' %}selected{% endif %}>HO</option>
+            <option value="Others" {% if filters.store == 'Others' %}selected{% endif %}>Others</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <div class="multi-select">
+            <div class="select-box" id="brand-trigger"><span id="brand-text">All Brands</span></div>
+            <div class="options-container" id="brand-options">
+              <div class="search-box-container">
+                <input type="text" id="brand-search" class="search-box" placeholder="Search..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              {% for b in brands %}<label class="option-label"><input type="checkbox" name="brand" value="{{ b }}" {% if b in filters.brand_filter %}checked{% endif %}><span class="option-text">{{ b }}</span></label>{% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Salesman</label>
+          <div class="multi-select">
+            <div class="select-box" id="salesman-trigger"><span id="salesman-text">All Salesmen</span></div>
+            <div class="options-container" id="salesman-options">
+              <div class="search-box-container">
+                <input type="text" id="salesman-search" class="search-box" placeholder="Search..." autocomplete="off">
+                <div class="options-actions">
+                  <button type="button" class="options-action-btn" data-action="select-all">Select all</button>
+                  <button type="button" class="options-action-btn danger" data-action="clear-all">Clear all</button>
+                </div>
+              </div>
+              {% for s in salesmen %}<label class="option-label"><input type="checkbox" name="salesman" value="{{ s }}" {% if s in filters.salesman_filter %}checked{% endif %}><span class="option-text">{{ s }}</span></label>{% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Per Page</label>
+          <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}">
+        </div>
+        <div class="field" style="display:flex;gap:8px;">
+          <a class="btn btn-secondary" href="{% url 'item_monthly_sales' %}">Clear</a>
+          <button class="btn btn-primary" type="submit">Apply</button>
+        </div>
+        <div class="field" style="display:flex;gap:8px;">
+          <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=xlsx" title="Download all items matching the applied filters as Excel">Excel</a>
+          <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=pdf" title="Download all items matching the applied filters as PDF">PDF</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="card table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="left">Item</th>
+              <th class="left">Brand</th>
+              {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
+              <th class="col-tot">Total</th>
+              <th class="col-trend">Trend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the sales chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
+              <td class="left">{{ r.brand|default:"&mdash;" }}</td>
+              {% for v in r.m %}
+                {% if v %}<td{% if v < 0 %} class="neg"{% endif %}>{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
+              {% endfor %}
+              <td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total|floatformat:2|intcomma }}</td>
+              <td class="col-trend"><svg class="spark" width="96" height="28" data-chart="{{ r.chart_json }}"></svg></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="16" class="empty-state">No sales found for the selected filters.</td></tr>
+            {% endfor %}
+          </tbody>
+          {# Totals row hidden for now #}
+          {% if False %}
+          <tfoot>
+            <tr class="totals">
+              <td class="left" colspan="2">Total (all {{ total_count }} item{{ total_count|pluralize }})</td>
+              {% for v in month_totals %}<td>{{ v|floatformat:2|intcomma }}</td>{% endfor %}
+              <td class="col-tot">{{ grand_total|floatformat:2|intcomma }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+      <div class="table-footer">
+        <span>{{ total_count }} item{{ total_count|pluralize }}{% if page_obj %} &middot; Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}{% endif %}</span>
+        {% if page_obj and page_obj.paginator.num_pages > 1 %}
+        <div class="pagination">
+          {% if page_obj.has_previous %}<a href="?{{ querystring }}{% if querystring %}&{% endif %}page={{ page_obj.previous_page_number }}">&laquo; Prev</a>{% endif %}
+          {% if page_obj.has_next %}<a href="?{{ querystring }}{% if querystring %}&{% endif %}page={{ page_obj.next_page_number }}">Next &raquo;</a>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="chart-modal-bg">
+    <div class="modal wide">
+      <div class="modal-head"><h3 id="chart-title"></h3><button type="button" class="modal-close" id="chart-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <div class="po-sum" id="chart-sub"></div>
+        <div class="chart-wrap"><svg id="chart-big" viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet"></svg></div>
+        <div class="chart-detail" id="chart-detail">Tap or hover a point to see the month's sales amount.</div>
+        <div class="chart-legend"><span><i style="background:#2C5530"></i>Monthly sales</span><span><i style="background:#b91c1c"></i>Month with net return (credit memos above sales)</span></div>
+        <table class="chart-table">
+          <thead><tr><th>Month</th><th>Sales Amount</th><th>% of Year</th></tr></thead>
+          <tbody id="chart-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function initMultiSelect(id, allText) {
+      var trigger = document.getElementById(id + '-trigger');
+      if (!trigger) return;
+      var options = document.getElementById(id + '-options');
+      var text = document.getElementById(id + '-text');
+      var search = document.getElementById(id + '-search');
+      var boxes = options.querySelectorAll('input[type="checkbox"]');
+      function label() {
+        var checked = Array.prototype.filter.call(boxes, function (b) { return b.checked; });
+        text.textContent = checked.length === 0 ? allText : checked.length === 1 ? checked[0].closest('.option-label').textContent.trim() : checked.length + ' Selected';
+      }
+      label();
+      boxes.forEach(function (b) { b.addEventListener('change', label); });
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('.options-container.active').forEach(function (o) { if (o !== options) o.classList.remove('active'); });
+        options.classList.toggle('active');
+        if (options.classList.contains('active')) search.focus();
+      });
+      options.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { options.classList.remove('active'); });
+      options.querySelectorAll('.options-action-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var selectAll = btn.getAttribute('data-action') === 'select-all';
+          boxes.forEach(function (b) {
+            var lbl = b.closest('.option-label');
+            if (selectAll) { if (!lbl.classList.contains('option-hidden')) b.checked = true; }
+            else { b.checked = false; }
+          });
+          label();
+        });
+      });
+      search.addEventListener('input', function () {
+        var term = this.value.toLowerCase().trim();
+        options.querySelectorAll('.option-label').forEach(function (l) {
+          l.classList.toggle('option-hidden', term !== '' && l.textContent.toLowerCase().indexOf(term) === -1);
+        });
+      });
+    }
+    initMultiSelect('brand', 'All Brands');
+    initMultiSelect('salesman', 'All Salesmen');
+
+    // ---- Monthly sales line charts (plain SVG, no external library) ----
+    (function () {
+      var NS = 'http://www.w3.org/2000/svg';
+      var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var POS = '#2C5530', NEG = '#b91c1c';
+      function el(name, attrs, parent) {
+        var e = document.createElementNS(NS, name);
+        for (var k in attrs) e.setAttribute(k, attrs[k]);
+        if (parent) parent.appendChild(e);
+        return e;
+      }
+      function fmt(v) { return v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+      function short(v) {
+        var a = Math.abs(v), s = v < 0 ? '-' : '';
+        if (a >= 1e6) return s + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+        if (a >= 1e3) return s + (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k';
+        return s + Math.round(a);
+      }
+      function parse(s) { try { return JSON.parse(s); } catch (e) { return null; } }
+
+      // draw the 12 monthly bars into svg; big = full chart with axes and tap targets
+      function draw(svg, d, big, W, H, onPick) {
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        var vals = d.m, mx = Math.max.apply(null, vals.concat([0])), mn = Math.min.apply(null, vals.concat([0]));
+        var range = (mx - mn) || 1;
+        var l = big ? 62 : 2, r = big ? 10 : 2, t = big ? 12 : 2, b = big ? 26 : 2;
+        var iw = W - l - r, ih = H - t - b, slot = iw / 12, bw = slot * (big ? 0.64 : 0.7);
+        function y(v) { return t + (mx - v) / range * ih; }
+        if (big) {
+          for (var g = 0; g <= 4; g++) {
+            var gv = mn + range * g / 4, gy = y(gv);
+            el('line', {x1: l, x2: W - r, y1: gy, y2: gy, stroke: '#e2e8f0', 'stroke-width': 1}, svg);
+            var tx = el('text', {x: l - 6, y: gy + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#64748b'}, svg);
+            tx.textContent = short(gv);
+          }
+          for (var m = 0; m < 12; m++) {
+            var lb = el('text', {x: l + slot * m + slot / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b'}, svg);
+            lb.textContent = MONTHS[m];
+          }
+        }
+        el('line', {x1: l, x2: W - r, y1: y(0), y2: y(0), stroke: big ? '#94a3b8' : '#cbd5e1', 'stroke-width': 1, 'stroke-dasharray': '3 3'}, svg);
+        // the line runs from the first to the last month that has sales (empty months in between count as 0)
+        var first = -1, last = -1;
+        vals.forEach(function (v, i) { if (v) { if (first < 0) first = i; last = i; } });
+        var dots = [];
+        if (first >= 0) {
+          var pts = [];
+          for (var i = first; i <= last; i++) pts.push((l + slot * i + slot / 2).toFixed(1) + ',' + y(vals[i]).toFixed(1));
+          if (pts.length > 1) el('polyline', {points: pts.join(' '), fill: 'none', stroke: POS, 'stroke-width': big ? 2.5 : 1.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
+          for (var j = first; j <= last; j++) {
+            if (!big && pts.length > 1 && vals[j] >= 0) { dots[j] = null; continue; }
+            dots[j] = el('circle', {cx: l + slot * j + slot / 2, cy: y(vals[j]), r: big ? 4 : 2, fill: vals[j] < 0 ? NEG : POS, stroke: '#fff', 'stroke-width': big ? 1.5 : 0.5}, svg);
+          }
+        }
+        if (big && onPick) {
+          vals.forEach(function (v, i) {
+            var hit = el('rect', {x: l + slot * i, y: t, width: slot, height: ih, fill: 'transparent', style: 'cursor:pointer'}, svg);
+            function pick() {
+              dots.forEach(function (dot) { if (dot) dot.setAttribute('r', 4); });
+              if (dots[i]) dots[i].setAttribute('r', 7);
+              onPick(i);
+            }
+            hit.addEventListener('mouseenter', pick);
+            hit.addEventListener('click', pick);
+          });
+        }
+      }
+
+      // sparklines
+      document.querySelectorAll('svg.spark').forEach(function (svg) {
+        var d = parse(svg.getAttribute('data-chart'));
+        if (!d) return;
+        svg.setAttribute('viewBox', '0 0 96 28');
+        draw(svg, d, false, 96, 28);
+        svg.addEventListener('click', function () { openChart(d); });
+      });
+
+      var bg = document.getElementById('chart-modal-bg');
+      var bigSvg = document.getElementById('chart-big');
+      var detail = document.getElementById('chart-detail');
+      function openChart(d) {
+        var total = d.m.reduce(function (a, b) { return a + b; }, 0);
+        document.getElementById('chart-title').textContent = d.code + ' – monthly sales ' + d.year;
+        document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + 'Total ' + fmt(total);
+        detail.textContent = 'Tap or hover a point to see the month’s sales amount.';
+        var body = document.getElementById('chart-table-body');
+        body.innerHTML = '';
+        d.m.forEach(function (v, i) {
+          var tr = document.createElement('tr');
+          var pct = total ? (v / total * 100).toFixed(1) + '%' : '–';
+          [MONTHS[i], v ? fmt(v) : '–', v ? pct : '–'].forEach(function (txt, c) {
+            var td = document.createElement('td');
+            td.textContent = txt;
+            if (c === 1 && v < 0) td.style.color = NEG;
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+        bg.classList.add('active');
+        draw(bigSvg, d, true, 700, 320, function (i) {
+          detail.textContent = MONTHS[i] + ' ' + d.year + ': ' + (d.m[i] ? fmt(d.m[i]) : 'no sales');
+        });
+      }
+      document.querySelectorAll('a.item-open').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          var d = parse(a.getAttribute('data-chart'));
+          if (d) openChart(d);
+        });
+      });
+      function close() { bg.classList.remove('active'); }
+      document.getElementById('chart-close').addEventListener('click', close);
+      bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    })();
+  </script>
+</body>
+</html>
