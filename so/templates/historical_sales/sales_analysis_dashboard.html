@@ -165,6 +165,10 @@
         <p>Uploaded sales data - Invoices and Credit Memos combined</p>
       </div>
       <div class="header-right">
+        {% if is_admin %}
+        <a href="{% url 'historical_sales_analysis_export_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Export PDF</a>
+        <a href="{% url 'historical_sales_analysis_export_excel' %}?{{ request.GET.urlencode }}" class="btn btn-secondary"><i class="fas fa-file-excel"></i> Export Excel</a>
+        {% endif %}
         <a href="{% url 'historical_sales_item_analysis' %}" class="btn btn-secondary"><i class="fas fa-cube"></i> Item Analysis</a>
         <a href="{% url 'historical_sales_customer_analysis' %}" class="btn btn-secondary"><i class="fas fa-users"></i> Customer Analysis</a>
         <a href="{% url 'historical_sales_upload' %}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload Data</a>

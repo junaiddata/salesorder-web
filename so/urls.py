@@ -22,6 +22,7 @@ from . import item_quoted_analysis_pdf_export
 from . import item_sold_analysis_views
 from . import item_sold_analysis_pdf_export
 from . import historical_sales_views
+from . import historical_sales_export
 from . import accounts_recording_views
 from . import brandwise_sales_analysis_views
 from . import brandwise_quotation_matrix_views
@@ -313,6 +314,8 @@ urlpatterns += [
     path('historical-sales/clear/', historical_sales_views.historical_sales_clear_all, name='historical_sales_clear_all'),
     path('historical-sales/upload/', historical_sales_views.historical_sales_upload, name='historical_sales_upload'),
     path('historical-sales/analysis/', historical_sales_views.historical_sales_analysis_dashboard, name='historical_sales_analysis'),
+    path('historical-sales/analysis/export-pdf/', historical_sales_export.export_historical_sales_analysis_pdf, name='historical_sales_analysis_export_pdf'),
+    path('historical-sales/analysis/export-excel/', historical_sales_export.export_historical_sales_analysis_excel, name='historical_sales_analysis_export_excel'),
     path('historical-sales/item-analysis/', historical_sales_views.historical_item_analysis, name='historical_sales_item_analysis'),
     path('historical-sales/customer-analysis/', historical_sales_views.historical_customer_analysis, name='historical_sales_customer_analysis'),
     path('historical-sales/item-analysis/export-pdf/', historical_sales_views.export_historical_item_analysis_pdf, name='historical_sales_item_analysis_export_pdf'),
