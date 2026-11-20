@@ -83,7 +83,7 @@
     .chart-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
     .modal.wide { max-width: 760px; }
     .chart-detail { min-height: 2.6em; margin-top: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
-    table.chart-table { margin-top: 12px; }
+    table.chart-table { margin-top: 12px; min-width: 0; width: 100%; }
     table.chart-table th, table.chart-table td { text-align: right; }
     table.chart-table th:first-child, table.chart-table td:first-child { text-align: left; }
     .chart-wrap svg circle { touch-action: manipulation; }
@@ -127,6 +127,23 @@
     th.col-tot, td.col-tot { border-left: 2px solid var(--border); font-weight: 700; }
     tr.totals td { font-weight: 700; background: var(--bg); border-top: 2px solid var(--border); }
     td.neg { color: #b91c1c; }
+    .view-switch { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); }
+    .view-switch a { padding: 8px 16px; font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); text-decoration: none; }
+    .view-switch a.on { background: var(--primary); color: #fff; }
+    .view-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .view-bar .hint { font-size: 0.8rem; color: var(--text-secondary); }
+    .chg-pos { color: #15803d; font-weight: 700; }
+    .chg-neg { color: #b91c1c; font-weight: 700; }
+    .chg-note { color: var(--text-secondary); font-size: 0.74rem; }
+    th.col-chg, td.col-chg { border-left: 2px solid var(--border); }
+    .table-wrap > table thead th.col-chg { text-align: center; }
+    td.has-detail { cursor: pointer; }
+    td.has-detail:hover { background: #eef6ef; }
+    table.lines-table { min-width: 0; width: 100%; margin-top: 10px; }
+    table.lines-table thead th { position: static; text-align: left; font-size: 0.75rem; }
+    table.lines-table tbody td { text-align: left; white-space: nowrap; font-size: 0.78rem; }
+    table.lines-table th.r, table.lines-table td.r { text-align: right; }
+    .modal.lines { max-width: 880px; }
   </style>
 </head>
 <body>
@@ -134,7 +151,7 @@
     <header class="header">
       <div>
         <h1>Item Monthly Sales</h1>
-        <p>Net sales amount (invoices less credit memos), per item, month by month &middot; {{ selected_year }}</p>
+        <p>{% if view == 'price' %}Latest unit price (most recent invoice line of the month), per item, month by month{% else %}Net sales amount (invoices less credit memos), per item, month by month{% endif %} &middot; {{ selected_year }}</p>
       </div>
       <div class="header-actions">
         <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
@@ -143,6 +160,7 @@
 
     <div class="card filters-card">
       <form class="filters-grid" method="get">
+        <input type="hidden" name="view" value="{{ view }}">
         <div class="field">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Item code or description...">
@@ -208,6 +226,14 @@
       </form>
     </div>
 
+    <div class="view-bar">
+      <div class="view-switch">
+        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=amount" class="{% if view != 'price' %}on{% endif %}">Sales Amount</a>
+        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=price" class="{% if view == 'price' %}on{% endif %}">Unit Price</a>
+      </div>
+      {% if view == 'price' %}<span class="hint">Showing the latest price of each month. Click a price to see every invoice line of that month. Returns, cancelled invoices and zero-price lines are not included.</span>{% endif %}
+    </div>
+
     <div class="card table-card">
       <div class="table-wrap">
         <table>
@@ -216,23 +242,39 @@
               <th class="left">Item</th>
               <th class="left">Brand</th>
               {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
-              <th class="col-tot">Total</th>
+              <th class="col-tot">{% if view == 'price' %}Latest{% else %}Total{% endif %}</th>
               <th class="col-trend">Trend</th>
+              {% if view == 'price' %}<th class="col-chg" title="Change from the January price (or the first month with a price) to the latest price">Change in Price %<br><span class="th-sub">(from Jan to latest price)</span></th>{% endif %}
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
             <tr>
-              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the sales chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
+              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the {% if view == 'price' %}price{% else %}sales{% endif %} chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
               <td class="left">{{ r.brand|default:"&mdash;" }}</td>
-              {% for v in r.m %}
-                {% if v %}<td{% if v < 0 %} class="neg"{% endif %}>{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
-              {% endfor %}
-              <td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total|floatformat:2|intcomma }}</td>
+              {% if view == 'price' %}
+                {% for v in r.p %}
+                  {% if v %}<td class="has-detail" data-item="{{ r.item_code }}" data-month="{{ forloop.counter }}" title="Click to see every invoice line of this month">{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
+                {% endfor %}
+                {% if r.p_total %}<td class="col-tot has-detail" data-item="{{ r.item_code }}" data-month="0" title="Click to see every invoice line of the year">{{ r.p_total|floatformat:2|intcomma }}</td>{% else %}<td class="col-tot zero">&ndash;</td>{% endif %}
+              {% else %}
+                {% for v in r.m %}
+                  {% if v %}<td{% if v < 0 %} class="neg"{% endif %}>{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
+                {% endfor %}
+                <td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total|floatformat:2|intcomma }}</td>
+              {% endif %}
               <td class="col-trend"><svg class="spark" width="96" height="28" data-chart="{{ r.chart_json }}"></svg></td>
+              {% if view == 'price' %}
+              <td class="col-chg">
+                {% if r.price_change %}
+                  <span class="{% if r.price_change.pct > 0 %}chg-pos{% elif r.price_change.pct < 0 %}chg-neg{% endif %}">{% if r.price_change.pct > 0 %}+{% endif %}{{ r.price_change.pct|floatformat:1 }}%</span>
+                  <span class="chg-note">({{ r.price_change.from_month }} {{ r.price_change.from_price|floatformat:2 }} &rarr; {{ r.price_change.to_month }} {{ r.price_change.to_price|floatformat:2 }})</span>
+                {% else %}<span class="zero">&ndash;</span>{% endif %}
+              </td>
+              {% endif %}
             </tr>
             {% empty %}
-            <tr><td colspan="16" class="empty-state">No sales found for the selected filters.</td></tr>
+            <tr><td colspan="{% if view == 'price' %}17{% else %}16{% endif %}" class="empty-state">No sales found for the selected filters.</td></tr>
             {% endfor %}
           </tbody>
           {# Totals row hidden for now #}
@@ -266,11 +308,26 @@
         <div class="po-sum" id="chart-sub"></div>
         <div class="chart-wrap"><svg id="chart-big" viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet"></svg></div>
         <div class="chart-detail" id="chart-detail">Tap or hover a point to see the month's sales amount.</div>
-        <div class="chart-legend"><span><i style="background:#2C5530"></i>Monthly sales</span><span><i style="background:#b91c1c"></i>Month with net return (credit memos above sales)</span></div>
+        <div class="chart-legend"><span id="chart-leg-amt"><i style="background:#2C5530"></i>Monthly sales</span><span id="chart-leg-amt2"><i style="background:#b91c1c"></i>Month with net return (credit memos above sales)</span><span id="chart-leg-price" style="display:none"><i style="background:#2C5530"></i>Latest unit price of the month</span></div>
         <table class="chart-table">
-          <thead><tr><th>Month</th><th>Sales Amount</th><th>% of Year</th></tr></thead>
+          <thead><tr><th>Month</th><th id="chart-th-val">Sales Amount</th><th id="chart-th-pct">% of Year</th></tr></thead>
           <tbody id="chart-table-body"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="lines-modal-bg">
+    <div class="modal lines">
+      <div class="modal-head"><h3 id="lines-title"></h3><button type="button" class="modal-close" id="lines-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <div class="po-sum" id="lines-sum"></div>
+        <div style="overflow:auto">
+          <table class="lines-table">
+            <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Salesman</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr></thead>
+            <tbody id="lines-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -341,7 +398,17 @@
       // draw the 12 monthly bars into svg; big = full chart with axes and tap targets
       function draw(svg, d, big, W, H, onPick) {
         while (svg.firstChild) svg.removeChild(svg.firstChild);
-        var vals = d.m, mx = Math.max.apply(null, vals.concat([0])), mn = Math.min.apply(null, vals.concat([0]));
+        var price = d.kind === 'price';
+        var vals = d.m, mx, mn;
+        if (price) {
+          // prices: scale to the prices actually seen (the axis does not start at 0), skip empty months
+          var nz = vals.filter(function (v) { return v > 0; });
+          mx = nz.length ? Math.max.apply(null, nz) : 1; mn = nz.length ? Math.min.apply(null, nz) : 0;
+          if (mx === mn) { mx += 1; mn = Math.max(0, mn - 1); }
+          var pad = (mx - mn) * 0.12; mx += pad; mn = Math.max(0, mn - pad);
+        } else {
+          mx = Math.max.apply(null, vals.concat([0])); mn = Math.min.apply(null, vals.concat([0]));
+        }
         var range = (mx - mn) || 1;
         var l = big ? 62 : 2, r = big ? 10 : 2, t = big ? 12 : 2, b = big ? 26 : 2;
         var iw = W - l - r, ih = H - t - b, slot = iw / 12, bw = slot * (big ? 0.64 : 0.7);
@@ -351,26 +418,32 @@
             var gv = mn + range * g / 4, gy = y(gv);
             el('line', {x1: l, x2: W - r, y1: gy, y2: gy, stroke: '#e2e8f0', 'stroke-width': 1}, svg);
             var tx = el('text', {x: l - 6, y: gy + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#64748b'}, svg);
-            tx.textContent = short(gv);
+            tx.textContent = price ? (gv >= 1000 ? short(gv) : gv.toFixed(2)) : short(gv);
           }
           for (var m = 0; m < 12; m++) {
             var lb = el('text', {x: l + slot * m + slot / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#64748b'}, svg);
             lb.textContent = MONTHS[m];
           }
         }
-        el('line', {x1: l, x2: W - r, y1: y(0), y2: y(0), stroke: big ? '#94a3b8' : '#cbd5e1', 'stroke-width': 1, 'stroke-dasharray': '3 3'}, svg);
-        // the line runs from the first to the last month that has sales (empty months in between count as 0)
-        var first = -1, last = -1;
-        vals.forEach(function (v, i) { if (v) { if (first < 0) first = i; last = i; } });
+        if (!price) el('line', {x1: l, x2: W - r, y1: y(0), y2: y(0), stroke: big ? '#94a3b8' : '#cbd5e1', 'stroke-width': 1, 'stroke-dasharray': '3 3'}, svg);
+        // amounts: the line runs from the first to the last month with sales (empty months in between count as 0)
+        // prices: only the months that have a price are joined
+        var idxs = [];
+        if (price) {
+          vals.forEach(function (v, i) { if (v > 0) idxs.push(i); });
+        } else {
+          var first = -1, last = -1;
+          vals.forEach(function (v, i) { if (v) { if (first < 0) first = i; last = i; } });
+          if (first >= 0) for (var k = first; k <= last; k++) idxs.push(k);
+        }
         var dots = [];
-        if (first >= 0) {
-          var pts = [];
-          for (var i = first; i <= last; i++) pts.push((l + slot * i + slot / 2).toFixed(1) + ',' + y(vals[i]).toFixed(1));
+        if (idxs.length) {
+          var pts = idxs.map(function (i) { return (l + slot * i + slot / 2).toFixed(1) + ',' + y(vals[i]).toFixed(1); });
           if (pts.length > 1) el('polyline', {points: pts.join(' '), fill: 'none', stroke: POS, 'stroke-width': big ? 2.5 : 1.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
-          for (var j = first; j <= last; j++) {
-            if (!big && pts.length > 1 && vals[j] >= 0) { dots[j] = null; continue; }
+          idxs.forEach(function (j) {
+            if (!big && pts.length > 1 && vals[j] >= 0) { dots[j] = null; return; }
             dots[j] = el('circle', {cx: l + slot * j + slot / 2, cy: y(vals[j]), r: big ? 4 : 2, fill: vals[j] < 0 ? NEG : POS, stroke: '#fff', 'stroke-width': big ? 1.5 : 0.5}, svg);
-          }
+          });
         }
         if (big && onPick) {
           vals.forEach(function (v, i) {
@@ -399,16 +472,22 @@
       var bigSvg = document.getElementById('chart-big');
       var detail = document.getElementById('chart-detail');
       function openChart(d) {
+        var price = d.kind === 'price';
         var total = d.m.reduce(function (a, b) { return a + b; }, 0);
-        document.getElementById('chart-title').textContent = d.code + ' – monthly sales ' + d.year;
-        document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + 'Total ' + fmt(total);
-        detail.textContent = 'Tap or hover a point to see the month’s sales amount.';
+        document.getElementById('chart-title').textContent = d.code + (price ? ' – latest unit price ' : ' – monthly sales ') + d.year;
+        document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + (price ? 'Latest price of each month (invoice lines only)' : 'Total ' + fmt(total));
+        detail.textContent = 'Tap or hover a point to see the month’s ' + (price ? 'unit price.' : 'sales amount.');
+        document.getElementById('chart-th-val').textContent = price ? 'Latest Unit Price' : 'Sales Amount';
+        document.getElementById('chart-th-pct').style.display = price ? 'none' : '';
+        document.getElementById('chart-leg-amt').style.display = price ? 'none' : '';
+        document.getElementById('chart-leg-amt2').style.display = price ? 'none' : '';
+        document.getElementById('chart-leg-price').style.display = price ? '' : 'none';
         var body = document.getElementById('chart-table-body');
         body.innerHTML = '';
         d.m.forEach(function (v, i) {
           var tr = document.createElement('tr');
           var pct = total ? (v / total * 100).toFixed(1) + '%' : '–';
-          [MONTHS[i], v ? fmt(v) : '–', v ? pct : '–'].forEach(function (txt, c) {
+          (price ? [MONTHS[i], v ? fmt(v) : '–'] : [MONTHS[i], v ? fmt(v) : '–', v ? pct : '–']).forEach(function (txt, c) {
             var td = document.createElement('td');
             td.textContent = txt;
             if (c === 1 && v < 0) td.style.color = NEG;
@@ -418,7 +497,7 @@
         });
         bg.classList.add('active');
         draw(bigSvg, d, true, 700, 320, function (i) {
-          detail.textContent = MONTHS[i] + ' ' + d.year + ': ' + (d.m[i] ? fmt(d.m[i]) : 'no sales');
+          detail.textContent = MONTHS[i] + ' ' + d.year + ': ' + (d.m[i] ? fmt(d.m[i]) : (price ? 'no invoice' : 'no sales'));
         });
       }
       document.querySelectorAll('a.item-open').forEach(function (a) {
@@ -430,6 +509,51 @@
       });
       function close() { bg.classList.remove('active'); }
       document.getElementById('chart-close').addEventListener('click', close);
+      bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    })();
+
+    // ---- Unit price view: click a price to list every invoice line of that month (loaded on click) ----
+    (function () {
+      var cells = document.querySelectorAll('td.has-detail');
+      if (!cells.length) return;
+      var LINES_URL = "{% url 'item_monthly_sales_lines' %}";
+      var QS = "{{ qs_noview|escapejs }}";
+      var YEAR = {{ selected_year }};
+      var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var bg = document.getElementById('lines-modal-bg');
+      var body = document.getElementById('lines-body');
+      var sum = document.getElementById('lines-sum');
+      var seq = 0;
+      function td(tr, txt, cls) { var c = document.createElement('td'); c.textContent = txt; if (cls) c.className = cls; tr.appendChild(c); }
+      function open(cell) {
+        var item = cell.getAttribute('data-item'), month = parseInt(cell.getAttribute('data-month'), 10);
+        document.getElementById('lines-title').textContent = item + ' – ' + (month ? MONTHS[month - 1] + ' ' + YEAR : 'whole year ' + YEAR);
+        sum.textContent = 'Loading…';
+        body.innerHTML = '';
+        bg.classList.add('active');
+        var my = ++seq;
+        fetch(LINES_URL + '?' + (QS ? QS + '&' : '') + 'item=' + encodeURIComponent(item) + '&month=' + month, {credentials: 'same-origin'})
+          .then(function (r) { if (!r.ok) throw new Error('failed'); return r.json(); })
+          .then(function (d) {
+            if (my !== seq) return;
+            if (!d.summary) { sum.textContent = 'No invoice lines found.'; return; }
+            var s = d.summary;
+            sum.textContent = 'Latest ' + s.latest + ' · Lowest ' + s.low + ' · Highest ' + s.high + ' · Average ' + s.avg +
+              ' · ' + s.invoices + ' invoice' + (s.invoices === 1 ? '' : 's') + ', ' + s.lines + ' line' + (s.lines === 1 ? '' : 's') +
+              (d.truncated ? ' (showing the most recent ' + d.lines.length + ')' : '');
+            d.lines.forEach(function (ln) {
+              var tr = document.createElement('tr');
+              td(tr, ln.date); td(tr, ln.invoice); td(tr, ln.customer); td(tr, ln.salesman);
+              td(tr, ln.qty, 'r'); td(tr, ln.price, 'r'); td(tr, ln.amount, 'r');
+              body.appendChild(tr);
+            });
+          })
+          .catch(function () { if (my === seq) sum.textContent = 'Could not load the invoice lines. Please try again.'; });
+      }
+      cells.forEach(function (c) { c.addEventListener('click', function () { open(c); }); });
+      function close() { bg.classList.remove('active'); }
+      document.getElementById('lines-close').addEventListener('click', close);
       bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     })();

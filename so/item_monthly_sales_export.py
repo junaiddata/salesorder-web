@@ -16,18 +16,31 @@ PDF_ROW_LIMIT = 3000   # a PDF with more rows is refused: use Excel or filter fi
 MONTHS = [calendar.month_abbr[m] for m in range(1, 13)]
 
 
+def _change_text(pc):
+    """'Jan 2.00 -> Mar 3.07' for the bracket part."""
+    return f"{pc['from_month']} {pc['from_price']:,.2f} \u2192 {pc['to_month']} {pc['to_price']:,.2f}"
+
+
+def _pct_text(pc):
+    pct = float(pc['pct'])
+    return f"{'+' if pct > 0 else ''}{pct:.1f}%"
+
+
 def _stamp():
     return timezone.localtime().strftime('%Y%m%d_%H%M')
 
 
-def xlsx_response(rows, year, filter_lines):
+def xlsx_response(rows, year, filter_lines, view='amount'):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
     wb = Workbook()
     ws = wb.active
+    price = view == 'price'
     ws.title = 'Item Monthly Sales'
-    head = ['Item Code', 'Description', 'Brand'] + MONTHS + ['Total']
+    head = ['Item Code', 'Description', 'Brand'] + MONTHS + ['Latest' if price else 'Total']
+    if price:
+        head += ['Change in Price %', 'Change (from -> to)']
     ws.append(head)
     for c in ws[1]:
         c.font = Font(bold=True, color='FFFFFF')
@@ -45,13 +58,27 @@ def xlsx_response(rows, year, filter_lines):
         put_text(ws.cell(row=n, column=2), r['description'])
         ws.cell(row=n, column=2).alignment = Alignment(wrap_text=True, vertical='top')
         put_text(ws.cell(row=n, column=3), r['brand'])
-        for i, v in enumerate(r['m']):
+        series = r['p'] if price else r['m']
+        for i, v in enumerate(series):
             if v:
                 cell = ws.cell(row=n, column=4 + i)
                 cell.value, cell.number_format = float(v), '#,##0.00;[Red]-#,##0.00'
-        tot = ws.cell(row=n, column=16)
-        tot.value, tot.number_format = float(r['total']), '#,##0.00;[Red]-#,##0.00'
-        tot.font = Font(bold=True)
+        total = r['p_total'] if price else r['total']
+        if total:
+            tot = ws.cell(row=n, column=16)
+            tot.value, tot.number_format = float(total), '#,##0.00;[Red]-#,##0.00'
+            tot.font = Font(bold=True)
+        pc = r.get('price_change') if price else None
+        if pc:
+            pcell = ws.cell(row=n, column=17)
+            pcell.value = round(float(pc['pct']), 1)
+            pcell.number_format = '+0.0"%";-0.0"%";0.0"%"'
+            # selling price: up is green, down is red
+            if pc['pct'] > 0:
+                pcell.font = Font(bold=True, color='15803D')
+            elif pc['pct'] < 0:
+                pcell.font = Font(bold=True, color='B91C1C')
+            put_text(ws.cell(row=n, column=18), _change_text(pc))
 
     ws.column_dimensions['A'].width = 14
     ws.column_dimensions['B'].width = 46
@@ -59,12 +86,15 @@ def xlsx_response(rows, year, filter_lines):
     for i in range(12):
         ws.column_dimensions[ws.cell(row=1, column=4 + i).column_letter].width = 13
     ws.column_dimensions['P'].width = 16
+    ws.column_dimensions['Q'].width = 14
+    ws.column_dimensions['R'].width = 26
     ws.row_dimensions[1].height = 24
     ws.freeze_panes = 'D2'
     ws.auto_filter.ref = ws.dimensions
 
     info = wb.create_sheet('Filter')
-    info.append(['Report', 'Item Monthly Sales (net sales amount: invoices less credit memos)'])
+    info.append(['Report', 'Item Monthly Sales - latest unit price of each month (invoice lines only)' if price
+                 else 'Item Monthly Sales (net sales amount: invoices less credit memos)'])
     info.append(['Year', year])
     info.append(['Exported', timezone.localtime().strftime('%d %b %Y %H:%M')])
     for label, value in filter_lines:
@@ -76,15 +106,16 @@ def xlsx_response(rows, year, filter_lines):
     buf = BytesIO()
     wb.save(buf)
     resp = HttpResponse(buf.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    resp['Content-Disposition'] = f'attachment; filename="item_monthly_sales_{year}_{_stamp()}.xlsx"'
+    resp['Content-Disposition'] = f'attachment; filename="item_monthly_{"unit_price" if price else "sales"}_{year}_{_stamp()}.xlsx"'
     resp['Cache-Control'] = 'private, no-store'
     return resp
 
 
-def pdf_response(rows, year, filter_lines):
+def pdf_response(rows, year, filter_lines, view='amount'):
     """Returns an HttpResponse, or None when there are too many rows for one PDF."""
     if len(rows) > PDF_ROW_LIMIT:
         return None
+    price = view == 'price'
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -105,24 +136,37 @@ def pdf_response(rows, year, filter_lines):
         s = f'{v:,.2f}'
         return f'<font color="#b91c1c">{s}</font>' if v < 0 else s
 
-    head = ['Item', 'Brand'] + MONTHS + ['Total']
+    head = ['Item', 'Brand'] + MONTHS + ['Latest' if price else 'Total'] + (['Change in Price % (from Jan to latest price)'] if price else [])
     data = [[Paragraph(h, hcell if i < 2 else hcell_r) for i, h in enumerate(head)]]
     for r in rows:
         item = f"<b>{escape(r['item_code'])}</b>"
         if r['description']:
             item += f"<br/>{escape(r['description'])}"
         line = [Paragraph(item, cell), Paragraph(escape(r['brand'] or '-'), brand_style)]
-        line += [Paragraph(money(v), num) for v in r['m']]
-        line.append(Paragraph(f"<b>{money(r['total'])}</b>", num))
+        line += [Paragraph(money(v), num) for v in (r['p'] if price else r['m'])]
+        line.append(Paragraph(f"<b>{money(r['p_total'] if price else r['total'])}</b>", num))
+        if price:
+            pc = r.get('price_change')
+            if pc:
+                colour = '#15803d' if pc['pct'] > 0 else '#b91c1c' if pc['pct'] < 0 else '#1e293b'
+                # the PDF's standard font has no arrow glyph, so spell it "to"
+                line.append(Paragraph(
+                    f'<font color="{colour}"><b>{escape(_pct_text(pc))}</b></font><br/>'
+                    f'({escape(_change_text(pc).replace(chr(0x2192), "to"))})', num))
+            else:
+                line.append(Paragraph('-', num))
         data.append(line)
     if not rows:
         data.append([Paragraph('No sales found for the selected filters.', cell)] + [''] * (len(head) - 1))
 
     page = landscape(A4)
     usable = page[0] - 16 * mm
-    month_w, brand_w, total_w = 16.5 * mm, 22 * mm, 20 * mm
-    item_w = usable - (brand_w + 12 * month_w + total_w)
-    table = Table(data, colWidths=[item_w, brand_w] + [month_w] * 12 + [total_w], repeatRows=1)
+    if price:   # prices are short numbers: narrower month columns leave room for the change column
+        month_w, brand_w, total_w, chg_w = 13.5 * mm, 24 * mm, 15 * mm, 34 * mm
+    else:
+        month_w, brand_w, total_w, chg_w = 16.5 * mm, 22 * mm, 20 * mm, 0
+    item_w = usable - (brand_w + 12 * month_w + total_w + chg_w)
+    table = Table(data, colWidths=[item_w, brand_w] + [month_w] * 12 + [total_w] + ([chg_w] if price else []), repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C5530')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -145,9 +189,9 @@ def pdf_response(rows, year, filter_lines):
     doc = SimpleDocTemplate(buf, pagesize=page, leftMargin=8 * mm, rightMargin=8 * mm, topMargin=8 * mm, bottomMargin=11 * mm,
                             title='Item Monthly Sales', author='Junaid')
     doc.build([Paragraph('Item Monthly Sales', title),
-               Paragraph('Net sales amount (invoices less credit memos)', cell), Paragraph(escape(sub), cell),
+               Paragraph('Latest unit price of each month (invoice lines only)' if price else 'Net sales amount (invoices less credit memos)', cell), Paragraph(escape(sub), cell),
                Spacer(1, 3 * mm), table], onFirstPage=footer, onLaterPages=footer)
     resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
-    resp['Content-Disposition'] = f'attachment; filename="item_monthly_sales_{year}_{_stamp()}.pdf"'
+    resp['Content-Disposition'] = f'attachment; filename="item_monthly_{"unit_price" if price else "sales"}_{year}_{_stamp()}.pdf"'
     resp['Cache-Control'] = 'private, no-store'
     return resp
