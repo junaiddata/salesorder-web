@@ -157,3 +157,48 @@ class FlashAutoCloseTests(TestCase):
         html = self.client.post(reverse('bangladeshpi:new'), {'ref_suffix': ''}, follow=True).content.decode()
         self.assertIn("document.querySelectorAll('#flashStack .flash')", html)
         self.assertIn('setTimeout(close', html)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(), BANGLADESH_PI_PRIVATE_ROOT=tempfile.mkdtemp(),
+                   BANGLADESH_PI_SEAL_USERS=['md'])
+class PackingListTests(TestCase):
+    def setUp(self):
+        self.md = get_user_model().objects.create_user('md', password='x')
+        self.client.force_login(self.md)
+        self.pi = BangladeshPI.objects.create(ref_suffix='07A', country_of_origin='Italy')
+        BangladeshPIItem.objects.create(pi=self.pi, position=0, code='3100635', description='ANDRIS RS 30/3',
+                                        qty=540, unit_price=82.15, bank_unit_price=17)
+        BangladeshPIItem.objects.create(pi=self.pi, position=1, code='FREE1', description='FREE SAMPLE',
+                                        qty=2, is_foc=True)
+        self.pdf = reverse('bangladeshpi:pl_pdf', args=[self.pi.pk])
+        self.edit = reverse('bangladeshpi:ci_edit', args=[self.pi.pk])
+
+    def _text(self):
+        r = self.client.get(self.pdf)
+        self.assertEqual(r.status_code, 200)
+        doc = fitz.open(stream=r.content, filetype='pdf')
+        return doc, '\n'.join(p.get_text() for p in doc)
+
+    def test_redirects_until_invoice_exists_then_pdf(self):
+        self.assertEqual(self.client.get(self.pdf).status_code, 302)
+        self.client.get(self.edit)
+        line = BangladeshCommercialInvoice.objects.get().lines.get()
+        self.client.post(self.edit, {
+            'invoice_date': '2026-11-20', 'our_delivery': '25', 'ref_our_ord_no': '26', 'packages': '635',
+            f'pack_{line.pk}': '540', f'gross_{line.pk}': '6210.00', f'net_{line.pk}': '5670.00'})
+        doc, text = self._text()
+        for needle in ('PACKING LIST', 'BD/IMAA/2026/PL/07A', 'ANDRIS RS 30/3', '6,210.00', '5,670.00',
+                       'ELECTRIC STORAGE WATER HEATERS', 'OUR DELIVERY', 'BD/IMAA/2026/07A', 'ALSO NOTIFY'):
+            self.assertIn(needle, text, needle)
+        for banned in ('FREE SAMPLE', '(USD)', 'FOB CHARGES', 'CFR CHATTOGRAM, BANGLADESH', '9,180.00'):
+            self.assertNotIn(banned, text, banned)
+        self.assertEqual(len(doc), 1)
+
+    def test_typed_number_and_commercial_invoice_unchanged(self):
+        self.client.get(self.edit)
+        self.client.post(self.edit, {'invoice_date': '2026-11-20', 'pl_no': '01/PL/2026/25'})
+        self.assertIn('01/PL/2026/25', self._text()[1])
+        r = self.client.get(reverse('bangladeshpi:ci_pdf', args=[self.pi.pk]))
+        t2 = '\n'.join(p.get_text() for p in fitz.open(stream=r.content, filetype='pdf'))
+        self.assertIn('COMMERCIAL INVOICE', t2)
+        self.assertIn('9,180.00', t2)

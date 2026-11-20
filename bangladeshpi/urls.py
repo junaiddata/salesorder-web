@@ -14,5 +14,6 @@ urlpatterns = [
     path('<int:pk>/pdf/', views.pi_pdf, name='pdf'),
     path('<int:pk>/excel/', views.pi_excel, name='excel'),
     path('<int:pk>/commercial-invoice/', commercial_views.ci_edit, name='ci_edit'),
+    path('<int:pk>/packing-list/pdf/', commercial_views.pl_pdf, name='pl_pdf'),
     path('<int:pk>/commercial-invoice/pdf/', commercial_views.ci_pdf, name='ci_pdf'),
 ]

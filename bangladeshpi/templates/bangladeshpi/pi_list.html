@@ -97,8 +97,10 @@
                             <span class="act-group">
                                 {% if p.has_bank_prices %}
                                 <a href="{% url 'bangladeshpi:ci_edit' p.pk %}" class="btn-x" title="Make or open the commercial invoice for this PI"><i class="fas fa-file-contract"></i> Commercial Invoice</a>
+                                <a href="{% url 'bangladeshpi:pl_pdf' p.pk %}" class="btn-x" title="Packing list (uses the commercial invoice details)"><i class="fas fa-box"></i> Packing List</a>
                                 {% else %}
                                 <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-file-contract"></i> Commercial Invoice</span>
+                                <span class="btn-x disabled-x" title="Add bank prices to enable"><i class="fas fa-box"></i> Packing List</span>
                                 {% endif %}
                             </span>
                             <span class="act-group end">

@@ -29,6 +29,7 @@
         <h2>Commercial Invoice <span class="u-muted" style="font-size:.9rem">from PI {{ pi.ref_no }}</span></h2>
         <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'bangladeshpi:ci_pdf' pi.pk %}" class="btn-x btn-primary-x"><i class="fas fa-download"></i> Download Commercial Invoice PDF</a>
+            <a href="{% url 'bangladeshpi:pl_pdf' pi.pk %}" class="btn-x"><i class="fas fa-box"></i> Download Packing List PDF</a>
             <a href="{% url 'bangladeshpi:list' %}" class="btn-x">Back to PIs</a>
         </div>
     </div>
@@ -82,6 +83,18 @@
                     <input type="number" step="0.01" min="0" name="net_weight" class="input-x" value="{{ ci.net_weight|default_if_none:'' }}"></div>
                 <div class="field-x"><label class="label-x">Volume (M3)</label>
                     <input type="number" step="0.01" min="0" name="volume" class="input-x" value="{{ ci.volume|default_if_none:'' }}"></div>
+            </div>
+        </div></div>
+
+        <div class="card-x mb-3"><div class="card-x-body">
+            <h5 class="mb-1">Packing list <small class="u-muted">(used only on the packing list)</small></h5>
+            <div class="grid-3">
+                <div class="field-x"><label class="label-x">Packing list no <small class="u-muted">(blank = automatic)</small></label>
+                    <input type="text" name="pl_no" class="input-x" value="{{ ci.pl_no }}" placeholder="e.g. BD/IMAA/2026/PL/07A"></div>
+                <div class="field-x"><label class="label-x">Our delivery</label>
+                    <input type="text" name="our_delivery" class="input-x" value="{{ ci.our_delivery }}"></div>
+                <div class="field-x"><label class="label-x">Ref our ord no <small class="u-muted">(VS. = PI no, automatic)</small></label>
+                    <input type="text" name="ref_our_ord_no" class="input-x" value="{{ ci.ref_our_ord_no }}"></div>
             </div>
         </div></div>
 

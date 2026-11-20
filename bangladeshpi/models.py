@@ -154,6 +154,10 @@ class BangladeshCommercialInvoice(models.Model):
     # typed by the user
     invoice_date = models.DateField(default=timezone.localdate)
     comm_ref_no = models.CharField(max_length=60, blank=True)
+    # packing list only
+    pl_no = models.CharField(max_length=80, blank=True)
+    our_delivery = models.CharField(max_length=60, blank=True)
+    ref_our_ord_no = models.CharField(max_length=60, blank=True)
     to_order_of = models.TextField(blank=True)
     packages = models.CharField(max_length=40, blank=True)
     lc_number = models.CharField(max_length=80, blank=True)

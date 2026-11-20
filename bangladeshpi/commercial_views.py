@@ -12,6 +12,7 @@ from .commercial_pdf import DEFAULT_HS_CODE, build_commercial_invoice_pdf
 from .models import (
     BangladeshCommercialInvoice, BangladeshCommercialInvoiceLine, BangladeshPI, BangladeshPISeal,
 )
+from .packing_pdf import build_packing_list_pdf, packing_list_no
 from .permissions import can_use_seal
 from .views import _dec_or_none, audit_log
 
@@ -87,6 +88,9 @@ def ci_edit(request, pk):
         p = request.POST
         ci.invoice_date = _date_or_none(p.get('invoice_date')) or ci.invoice_date
         ci.comm_ref_no = (p.get('comm_ref_no') or '').strip()
+        ci.pl_no = (p.get('pl_no') or '').strip()
+        ci.our_delivery = (p.get('our_delivery') or '').strip()
+        ci.ref_our_ord_no = (p.get('ref_our_ord_no') or '').strip()
         ci.to_order_of = (p.get('to_order_of') or '').strip()
         ci.packages = (p.get('packages') or '').strip()
         ci.lc_number = (p.get('lc_number') or '').strip()
@@ -132,5 +136,25 @@ def ci_pdf(request, pk):
     resp = HttpResponse(pdf, content_type='application/pdf')
     disp = 'inline' if request.GET.get('inline') == '1' else 'attachment'
     resp['Content-Disposition'] = f'{disp}; filename="CommercialInvoice_{ci.invoice_no.replace("/", "-")}.pdf"'
+    resp['Cache-Control'] = 'no-store'
+    return resp
+
+
+@login_required
+def pl_pdf(request, pk):
+    """Packing list from the saved commercial invoice (sends you to fill it in first if it does not exist)."""
+    pi = get_object_or_404(BangladeshPI, pk=pk)
+    ci = BangladeshCommercialInvoice.objects.filter(pi=pi).prefetch_related('lines').first()
+    if ci is None:
+        messages.info(request, 'Fill in the commercial invoice first; the packing list uses the same details.')
+        return redirect('bangladeshpi:ci_edit', pk=pi.pk)
+    with_seals = can_use_seal(request.user)
+    pdf = build_packing_list_pdf(ci, with_seals=with_seals)
+    if with_seals and (ci.add_signature or ci.add_stamp):
+        audit_log.info('Signed packing list generated: user=%s invoice=%s signature=%s stamp=%s',
+                       request.user.username, ci.invoice_no, ci.add_signature, ci.add_stamp)
+    resp = HttpResponse(pdf, content_type='application/pdf')
+    disp = 'inline' if request.GET.get('inline') == '1' else 'attachment'
+    resp['Content-Disposition'] = f'{disp}; filename="PackingList_{packing_list_no(ci).replace("/", "-")}.pdf"'
     resp['Cache-Control'] = 'no-store'
     return resp
