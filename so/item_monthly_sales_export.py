@@ -30,15 +30,16 @@ def _stamp():
     return timezone.localtime().strftime('%Y%m%d_%H%M')
 
 
-def xlsx_response(rows, year, filter_lines, view='amount'):
+def xlsx_response(rows, year, filter_lines, view='amount', pmode='latest'):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
     wb = Workbook()
     ws = wb.active
     price = view == 'price'
+    avg = price and pmode == 'avg'
     ws.title = 'Item Monthly Sales'
-    head = ['Item Code', 'Description', 'Brand'] + MONTHS + ['Latest' if price else 'Total']
+    head = ['Item Code', 'Description', 'Brand'] + MONTHS + [('Last Month Avg' if avg else 'Latest') if price else 'Total']
     if price:
         head += ['Change in Price %', 'Change (from -> to)']
     ws.append(head)
@@ -93,7 +94,8 @@ def xlsx_response(rows, year, filter_lines, view='amount'):
     ws.auto_filter.ref = ws.dimensions
 
     info = wb.create_sheet('Filter')
-    info.append(['Report', 'Item Monthly Sales - latest unit price of each month (invoice lines only)' if price
+    info.append(['Report', ('Item Monthly Sales - average unit price of each month, weighted by quantity (invoice lines only)' if avg
+                 else 'Item Monthly Sales - latest unit price of each month (invoice lines only)') if price
                  else 'Item Monthly Sales (net sales amount: invoices less credit memos)'])
     info.append(['Year', year])
     info.append(['Exported', timezone.localtime().strftime('%d %b %Y %H:%M')])
@@ -111,11 +113,12 @@ def xlsx_response(rows, year, filter_lines, view='amount'):
     return resp
 
 
-def pdf_response(rows, year, filter_lines, view='amount'):
+def pdf_response(rows, year, filter_lines, view='amount', pmode='latest'):
     """Returns an HttpResponse, or None when there are too many rows for one PDF."""
     if len(rows) > PDF_ROW_LIMIT:
         return None
     price = view == 'price'
+    avg = price and pmode == 'avg'
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -136,7 +139,7 @@ def pdf_response(rows, year, filter_lines, view='amount'):
         s = f'{v:,.2f}'
         return f'<font color="#b91c1c">{s}</font>' if v < 0 else s
 
-    head = ['Item', 'Brand'] + MONTHS + ['Latest' if price else 'Total'] + (['Change in Price % (from Jan to latest price)'] if price else [])
+    head = ['Item', 'Brand'] + MONTHS + [('Last Month Avg' if avg else 'Latest') if price else 'Total'] + ([f"Change in Price % ({'from Jan to last month average' if avg else 'from Jan to latest price'})"] if price else [])
     data = [[Paragraph(h, hcell if i < 2 else hcell_r) for i, h in enumerate(head)]]
     for r in rows:
         item = f"<b>{escape(r['item_code'])}</b>"
@@ -189,7 +192,7 @@ def pdf_response(rows, year, filter_lines, view='amount'):
     doc = SimpleDocTemplate(buf, pagesize=page, leftMargin=8 * mm, rightMargin=8 * mm, topMargin=8 * mm, bottomMargin=11 * mm,
                             title='Item Monthly Sales', author='Junaid')
     doc.build([Paragraph('Item Monthly Sales', title),
-               Paragraph('Latest unit price of each month (invoice lines only)' if price else 'Net sales amount (invoices less credit memos)', cell), Paragraph(escape(sub), cell),
+               Paragraph(('Average unit price of each month, weighted by quantity (invoice lines only)' if avg else 'Latest unit price of each month (invoice lines only)') if price else 'Net sales amount (invoices less credit memos)', cell), Paragraph(escape(sub), cell),
                Spacer(1, 3 * mm), table], onFirstPage=footer, onLaterPages=footer)
     resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
     resp['Content-Disposition'] = f'attachment; filename="item_monthly_{"unit_price" if price else "sales"}_{year}_{_stamp()}.pdf"'

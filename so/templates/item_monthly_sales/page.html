@@ -151,7 +151,7 @@
     <header class="header">
       <div>
         <h1>Item Monthly Sales</h1>
-        <p>{% if view == 'price' %}Latest unit price (most recent invoice line of the month), per item, month by month{% else %}Net sales amount (invoices less credit memos), per item, month by month{% endif %} &middot; {{ selected_year }}</p>
+        <p>{% if view == 'price' %}{% if pmode == 'avg' %}Average unit price (weighted by quantity), per item, month by month{% else %}Latest unit price (most recent invoice line of the month), per item, month by month{% endif %}{% else %}Net sales amount (invoices less credit memos), per item, month by month{% endif %} &middot; {{ selected_year }}</p>
       </div>
       <div class="header-actions">
         <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
@@ -161,6 +161,7 @@
     <div class="card filters-card">
       <form class="filters-grid" method="get">
         <input type="hidden" name="view" value="{{ view }}">
+        {% if pmode == 'avg' %}<input type="hidden" name="pmode" value="avg">{% endif %}
         <div class="field">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Item code or description...">
@@ -229,9 +230,18 @@
     <div class="view-bar">
       <div class="view-switch">
         <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=amount" class="{% if view != 'price' %}on{% endif %}">Sales Amount</a>
-        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=price" class="{% if view == 'price' %}on{% endif %}">Unit Price</a>
+        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=price" class="{% if view == 'price' %}on{% endif %}">Average Unit Selling Price</a>
       </div>
-      {% if view == 'price' %}<span class="hint">Showing the latest price of each month. Click a price to see every invoice line of that month. Returns, cancelled invoices and zero-price lines are not included.</span>{% endif %}
+      {% if view == 'price' %}
+      {# Latest | Average switch hidden for now - the unit-price view always shows the average #}
+      {% if False %}
+      <div class="view-switch">
+        <a href="?{{ qs_nopmode }}{% if qs_nopmode %}&{% endif %}view=price" class="{% if pmode != 'avg' %}on{% endif %}">Latest</a>
+        <a href="?{{ qs_nopmode }}{% if qs_nopmode %}&{% endif %}view=price&pmode=avg" class="{% if pmode == 'avg' %}on{% endif %}">Average</a>
+      </div>
+      {% endif %}
+      <span class="hint">{% if pmode == 'avg' %}Showing the average price of each month, weighted by quantity (total value &divide; total quantity).{% else %}Showing the latest price of each month.{% endif %} Click a price to see every invoice line of that month. Returns, cancelled invoices and zero-price lines are not included.</span>
+      {% endif %}
     </div>
 
     <div class="card table-card">
@@ -242,9 +252,9 @@
               <th class="left">Item</th>
               <th class="left">Brand</th>
               {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
-              <th class="col-tot">{% if view == 'price' %}Latest{% else %}Total{% endif %}</th>
+              <th class="col-tot">{% if view == 'price' %}{% if pmode == 'avg' %}Last Month Avg{% else %}Latest{% endif %}{% else %}Total{% endif %}</th>
               <th class="col-trend">Trend</th>
-              {% if view == 'price' %}<th class="col-chg" title="Change from the January price (or the first month with a price) to the latest price">Change in Price %<br><span class="th-sub">(from Jan to latest price)</span></th>{% endif %}
+              {% if view == 'price' %}<th class="col-chg" title="Change from the January price (or the first month with a price) to the {% if pmode == 'avg' %}last month's average{% else %}latest price{% endif %}">Change in Price %<br><span class="th-sub">({% if pmode == 'avg' %}from Jan to last month average{% else %}from Jan to latest price{% endif %})</span></th>{% endif %}
             </tr>
           </thead>
           <tbody>
@@ -256,7 +266,7 @@
                 {% for v in r.p %}
                   {% if v %}<td class="has-detail" data-item="{{ r.item_code }}" data-month="{{ forloop.counter }}" title="Click to see every invoice line of this month">{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
                 {% endfor %}
-                {% if r.p_total %}<td class="col-tot has-detail" data-item="{{ r.item_code }}" data-month="0" title="Click to see every invoice line of the year">{{ r.p_total|floatformat:2|intcomma }}</td>{% else %}<td class="col-tot zero">&ndash;</td>{% endif %}
+                {% if r.p_total %}<td class="col-tot has-detail" data-item="{{ r.item_code }}" data-month="{{ r.p_last_m|default:0 }}" title="Click to see every invoice line of the last month">{{ r.p_total|floatformat:2|intcomma }}</td>{% else %}<td class="col-tot zero">&ndash;</td>{% endif %}
               {% else %}
                 {% for v in r.m %}
                   {% if v %}<td{% if v < 0 %} class="neg"{% endif %}>{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
@@ -308,7 +318,7 @@
         <div class="po-sum" id="chart-sub"></div>
         <div class="chart-wrap"><svg id="chart-big" viewBox="0 0 700 320" preserveAspectRatio="xMidYMid meet"></svg></div>
         <div class="chart-detail" id="chart-detail">Tap or hover a point to see the month's sales amount.</div>
-        <div class="chart-legend"><span id="chart-leg-amt"><i style="background:#2C5530"></i>Monthly sales</span><span id="chart-leg-amt2"><i style="background:#b91c1c"></i>Month with net return (credit memos above sales)</span><span id="chart-leg-price" style="display:none"><i style="background:#2C5530"></i>Latest unit price of the month</span></div>
+        <div class="chart-legend"><span id="chart-leg-amt"><i style="background:#2C5530"></i>Monthly sales</span><span id="chart-leg-amt2"><i style="background:#b91c1c"></i>Month with net return (credit memos above sales)</span><span id="chart-leg-price" style="display:none"><i style="background:#2C5530"></i><span id="chart-leg-price-t">Latest unit price of the month</span></span></div>
         <table class="chart-table">
           <thead><tr><th>Month</th><th id="chart-th-val">Sales Amount</th><th id="chart-th-pct">% of Year</th></tr></thead>
           <tbody id="chart-table-body"></tbody>
@@ -473,11 +483,13 @@
       var detail = document.getElementById('chart-detail');
       function openChart(d) {
         var price = d.kind === 'price';
+        var avg = price && d.pmode === 'avg';
         var total = d.m.reduce(function (a, b) { return a + b; }, 0);
-        document.getElementById('chart-title').textContent = d.code + (price ? ' – latest unit price ' : ' – monthly sales ') + d.year;
-        document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + (price ? 'Latest price of each month (invoice lines only)' : 'Total ' + fmt(total));
+        document.getElementById('chart-title').textContent = d.code + (price ? (avg ? ' – average unit price ' : ' – latest unit price ') : ' – monthly sales ') + d.year;
+        document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + (price ? (avg ? 'Average price of each month, weighted by quantity (invoice lines only)' : 'Latest price of each month (invoice lines only)') : 'Total ' + fmt(total));
         detail.textContent = 'Tap or hover a point to see the month’s ' + (price ? 'unit price.' : 'sales amount.');
-        document.getElementById('chart-th-val').textContent = price ? 'Latest Unit Price' : 'Sales Amount';
+        document.getElementById('chart-th-val').textContent = price ? (avg ? 'Average Unit Price' : 'Latest Unit Price') : 'Sales Amount';
+        document.getElementById('chart-leg-price-t').textContent = avg ? 'Average unit price of the month (weighted)' : 'Latest unit price of the month';
         document.getElementById('chart-th-pct').style.display = price ? 'none' : '';
         document.getElementById('chart-leg-amt').style.display = price ? 'none' : '';
         document.getElementById('chart-leg-amt2').style.display = price ? 'none' : '';

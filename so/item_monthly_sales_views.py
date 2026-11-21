@@ -14,7 +14,7 @@ price > 0, and cancelled invoices (csYes) and their cancellation documents (csCa
 import calendar
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -116,6 +116,9 @@ def item_monthly_sales(request):
 
     view = request.GET.get('view', '').strip().lower()
     view = 'price' if view == 'price' else 'amount'
+    # unit-price view only: 'latest' (default, last invoice line of the month) or 'avg' (weighted average)
+    # The Latest option is switched off for now (kept in the code): the unit-price view always shows the average.
+    pmode = 'avg' if view == 'price' else 'latest'
     try:
         page_size = int(request.GET.get('page_size', 50))
     except ValueError:
@@ -172,17 +175,38 @@ def item_monthly_sales(request):
         if len(by_code) < 500:   # a page worth of items: narrow the query; the full export reads them all
             lines = lines.filter(item_code__in=list(by_code))
         lines = lines.values(
-            'item_code', 'invoice__posting_date__month', 'price',
+            'item_code', 'invoice__posting_date__month', 'price', 'quantity',
         ).order_by('item_code', 'invoice__posting_date', 'invoice__invoice_number', 'line_no')
+        sums = {}   # (item, month; month 0 = whole year) -> [price x qty, qty]   (average mode)
         for ln in lines.iterator(chunk_size=5000):
             it = by_code.get((ln['item_code'] or '').strip())
             m = ln['invoice__posting_date__month']
             if it is None or not m:
                 continue
+            if pmode == 'avg':
+                value = ln['price'] * ln['quantity']
+                for key in ((it['item_code'], m), (it['item_code'], 0)):
+                    acc = sums.setdefault(key, [ZERO, ZERO])
+                    acc[0] += value
+                    acc[1] += ln['quantity']
+                continue
             price = ln['price'].quantize(CENT)
             it['p'][m - 1] = price      # rows come in date order, so the last write is the latest
             it['p_total'] = price
+        for (code, m), (value, qty) in sums.items():
+            if qty > 0:   # weighted average = total value / total quantity
+                avg = (value / qty).quantize(CENT, rounding=ROUND_HALF_UP)
+                if m:
+                    by_code[code]['p'][m - 1] = avg
+                else:
+                    by_code[code]['p_total'] = avg
         for it in target_rows:
+            it['p_last_m'] = 0
+            if pmode == 'avg':
+                # the total column shows the LAST month's average (the figure the Change in Price % is worked out from)
+                bought = [i for i, v in enumerate(it['p']) if v]
+                it['p_total'] = it['p'][bought[-1]] if bought else None
+                it['p_last_m'] = bought[-1] + 1 if bought else 0
             it['price_change'] = _price_change(it['p'])
 
     if export:
@@ -190,15 +214,15 @@ def item_monthly_sales(request):
         if view == 'price':
             _attach_prices(rows)
         filter_lines = [
-            ('View', 'Latest unit price' if view == 'price' else 'Sales amount'),
+            ('View', ('Average unit price (weighted)' if pmode == 'avg' else 'Latest unit price') if view == 'price' else 'Sales amount'),
             ('Store', store or 'All'),
             ('Brand', ', '.join(brand_filter) or 'All'),
             ('Salesman', ', '.join(salesman_filter) or 'All'),
             ('Search', q or '-'),
         ]
         if export == 'xlsx':
-            return xlsx_response(rows, selected_year, filter_lines, view)
-        resp = pdf_response(rows, selected_year, filter_lines, view)
+            return xlsx_response(rows, selected_year, filter_lines, view, pmode)
+        resp = pdf_response(rows, selected_year, filter_lines, view, pmode)
         if resp is None:
             return HttpResponse(
                 f'{len(rows)} items are too many for one PDF (max {PDF_ROW_LIMIT}). '
@@ -215,7 +239,7 @@ def item_monthly_sales(request):
         # compact data for the line charts (drawn in the browser, no chart library)
         series = it['p'] if view == 'price' else it['m']
         it['chart_json'] = json.dumps({
-            'code': it['item_code'], 'desc': it['description'], 'year': selected_year, 'kind': view,
+            'code': it['item_code'], 'desc': it['description'], 'year': selected_year, 'kind': view, 'pmode': pmode,
             'm': [round(float(v), 2) if v else 0 for v in series],
         })
 
@@ -224,6 +248,10 @@ def item_monthly_sales(request):
 
     params = request.GET.copy()
     params.pop('page', None)
+    params_nopmode = params.copy()
+    params_nopmode.pop('view', None)
+    params_nopmode.pop('pmode', None)
+    params_nopmode.pop('export', None)
     params_noview = params.copy()
     params_noview.pop('view', None)
     params_noview.pop('export', None)
@@ -231,7 +259,8 @@ def item_monthly_sales(request):
     return render(request, 'item_monthly_sales/page.html', {
         'years': f['years'], 'selected_year': selected_year,
         'brands': brands, 'salesmen': f['salesmen'],
-        'month_names': MONTH_NAMES_SHORT, 'view': view,
+        'month_names': MONTH_NAMES_SHORT, 'view': view, 'pmode': pmode,
+        'qs_nopmode': params_nopmode.urlencode(),
         'rows': page_rows, 'page_obj': page_obj, 'total_count': paginator.count,
         'month_totals': month_totals, 'grand_total': grand_total,
         'querystring': params.urlencode(),
@@ -262,13 +291,14 @@ def item_monthly_sales_lines(request):
         'invoice__salesman_name', 'quantity', 'price', 'line_total', 'line_total_after_discount',
     ).order_by('invoice__posting_date', 'invoice__invoice_number', 'line_no')
 
-    lines, total_qty, total_amt, invoices = [], ZERO, ZERO, set()
+    lines, total_qty, total_amt, total_val, invoices = [], ZERO, ZERO, ZERO, set()
     lo = hi = None
     for r in qs:
         price = r['price'].quantize(CENT)
         amount = r['line_total_after_discount'] or r['line_total'] or (r['price'] * r['quantity'])
         total_qty += r['quantity']
         total_amt += amount
+        total_val += r['price'] * r['quantity']
         invoices.add(r['invoice__invoice_number'])
         lo = price if lo is None or price < lo else lo
         hi = price if hi is None or price > hi else hi
@@ -283,7 +313,7 @@ def item_monthly_sales_lines(request):
     if lines:
         summary = {
             'latest': lines[-1]['price'], 'low': f'{lo:,.2f}', 'high': f'{hi:,.2f}',
-            'avg': f'{(total_amt / total_qty):,.2f}' if total_qty else '-',
+            'avg': f'{(total_val / total_qty).quantize(CENT, rounding=ROUND_HALF_UP):,.2f}' if total_qty else '-',
             'invoices': len(invoices), 'lines': len(lines),
         }
     truncated = len(lines) > MAX_POPUP_LINES
