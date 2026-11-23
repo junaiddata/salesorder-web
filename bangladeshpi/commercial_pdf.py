@@ -210,14 +210,15 @@ def _legal(ci):
            f'THE GOODS AS PER BENEFICIARY\'S PROFORMA INVOICE NO <b>{ref}</b> DATE <b>{d}</b>.', S_NOTE),
         _p('IMPORT UNDER CFR', S_NOTE),
         _p(f'APPLICANTS\' BIN: <b>{APPLICANT_BIN}</b> &nbsp;&amp;&nbsp; TIN NO: <b>{APPLICANT_TIN}</b> &nbsp;AND&nbsp; '
-           f'ISSUING BANK\'S BIN NO.: <b>{ISSUING_BANK_BIN}</b>', S_NOTE),
+           f'ISSUING BANK\'S BIN NO.: <b>{_t(ci.issuing_bank_bin) or ISSUING_BANK_BIN}</b>', S_NOTE),
         _p(f'SHIPPING MARK: <b>{SHIPPING_MARK}</b> &nbsp;&nbsp;&nbsp;&nbsp; <b>FREIGHT PREPAID</b>', S_NOTE),
     ]
 
 
 def _closing(ci, with_seals):
     """Left: the exporter's sign-off with signature and stamp. Right: ALSO NOTIFY."""
-    also = '<br/>'.join(_t(l) for l in ALSO_NOTIFY_LINES)
+    typed = [l for l in (ci.to_order_of or '').splitlines() if l.strip()]
+    also = '<br/>'.join(_t(l) for l in (typed or ALSO_NOTIFY_LINES))   # same as TO THE ORDER OF; fixed text if that is empty
     left = [_label('ALSO NOTIFY'), Spacer(1, 2), _p(also)]
 
     seal = BangladeshPISeal.get_instance()

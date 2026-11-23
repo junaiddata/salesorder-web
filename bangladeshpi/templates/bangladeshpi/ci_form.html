@@ -73,6 +73,8 @@
                     <input type="date" name="lc_date" class="input-x" value="{{ ci.lc_date|date:'Y-m-d' }}"></div>
                 <div class="field-x"><label class="label-x">Container No</label>
                     <input type="text" name="container_no" class="input-x" value="{{ ci.container_no }}"></div>
+                <div class="field-x"><label class="label-x">Issuing bank's BIN no <small class="u-muted">(blank = 000483386-0202)</small></label>
+                    <input type="text" name="issuing_bank_bin" class="input-x" value="{{ ci.issuing_bank_bin }}" placeholder="000483386-0202"></div>
                 <div class="field-x"><label class="label-x">HS code <small class="u-muted">(from the PI heading)</small></label>
                     <input type="text" name="hs_code" class="input-x" value="{{ ci.hs_code }}"></div>
             </div>

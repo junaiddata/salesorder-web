@@ -89,6 +89,7 @@ def ci_edit(request, pk):
         ci.invoice_date = _date_or_none(p.get('invoice_date')) or ci.invoice_date
         ci.comm_ref_no = (p.get('comm_ref_no') or '').strip()
         ci.pl_no = (p.get('pl_no') or '').strip()
+        ci.issuing_bank_bin = (p.get('issuing_bank_bin') or '').strip()
         ci.our_delivery = (p.get('our_delivery') or '').strip()
         ci.ref_our_ord_no = (p.get('ref_our_ord_no') or '').strip()
         ci.to_order_of = (p.get('to_order_of') or '').strip()

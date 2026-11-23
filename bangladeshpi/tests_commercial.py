@@ -102,6 +102,12 @@ class CommercialInvoiceTests(TestCase):
                        '7,962.50', '7,270.00', '66.66', 'ANDRIS RS 30/3', '9,180.00', 'PZ',
                        'FOB CHARGES', 'FREIGHT PREPAID', 'SHIPPING MARK', 'ALSO NOTIFY', 'NASHEER AHAMMAD'):
             self.assertIn(needle, text, needle)
+        self.assertEqual(text.count('AGRABAD BRANCH'), 2)       # TO THE ORDER OF and ALSO NOTIFY show the same address
+        self.assertNotIn('DOMINION PLAZA', text)
+        self.assertIn('000483386-0202', text)                   # default issuing bank BIN
+        ci.issuing_bank_bin = '000111222-0303'
+        ci.save()
+        self.assertIn('000111222-0303', self._text()[1])
         self.assertNotIn('FREE SAMPLE', text)
         self.assertNotIn('ARISTON BRAND', text)        # the PI heading row is not on the invoice
         self.assertNotIn('Page 1/1', text)
