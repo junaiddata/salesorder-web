@@ -699,9 +699,13 @@ def sap_quotations_filtered_qs_combined(request):
         qs = qs.filter(sm_q)
 
     if status and status != 'All':
-        if status in ('Pending', 'On Hold'):
+        if status == 'Open':
             qs = qs.filter(status__in=['O', 'OPEN', 'Open', 'open'])
-        # App "Approved" has no SAP equivalent; leave SAP unfiltered by document status.
+        elif status == 'Closed':
+            qs = qs.filter(status__in=['C', 'CLOSED', 'Closed', 'closed'])
+        else:
+            # App-only workflow statuses (Approved / Pending / On Hold) have no SAP equivalent.
+            qs = qs.none()
 
     if start_date:
         qs = qs.filter(posting_date__gte=start_date)
