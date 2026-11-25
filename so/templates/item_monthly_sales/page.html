@@ -144,6 +144,13 @@
     table.lines-table tbody td { text-align: left; white-space: nowrap; font-size: 0.78rem; }
     table.lines-table th.r, table.lines-table td.r { text-align: right; }
     .modal.lines { max-width: 880px; }
+    th.col-bud, td.col-bud { border-left: 2px solid var(--border); text-align: right; white-space: nowrap; }
+    .budget-input { width: 96px; padding: 4px 7px; font: inherit; text-align: right; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+    .budget-input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(44,85,48,0.12); }
+    .budget-input.failed { border-color: #b91c1c; background: #fef2f2; }
+    .budget-status { display: block; min-height: 1em; font-size: 0.68rem; color: var(--text-secondary); white-space: normal; }
+    .budget-status.ok { color: #15803d; }
+    .budget-status.err { color: #b91c1c; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -151,7 +158,7 @@
     <header class="header">
       <div>
         <h1>Item Monthly Sales</h1>
-        <p>{% if view == 'price' %}{% if pmode == 'avg' %}Average unit price (weighted by quantity), per item, month by month{% else %}Latest unit price (most recent invoice line of the month), per item, month by month{% endif %}{% else %}Net sales amount (invoices less credit memos), per item, month by month{% endif %} &middot; {{ selected_year }}</p>
+        <p>{% if view == 'price' %}{% if pmode == 'avg' %}Average unit price (weighted by quantity), per item, month by month{% else %}Latest unit price (most recent invoice line of the month), per item, month by month{% endif %}{% elif view == 'qty' %}Sold quantity (invoices less returns), per item, month by month{% else %}Net sales amount (invoices less credit memos), per item, month by month{% endif %} &middot; {{ selected_year }}</p>
       </div>
       <div class="header-actions">
         <a class="btn btn-secondary" href="{% url 'home' %}">Home</a>
@@ -217,7 +224,7 @@
           <input class="input" type="number" name="page_size" min="10" max="200" value="{{ filters.page_size }}">
         </div>
         <div class="field" style="display:flex;gap:8px;">
-          <a class="btn btn-secondary" href="{% url 'item_monthly_sales' %}">Clear</a>
+          <a class="btn btn-secondary" href="{% url 'item_monthly_sales' %}{% if view == 'qty' %}?view=qty{% endif %}">Clear</a>
           <button class="btn btn-primary" type="submit">Apply</button>
         </div>
         <div class="field" style="display:flex;gap:8px;">
@@ -229,8 +236,9 @@
 
     <div class="view-bar">
       <div class="view-switch">
-        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=amount" class="{% if view != 'price' %}on{% endif %}">Sales Amount</a>
+        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=amount" class="{% if view == 'amount' %}on{% endif %}">Sales Amount</a>
         <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=price" class="{% if view == 'price' %}on{% endif %}">Average Unit Selling Price</a>
+        <a href="?{{ qs_noview }}{% if qs_noview %}&{% endif %}view=qty" class="{% if view == 'qty' %}on{% endif %}">Sold Qty</a>
       </div>
       {% if view == 'price' %}
       {# Latest | Average switch hidden for now - the unit-price view always shows the average #}
@@ -242,6 +250,9 @@
       {% endif %}
       <span class="hint">{% if pmode == 'avg' %}Showing the average price of each month, weighted by quantity (total value &divide; total quantity).{% else %}Showing the latest price of each month.{% endif %} Click a price to see every invoice line of that month. Returns, cancelled invoices and zero-price lines are not included.</span>
       {% endif %}
+      {% if view == 'qty' %}
+      <span class="hint">All items are listed, with or without sales. {{ budget_label }} is a quantity for the whole company{% if can_edit_budget %} &ndash; type a whole number and press Enter (clear the box to remove it){% endif %}. PDF without a brand filter lists only items with sales or a budget.</span>
+      {% endif %}
     </div>
 
     <div class="card table-card">
@@ -252,21 +263,27 @@
               <th class="left">Item</th>
               <th class="left">Brand</th>
               {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
-              <th class="col-tot">{% if view == 'price' %}{% if pmode == 'avg' %}Last Month Avg{% else %}Latest{% endif %}{% else %}Total{% endif %}</th>
+              <th class="col-tot">{% if view == 'price' %}{% if pmode == 'avg' %}Last Month Avg{% else %}Latest{% endif %}{% elif view == 'qty' %}Total Qty{% else %}Total{% endif %}</th>
               <th class="col-trend">Trend</th>
+              {% if view == 'qty' %}<th class="col-bud">{{ budget_label }}</th>{% endif %}
               {% if view == 'price' %}<th class="col-chg" title="Change from the January price (or the first month with a price) to the {% if pmode == 'avg' %}last month's average{% else %}latest price{% endif %}">Change in Price %<br><span class="th-sub">({% if pmode == 'avg' %}from Jan to last month average{% else %}from Jan to latest price{% endif %})</span></th>{% endif %}
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
             <tr>
-              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the {% if view == 'price' %}price{% else %}sales{% endif %} chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
+              <td class="left"><a href="#" class="item-code item-open" data-chart="{{ r.chart_json }}" title="Click to see the {% if view == 'price' %}price{% elif view == 'qty' %}sold qty{% else %}sales{% endif %} chart">{{ r.item_code }}</a><span class="item-desc" title="{{ r.description }}">{{ r.description }}</span></td>
               <td class="left">{{ r.brand|default:"&mdash;" }}</td>
               {% if view == 'price' %}
                 {% for v in r.p %}
                   {% if v %}<td class="has-detail" data-item="{{ r.item_code }}" data-month="{{ forloop.counter }}" title="Click to see every invoice line of this month">{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
                 {% endfor %}
                 {% if r.p_total %}<td class="col-tot has-detail" data-item="{{ r.item_code }}" data-month="{{ r.p_last_m|default:0 }}" title="Click to see every invoice line of the last month">{{ r.p_total|floatformat:2|intcomma }}</td>{% else %}<td class="col-tot zero">&ndash;</td>{% endif %}
+              {% elif view == 'qty' %}
+                {% for c in r.cells %}
+                  {% if c.text %}<td{% if c.neg %} class="neg"{% endif %}>{{ c.text }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
+                {% endfor %}
+                {% if r.sold %}<td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total_text }}</td>{% else %}<td class="col-tot zero">&ndash;</td>{% endif %}
               {% else %}
                 {% for v in r.m %}
                   {% if v %}<td{% if v < 0 %} class="neg"{% endif %}>{{ v|floatformat:2|intcomma }}</td>{% else %}<td class="zero">&ndash;</td>{% endif %}
@@ -274,6 +291,12 @@
                 <td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total|floatformat:2|intcomma }}</td>
               {% endif %}
               <td class="col-trend"><svg class="spark" width="96" height="28" data-chart="{{ r.chart_json }}"></svg></td>
+              {% if view == 'qty' %}
+              <td class="col-bud">
+                {% if can_edit_budget %}<input type="text" inputmode="numeric" class="budget-input" maxlength="11" autocomplete="off" aria-label="{{ budget_label }} for {{ r.item_code }}" data-item="{{ r.item_code }}" value="{% if r.budget is not None %}{{ r.budget }}{% endif %}"><span class="budget-status"></span>
+                {% elif r.budget is not None %}{{ r.budget|intcomma }}{% else %}<span class="zero">&ndash;</span>{% endif %}
+              </td>
+              {% endif %}
               {% if view == 'price' %}
               <td class="col-chg">
                 {% if r.price_change %}
@@ -284,7 +307,7 @@
               {% endif %}
             </tr>
             {% empty %}
-            <tr><td colspan="{% if view == 'price' %}17{% else %}16{% endif %}" class="empty-state">No sales found for the selected filters.</td></tr>
+            <tr><td colspan="{% if view == 'price' or view == 'qty' %}17{% else %}16{% endif %}" class="empty-state">No sales found for the selected filters.</td></tr>
             {% endfor %}
           </tbody>
           {# Totals row hidden for now #}
@@ -483,17 +506,22 @@
       var detail = document.getElementById('chart-detail');
       function openChart(d) {
         var price = d.kind === 'price';
+        var qty = d.kind === 'qty';
         var avg = price && d.pmode === 'avg';
         var total = d.m.reduce(function (a, b) { return a + b; }, 0);
-        document.getElementById('chart-title').textContent = d.code + (price ? (avg ? ' – average unit price ' : ' – latest unit price ') : ' – monthly sales ') + d.year;
+        document.getElementById('chart-title').textContent = d.code + (price ? (avg ? ' – average unit price ' : ' – latest unit price ') : qty ? ' – monthly sold qty ' : ' – monthly sales ') + d.year;
         document.getElementById('chart-sub').textContent = (d.desc ? d.desc + ' · ' : '') + (price ? (avg ? 'Average price of each month, weighted by quantity (invoice lines only)' : 'Latest price of each month (invoice lines only)') : 'Total ' + fmt(total));
-        detail.textContent = 'Tap or hover a point to see the month’s ' + (price ? 'unit price.' : 'sales amount.');
-        document.getElementById('chart-th-val').textContent = price ? (avg ? 'Average Unit Price' : 'Latest Unit Price') : 'Sales Amount';
+        detail.textContent = 'Tap or hover a point to see the month’s ' + (price ? 'unit price.' : qty ? 'sold qty.' : 'sales amount.');
+        document.getElementById('chart-th-val').textContent = price ? (avg ? 'Average Unit Price' : 'Latest Unit Price') : qty ? 'Sold Qty' : 'Sales Amount';
         document.getElementById('chart-leg-price-t').textContent = avg ? 'Average unit price of the month (weighted)' : 'Latest unit price of the month';
         document.getElementById('chart-th-pct').style.display = price ? 'none' : '';
         document.getElementById('chart-leg-amt').style.display = price ? 'none' : '';
         document.getElementById('chart-leg-amt2').style.display = price ? 'none' : '';
         document.getElementById('chart-leg-price').style.display = price ? '' : 'none';
+        if (qty) {
+          document.getElementById('chart-leg-amt').lastChild.textContent = 'Monthly sold qty';
+          document.getElementById('chart-leg-amt2').lastChild.textContent = 'Month with net return (returns above sales)';
+        }
         var body = document.getElementById('chart-table-body');
         body.innerHTML = '';
         d.m.forEach(function (v, i) {
@@ -570,5 +598,50 @@
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     })();
   </script>
+  {% if view == 'qty' and can_edit_budget %}
+  {% csrf_token %}
+  <script>
+    // ---- Proposed budget: save a cell when it changes ----
+    (function () {
+      var URL_SAVE = "{% url 'item_monthly_sales_budget' %}";
+      var token = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+      document.querySelectorAll('.budget-input').forEach(function (input) {
+        var status = input.nextElementSibling;
+        var queue = Promise.resolve();   // saves of one cell run in the order they were typed
+        var latest = 0;
+        function show(text, cls) {
+          status.textContent = text;
+          status.className = 'budget-status' + (cls ? ' ' + cls : '');
+          input.classList.toggle('failed', cls === 'err');
+        }
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') input.blur(); });
+        input.addEventListener('change', function () {
+          var value = input.value.trim(), mine = ++latest;
+          input.dataset.unsaved = '1';
+          show('Saving…', '');
+          queue = queue.then(function () {
+            var data = new FormData();
+            data.append('item', input.getAttribute('data-item'));
+            data.append('qty', value);
+            return fetch(URL_SAVE, {method: 'POST', body: data, credentials: 'same-origin', keepalive: true, headers: {'X-CSRFToken': token}})
+              .then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (d) {
+                  if (!r.ok || !d.ok) throw new Error(d.error || 'Reload the page and try again.');
+                  if (mine !== latest) return;
+                  input.value = d.qty === null ? '' : d.qty;
+                  delete input.dataset.unsaved;
+                  show('Saved', 'ok');
+                });
+              })
+              .catch(function (err) { if (mine === latest) show('Not saved. ' + err.message, 'err'); });
+          });
+        });
+      });
+      window.addEventListener('beforeunload', function (e) {
+        if (document.querySelector('.budget-input[data-unsaved]')) { e.preventDefault(); e.returnValue = ''; }
+      });
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

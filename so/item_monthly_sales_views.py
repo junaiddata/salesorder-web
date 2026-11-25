@@ -2,6 +2,7 @@
 Item Monthly Sales - read-only page showing, for every item, month by month:
   * view=amount (default): the net SALES AMOUNT (invoices + credit memos, credit-memo values are
     stored negative - same definition as the other sales reports)
+  * view=qty: sold quantity and the proposed 2027 budget (see item_monthly_sales_qty.py)
   * view=price: the LATEST UNIT PRICE of the month (price of the most recent invoice line). Clicking a
     cell lists every invoice line of that item in that month (loaded on click by `item_monthly_sales_lines`).
 
@@ -24,6 +25,7 @@ from django.shortcuts import render
 
 from .brandwise_sales_analysis_views import MONTH_NAMES_SHORT, _net_value_expr
 from .item_monthly_sales_export import PDF_ROW_LIMIT, pdf_response, xlsx_response
+from .item_monthly_sales_qty import qty_view
 from .models import Items, SAPARCreditMemo, SAPARCreditMemoItem, SAPARInvoice, SAPARInvoiceItem
 from .sap_salesorder_views import salesman_scope_q_salesorder
 
@@ -71,6 +73,7 @@ def _filters(request):
                  .exclude(item_code__isnull=True).exclude(item_code=''))
     cm_items = (SAPARCreditMemoItem.objects.filter(credit_memo__in=cm_h)
                 .exclude(item_code__isnull=True).exclude(item_code=''))
+    inv_items_all, cm_items_all = inv_items, cm_items   # before Brand / Search (the Sold Qty tab picks items itself)
     if brand_filter:
         inv_items = inv_items.filter(item__item_firm__in=brand_filter)
         cm_items = cm_items.filter(item__item_firm__in=brand_filter)
@@ -81,6 +84,7 @@ def _filters(request):
         'years': years, 'selected_year': selected_year, 'q': q, 'brand_filter': brand_filter,
         'salesman_filter': salesman_filter, 'store': store, 'salesmen': salesmen,
         'inv_items': inv_items, 'cm_items': cm_items,
+        'inv_items_all': inv_items_all, 'cm_items_all': cm_items_all,
     }
 
 
@@ -115,7 +119,7 @@ def item_monthly_sales(request):
     inv_items, cm_items = f['inv_items'], f['cm_items']
 
     view = request.GET.get('view', '').strip().lower()
-    view = 'price' if view == 'price' else 'amount'
+    view = view if view in ('price', 'qty') else 'amount'
     # unit-price view only: 'latest' (default, last invoice line of the month) or 'avg' (weighted average)
     # The Latest option is switched off for now (kept in the code): the unit-price view always shows the average.
     pmode = 'avg' if view == 'price' else 'latest'
@@ -124,6 +128,10 @@ def item_monthly_sales(request):
     except ValueError:
         page_size = 50
     page_size = max(10, min(page_size, 200))
+
+    if view == 'qty':
+        export = request.GET.get('export', '').strip().lower()
+        return qty_view(request, f, page_size, export if export in ('xlsx', 'pdf') else '')
 
     items = {}  # item_code -> {'description', 'brand', 'm': [12 amounts]}
 

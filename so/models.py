@@ -1581,3 +1581,21 @@ class AlabamaCatalogBrand(models.Model):
 
     def __str__(self):
         return self.brand
+
+
+class ItemBudget(models.Model):
+    """Proposed budget quantity of one item for one year (Item Monthly Sales > Sold Qty, edited by admins).
+
+    Stored by item code in its own table, so syncing items or invoices never touches it.
+    """
+    item_code = models.CharField(max_length=100)
+    year = models.PositiveSmallIntegerField()
+    qty = models.PositiveIntegerField()
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['item_code', 'year'], name='uniq_item_budget_item_year')]
+
+    def __str__(self):
+        return f'{self.item_code} {self.year}: {self.qty}'
