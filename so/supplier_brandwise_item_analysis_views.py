@@ -10,7 +10,7 @@ Credit Memo lines, credit memos netting negative):
   - Item comparison    : one block of columns per brand, each listing that
                          brand's top items by sales, ranked side by side
 
-Filters: Year, Store, Month (multi), Salesman (multi), Brand (multi), Item search.
+Filters: Year, Store, Month (multi), Salesman (multi), Customer (multi), Brand (multi), Item search.
 All items of the selected brands are listed, paginated.
 """
 from collections import defaultdict
@@ -23,6 +23,12 @@ from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.shortcuts import render
 
+from .item_analysis_customer_filter import (
+    apply_customer_filter,
+    customer_choices,
+    customer_labels,
+    selected_customer_codes,
+)
 from .brandwise_sales_analysis_views import (
     MONTH_NAMES_SHORT,
     _net_value_expr,
@@ -96,6 +102,9 @@ def _analysis_data(request):
         .distinct()
         .order_by('salesman_name')
     )
+    customer_scope_q = scope_q & ~Q(salesman_name__iexact='Z.DUTY')  # this page never counts Z.DUTY
+    customers = customer_choices(customer_scope_q)
+    selected_customers = selected_customer_codes(request)
     brands = list(
         Items.objects.exclude(item_firm__isnull=True)
         .exclude(item_firm='')
@@ -129,6 +138,7 @@ def _analysis_data(request):
         if selected_salesmen:
             inv_headers = inv_headers.filter(salesman_name__in=selected_salesmen)
             cm_headers = cm_headers.filter(salesman_name__in=selected_salesmen)
+        inv_headers, cm_headers = apply_customer_filter(request, inv_headers, cm_headers)
 
         inv_items = SAPARInvoiceItem.objects.filter(
             invoice__in=inv_headers, item__item_firm__in=selected_brands,
@@ -261,6 +271,9 @@ def _analysis_data(request):
         'selected_months': selected_months,
         'salesmen': salesmen,
         'selected_salesmen': selected_salesmen,
+        'customers': customers,
+        'selected_customers': selected_customers,
+        'selected_customer_labels': customer_labels(selected_customers, customer_scope_q),
         'brands': brands,
         'selected_brands': selected_brands,
         'search_query': search_query,
@@ -304,6 +317,8 @@ def _filter_summary(d):
         f"Salesmen: {salesmen}",
         f"Brands: {', '.join(d['selected_brands']) or '-'}",
     ]
+    if d['selected_customer_labels']:
+        parts.append(f"Customers: {', '.join(d['selected_customer_labels'])}")
     if d['search_query']:
         parts.append(f"Search: {d['search_query']}")
     return parts
@@ -453,6 +468,7 @@ def export_supplier_brandwise_item_analysis_excel(request):
 @login_required
 def export_supplier_brandwise_item_analysis_pdf(request):
     from io import BytesIO
+    from xml.sax.saxutils import escape
     from django.http import HttpResponse
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -471,7 +487,7 @@ def export_supplier_brandwise_item_analysis_pdf(request):
     small = ParagraphStyle('small', parent=styles['Normal'], fontSize=7, leading=8.5)
     story = [
         Paragraph('Supplier/Brandwise Item Analysis', styles['Title']),
-        Paragraph(' | '.join(_filter_summary(d)), small),
+        Paragraph(escape(' | '.join(_filter_summary(d))), small),
         Spacer(1, 10),
     ]
 

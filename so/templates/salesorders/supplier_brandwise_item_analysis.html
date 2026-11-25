@@ -213,6 +213,28 @@
           </div>
         </div>
 
+        <div class="field salesman-box">
+          <label>Customer</label>
+          <button type="button" class="btn salesman-toggle" id="customer-toggle">
+            <span id="customer-display" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              {% if selected_customer_labels %}{{ selected_customer_labels.0 }}{% if selected_customer_labels|length > 1 %} +{{ selected_customer_labels|length|add:"-1" }} more{% endif %}{% else %}All customers{% endif %}
+            </span>
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="salesman-dropdown" id="customer-dropdown">
+            <input type="text" id="customer-search" class="salesman-search" placeholder="Search customer name or code..." autocomplete="off">
+            {% for code, name in customers %}
+            <label class="salesman-option customer-option">
+              <input type="checkbox" name="customer" value="{{ code }}" {% if code in selected_customers %}checked{% endif %}>
+              <span>{{ name }} ({{ code }})</span>
+            </label>
+            {% empty %}
+            <div style="padding:8px;color:var(--text-muted);font-size:0.85rem;">No customers</div>
+            {% endfor %}
+            <div id="customer-no-results" style="display:none; padding:8px; color:var(--text-muted); font-size:0.85rem;">No matching customers</div>
+          </div>
+        </div>
+
         <div class="field">
           <label>Brand</label>
           <div class="multi-select" id="brand-wrapper">
@@ -457,6 +479,52 @@
         if (checked.length === 0) display.textContent = 'All salesmen';
         else if (checked.length === 1) display.textContent = checked[0].value;
         else display.textContent = checked[0].value + ' +' + (checked.length - 1) + ' more';
+      });
+    })();
+
+    // Customer multi-select dropdown (searchable; submits with the form)
+    (function () {
+      var toggle = document.getElementById('customer-toggle');
+      var dropdown = document.getElementById('customer-dropdown');
+      if (!toggle || !dropdown) return;
+      var search = document.getElementById('customer-search');
+      var display = document.getElementById('customer-display');
+      var noResults = document.getElementById('customer-no-results');
+      var options = Array.from(dropdown.querySelectorAll('label.customer-option'));
+
+      function close() {
+        dropdown.classList.remove('open');
+        search.value = '';
+        options.forEach(function (l) { l.classList.remove('salesman-hidden'); });
+        noResults.style.display = 'none';
+      }
+      // capture phase: the other dropdown buttons stop propagation, so listen first to close on any outside click
+      document.addEventListener('click', function (e) {
+        if (dropdown.classList.contains('open') && !dropdown.contains(e.target) && !toggle.contains(e.target)) close();
+      }, true);
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (dropdown.classList.contains('open')) { close(); return; }
+        document.querySelectorAll('.salesman-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+        dropdown.classList.add('open');
+        setTimeout(function () { search.focus(); }, 50);
+      });
+      dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+      search.addEventListener('input', function () {
+        var term = this.value.toLowerCase().trim();
+        var shown = 0;
+        options.forEach(function (l) {
+          var match = !term || l.textContent.toLowerCase().indexOf(term) !== -1;
+          l.classList.toggle('salesman-hidden', !match);
+          if (match) shown++;
+        });
+        noResults.style.display = shown ? 'none' : 'block';
+      });
+      dropdown.addEventListener('change', function () {
+        var checked = options.filter(function (l) { return l.querySelector('input').checked; });
+        if (checked.length === 0) { display.textContent = 'All customers'; return; }
+        var first = checked[0].querySelector('span').textContent;
+        display.textContent = checked.length === 1 ? first : first + ' +' + (checked.length - 1) + ' more';
       });
     })();
 

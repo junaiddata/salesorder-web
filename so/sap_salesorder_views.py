@@ -9395,6 +9395,10 @@ def item_analysis(request):
             invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
             creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
     
+    # Customer filter (applied on top of the salesman scope)
+    from .item_analysis_customer_filter import apply_customer_filter
+    invoice_qs, creditmemo_qs = apply_customer_filter(request, invoice_qs, creditmemo_qs)
+
     # Apply store filter
     if store_filter:
         invoice_qs = invoice_qs.filter(store=store_filter)
@@ -9863,13 +9867,16 @@ def item_analysis(request):
             
             # Render filter display HTML
             filter_display_html = ''
-            if salesmen_filter or firm_filter or exclude_firm_filter:
+            from .item_analysis_customer_filter import customer_labels, selected_customer_codes
+            selected_customers = selected_customer_codes(request)
+            if salesmen_filter or firm_filter or exclude_firm_filter or selected_customers:
                 filter_display_html = render_to_string('salesorders/_item_analysis_filter_display.html', {
                     'filters': {
                         'salesman': salesmen_filter,
                         'firm': firm_filter,
                         'exclude_firm': exclude_firm_filter,
                     },
+                    'customer_labels': customer_labels(selected_customers, salesman_scope_q_salesorder(request.user)),
                 }, request=request)
             
             return JsonResponse({
@@ -9891,7 +9898,13 @@ def item_analysis(request):
                 'error': str(e)
             }, status=500)
     
+    from .item_analysis_customer_filter import customer_choices, customer_labels, selected_customer_codes
+    selected_customers = selected_customer_codes(request)
+    customer_scope_q = salesman_scope_q_salesorder(request.user)
+
     context = {
+        'customers': customer_choices(customer_scope_q),
+        'customer_labels': customer_labels(selected_customers, customer_scope_q),
         'items': page_obj,  # Pass paginated items
         'page_obj': page_obj,  # Also pass as page_obj for pagination template
         'total_count': total_count,  # Total count for display
@@ -9907,6 +9920,7 @@ def item_analysis(request):
         'filters': {
             'q': search_query,
             'salesman': salesmen_filter,
+            'customer': selected_customers,
             'firm': firm_filter,
             'exclude_firm': exclude_firm_filter,
             'store': store_filter,
@@ -10155,6 +10169,10 @@ def export_item_analysis_pdf(request):
             invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
             creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
     
+    # Customer filter (applied on top of the salesman scope)
+    from .item_analysis_customer_filter import apply_customer_filter
+    invoice_qs, creditmemo_qs = apply_customer_filter(request, invoice_qs, creditmemo_qs)
+
     if store_filter:
         invoice_qs = invoice_qs.filter(store=store_filter)
         creditmemo_qs = creditmemo_qs.filter(store=store_filter)
@@ -10429,15 +10447,19 @@ def export_item_analysis_pdf(request):
     elements = []
     styles = getSampleStyleSheet()
     
-    # Logo
-    logo_url = "https://junaidworld.com/wp-content/uploads/2023/09/footer-logo.png.webp"
+    # Logo: read from the local media folder (no network call). Skipped if the file is missing or unreadable.
+    import os
+    from django.conf import settings
+    from reportlab.lib.utils import ImageReader
+    logo_path = os.path.join(settings.BASE_DIR, 'media', 'footer-logo1.png')
     try:
-        logo = Image(logo_url, width=2*inch, height=0.7*inch)
+        ImageReader(logo_path).getSize()  # Image() loads lazily, so check here where a failure can be caught
+        logo = Image(logo_path, width=2*inch, height=0.7*inch)
         elements.append(logo)
         elements.append(Spacer(1, 0.2*inch))
     except Exception:
         pass
-    
+
     # Title
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -10458,6 +10480,12 @@ def export_item_analysis_pdf(request):
         filter_info.append(f"Category: {category_filter}")
     if salesmen_filter:
         filter_info.append(f"Salesmen: {', '.join(salesmen_filter)}")
+    from xml.sax.saxutils import escape
+    from .item_analysis_customer_filter import customer_labels, selected_customer_codes
+    pdf_customers = customer_labels(selected_customer_codes(request), salesman_scope_q_salesorder(request.user))
+    if pdf_customers:
+        more = f' (+{len(pdf_customers) - 3} more)' if len(pdf_customers) > 3 else ''
+        filter_info.append(f"Customers: {escape(', '.join(pdf_customers[:3]))}{more}")
     if firm_filter:
         filter_info.append(f"Firms: {', '.join(firm_filter[:2])}{'...' if len(firm_filter) > 2 else ''}")
     if month_filter:
@@ -10659,6 +10687,10 @@ def export_item_analysis_excel(request):
         if clean_salesmen:
             invoice_qs = invoice_qs.filter(salesman_name__in=clean_salesmen)
             creditmemo_qs = creditmemo_qs.filter(salesman_name__in=clean_salesmen)
+
+    # Customer filter (applied on top of the salesman scope)
+    from .item_analysis_customer_filter import apply_customer_filter
+    invoice_qs, creditmemo_qs = apply_customer_filter(request, invoice_qs, creditmemo_qs)
 
     if store_filter:
         invoice_qs = invoice_qs.filter(store=store_filter)
@@ -10876,6 +10908,10 @@ def export_item_analysis_excel(request):
         filter_parts.append(f'Store: {store_filter}')
     if category_filter != 'All':
         filter_parts.append(f'Category: {category_filter}')
+    from .item_analysis_customer_filter import customer_labels, selected_customer_codes
+    xl_customers = customer_labels(selected_customer_codes(request), salesman_scope_q_salesorder(request.user))
+    if xl_customers:
+        filter_parts.append(f'Customers: {", ".join(xl_customers[:3])}{"..." if len(xl_customers) > 3 else ""}')
     if salesmen_filter:
         filter_parts.append(f'Salesmen: {", ".join(salesmen_filter[:3])}{"..." if len(salesmen_filter) > 3 else ""}')
     if firm_filter:

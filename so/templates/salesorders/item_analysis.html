@@ -716,6 +716,27 @@
             </div>
           </div>
           <div class="field">
+            <label>Customer</label>
+            <div class="multi-select" id="customer-wrapper">
+              <div class="select-box" id="customer-trigger">
+                <span id="customer-text">All Customers</span>
+              </div>
+              <div class="options-container" id="customer-options">
+                <div class="search-box-container">
+                  <input type="text" id="customer-search" class="search-box" placeholder="Search customer name or code..." autocomplete="off">
+                </div>
+                <div class="options-list" id="customer-options-list">
+                  {% for code, name in customers %}
+                    <label class="option-label" data-value="{{ code }}">
+                      <input type="checkbox" name="customer" value="{{ code }}" {% if code in filters.customer %}checked{% endif %}>
+                      <span class="option-text">{{ name }} ({{ code }})</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="field">
             <label>Brand</label>
             <div class="multi-select" id="firm-wrapper">
               <div class="select-box" id="firm-trigger">
@@ -792,7 +813,7 @@
         <div>
           <h3 class="table-title">Item Performance Matrix</h3>
           <div id="filter-display-container">
-            {% if filters.salesman or filters.firm or filters.exclude_firm %}
+            {% if filters.salesman or filters.firm or filters.exclude_firm or filters.customer %}
             {% include 'salesorders/_item_analysis_filter_display.html' with filters=filters %}
             {% endif %}
           </div>
@@ -974,6 +995,45 @@
       document.addEventListener('click', e => {
         if (!salesmanWrapper.contains(e.target)) salesmanOptions.classList.remove('active');
       });
+
+      // Multi-Select for Customer
+      const customerWrapper = document.getElementById('customer-wrapper');
+      const customerOptions = document.getElementById('customer-options');
+      const customerText = document.getElementById('customer-text');
+      const customerSearch = document.getElementById('customer-search');
+      const customerOptionLabels = Array.from(document.querySelectorAll('#customer-options-list .option-label'));
+
+      function updateCustomerText() {
+        const checked = customerOptionLabels.filter(l => l.querySelector('input').checked);
+        if (checked.length === 0) {
+          customerText.textContent = "All Customers";
+          customerText.style.opacity = "0.6";
+        } else {
+          customerText.textContent = checked.length === 1 ? checked[0].querySelector('.option-text').textContent : `${checked.length} Selected`;
+          customerText.style.opacity = "1";
+        }
+      }
+
+      document.getElementById('customer-trigger').addEventListener('click', e => {
+        e.stopPropagation();
+        customerOptions.classList.toggle('active');
+        if (customerOptions.classList.contains('active')) {
+          setTimeout(() => customerSearch.focus(), 100);
+        } else {
+          customerSearch.value = '';
+          customerOptionLabels.forEach(l => l.classList.remove('hidden'));
+        }
+      });
+      customerOptions.addEventListener('click', e => e.stopPropagation());
+      customerSearch.addEventListener('input', function() {
+        const term = this.value.toLowerCase().trim();
+        customerOptionLabels.forEach(l => l.classList.toggle('hidden', !l.querySelector('.option-text').textContent.toLowerCase().includes(term)));
+      });
+      customerOptionLabels.forEach(l => l.querySelector('input').addEventListener('change', updateCustomerText));
+      document.addEventListener('click', e => {
+        if (!customerWrapper.contains(e.target)) customerOptions.classList.remove('active');
+      });
+      updateCustomerText();
 
       // Multi-Select for Firm
       const firmWrapper = document.getElementById('firm-wrapper');
@@ -1250,7 +1310,7 @@
         
         // Add all form fields
         for (const [key, value] of formData.entries()) {
-          if (key === 'salesman' || key === 'firm' || key === 'exclude_firm' || key === 'month') {
+          if (key === 'salesman' || key === 'customer' || key === 'firm' || key === 'exclude_firm' || key === 'month') {
             params.append(key, value);
           } else if (value) {
             params.set(key, value);
