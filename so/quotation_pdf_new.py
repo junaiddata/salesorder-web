@@ -47,6 +47,25 @@ _LH_SCALE = PAGE_W / _LH_W
 _LH_DY = (PAGE_H - _LH_H * _LH_SCALE) / 2
 LETTERHEAD_DIR = os.path.join(settings.MEDIA_ROOT, 'quotation_letterheads')
 
+# Printed after the terms, above the stamp. Each division has its own account and TRN (see 'bank_details' below);
+# the labels are the same on both. BANK_DETAILS is Junaid's (in-app and SAP quotations).
+BANK_DETAILS = (
+    ('A/C NAME', 'JUNAID SANITARY AND ELECTRICAL MATERIALS TRADING LLC (DUBAI BRANCH)'),
+    ('BANK', 'NATIONAL BANK OF RAS AL KHAIMAH'),
+    ('A/C NO', '0322464229001'),
+    ('IBAN NO', 'AE23 0400 0003 2246 4229 001'),
+    ('SWIFT', 'NRAKAEAK'),
+    ('TRN', '100225006400003'),
+)
+ALABAMA_BANK_DETAILS = (
+    ('A/C NAME', 'ALABAMA BUILDING MATERIALS T LLC'),
+    ('BANK', 'ABU DHABI COMMERCIAL BANK'),
+    ('A/C NO', '11513072820001'),
+    ('IBAN NO', 'AE95 0030 0115 1307 2820 001'),
+    ('SWIFT', 'ADCBAEAAXXX'),
+    ('TRN', '100604133700003'),
+)
+
 # Per division: letterhead file (a one-page PDF or an A4 image), how far down the page the content may start (`top`) and
 # how far up from the bottom it must stop (`bottom`), and an optional stamp image (path without extension: .png/.jpg/
 # .jpeg/.webp are all picked up; skipped when no file exists).
@@ -60,7 +79,7 @@ DIVISION_CONFIG = {
         'bottom': 40,
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'junaid'),
         'show_license': True,
-        'bank_details': True,       # BANK_DETAILS is printed above the stamp (Junaid only, never Alabama)
+        'bank_details': BANK_DETAILS,
         'phone': '04-2367723',      # the landline printed on the letterhead (used in the solar terms)
     },
     'ALABAMA': {
@@ -70,6 +89,7 @@ DIVISION_CONFIG = {
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'alabama'),
         'show_license': False,
         'phone': '04-3526973',      # the landline printed on the letterhead (used in the solar terms)
+        'bank_details': ALABAMA_BANK_DETAILS,
     },
 }
 
@@ -92,15 +112,6 @@ LICENSE_NAMES = {
     'JUNAID_MAT': 'JUNAID SANITARY & ELECTRICAL MATERIALS TRADING (LLC.) (DUBAI BR)',
 }
 
-# Printed after the terms, above the stamp, on Junaid quotations (in-app and SAP).
-BANK_DETAILS = (
-    ('A/C NAME', 'JUNAID SANITARY AND ELECTRICAL MATERIALS TRADING LLC (DUBAI BRANCH)'),
-    ('BANK', 'NATIONAL BANK OF RAS AL KHAIMAH'),
-    ('A/C NO', '0322464229001'),
-    ('IBAN NO', 'AE23 0400 0003 2246 4229 001'),
-    ('SWIFT', 'NRAKAEAK'),
-    ('TRN', '100225006400003'),
-)
 _STAMP_COL_W = 130     # room kept for the stamp when it sits beside the bank details
 
 TERMS = [
@@ -393,9 +404,9 @@ def _stamp(base):
         return None
 
 
-def _bank_table():
+def _bank_table(details):
     rows = [[Paragraph('BANK DETAILS', S_SECTION), '']]
-    rows += [[Paragraph(label, S_LBL), Paragraph(escape(value), S_CELL)] for label, value in BANK_DETAILS]
+    rows += [[Paragraph(label, S_LBL), Paragraph(escape(value), S_CELL)] for label, value in details]
     t = Table(rows, colWidths=[58, CONTENT_W - _STAMP_COL_W - 58], hAlign='LEFT')
     t.setStyle(TableStyle([
         ('SPAN', (0, 0), (-1, 0)),
@@ -416,9 +427,9 @@ class _Closing(Flowable):
     """
     GAP = 8   # between the terms and the bank details
 
-    def __init__(self, lead, stamp, stamp_row, page_height):
+    def __init__(self, lead, stamp, stamp_row, page_height, details):
         super().__init__()
-        bank = _bank_table()
+        bank = _bank_table(details)
         gap = [Spacer(1, self.GAP)] if lead else []
         self.stacked = list(lead) + gap + [bank] + ([stamp_row] if stamp_row is not None else [])
         self.side_by_side = None
@@ -462,9 +473,9 @@ class _Closing(Flowable):
 
 
 def _closing(lead, stamp, stamp_row, cfg):
-    """The flowable that ends a quotation. Divisions without bank details are laid out exactly as before."""
+    """The flowable that ends a quotation. With no bank details it is just the terms and stamp kept together."""
     if cfg.get('bank_details'):
-        return _Closing(lead, stamp, stamp_row, PAGE_H - cfg['top'] - cfg['bottom'])
+        return _Closing(lead, stamp, stamp_row, PAGE_H - cfg['top'] - cfg['bottom'], cfg['bank_details'])
     return KeepTogether(list(lead) + ([stamp_row] if stamp_row is not None else []))
 
 
@@ -834,9 +845,10 @@ def _sap_body(q, cfg):
 def build_sap_quotation_pdf(quotation):
     """Return the finished PDF (Junaid letterhead + content) for an so.SAPQuotation as bytes."""
     cfg = DIVISION_CONFIG['JUNAID']
-    # SAP headers carry no division; an Alabama salesperson's name is the marker the app uses. No Junaid bank details then.
+    # SAP headers carry no division, and this PDF always uses the Junaid letterhead and stamp. An Alabama salesperson's
+    # name is the marker the app uses: no bank details then (never Junaid's account on an Alabama quotation).
     if 'alabama' in (quotation.salesman_name or '').lower():
-        cfg = {**cfg, 'bank_details': False}
+        cfg = {**cfg, 'bank_details': None}
     body_buf = BytesIO()
     doc = BaseDocTemplate(
         body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
