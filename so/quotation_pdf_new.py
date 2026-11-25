@@ -24,7 +24,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.platypus import (
-    BaseDocTemplate, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer, Table, TableStyle,
+    BaseDocTemplate, Flowable, Frame, Image, KeepTogether, PageTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 
 from quotation.pdf_utils import clean_pdf
@@ -60,6 +60,7 @@ DIVISION_CONFIG = {
         'bottom': 40,
         'stamp': os.path.join(settings.MEDIA_ROOT, 'quotation_stamps', 'junaid'),
         'show_license': True,
+        'bank_details': True,       # BANK_DETAILS is printed above the stamp (Junaid only, never Alabama)
         'phone': '04-2367723',      # the landline printed on the letterhead (used in the solar terms)
     },
     'ALABAMA': {
@@ -90,6 +91,17 @@ LICENSE_NAMES = {
     'JUNAID_SME': 'JUNAID SANITARY AND ELECTRICAL REQUISITES TRADING L.L.C - DUBAI BRANCH',
     'JUNAID_MAT': 'JUNAID SANITARY & ELECTRICAL MATERIALS TRADING (LLC.) (DUBAI BR)',
 }
+
+# Printed after the terms, above the stamp, on Junaid quotations (in-app and SAP).
+BANK_DETAILS = (
+    ('A/C NAME', 'JUNAID SANITARY AND ELECTRICAL MATERIALS TRADING LLC (DUBAI BRANCH)'),
+    ('BANK', 'NATIONAL BANK OF RAS AL KHAIMAH'),
+    ('A/C NO', '0322464229001'),
+    ('IBAN NO', 'AE23 0400 0003 2246 4229 001'),
+    ('SWIFT', 'NRAKAEAK'),
+    ('TRN', '100225006400003'),
+)
+_STAMP_COL_W = 130     # room kept for the stamp when it sits beside the bank details
 
 TERMS = [
     'This quotation is valid as Agreed.',
@@ -381,6 +393,81 @@ def _stamp(base):
         return None
 
 
+def _bank_table():
+    rows = [[Paragraph('BANK DETAILS', S_SECTION), '']]
+    rows += [[Paragraph(label, S_LBL), Paragraph(escape(value), S_CELL)] for label, value in BANK_DETAILS]
+    t = Table(rows, colWidths=[58, CONTENT_W - _STAMP_COL_W - 58], hAlign='LEFT')
+    t.setStyle(TableStyle([
+        ('SPAN', (0, 0), (-1, 0)),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
+    ]))
+    return t
+
+
+class _Closing(Flowable):
+    """The end of a quotation: `lead` (terms), the bank details, then the stamp -- always on one page.
+
+    Normally the bank details sit above the stamp. When that would push the stamp over to the next page, the two are
+    put side by side instead (bank details left, stamp right). When even that does not fit, everything moves to the next
+    page together, so the stamp is never left alone.
+    """
+    GAP = 8   # between the terms and the bank details
+
+    def __init__(self, lead, stamp, stamp_row, page_height):
+        super().__init__()
+        bank = _bank_table()
+        gap = [Spacer(1, self.GAP)] if lead else []
+        self.stacked = list(lead) + gap + [bank] + ([stamp_row] if stamp_row is not None else [])
+        self.side_by_side = None
+        if stamp is not None:
+            row = Table([[bank, stamp]], colWidths=[CONTENT_W - _STAMP_COL_W, _STAMP_COL_W])
+            row.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ('LEFTPADDING', (1, 0), (1, 0), 8),
+            ]))
+            self.side_by_side = list(lead) + gap + [row]
+        self.page_height = page_height
+        self._parts = self.stacked
+
+    @staticmethod
+    def _measure(parts, width):
+        return sum(part.wrap(width, PAGE_H)[1] for part in parts)
+
+    def wrap(self, avail_width, avail_height):
+        self._parts, height = self.stacked, self._measure(self.stacked, avail_width)
+        if height > avail_height and self.side_by_side is not None:
+            side = self._measure(self.side_by_side, avail_width)
+            if side <= avail_height:
+                self._parts, height = self.side_by_side, side
+        self.width, self.height = avail_width, height
+        return avail_width, height
+
+    def split(self, avail_width, avail_height):
+        # [] = "move me to the next page". Only something too long for any page is allowed to flow across pages.
+        if self._measure(self.side_by_side or self.stacked, avail_width) > self.page_height:
+            return list(self.stacked)
+        return []
+
+    def draw(self):
+        y = self.height
+        for part in self._parts:
+            height = part.wrapOn(self.canv, self.width, PAGE_H)[1]
+            y -= height
+            part.drawOn(self.canv, 0, y)
+
+
+def _closing(lead, stamp, stamp_row, cfg):
+    """The flowable that ends a quotation. Divisions without bank details are laid out exactly as before."""
+    if cfg.get('bank_details'):
+        return _Closing(lead, stamp, stamp_row, PAGE_H - cfg['top'] - cfg['bottom'])
+    return KeepTogether(list(lead) + ([stamp_row] if stamp_row is not None else []))
+
+
 def _body(q, cfg):
     story = [
         Paragraph('<u>QUOTATION</u>', S_TITLE),
@@ -429,7 +516,9 @@ def _body(q, cfg):
             split_at += 1                      # the payment point was inserted before the exclusions heading
         if split_at is None:
             story.append(_section('TERMS AND CONDITIONS', points))
-            if stamp_row is not None:
+            if cfg.get('bank_details'):
+                story.append(_closing([], stamp, stamp_row, cfg))
+            elif stamp_row is not None:
                 story.append(stamp_row)
         else:
             story.append(_section('TERMS AND CONDITIONS', points[:split_at]))
@@ -440,12 +529,9 @@ def _body(q, cfg):
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
                 ('TOPPADDING', (0, 0), (0, 0), 6),
             ]))
-            story.append(KeepTogether([end] + ([stamp_row] if stamp_row is not None else [])))
+            story.append(_closing([end], stamp, stamp_row, cfg))
     else:
-        tail = [_section('TERMS AND CONDITIONS', points)]
-        if stamp_row is not None:
-            tail.append(stamp_row)
-        story.append(KeepTogether(tail))
+        story.append(_closing([_section('TERMS AND CONDITIONS', points)], stamp, stamp_row, cfg))
     return story
 
 
@@ -724,7 +810,9 @@ def _sap_body(q, cfg):
         split_at = next((i for i, e in enumerate(SOLAR_TERMS) if isinstance(e, tuple) and e[0] == 'H'), None)
         if split_at is None:
             story.append(_section('TERMS AND CONDITIONS', points))
-            if stamp_row is not None:
+            if cfg.get('bank_details'):
+                story.append(_closing([], stamp, stamp_row, cfg))
+            elif stamp_row is not None:
                 story.append(stamp_row)
         else:
             story.append(_section('TERMS AND CONDITIONS', points[:split_at]))
@@ -735,20 +823,20 @@ def _sap_body(q, cfg):
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
                 ('TOPPADDING', (0, 0), (0, 0), 6),
             ]))
-            story.append(KeepTogether([end] + ([stamp_row] if stamp_row is not None else [])))
+            story.append(_closing([end], stamp, stamp_row, cfg))
         return story
 
     points = [[Paragraph(f'{n}.&nbsp;&nbsp;{escape(text)}', S_POINT)] for n, text in enumerate(TERMS, 1)]
-    tail = [_section('TERMS AND CONDITIONS', points)]
-    if stamp_row is not None:
-        tail.append(stamp_row)
-    story.append(KeepTogether(tail))
+    story.append(_closing([_section('TERMS AND CONDITIONS', points)], stamp, stamp_row, cfg))
     return story
 
 
 def build_sap_quotation_pdf(quotation):
     """Return the finished PDF (Junaid letterhead + content) for an so.SAPQuotation as bytes."""
     cfg = DIVISION_CONFIG['JUNAID']
+    # SAP headers carry no division; an Alabama salesperson's name is the marker the app uses. No Junaid bank details then.
+    if 'alabama' in (quotation.salesman_name or '').lower():
+        cfg = {**cfg, 'bank_details': False}
     body_buf = BytesIO()
     doc = BaseDocTemplate(
         body_buf, pagesize=A4, leftMargin=MARGIN_X, rightMargin=MARGIN_X,
