@@ -1,7 +1,7 @@
 """
 Item Monthly Sales - the "Sold Qty" tab and its "Proposed Budget 2027" column.
 
-Kept apart from the Sales Amount / Unit Price code, so the budget table is only touched by this tab.
+Kept apart from the Sales Amount / Unit Price code. Budget saving is in item_monthly_sales_budget.py.
 
   * Sold qty = invoice qty + credit-memo qty (returns and cancellation documents are stored negative).
   * Every item of the Items master is listed, with or without sales. Brand / Search pick ITEMS; the sales of a
@@ -10,37 +10,23 @@ Kept apart from the Sales Amount / Unit Price code, so the budget table is only 
   * PDF without a brand filter lists only items that have sales or a budget (a PDF cannot hold the whole master).
 """
 import json
-import re
 from decimal import Decimal
 from io import BytesIO
 from xml.sax.saxutils import escape
 
-from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 
 from .brandwise_sales_analysis_views import MONTH_NAMES_SHORT
+from .item_monthly_sales_budget import BUDGET_YEAR, LABELS, add_budget_cells, budgets_for, can_edit_budget
 from .item_monthly_sales_export import MONTHS, PDF_ROW_LIMIT
-from .models import ItemBudget, Items, SAPARCreditMemoItem, SAPARInvoiceItem
+from .models import Items
 
-BUDGET_YEAR = 2027
-BUDGET_LABEL = f'Proposed Budget {BUDGET_YEAR}'
-MAX_BUDGET = 999_999_999
+BUDGET_LABEL = LABELS['qty']
 ZERO = Decimal('0')
-
-_WHOLE_NUMBER = re.compile(r'[0-9]+|[0-9]{1,3}(,[0-9]{3})+')
-
-
-def can_edit_budget(user):
-    """Only users whose Role is Admin."""
-    try:
-        return user.role.role == 'Admin'
-    except Exception:   # no Role row
-        return False
 
 
 def _qty_text(v):
@@ -78,7 +64,7 @@ def build_rows(f):
         code = (code or '').strip()
         if code:
             master[code] = (desc or '', firm or '')
-    budgets = dict(ItemBudget.objects.filter(year=BUDGET_YEAR).values_list('item_code', 'qty'))
+    budgets = budgets_for('qty')
 
     brands = set(f['brand_filter'])
     needle = f['q'].lower()
@@ -134,6 +120,7 @@ def qty_view(request, f, page_size, export):
     paginator = Paginator(rows, page_size)
     page_obj = paginator.get_page(request.GET.get('page'))
     page_rows = list(page_obj.object_list)
+    add_budget_cells(page_rows, 'qty')
     for it in page_rows:
         it['cells'] = [{'text': _qty_text(v) if v else '', 'neg': v < 0} for v in it['m']]
         it['total_text'] = _qty_text(it['total'])
@@ -159,45 +146,9 @@ def qty_view(request, f, page_size, export):
         'qs_noview': params_noview.urlencode(),
         'filters': {'q': f['q'], 'brand_filter': f['brand_filter'], 'salesman_filter': f['salesman_filter'],
                     'store': f['store'], 'page_size': page_size},
-        'budget_label': BUDGET_LABEL,
+        'budget_label': BUDGET_LABEL, 'budget_field': 'qty',
         'can_edit_budget': can_edit_budget(request.user),
     })
-
-
-def _item_exists(code):
-    return (Items.objects.filter(item_code=code).exists()
-            or SAPARInvoiceItem.objects.filter(item_code=code).exists()
-            or SAPARCreditMemoItem.objects.filter(item_code=code).exists())
-
-
-@login_required
-@require_POST
-def save_item_budget(request):
-    """Save one item's proposed budget. An empty value removes it."""
-    if not can_edit_budget(request.user):
-        return JsonResponse({'ok': False, 'error': 'Only an admin can change the budget.'}, status=403)
-
-    code = request.POST.get('item', '').strip()
-    raw = request.POST.get('qty')
-    if not code or len(code) > 100 or raw is None:
-        return JsonResponse({'ok': False, 'error': 'Bad request.'}, status=400)
-    raw = raw.strip()
-
-    qty = None
-    if raw:
-        digits = raw.replace(',', '')
-        if not _WHOLE_NUMBER.fullmatch(raw) or len(digits) > 12 or int(digits) > MAX_BUDGET:
-            return JsonResponse({'ok': False, 'error': 'Enter a whole number (0 or more).'}, status=400)
-        qty = int(digits)
-
-    if qty is None:
-        ItemBudget.objects.filter(item_code=code, year=BUDGET_YEAR).delete()
-    else:
-        if not _item_exists(code):
-            return JsonResponse({'ok': False, 'error': 'Unknown item.'}, status=400)
-        ItemBudget.objects.update_or_create(
-            item_code=code, year=BUDGET_YEAR, defaults={'qty': qty, 'updated_by': request.user})
-    return JsonResponse({'ok': True, 'qty': qty})
 
 
 # ---------------------------------------------------------------- Excel / PDF
@@ -284,7 +235,7 @@ def pdf_response(rows, year, filter_lines):
             return '-'
         return f'<font color="#b91c1c">{_qty_text(v)}</font>' if v < 0 else _qty_text(v)
 
-    head = ['Item', 'Brand'] + MONTHS + ['Total Qty', f'Proposed<br/>Budget {BUDGET_YEAR}']
+    head = ['Item', 'Brand'] + MONTHS + ['Total Qty', f'Proposed<br/>Budget Qty {BUDGET_YEAR}']
     data = [[Paragraph(h, hcell if i < 2 else hcell_r) for i, h in enumerate(head)]]
     for r in rows:
         item = f"<b>{escape(r['item_code'])}</b>"

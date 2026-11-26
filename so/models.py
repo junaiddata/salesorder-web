@@ -1584,13 +1584,16 @@ class AlabamaCatalogBrand(models.Model):
 
 
 class ItemBudget(models.Model):
-    """Proposed budget quantity of one item for one year (Item Monthly Sales > Sold Qty, edited by admins).
+    """Proposed budgets of one item for one year (Item Monthly Sales, edited by admins): quantity, sales amount
+    and average unit selling price. Each is optional and edited on its own tab.
 
     Stored by item code in its own table, so syncing items or invoices never touches it.
     """
     item_code = models.CharField(max_length=100)
     year = models.PositiveSmallIntegerField()
-    qty = models.PositiveIntegerField()
+    qty = models.PositiveIntegerField(null=True, blank=True)
+    amount = models.PositiveBigIntegerField(null=True, blank=True)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1598,4 +1601,4 @@ class ItemBudget(models.Model):
         constraints = [models.UniqueConstraint(fields=['item_code', 'year'], name='uniq_item_budget_item_year')]
 
     def __str__(self):
-        return f'{self.item_code} {self.year}: {self.qty}'
+        return f'{self.item_code} {self.year}: qty {self.qty}, amount {self.amount}, price {self.unit_price}'

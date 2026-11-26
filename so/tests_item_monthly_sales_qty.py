@@ -1,4 +1,4 @@
-"""Item Monthly Sales > Sold Qty tab and Proposed Budget 2027."""
+"""Item Monthly Sales > Sold Qty tab and the proposed 2027 budgets of all three tabs."""
 import io
 from datetime import date
 from decimal import Decimal as D
@@ -125,7 +125,7 @@ class SoldQtyTests(TestCase):
     def test_excel_has_all_items_and_the_budget_last(self):
         self.save('C1', '40')
         sheet = self.excel()
-        self.assertEqual(sheet[0][15:], ('Total Qty', 'Proposed Budget 2027'))
+        self.assertEqual(sheet[0][15:], ('Total Qty', 'Proposed Budget Qty 2027'))
         by_code = {r[0]: r for r in sheet[1:]}
         self.assertEqual(set(by_code), {'A1', 'B1', 'C1'})
         self.assertEqual(by_code['A1'][15:], (13, None))
@@ -141,9 +141,84 @@ class SoldQtyTests(TestCase):
         self.assertIn('C1', text)
         self.assertIn('4,321', text)
 
-    def test_other_tabs_have_no_budget_and_only_sold_items(self):
-        self.save('C1', '40')
+    # ---- Sales Amount / Average Unit Selling Price budgets
+
+    LABEL = {'amount': 'Proposed Budget Sales Amount 2027',
+             'price': 'Proposed Budget Average Unit Selling Price 2027',
+             'qty': 'Proposed Budget Qty 2027'}
+
+    def post(self, item, **value):
+        return self.client.post(SAVE, {'item': item, **value})
+
+    def budgets(self, view):
+        resp = self.client.get(PAGE, {'view': view, 'year': 2026})
+        return {r['item_code']: r['budget'] for r in resp.context['rows']}
+
+    def test_each_tab_has_only_its_own_budget(self):
+        self.post('A1', qty='7')
+        self.post('A1', amount='1,200')
+        self.post('A1', unit_price='2.5')
+        self.assertEqual(ItemBudget.objects.count(), 1)
+        for view, expected in (('qty', 7), ('amount', 1200), ('price', D('2.50'))):
+            self.assertEqual(self.budgets(view)['A1'], expected, view)
+            html = self.client.get(PAGE, {'view': view, 'year': 2026}).content.decode()
+            for other, label in self.LABEL.items():
+                self.assertEqual(label in html, other == view, (view, label))
+
+    def test_clearing_one_budget_keeps_the_others(self):
+        self.post('A1', qty='7')
+        self.post('A1', amount='1200')
+        self.post('A1', unit_price='2.50')
+        self.assertEqual(self.post('A1', qty='').json(), {'ok': True, 'qty': None})
+        budget = ItemBudget.objects.get()
+        self.assertEqual((budget.qty, budget.amount, budget.unit_price), (None, 1200, D('2.50')))
+        self.assertIsNone(self.budgets('qty')['A1'])
+        self.post('A1', amount='')
+        self.assertEqual(ItemBudget.objects.get().unit_price, D('2.50'))
+        self.post('A1', unit_price='')
+        self.assertFalse(ItemBudget.objects.exists())      # nothing left
+
+    def test_amount_and_price_values(self):
+        self.assertEqual(self.post('A1', unit_price='1,234.5').json(), {'ok': True, 'unit_price': '1234.50'})
+        self.assertEqual(self.post('A1', amount='999999999999').status_code, 200)
+        for bad in ({'amount': '10.5'}, {'amount': '-1'}, {'amount': '1000000000000'}, {'unit_price': '1.234'},
+                    {'unit_price': '2,5'}, {'unit_price': '-2'}, {'unit_price': 'NaN'}, {'unit_price': '1000000000'},
+                    {'qty': '1', 'amount': '1'}, {'other': '1'}):
+            self.assertEqual(self.post('A1', **bad).status_code, 400, bad)
+        budget = ItemBudget.objects.get()
+        self.assertEqual((budget.qty, budget.amount, budget.unit_price), (None, 999999999999, D('1234.50')))
+
+    def test_salesman_sees_but_cannot_change_amount_and_price(self):
+        self.post('A1', amount='1200')
+        self.post('A1', unit_price='2.50')
+        self.client.force_login(self.salesman)
+        for field in ('amount', 'unit_price'):
+            self.assertEqual(self.post('A1', **{field: '9'}).status_code, 403, field)
+        for view, shown in (('amount', '1,200'), ('price', '2.50')):
+            html = self.client.get(PAGE, {'view': view, 'year': 2026}).content.decode()
+            self.assertIn(shown, html)
+            self.assertNotIn('class="budget-input"', html)
+            self.assertNotIn(SAVE, html)
+
+    def test_amount_and_price_tabs_still_list_only_sold_items(self):
+        self.post('C1', amount='40')
+        self.post('C1', unit_price='4')
         for view in ('amount', 'price'):
-            resp = self.client.get(PAGE, {'view': view, 'year': 2026})
-            self.assertEqual({r['item_code'] for r in resp.context['rows']}, {'A1', 'B1'}, view)
-            self.assertNotIn('Proposed Budget', resp.content.decode())
+            self.assertEqual(set(self.budgets(view)), {'A1', 'B1'}, view)
+        self.assertNotIn('C1', self.pdf_text())     # an amount / price budget is not a quantity budget
+
+    def test_amount_and_price_excel_and_pdf_end_with_their_budget(self):
+        from pypdf import PdfReader
+        self.post('A1', amount='1234567')
+        self.post('A1', unit_price='7.25')
+        for view, column, value, shown in (('amount', 16, 1234567, '1,234,567'), ('price', 18, 7.25, '7.25')):
+            params = {'view': view, 'year': 2026}
+            resp = self.client.get(PAGE, {**params, 'export': 'xlsx'})
+            sheet = list(load_workbook(io.BytesIO(resp.content)).worksheets[0].iter_rows(values_only=True))
+            self.assertEqual((len(sheet[0]), sheet[0][column]), (column + 1, self.LABEL[view]))
+            by_code = {r[0]: r for r in sheet[1:]}
+            self.assertEqual((by_code['A1'][column], by_code['B1'][column]), (value, None))
+            resp = self.client.get(PAGE, {**params, 'export': 'pdf'})
+            text = ' '.join(' '.join(p.extract_text() for p in PdfReader(io.BytesIO(resp.content)).pages).split())
+            self.assertIn(self.LABEL[view], text)
+            self.assertIn(shown, text)

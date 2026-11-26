@@ -2,7 +2,8 @@
 Excel / PDF export for the Item Monthly Sales page.
 
 Receives the rows the page itself builds (so numbers always match the screen) and writes the same
-table: net sales amount per item for Jan-Dec plus the item total. Graphs are intentionally not included.
+table: net sales amount per item for Jan-Dec plus the item total, and the tab's proposed budget as the last
+column. Graphs are intentionally not included.
 """
 import calendar
 from io import BytesIO
@@ -10,6 +11,8 @@ from xml.sax.saxutils import escape
 
 from django.http import HttpResponse
 from django.utils import timezone
+
+from .item_monthly_sales_budget import LABELS, VIEW_FIELD
 
 PDF_ROW_LIMIT = 3000   # a PDF with more rows is refused: use Excel or filter first
 
@@ -42,6 +45,8 @@ def xlsx_response(rows, year, filter_lines, view='amount', pmode='latest'):
     head = ['Item Code', 'Description', 'Brand'] + MONTHS + [('Last Month Avg' if avg else 'Latest') if price else 'Total']
     if price:
         head += ['Change in Price %', 'Change (from -> to)']
+    head.append(LABELS[VIEW_FIELD[view]])
+    budget_col = len(head)
     ws.append(head)
     for c in ws[1]:
         c.font = Font(bold=True, color='FFFFFF')
@@ -80,6 +85,10 @@ def xlsx_response(rows, year, filter_lines, view='amount', pmode='latest'):
             elif pc['pct'] < 0:
                 pcell.font = Font(bold=True, color='B91C1C')
             put_text(ws.cell(row=n, column=18), _change_text(pc))
+        if r['budget'] is not None:
+            bcell = ws.cell(row=n, column=budget_col)
+            bcell.value = float(r['budget']) if price else int(r['budget'])
+            bcell.number_format = '#,##0.00' if price else '#,##0'
 
     ws.column_dimensions['A'].width = 14
     ws.column_dimensions['B'].width = 46
@@ -89,7 +98,8 @@ def xlsx_response(rows, year, filter_lines, view='amount', pmode='latest'):
     ws.column_dimensions['P'].width = 16
     ws.column_dimensions['Q'].width = 14
     ws.column_dimensions['R'].width = 26
-    ws.row_dimensions[1].height = 24
+    ws.column_dimensions[ws.cell(row=1, column=budget_col).column_letter].width = 26
+    ws.row_dimensions[1].height = 36   # the budget heading wraps to two or three lines
     ws.freeze_panes = 'D2'
     ws.auto_filter.ref = ws.dimensions
 
@@ -141,6 +151,9 @@ def pdf_response(rows, year, filter_lines, view='amount', pmode='latest'):
 
     head = ['Item', 'Brand'] + MONTHS + [('Last Month Avg' if avg else 'Latest') if price else 'Total'] + ([f"Change in Price % ({'from Jan to last month average' if avg else 'from Jan to latest price'})"] if price else [])
     data = [[Paragraph(h, hcell if i < 2 else hcell_r) for i, h in enumerate(head)]]
+    # the long budget heading wraps at spaces only (the other heading style may split a word)
+    data[0].append(Paragraph(LABELS[VIEW_FIELD[view]], ParagraphStyle('mshb', parent=hcell_r, wordWrap=None)))
+    head.append(LABELS[VIEW_FIELD[view]])
     for r in rows:
         item = f"<b>{escape(r['item_code'])}</b>"
         if r['description']:
@@ -158,6 +171,8 @@ def pdf_response(rows, year, filter_lines, view='amount', pmode='latest'):
                     f'({escape(_change_text(pc).replace(chr(0x2192), "to"))})', num))
             else:
                 line.append(Paragraph('-', num))
+        budget = r['budget']
+        line.append(Paragraph('-' if budget is None else f'{budget:,}', num))
         data.append(line)
     if not rows:
         data.append([Paragraph('No sales found for the selected filters.', cell)] + [''] * (len(head) - 1))
@@ -165,11 +180,12 @@ def pdf_response(rows, year, filter_lines, view='amount', pmode='latest'):
     page = landscape(A4)
     usable = page[0] - 16 * mm
     if price:   # prices are short numbers: narrower month columns leave room for the change column
-        month_w, brand_w, total_w, chg_w = 13.5 * mm, 24 * mm, 15 * mm, 34 * mm
+        month_w, brand_w, total_w, chg_w = 12.3 * mm, 24 * mm, 15 * mm, 34 * mm
     else:
-        month_w, brand_w, total_w, chg_w = 16.5 * mm, 22 * mm, 20 * mm, 0
-    item_w = usable - (brand_w + 12 * month_w + total_w + chg_w)
-    table = Table(data, colWidths=[item_w, brand_w] + [month_w] * 12 + [total_w] + ([chg_w] if price else []), repeatRows=1)
+        month_w, brand_w, total_w, chg_w = 15.2 * mm, 22 * mm, 20 * mm, 0
+    budget_w = 20 * mm
+    item_w = usable - (brand_w + 12 * month_w + total_w + chg_w + budget_w)
+    table = Table(data, colWidths=[item_w, brand_w] + [month_w] * 12 + [total_w] + ([chg_w] if price else []) + [budget_w], repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C5530')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),

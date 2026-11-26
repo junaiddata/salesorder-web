@@ -1226,15 +1226,8 @@ def _combined_sort_date(s):
         return date_cls(1900, 1, 1)
 
 
-@login_required
-@require_GET
-def export_combined_quotations_consolidated_excel(request):
-    """Combined SAP + in-app quotations, one row per quote; same filters as combined list."""
-    import pandas as pd
-    from io import BytesIO
-    from django.http import HttpResponse
-    from django.utils import timezone
-
+def _combined_export_summary_rows(request):
+    """One dict per quotation (SAP + app) for the current filters and user; used by Excel and PDF."""
     source = _combined_list_export_source(request)
     rows = []
     if source in ('all', 'sap'):
@@ -1278,6 +1271,19 @@ def export_combined_quotations_consolidated_excel(request):
         ),
         reverse=True,
     )
+    return rows
+
+
+@login_required
+@require_GET
+def export_combined_quotations_consolidated_excel(request):
+    """Combined SAP + in-app quotations, one row per quote; same filters as combined list."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    rows = _combined_export_summary_rows(request)
     cols = [
         'Source', 'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
         'Total Value', 'Status', 'Salesman',
@@ -1299,14 +1305,8 @@ def export_combined_quotations_consolidated_excel(request):
     return response
 
 
-@login_required
-@require_GET
-def export_combined_quotations_items_excel(request):
-    """Combined SAP + in-app line items; respects combined filters."""
-    import pandas as pd
-    from io import BytesIO
-    from django.http import HttpResponse
-    from django.utils import timezone
+def _combined_export_item_rows(request):
+    """One dict per quotation line (SAP + app) for the current filters and user; used by Excel and PDF."""
     from .models import SAPQuotationItem
 
     source = _combined_list_export_source(request)
@@ -1380,6 +1380,19 @@ def export_combined_quotations_items_excel(request):
         ),
         reverse=True,
     )
+    return rows
+
+
+@login_required
+@require_GET
+def export_combined_quotations_items_excel(request):
+    """Combined SAP + in-app line items; respects combined filters."""
+    import pandas as pd
+    from io import BytesIO
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    rows = _combined_export_item_rows(request)
     cols = [
         'Source', 'Quotation Number', 'Date', 'Customer Code', 'Customer Name',
         'Salesman', 'Item No', 'Item Name', 'Quantity', 'Price', 'Total Value',
@@ -1399,6 +1412,30 @@ def export_combined_quotations_items_excel(request):
     )
     response['Content-Disposition'] = 'attachment; filename="%s"' % filename
     return response
+
+
+@login_required
+@require_GET
+def export_combined_quotations_consolidated_pdf(request):
+    """PDF, one row per quotation: same rows as the Excel export."""
+    from .combined_quotations_pdf import filter_lines, pdf_response
+
+    return pdf_response(
+        'summary', _combined_export_summary_rows(request), 'Combined quotations',
+        filter_lines(request, ['q', 'start_date', 'end_date', 'source', 'customer', 'salesman_filter', 'division', 'status', 'total']), 'combined_quotations', '#366092',
+    )
+
+
+@login_required
+@require_GET
+def export_combined_quotations_items_pdf(request):
+    """PDF, one row per line item: same rows as the Excel export."""
+    from .combined_quotations_pdf import filter_lines, pdf_response
+
+    return pdf_response(
+        'items', _combined_export_item_rows(request), 'Combined quotations',
+        filter_lines(request, ['q', 'start_date', 'end_date', 'source', 'customer', 'salesman_filter', 'division', 'status', 'total']), 'combined_quotations', '#366092',
+    )
 
 
 def _combined_quotation_calendar_context(request):

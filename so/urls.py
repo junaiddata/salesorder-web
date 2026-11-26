@@ -11,7 +11,7 @@ from . import sap_purchaseorder_pdf_export
 from . import detailed_purchase_analysis_views
 from . import detailed_purchase_cost_views
 from . import item_monthly_sales_views
-from . import item_monthly_sales_qty
+from . import item_monthly_sales_budget
 from . import po_receiving_views
 from . import po_updates_export
 from . import finance_statement_views
@@ -143,6 +143,8 @@ urlpatterns = [
     path('quotations/combined/', views_quotation.combined_quotations_list, name='combined_quotations_list'),
     path('quotations/combined/export-consolidated-excel/', views_quotation.export_combined_quotations_consolidated_excel, name='export_combined_quotations_consolidated_excel'),
     path('quotations/combined/export-items-excel/', views_quotation.export_combined_quotations_items_excel, name='export_combined_quotations_items_excel'),
+    path('quotations/combined/export-consolidated-pdf/', views_quotation.export_combined_quotations_consolidated_pdf, name='export_combined_quotations_consolidated_pdf'),
+    path('quotations/combined/export-items-pdf/', views_quotation.export_combined_quotations_items_pdf, name='export_combined_quotations_items_pdf'),
     path('quotations/ajax/', views_quotation.view_quotations_ajax, name='view_quotations_ajax'),
     path('quotations/export-consolidated-excel/', views_quotation.export_inapp_quotations_consolidated_excel, name='export_inapp_quotations_consolidated_excel'),
     path('quotations/export-items-excel/', views_quotation.export_inapp_quotations_items_excel, name='export_inapp_quotations_items_excel'),
@@ -260,7 +262,7 @@ urlpatterns += [
     path('saparinvoices/brandwise-sales-analysis/export-pdf/', brandwise_sales_analysis_views.export_brandwise_sales_analysis_pdf, name='export_brandwise_sales_analysis_pdf'),
     path('item-monthly-sales/', item_monthly_sales_views.item_monthly_sales, name='item_monthly_sales'),
     path('item-monthly-sales/lines/', item_monthly_sales_views.item_monthly_sales_lines, name='item_monthly_sales_lines'),
-    path('item-monthly-sales/budget/', item_monthly_sales_qty.save_item_budget, name='item_monthly_sales_budget'),
+    path('item-monthly-sales/budget/', item_monthly_sales_budget.save_item_budget, name='item_monthly_sales_budget'),
     path('saparinvoices/customer-item-monthwise-analysis/', customer_item_monthwise_analysis_views.customer_item_monthwise_analysis, name='customer_item_monthwise_analysis'),
     path('saparinvoices/customer-item-monthwise-analysis/export-pdf/', customer_item_monthwise_analysis_views.export_customer_item_monthwise_analysis_pdf, name='export_customer_item_monthwise_analysis_pdf'),
     path('saparinvoices/customer-item-yearwise-analysis/', customer_item_yearwise_analysis_views.customer_item_yearwise_analysis, name='customer_item_yearwise_analysis'),

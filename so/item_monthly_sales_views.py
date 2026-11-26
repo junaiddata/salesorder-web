@@ -2,7 +2,8 @@
 Item Monthly Sales - read-only page showing, for every item, month by month:
   * view=amount (default): the net SALES AMOUNT (invoices + credit memos, credit-memo values are
     stored negative - same definition as the other sales reports)
-  * view=qty: sold quantity and the proposed 2027 budget (see item_monthly_sales_qty.py)
+  * view=qty: sold quantity (see item_monthly_sales_qty.py)
+Every view has its own proposed 2027 budget column (see item_monthly_sales_budget.py).
   * view=price: the LATEST UNIT PRICE of the month (price of the most recent invoice line). Clicking a
     cell lists every invoice line of that item in that month (loaded on click by `item_monthly_sales_lines`).
 
@@ -24,6 +25,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 
 from .brandwise_sales_analysis_views import MONTH_NAMES_SHORT, _net_value_expr
+from .item_monthly_sales_budget import LABELS, VIEW_FIELD, add_budget_cells, budgets_for, can_edit_budget
 from .item_monthly_sales_export import PDF_ROW_LIMIT, pdf_response, xlsx_response
 from .item_monthly_sales_qty import qty_view
 from .models import Items, SAPARCreditMemo, SAPARCreditMemoItem, SAPARInvoice, SAPARInvoiceItem
@@ -170,6 +172,11 @@ def item_monthly_sales(request):
     rows.sort(key=lambda it: (-it['total'], it['item_code']))
     grand_total = sum(month_totals, ZERO)
 
+    budget_field = VIEW_FIELD[view]
+    budgets = budgets_for(budget_field)
+    for it in rows:
+        it['budget'] = budgets.get(it['item_code'])
+
     export = request.GET.get('export', '').strip().lower()
     export = export if export in ('xlsx', 'pdf') else ''
 
@@ -241,6 +248,7 @@ def item_monthly_sales(request):
     paginator = Paginator(rows, page_size)
     page_obj = paginator.get_page(request.GET.get('page'))
     page_rows = list(page_obj.object_list)
+    add_budget_cells(page_rows, budget_field)
     if view == 'price':
         _attach_prices(page_rows)
     for it in page_rows:
@@ -273,6 +281,8 @@ def item_monthly_sales(request):
         'month_totals': month_totals, 'grand_total': grand_total,
         'querystring': params.urlencode(),
         'qs_noview': params_noview.urlencode(),
+        'budget_label': LABELS[budget_field], 'budget_field': budget_field,
+        'can_edit_budget': can_edit_budget(request.user),
         'filters': {'q': q, 'brand_filter': brand_filter, 'salesman_filter': salesman_filter,
                     'store': store, 'page_size': page_size},
     })

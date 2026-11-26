@@ -52,6 +52,10 @@
     .btn-success:hover { background: #047857; }
     .btn-outline-success { background: var(--white); color: #059669; border: 1px solid #a7f3d0; }
     .btn-outline-success:hover { background: #ecfdf5; }
+    .btn-pdf { background: #dc2626; color: white; }
+    .btn-pdf:hover { background: #b91c1c; }
+    .btn-outline-pdf { background: var(--white); color: #dc2626; border: 1px solid #fecaca; }
+    .btn-outline-pdf:hover { background: #fef2f2; }
 
     /* Calendar */
     .qcal-widget { margin-bottom: 1.25rem; padding: 1rem; }
@@ -200,6 +204,8 @@
         <span style="font-size:0.8rem;color:var(--gray-500);">Export (current filters):</span>
         <button type="button" class="btn btn-success" id="btnCombinedExportSummary"><i class="fas fa-file-excel"></i>Excel — summary</button>
         <button type="button" class="btn btn-outline-success" id="btnCombinedExportItems"><i class="fas fa-file-excel"></i>Excel — line items</button>
+        <button type="button" class="btn btn-pdf" id="btnCombinedPdfSummary"><i class="fas fa-file-pdf"></i>PDF — summary</button>
+        <button type="button" class="btn btn-outline-pdf" id="btnCombinedPdfItems"><i class="fas fa-file-pdf"></i>PDF — line items</button>
     </div>
     <p style="font-size:0.78rem;color:var(--gray-500);padding:0 20px 16px;margin:0;">Dates: SAP uses <strong>posting date</strong>, app uses <strong>quotation date</strong>. Status <strong>Pending</strong> or <strong>On Hold</strong> limits SAP to open documents; <strong>Approved</strong> filters the app list only.</p>
 </div>
@@ -325,6 +331,14 @@
   if (btnI) btnI.addEventListener('click', function () {
     var q = combinedExportParams();
     window.location.href = q ? (uItems + '?' + q) : uItems;
+  });
+  [['btnCombinedPdfSummary', "{% url 'alabama:export_combined_quotations_consolidated_pdf' %}"],
+   ['btnCombinedPdfItems', "{% url 'alabama:export_combined_quotations_items_pdf' %}"]].forEach(function (pair) {
+    var btn = document.getElementById(pair[0]);
+    if (btn) btn.addEventListener('click', function () {
+      var q = combinedExportParams();
+      window.location.href = q ? (pair[1] + '?' + q) : pair[1];
+    });
   });
 
   var calYear = document.getElementById('qcal-year');

@@ -145,6 +145,7 @@
     table.lines-table th.r, table.lines-table td.r { text-align: right; }
     .modal.lines { max-width: 880px; }
     th.col-bud, td.col-bud { border-left: 2px solid var(--border); text-align: right; white-space: nowrap; }
+    th.col-bud { white-space: normal; min-width: 130px; max-width: 160px; }
     .budget-input { width: 96px; padding: 4px 7px; font: inherit; text-align: right; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
     .budget-input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(44,85,48,0.12); }
     .budget-input.failed { border-color: #b91c1c; background: #fef2f2; }
@@ -265,8 +266,8 @@
               {% for m in month_names %}<th>{{ m }}</th>{% endfor %}
               <th class="col-tot">{% if view == 'price' %}{% if pmode == 'avg' %}Last Month Avg{% else %}Latest{% endif %}{% elif view == 'qty' %}Total Qty{% else %}Total{% endif %}</th>
               <th class="col-trend">Trend</th>
-              {% if view == 'qty' %}<th class="col-bud">{{ budget_label }}</th>{% endif %}
               {% if view == 'price' %}<th class="col-chg" title="Change from the January price (or the first month with a price) to the {% if pmode == 'avg' %}last month's average{% else %}latest price{% endif %}">Change in Price %<br><span class="th-sub">({% if pmode == 'avg' %}from Jan to last month average{% else %}from Jan to latest price{% endif %})</span></th>{% endif %}
+              <th class="col-bud" title="Company-wide figure: the salesman and store filters do not change it">{{ budget_label }}</th>
             </tr>
           </thead>
           <tbody>
@@ -291,12 +292,6 @@
                 <td class="col-tot{% if r.total < 0 %} neg{% endif %}">{{ r.total|floatformat:2|intcomma }}</td>
               {% endif %}
               <td class="col-trend"><svg class="spark" width="96" height="28" data-chart="{{ r.chart_json }}"></svg></td>
-              {% if view == 'qty' %}
-              <td class="col-bud">
-                {% if can_edit_budget %}<input type="text" inputmode="numeric" class="budget-input" maxlength="11" autocomplete="off" aria-label="{{ budget_label }} for {{ r.item_code }}" data-item="{{ r.item_code }}" value="{% if r.budget is not None %}{{ r.budget }}{% endif %}"><span class="budget-status"></span>
-                {% elif r.budget is not None %}{{ r.budget|intcomma }}{% else %}<span class="zero">&ndash;</span>{% endif %}
-              </td>
-              {% endif %}
               {% if view == 'price' %}
               <td class="col-chg">
                 {% if r.price_change %}
@@ -305,9 +300,13 @@
                 {% else %}<span class="zero">&ndash;</span>{% endif %}
               </td>
               {% endif %}
+              <td class="col-bud">
+                {% if can_edit_budget %}<input type="text" inputmode="{% if budget_field == 'unit_price' %}decimal{% else %}numeric{% endif %}" class="budget-input" maxlength="16" autocomplete="off" aria-label="{{ budget_label }} for {{ r.item_code }}" data-item="{{ r.item_code }}" data-field="{{ budget_field }}" value="{{ r.budget_input }}"><span class="budget-status"></span>
+                {% elif r.budget_text %}{{ r.budget_text }}{% else %}<span class="zero">&ndash;</span>{% endif %}
+              </td>
             </tr>
             {% empty %}
-            <tr><td colspan="{% if view == 'price' or view == 'qty' %}17{% else %}16{% endif %}" class="empty-state">No sales found for the selected filters.</td></tr>
+            <tr><td colspan="{% if view == 'price' %}18{% else %}17{% endif %}" class="empty-state">No sales found for the selected filters.</td></tr>
             {% endfor %}
           </tbody>
           {# Totals row hidden for now #}
@@ -598,7 +597,7 @@
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     })();
   </script>
-  {% if view == 'qty' and can_edit_budget %}
+  {% if can_edit_budget %}
   {% csrf_token %}
   <script>
     // ---- Proposed budget: save a cell when it changes ----
@@ -622,13 +621,14 @@
           queue = queue.then(function () {
             var data = new FormData();
             data.append('item', input.getAttribute('data-item'));
-            data.append('qty', value);
+            var field = input.getAttribute('data-field');
+            data.append(field, value);
             return fetch(URL_SAVE, {method: 'POST', body: data, credentials: 'same-origin', keepalive: true, headers: {'X-CSRFToken': token}})
               .then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (d) {
                   if (!r.ok || !d.ok) throw new Error(d.error || 'Reload the page and try again.');
                   if (mine !== latest) return;
-                  input.value = d.qty === null ? '' : d.qty;
+                  input.value = d[field] === null ? '' : d[field];
                   delete input.dataset.unsaved;
                   show('Saved', 'ok');
                 });

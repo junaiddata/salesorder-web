@@ -44,6 +44,16 @@ urlpatterns = [
         quotation_combined_views.export_combined_quotations_items_excel,
         name='export_combined_quotations_items_excel',
     ),
+    path(
+        'quotations/combined/export-consolidated-pdf/',
+        quotation_combined_views.export_combined_quotations_consolidated_pdf,
+        name='export_combined_quotations_consolidated_pdf',
+    ),
+    path(
+        'quotations/combined/export-items-pdf/',
+        quotation_combined_views.export_combined_quotations_items_pdf,
+        name='export_combined_quotations_items_pdf',
+    ),
     path('quotations/<str:q_number>/export-pdf/', quotation_pdf.export_quotation_pdf, name='export_quotation_pdf'),
     path('quotations/<str:q_number>/', views.quotation_detail, name='quotation_detail'),
     path('sales-orders/', salesorder_views.salesorder_list, name='salesorder_list'),
