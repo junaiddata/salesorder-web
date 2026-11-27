@@ -72,7 +72,6 @@
     .th-sub { font-size: 0.72rem; font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
     .chg-up { color: #b91c1c; font-weight: 700; }
     .chg-down { color: #15803d; font-weight: 700; }
-    .chg-note { color: var(--text-secondary); font-size: 0.74rem; }
     a.item-open { color: var(--primary); text-decoration: none; cursor: pointer; }
     a.item-open:hover { text-decoration: underline; }
     th.col-trend, td.col-trend { text-align: center; border-left: 2px solid var(--border); }
@@ -118,6 +117,10 @@
     .modal-close { border: none; background: none; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--text-secondary); }
     .modal-body { padding: 14px 18px; overflow: auto; }
     .po-sum { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 10px; }
+    .col-actions { display: flex; gap: 8px; margin-bottom: 6px; }
+    .col-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .col-months-head { border-top: 1px solid var(--border-light); margin-top: 8px; }
+    .col-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 14px; font-size: 0.8rem; }
     table.po-table { min-width: 0; width: 100%; }
     table.po-table thead th { position: static; text-align: left; }
     table.po-table tbody td { text-align: left; white-space: nowrap; }
@@ -228,7 +231,7 @@
         </div>
         <div class="field" style="display:flex;gap:8px;">
           <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=xlsx" title="Download all items matching the applied filters as Excel">Excel</a>
-          <a class="btn btn-secondary" href="?{{ querystring }}{% if querystring %}&{% endif %}export=pdf" title="Download all items matching the applied filters as PDF">PDF</a>
+          <a class="btn btn-secondary" id="pdf-link" href="?{{ querystring }}{% if querystring %}&{% endif %}export=pdf" title="Choose columns and download all items matching the applied filters as PDF">PDF</a>
         </div>
       </form>
     </div>
@@ -273,7 +276,7 @@
               {% endfor %}
               <td class="col-trend"><svg class="spark" width="110" height="30" viewBox="0 0 110 30" data-chart="{{ r.chart_json }}"></svg></td>
               <td class="col-cur">{% if r.current_cost is not None %}{{ r.current_cost|floatformat:2|intcomma }}{% else %}<span class="zero">&ndash;</span>{% endif %}</td>
-              <td class="col-chg">{% with pc=r.price_change %}{% if pc %}<span class="{% if pc.pct > 0 %}chg-up{% elif pc.pct < 0 %}chg-down{% endif %}">{% if pc.pct > 0 %}+{% endif %}{{ pc.pct|floatformat:1 }}%</span> <span class="chg-note">({{ pc.from_month }} {{ pc.from_price|floatformat:2 }} &rarr; {{ pc.to_month }} {{ pc.to_price|floatformat:2 }})</span>{% else %}<span class="zero">&ndash;</span>{% endif %}{% endwith %}</td>
+              <td class="col-chg">{% with pc=r.price_change %}{% if pc %}<span class="{% if pc.pct > 0 %}chg-up{% elif pc.pct < 0 %}chg-down{% endif %}">{% if pc.pct > 0 %}+{% endif %}{{ pc.pct|floatformat:1 }}%</span>{% else %}<span class="zero">&ndash;</span>{% endif %}{% endwith %}</td>
             </tr>
             {% empty %}
             <tr><td colspan="17" class="empty-state">No purchases found for the selected filters.</td></tr>
@@ -293,6 +296,33 @@
       {% endif %}
     </div>
     {% endif %}
+  </div>
+  <div class="modal-bg" id="pdf-modal-bg">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Columns to include in PDF</h3><button type="button" class="modal-close" id="pdf-modal-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <p class="po-sum">Item is always included.</p>
+        <div class="col-actions">
+          <button type="button" class="options-action-btn" id="pdf-select-all">Select all</button>
+          <button type="button" class="options-action-btn danger" id="pdf-clear-all">Clear all</button>
+        </div>
+        <div class="col-grid">
+          <label class="option-label"><input type="checkbox" class="pdf-col" value="brand" checked> Brand</label>
+          <label class="option-label"><input type="checkbox" class="pdf-col" value="current" checked> Current Cost</label>
+          <label class="option-label"><input type="checkbox" class="pdf-col" value="change" checked> Change in Price %</label>
+        </div>
+        <label class="option-label col-months-head"><input type="checkbox" id="pdf-all-months" checked> <strong>All months</strong></label>
+        <div class="col-grid">
+          {% for m in month_names %}
+            <label class="option-label"><input type="checkbox" class="pdf-col pdf-month" value="m{{ forloop.counter }}" checked> {{ m }}</label>
+          {% endfor %}
+        </div>
+        <div class="col-footer">
+          <span class="chg-up" id="pdf-col-error" hidden>Select at least one column.</span>
+          <button type="button" class="btn btn-primary" id="pdf-download">Download PDF</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="modal-bg" id="po-modal-bg">
     <div class="modal" role="dialog" aria-modal="true">
@@ -362,6 +392,48 @@
     }
     initMultiSelect('brand', 'All Brands');
     initMultiSelect('purchaser', 'All Purchasers');
+
+    // PDF button -> choose the columns first (the choice is not part of the filter form)
+    (function () {
+      var link = document.getElementById('pdf-link');
+      if (!link) return;
+      var bg = document.getElementById('pdf-modal-bg');
+      var cols = bg.querySelectorAll('.pdf-col');
+      var months = bg.querySelectorAll('.pdf-month');
+      var allMonths = document.getElementById('pdf-all-months');
+      var error = document.getElementById('pdf-col-error');
+      function close() { bg.classList.remove('active'); }
+      function sync() {
+        var n = Array.prototype.filter.call(months, function (b) { return b.checked; }).length;
+        allMonths.checked = n === months.length;
+        allMonths.indeterminate = n > 0 && n < months.length;
+        error.hidden = true;
+      }
+      function setAll(boxes, on) {
+        Array.prototype.forEach.call(boxes, function (b) { b.checked = on; });
+        sync();
+      }
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        error.hidden = true;
+        bg.classList.add('active');
+      });
+      Array.prototype.forEach.call(cols, function (b) { b.addEventListener('change', sync); });
+      allMonths.addEventListener('change', function () { setAll(months, allMonths.checked); });
+      document.getElementById('pdf-select-all').addEventListener('click', function () { setAll(cols, true); });
+      document.getElementById('pdf-clear-all').addEventListener('click', function () { setAll(cols, false); });
+      document.getElementById('pdf-download').addEventListener('click', function () {
+        var picked = Array.prototype.filter.call(cols, function (b) { return b.checked; });
+        if (!picked.length) { error.hidden = false; return; }
+        var url = link.getAttribute('href');
+        picked.forEach(function (b) { url += '&col=' + b.value; });
+        close();
+        window.location.href = url;
+      });
+      bg.addEventListener('click', function (e) { if (e.target === bg) close(); });
+      document.getElementById('pdf-modal-close').addEventListener('click', close);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    })();
 
     // ---- Price trend charts (plain SVG, no external library) ----
     (function () {

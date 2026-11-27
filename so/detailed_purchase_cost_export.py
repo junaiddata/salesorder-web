@@ -112,8 +112,13 @@ def xlsx_response(rows, year, filter_lines):
     return resp
 
 
-def pdf_response(rows, year, filter_lines):
-    """Returns an HttpResponse, or None when there are too many rows for one PDF."""
+def pdf_response(rows, year, filter_lines, columns=None):
+    """
+    Returns an HttpResponse, or None when there are too many rows for one PDF.
+
+    columns: keys picked on the page ('brand', 'm1'..'m12', 'current', 'change'). Item is always
+    included. Nothing (or nothing recognised) means every column.
+    """
     if len(rows) > PDF_ROW_LIMIT:
         return None
     from reportlab.lib import colors
@@ -130,35 +135,48 @@ def pdf_response(rows, year, filter_lines):
     hcell_r = ParagraphStyle('mhr', parent=hcell, alignment=2)
     title = ParagraphStyle('mt', parent=base, fontName='Helvetica-Bold', fontSize=14, leading=18)
 
-    head = ['Item', 'Brand'] + MONTHS + ['Current Cost', 'Change in Price % (from Jan to current date)']
-    data = [[Paragraph(h, hcell if i < 2 else hcell_r) for i, h in enumerate(head)]]
-    for r in rows:
+    def money(v):
+        return Paragraph('-' if v is None else f'{v:,.2f}', cell_r)
+
+    def month_value(i):
+        return lambda r: money(None if r['months'][i] is None else r['months'][i]['last'])
+
+    def change_value(r):
+        pc = r['price_change']
+        if not pc:
+            return Paragraph('-', cell_r)
+        colour = '#b91c1c' if pc['pct'] > 0 else '#15803d' if pc['pct'] < 0 else '#1e293b'
+        return Paragraph(f'<font color="{colour}"><b>{escape(_pct_text(pc))}</b></font>', cell_r)
+
+    def item_value(r):
         item = f"<b>{escape(r['item_code'])}</b>"
         if r['description']:
             item += f"<br/>{escape(r['description'])}"
-        line = [Paragraph(item, cell), Paragraph(escape(r['brand'] or '-'), brand_style)]
-        for c in r['months']:
-            line.append(Paragraph('-' if c is None else f"{c['last']:,.2f}", cell_r))
-        line.append(Paragraph('-' if r['current_cost'] is None else f"{r['current_cost']:,.2f}", cell_r))
-        pc = r['price_change']
-        if pc:
-            colour = '#b91c1c' if pc['pct'] > 0 else '#15803d' if pc['pct'] < 0 else '#1e293b'
-            line.append(Paragraph(
-                # the PDF's standard font has no arrow glyph, so spell it "to"
-                f'<font color="{colour}"><b>{escape(_pct_text(pc))}</b></font><br/>'
-                f'({escape(_change_text(pc).replace(chr(0x2192), "to"))})', cell_r))
-        else:
-            line.append(Paragraph('-', cell_r))
-        data.append(line)
+        return Paragraph(item, cell)
+
+    # every possible column: (key, heading, heading style, width, cell builder)
+    all_columns = (
+        [('item', 'Item', hcell, 67 * mm, item_value),
+         ('brand', 'Brand', hcell, 27 * mm, lambda r: Paragraph(escape(r['brand'] or '-'), brand_style))]
+        + [(f'm{i + 1}', name, hcell_r, 11.5 * mm, month_value(i)) for i, name in enumerate(MONTHS)]
+        + [('current', 'Current Cost', hcell_r, 15 * mm, lambda r: money(r['current_cost'])),
+           ('change', 'Change in Price % (from Jan to current date)', hcell_r, 22 * mm, change_value)]
+    )
+    wanted = set(columns or ()) & {col[0] for col in all_columns if col[0] != 'item'}
+    shown = [col for col in all_columns if not wanted or col[0] == 'item' or col[0] in wanted]
+
+    data = [[Paragraph(heading, style) for _, heading, style, _, _ in shown]]
+    for r in rows:
+        data.append([build(r) for _, _, _, _, build in shown])
     if not rows:
-        data.append([Paragraph('No purchases found for the selected filters.', cell)] + [''] * (len(head) - 1))
+        data.append([Paragraph('No purchases found for the selected filters.', cell)] + [''] * (len(shown) - 1))
 
     page = landscape(A4)
     usable = page[0] - 16 * mm
-    month_w, brand_w, cost_w, chg_w = 11.5 * mm, 27 * mm, 15 * mm, 34 * mm
-    item_w = usable - (brand_w + 12 * month_w + cost_w + chg_w)
-    table = Table(data, colWidths=[item_w, brand_w] + [month_w] * 12 + [cost_w, chg_w], repeatRows=1)
-    table.setStyle(TableStyle([
+    # stretch the columns towards the page width, but not so far that a few columns look empty
+    scale = min(usable / sum(col[3] for col in shown), 1.8)
+    table = Table(data, colWidths=[col[3] * scale for col in shown], repeatRows=1)
+    table.setStyle(TableStyle(([('SPAN', (0, 1), (-1, 1))] if not rows else []) + [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C5530')),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
@@ -166,6 +184,7 @@ def pdf_response(rows, year, filter_lines):
         ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ('LEFTPADDING', (0, 0), (-1, -1), 3), ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]))
+
 
     def footer(canvas, doc):
         canvas.saveState()

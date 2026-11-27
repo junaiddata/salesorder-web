@@ -254,7 +254,7 @@ def detailed_purchase_monthly_cost(request):
         ]
         if export == 'xlsx':
             return xlsx_response(rows, selected_year, filter_lines)
-        resp = pdf_response(rows, selected_year, filter_lines)
+        resp = pdf_response(rows, selected_year, filter_lines, request.GET.getlist('col'))
         if resp is None:
             return HttpResponse(
                 f'{len(rows)} items are too many for one PDF (max {PDF_ROW_LIMIT}). '
